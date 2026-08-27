@@ -1,0 +1,72 @@
+{
+  "name": "@onlytests/eitr",
+  "description": "Universal zero-lock-in UI test framework scaffolder (Playwright/Cypress)",
+  "bin": {
+    "eitr": "./dist/bin/eitr.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "version": "0.4.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "license": "FSL-1.1-Apache-2.0",
+  "homepage": "https://github.com/ivanestar/eitr#readme",
+  "bugs": {
+    "url": "https://github.com/ivanestar/eitr/issues"
+  },
+  "author": {
+    "name": "Ivan Nestaruk",
+    "email": "inestar@yahoo.com",
+    "url": "https://www.linkedin.com/in/inestar/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ivanestar/eitr.git"
+  },
+  "keywords": [
+    "testing",
+    "playwright",
+    "cypress",
+    "scaffolder",
+    "e2e",
+    "automation",
+    "framework"
+  ],
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "prettier": "^3.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "npm run build",
+    "commit": "node scripts/git-safe-commit.mjs",
+    "build": "tsc -b packages/engine packages/cli packages/evals && node packages/engine/scripts/compile-js-assets.js && node esbuild.config.mjs",
+    "typecheck": "tsc -p packages/engine/assets/tsconfig.json --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "npm run format:check",
+    "test": "vitest run",
+    "test:e2e": "vitest run packages/cli/test/terminal-e2e.test.ts",
+    "eval": "vitest run packages/evals/test/all-agents.eval.test.ts packages/evals/test/all-skills.eval.test.ts packages/evals/test/all-rules.eval.test.ts packages/evals/test/offline-evals.test.ts packages/evals/test/eval-validator.test.ts packages/evals/test/protocol-123-meta-agents.test.ts packages/evals/test/protocol-123-sdet.test.ts packages/evals/test/protocol-123-telemetry.test.ts packages/evals/test/tdm-synthetic-data.test.ts packages/evals/test/docker-preset.test.ts packages/evals/test/visual-diff-healing.test.ts packages/evals/test/animation-sync-helper.test.ts packages/evals/test/polyglot-tdm-parity.test.ts packages/evals/test/master-batch-improvements.test.ts packages/evals/test/mcp-bridge.eval.test.ts packages/evals/test/test-format-sota.eval.test.ts",
+    "eval:live": "vitest run packages/evals/test/live-evals.test.ts",
+    "eval:sonnet": "vitest run packages/evals/test/live-evals.test.ts -- --sonnet",
+    "eval:opus": "vitest run packages/evals/test/live-evals.test.ts -- --opus",
+    "eval:haiku": "vitest run packages/evals/test/live-evals.test.ts -- --haiku",
+    "eval:flash": "vitest run packages/evals/test/live-evals.test.ts -- --flash",
+    "eval:pro": "vitest run packages/evals/test/live-evals.test.ts -- --pro",
+    "eval:gpt4o": "vitest run packages/evals/test/live-evals.test.ts -- --gpt4o",
+    "eval:mini": "vitest run packages/evals/test/live-evals.test.ts -- --mini",
+    "eval:o3": "vitest run packages/evals/test/live-evals.test.ts -- --o3",
+    "eval:all": "vitest run packages/evals",
+    "new": "npm run build && node packages/cli/dist/index.js new"
+  }
+}

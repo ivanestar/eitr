@@ -1,0 +1,11 @@
+{
+  "name": "fixture-testing-library",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.2.0",
+    "@mui/material": "^5.14.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^15.0.0"
+  }
+}

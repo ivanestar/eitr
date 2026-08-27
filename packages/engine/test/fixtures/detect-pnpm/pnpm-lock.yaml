@@ -1,0 +1,3 @@
+lockfileVersion: '9.0'
+# stub fixture: content is never parsed by the detector — only the filename's presence
+# decides packageManager. Slice 1 ships no external lockfile parser.

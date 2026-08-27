@@ -1,0 +1,12 @@
+{
+  "name": "fixture-npm-lock",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "react": "^18.2.0",
+    "@mui/material": "^5.14.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.51.1"
+  }
+}

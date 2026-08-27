@@ -1,0 +1,8 @@
+{
+  "name": "fixture-lockfile-v1",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.2.0",
+    "@mui/material": "^5.14.0"
+  }
+}

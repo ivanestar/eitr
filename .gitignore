@@ -1,0 +1,42 @@
+node_modules/
+dist/
+fixtures/mui-app/generated/
+fixtures/mui-app/dist/
+.scaffolder/
+.scaffolder-tmp/
+.auth/
+playwright-report/
+blob-report/
+test-results/
+*.tsbuildinfo
+
+# Generated test folders
+PlaywrightTests/
+PlaywrightCsharpTests/
+PlaywrightJavaTests/
+CypressTests/
+WebdriverIOTests/
+SeleniumTests/
+PytestTests/
+JUnitTests/
+NUnitTests/
+AutomatedTests/
+
+# Local Eitr metadata
+.eitr/
+.eitr-tmp/
+
+# Environment variables and secrets
+.env
+.env.*
+.env.local
+!.env.example
+
+# Evaluation reports and artifacts
+packages/evals/reports/
+eval-results/
+
+# Virtual environments and sandboxes
+.venv/
+**/sandbox/
+TODO.md

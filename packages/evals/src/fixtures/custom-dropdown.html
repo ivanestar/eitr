@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Custom Dropdown Test Case</title>
+  </head>
+  <body>
+    <!-- Custom combobox widget that does not use native select/option or standard role="combobox" -->
+    <div class="custom-combo-container" data-testid="country-selector">
+      <div class="custom-combo-trigger" onclick="toggleDropdown()">
+        <span class="custom-combo-value">Select Country...</span>
+        <button class="custom-combo-arrow" aria-label="Open selector">v</button>
+      </div>
+      <ul class="custom-combo-menu" style="display: none">
+        <li class="custom-combo-item" data-value="us">United States</li>
+        <li class="custom-combo-item" data-value="ca">Canada</li>
+        <li class="custom-combo-item" data-value="uk">United Kingdom</li>
+      </ul>
+    </div>
+
+    <script>
+      function toggleDropdown() {
+        const menu = document.querySelector('.custom-combo-menu');
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+      }
+    </script>
+  </body>
+</html>

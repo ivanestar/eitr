@@ -1,0 +1,32 @@
+# EITR NPM Publish Exclusions
+
+# Development and AI Agent Skills
+.gemini/
+.eitr/
+.env*
+
+# Monorepo Source Packages and Tests
+packages/
+
+# Documentation and Project Rules
+docs/
+AGENTS.md
+COMMERCIAL.md
+CLA.md
+CONTRIBUTING.md
+SECURITY.md
+
+# Build and TypeScript configuration
+tsconfig*.json
+vitest.config.ts
+esbuild.config.mjs
+*.tsbuildinfo
+.editorconfig
+.prettierrc.json
+scripts/
+
+# Git and CI
+.git/
+.gitignore
+.github/
+*.log

@@ -1,0 +1,33 @@
+// assetId -> target path RELATIVE TO the framework root folder (e.g. PlaywrightTests/). plan()
+// prepends the framework dir; apply() resolves the shipped file via the assetId (the KEY), i.e.
+// `new URL('../../assets/runtime/' + assetId, import.meta.url)`. All regenerate; no Link primitive.
+export const BASE_ASSET_FILES: Record<string, string> = {
+  'components/base/scope.ts': 'components/base/scope.ts',
+  'components/base/descriptor.ts': 'components/base/descriptor.ts',
+  'components/base/component.ts': 'components/base/component.ts',
+  'components/base/container.ts': 'components/base/container.ts',
+  'components/base/collection.ts': 'components/base/collection.ts',
+  'components/base/base-page.ts': 'components/base/base-page.ts',
+  'components/base/frame-container.ts': 'components/base/frame-container.ts',
+  'components/base/index.ts': 'components/base/index.ts',
+  'components/index.ts': 'components/index.ts',
+  'components/primitives/button.ts': 'components/primitives/button.ts',
+  'components/primitives/text-input.ts': 'components/primitives/text-input.ts',
+  'components/primitives/checkbox.ts': 'components/primitives/checkbox.ts',
+  'components/primitives/select.ts': 'components/primitives/select.ts',
+  'components/primitives/native-select.ts': 'components/primitives/native-select.ts',
+  'components/primitives/link.ts': 'components/primitives/link.ts',
+  'components/primitives/file-input.ts': 'components/primitives/file-input.ts',
+  'components/primitives/radio.ts': 'components/primitives/radio.ts',
+  'components/primitives/element.ts': 'components/primitives/element.ts',
+  'components/primitives/heading.ts': 'components/primitives/heading.ts',
+  'components/primitives/slider.ts': 'components/primitives/slider.ts',
+  'components/primitives/drag-and-drop.ts': 'components/primitives/drag-and-drop.ts',
+  'components/primitives/canvas.ts': 'components/primitives/canvas.ts',
+  'components/primitives/index.ts': 'components/primitives/index.ts',
+  'components/widgets/dialog.ts': 'components/widgets/dialog.ts',
+  'components/widgets/table.ts': 'components/widgets/table.ts',
+  'components/widgets/index.ts': 'components/widgets/index.ts',
+  'shared/utils/visual.ts': 'shared/utils/visual.ts',
+  'shared/utils/network.ts': 'shared/utils/network.ts',
+};

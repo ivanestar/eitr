@@ -1,0 +1,139 @@
+/**
+ * Golden Dataset for evaluating all 6 EITR Operational Skills.
+ */
+
+export interface GoldenSkillCase {
+  skillName:
+    | '/auth-bootstrap'
+    | '/scan-and-generate-pom'
+    | '/automate-ticket'
+    | '/heal-test'
+    | '/map-site'
+    | '/bulk-rescan';
+  description: string;
+  inputScenario: string;
+  expectedWorkflow: {
+    mustContainKeySteps: string[];
+    contractGuarantees: string[];
+    forbiddenPatterns: string[];
+  };
+}
+
+export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
+  // 1. /auth-bootstrap
+  {
+    skillName: '/auth-bootstrap',
+    description: 'Authenticates browser session and serializes credentials into auth.json',
+    inputScenario: 'Run session capture for protected dashboard behind SSO login',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'Execution Mode Decision',
+        'auth.json',
+        'create-if-absent',
+        'excluded from version control',
+      ],
+      contractGuarantees: ['Zero secrets hardcoded', 'StorageState fixture preload'],
+      forbiddenPatterns: ['EITR', 'Eitr'],
+    },
+  },
+  // 2. /scan-and-generate-pom
+  {
+    skillName: '/scan-and-generate-pom',
+    description: 'Crawls live DOM and creates 1:1 Page Object + POM sanity micro-test',
+    inputScenario: 'Scan checkout page (/checkout) and synthesize Page Object with sanity test',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'components/pages/checkout.page.ts',
+        'tests/pom-sanity/checkout.sanity.spec.ts',
+        '3-Tier Locator Priority',
+        'Infinite Scroll & Dynamic Feed Guard',
+        'npm run test:sanity',
+      ],
+      contractGuarantees: [
+        'Now() suffix on snapshot getters',
+        'No expect() in component',
+        'Max 2 Viewport Scrolls for Feeds',
+      ],
+      forbiddenPatterns: ['page.waitForTimeout', 'sleep('],
+    },
+  },
+  // 3. /automate-ticket
+  {
+    skillName: '/automate-ticket',
+    description: 'Full automation workflow with Human Sign-Off Gateway and linear test synthesis',
+    inputScenario: 'Automate ticket AZURE-789 (User Profile Update) from Azure DevOps',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'tms-validator',
+        'Human Sign-Off Gateway',
+        'Markdown proposal artifact',
+        'await test.step',
+        'tests/fixtures.ts',
+      ],
+      contractGuarantees: ['Zero Branching (no if/else/loops)', 'Fixture Dependency Injection'],
+      forbiddenPatterns: ['new LoginPage(page)', 'try/catch around assertions'],
+    },
+  },
+  // 4. /heal-test
+  {
+    skillName: '/heal-test',
+    description: 'Self-healing workflow with 4-point triage and Two-Strike Rule rollback',
+    inputScenario: 'Heal failing test spec tests/checkout.spec.ts after selector drift',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'npx playwright test tests/checkout.spec.ts',
+        '4-Point Trace Triage',
+        'Two-Strike Rule',
+        'git checkout --',
+        '[SELECTOR DRIFT]',
+      ],
+      contractGuarantees: [
+        'Fail-Fast Real Bug Detection',
+        'Maximum 2 fix attempts before rollback',
+      ],
+      forbiddenPatterns: ['sleep(5000) workaround', 'suppress error'],
+    },
+  },
+  // 5. /map-site
+  {
+    skillName: '/map-site',
+    description: 'Concurrent route crawler with URL canonicalization and shared widget extraction',
+    inputScenario: 'Crawl entire web app starting at https://app.example.com/',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'URL Canonicalization',
+        'Pagination Normalization',
+        'docs/site-map.json',
+        'docs/APP_GRAPH.md',
+        'frequency >= 2',
+        'components/widgets/',
+      ],
+      contractGuarantees: [
+        'Shared Primitives First',
+        'Concurrency worker pool',
+        'Anti-Infinite-Scroll Guard',
+      ],
+      forbiddenPatterns: ['infinite crawl loop', 'hardcoded routes'],
+    },
+  },
+  // 6. /bulk-rescan
+  {
+    skillName: '/bulk-rescan',
+    description: 'Batch Page Object locator update with 100% public method signature preservation',
+    inputScenario: 'Batch rescan all Page Objects after global UI redesign',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'eitr rescan',
+        'components/pages/',
+        'preserving public method signatures',
+        '3-Tier Locator Priority',
+        'npm run test:sanity',
+      ],
+      contractGuarantees: [
+        'Preserve dependent tests without editing specs',
+        'Sanity verification gate',
+      ],
+      forbiddenPatterns: ['delete custom methods', 'break signature'],
+    },
+  },
+];
