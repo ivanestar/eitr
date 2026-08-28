@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-08-28
+
+- **CI Reliability Fixes (found by a real Linux CI failure after the 0.5.0 batch widened the test gate):**
+  - **Cross-platform `npm` resolution:** `findNpmCli()` in `packages/cli/src/commands/install.ts` only checked the flat Windows Node.js layout (`<nodeDir>/node_modules/npm/bin/npm-cli.js`). The official POSIX (Linux/macOS) Node.js tarball layout puts `node` in `bin/` and npm one level up in `lib/node_modules/npm/`, so every TypeScript/JavaScript generator combination failed auto-install with "could not locate npm next to the node binary" on `ubuntu-latest`. Added the POSIX candidate path as a fallback.
+  - **`e2e.full-cycle.test.ts` pytest fix:** The Python + Playwright case ran `python -m pytest` against the system Python, but `runInstall()` installs pytest into a project-local `.venv`. Worked by accident locally (a global Python happened to have pytest too); failed on a clean CI runner. The test now invokes the `.venv` interpreter directly, with a system-Python fallback.
+  - **`e2e.full-cycle.test.ts` csproj-name fix:** The C# case asserted the generated `.csproj` filename equals the raw temp-directory basename, but the generator derives the project name via `toProjectName()`, which lowercases it. Masked on Windows by its case-insensitive filesystem; a real mismatch on Linux's case-sensitive filesystem whenever the temp dir's random suffix contained an uppercase letter. `toProjectName()` is now exported from `generate.ts` and reused by the test instead of duplicating (and drifting from) its sanitization logic.
+  - Also prettier-formatted `scripts/check-mirror-parity.mjs` and `scripts/check-version-parity.mjs` (missed by the 0.5.0 batch's formatting pass).
+- **Relicensed from Fair Source (FSL-1.1-ALv2) to Apache License, Version 2.0:** `LICENSE` now contains the full, unmodified Apache-2.0 text. All 4 `package.json` `license` fields updated to the `Apache-2.0` SPDX identifier. `COMMERCIAL.md` and `docs/commercial-license-template.md` removed (no longer applicable - Apache-2.0 has no Competing Use restriction to waive). `README.md`, `CLA.md`, and `CONTRIBUTING.md` updated to drop Fair Source/Competing-Use/Change-Date language and dead links to the removed commercial-licensing files; `CLA.md`'s contribution-rights-assignment clause was reworded from "commercially exploit under fair-source or proprietary licenses" to a narrower future-relicensing right, since there is no longer a commercial-tier license to assign rights into.
+
 ## [0.5.0] - 2026-08-28
 
 - **Audit Remediation Batch (7 CRITICAL + 12 MAJOR findings):**

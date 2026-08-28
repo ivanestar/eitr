@@ -1,8 +1,8 @@
 {
   "name": "@eitr/engine",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Core scaffolding engine for EITR",
-  "license": "FSL-1.1-ALv2",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "engines": {

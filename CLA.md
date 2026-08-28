@@ -4,9 +4,8 @@ Thank you for your interest in contributing to EITR (the "Project").
 In order to clarify the intellectual property license and assignment of rights granted with Contributions, the Project owner, **Ivan Nestaruk** ("Owner"), requires that you accept this Contributor License Agreement before your contributions can be merged into the Project.
 
 - **Project Repository:** [https://github.com/ivanestar/eitr](https://github.com/ivanestar/eitr)
-- **Public License:** [FSL-1.1-Apache-2.0](LICENSE)
+- **Public License:** [Apache-2.0](LICENSE)
 - **Contributing Guidelines:** [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Enterprise Licensing:** [COMMERCIAL.md](COMMERCIAL.md)
 
 ---
 
@@ -21,7 +20,7 @@ In order to clarify the intellectual property license and assignment of rights g
 You hereby irrevocably, perpetually, and unconditionally assign, transfer, and convey to the Owner all worldwide rights, titles, and interests in and to Your Contribution, including but not limited to:
 
 - All copyrights, patents, design rights, and trade secrets.
-- The exclusive right to commercially exploit, monetize, sell, license, sub-license, dual-license, re-license, or rebrand the Contribution under any public, fair-source, or proprietary commercial licenses.
+- The right to sub-license, re-license, or relicense the Contribution under different license terms in the future (e.g. a future Project license change), in addition to its continued availability under the Project's current public license.
 - The right to enforce intellectual property rights and bring claims against third-party infringers.
 
 ## 3. Moral Rights and Attribution
@@ -31,7 +30,7 @@ Your authorship will be publicly acknowledged in the Project's Git commit histor
 
 ## 4. Grant of Back-License to Contributor
 
-The Owner hereby grants You a non-exclusive, worldwide, royalty-free, perpetual license to use, modify, and distribute Your own Contribution under the Project's public license ([Functional Source License, Version 1.1, Apache-2.0 Change License](LICENSE)).
+The Owner hereby grants You a non-exclusive, worldwide, royalty-free, perpetual license to use, modify, and distribute Your own Contribution under the Project's public license ([Apache License, Version 2.0](LICENSE)).
 
 ## 5. Representations and Warranties
 
