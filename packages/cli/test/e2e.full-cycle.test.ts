@@ -56,9 +56,17 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       expect(existsSync(join(cwd, 'components', '__init__.py'))).toBe(true);
       expect(existsSync(join(cwd, 'tests', 'test_smoke.py'))).toBe(true);
 
+      // runInstall() installs pytest into a project-local .venv, not into the system python -
+      // invoke that venv's interpreter directly rather than relying on a system-wide pytest.
+      const venvPython =
+        process.platform === 'win32'
+          ? join(cwd, '.venv', 'Scripts', 'python.exe')
+          : join(cwd, '.venv', 'bin', 'python');
+      const pythonBin = existsSync(venvPython) ? venvPython : 'python';
+
       let output: string;
       try {
-        output = execSync('python -m pytest', {
+        output = execSync(`"${pythonBin}" -m pytest`, {
           cwd,
           encoding: 'utf8',
           timeout: 90000,

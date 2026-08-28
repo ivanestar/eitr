@@ -45,10 +45,16 @@ const defaultRun: SpawnRun = (file, args, opts) =>
     child.on('close', (code) => resolve({ code }));
   });
 
-// npm ships next to the node binary: <nodeDir>/node_modules/npm/bin/npm-cli.js
+// npm ships alongside the node binary, but the relative layout differs by platform:
+// Windows installers put node.exe and node_modules/npm in the same flat directory, while the
+// official POSIX (Linux/macOS) tarballs put node in bin/ and npm one level up in lib/node_modules/npm.
 function findNpmCli(): string | undefined {
-  const p = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
-  return existsSync(p) ? p : undefined;
+  const nodeDir = path.dirname(process.execPath);
+  const candidates = [
+    path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.join(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ];
+  return candidates.find((p) => existsSync(p));
 }
 
 function findPlaywrightCli(projectDir: string): string | undefined {
