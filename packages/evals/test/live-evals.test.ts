@@ -27,7 +27,7 @@ import {
 import { resolveCliModelFlags } from '../src/env-loader.js';
 
 // Resolve any CLI model flags like --sonnet, --flash, --gpt4o
-const cliResolution = resolveCliModelFlags();
+resolveCliModelFlags();
 
 describe('Live LLM Prompt & Agent Comprehensive Evaluation Suite', { timeout: 120_000 }, () => {
   const hasLiveApiKey = Boolean(
@@ -92,7 +92,7 @@ describe('Live LLM Prompt & Agent Comprehensive Evaluation Suite', { timeout: 12
       };
 
       // Save reports to packages/evals/reports/
-      const { markdownPath } = saveBenchmarkReports(summary);
+      saveBenchmarkReports(summary);
 
       // Print comprehensive terminal scorecard
       printTokenUsageTable(sessionBenchmarkItems, `${activeModel} (${activeProviderName})`);

@@ -1,7 +1,7 @@
 # EITR NPM Publish Exclusions
 
 # Development and AI Agent Skills
-.gemini/
+.agents/
 .eitr/
 .env*
 

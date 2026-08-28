@@ -170,8 +170,6 @@ jobs:
       run: npx playwright install --with-deps
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
       run: npm run lint:cpom
-    - name: Run POM Sanity Micro-Tests
-      run: npm run test:sanity
     - name: Run Playwright tests
       run: npm test
     - uses: actions/upload-artifact@v4
@@ -285,7 +283,6 @@ playwright-tests:
   script:
     - npm ci
     - npm run lint:cpom
-    - npm run test:sanity
     - npm test
   artifacts:
     when: always

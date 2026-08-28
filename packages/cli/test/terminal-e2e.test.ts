@@ -132,10 +132,10 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       expect(existsSync(path.join(cwd, 'components', 'primitives', 'button.ts'))).toBe(true);
       expect(existsSync(path.join(cwd, '.github', 'workflows', 'playwright.yml'))).toBe(true);
       expect(existsSync(path.join(cwd, '.mcp.json'))).toBe(true);
-      expect(existsSync(path.join(cwd, '.gemini', 'agents', 'sdet-orchestrator', 'agent.md'))).toBe(
+      expect(existsSync(path.join(cwd, '.agents', 'agents', 'sdet-orchestrator', 'agent.md'))).toBe(
         true,
       );
-      expect(existsSync(path.join(cwd, '.gemini', 'skills', 'automate-ticket', 'SKILL.md'))).toBe(
+      expect(existsSync(path.join(cwd, '.agents', 'skills', 'automate-ticket', 'SKILL.md'))).toBe(
         true,
       );
 

@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, extname, resolve, basename } from 'node:path';
 import { spawnSync, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { TEST_COMBINATIONS, verifyFullCoverage, type TestCombination } from '../../src/pairwise.js';
+import { TEST_COMBINATIONS, verifyFullCoverage } from '../../src/pairwise.js';
 import { startServer, stopServer, type ServerInstance } from './server.js';
 
 const __filename = fileURLToPath(import.meta.url);

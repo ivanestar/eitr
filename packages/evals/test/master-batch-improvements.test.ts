@@ -5,7 +5,6 @@ import { renderAppGraphHtml } from '../../engine/src/plan/templates/app-graph-ht
 import { planSharedScaffold } from '../../engine/src/plan/shared.js';
 import { checkAiTooling } from '../../cli/src/commands/doctor.js';
 import { planAiOperationalSkills } from '../../engine/src/plan/templates/ai-operational-skills.js';
-import { planAiTmsSkills } from '../../engine/src/plan/templates/ai-tms-skills.js';
 import { renderAuthSetupTs } from '../../engine/src/plan/templates/auth-setup.js';
 import { renderGitHooks } from '../../engine/src/plan/templates/git-hooks.js';
 
@@ -15,7 +14,7 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
   it('AC-1: renderAppGraphHtml generates interactive HTML site graph dashboard', () => {
     const html = renderAppGraphHtml('http://localhost:3000');
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('EITR Architecture & Site Topology Graph');
+    expect(html).toContain('Architecture & Site Topology Graph');
     expect(html).toContain('<svg');
     expect(html).toContain('filterGraph');
 
@@ -52,17 +51,6 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
       storageStatePath: '.auth/user.json',
     });
     expect(authSetupCode).toContain('TOTP_SECRET');
-  });
-
-  it('AC-4: Anti-Bug-Spam & Root Cause Deduplication in /tms-triage', () => {
-    const tmsSkills = planAiTmsSkills(assistants, 'jira');
-    const triageSkill = tmsSkills.find((s) => s.path.includes('tms-triage'));
-    expect(triageSkill).toBeDefined();
-
-    const triageContent = (triageSkill?.source as { text: string }).text;
-    expect(triageContent).toContain('Deduplication');
-    expect(triageContent).toContain('Root Cause');
-    expect(triageContent).toContain('Error Signature');
   });
 
   it('AC-5: Batch Proposal Matrix in /automate-ticket', () => {

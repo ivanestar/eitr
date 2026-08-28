@@ -78,12 +78,6 @@ export function renderAiGenerateText(
       : language === 'csharp' || language === 'java'
         ? `{Name}Page.${ext}`
         : `{name}.page.${ext}`;
-  const sanityName =
-    language === 'python'
-      ? 'test_{name}_page_sanity.py'
-      : language === 'csharp' || language === 'java'
-        ? `{Name}PageSanityTest.${ext}`
-        : `{name}-page.sanity.spec.${ext}`;
   const widgetName =
     language === 'python'
       ? '{name}_widget.py'
@@ -99,7 +93,6 @@ You are generating Page Objects and tests for the ${toolName} CPOM framework.
 | What | Where | Naming |
 |---|---|---|
 | Page Object class | \`components/pages/\` | \`${pageName}\` |
-| POM Sanity test | \`tests/pom-sanity/\` | \`${sanityName}\` |
 | Shared reusable widgets | \`components/widgets/\` | \`${widgetName}\` |
 | Base smoke test | \`tests/\` | \`${smokeName}\` |
 | Full scenario / regression tests | \`tests/\` | \`${featureName}\` |
@@ -123,13 +116,13 @@ ${componentSyntax}
 ### 5. API-First Test Setup
 - If test data setup requires >3 UI clicks, use \`ApiClient\` instead.
 
-### 6. Execution-First SDET Protocol & Mandatory Sanity Parity
-- Every Page Object in \`components/pages/<name>.page.${ext}\` MUST have a dedicated \`tests/pom-sanity/{name}-page.sanity.spec.${ext}\` (1:1 strict parity).
-- Autonomous Execution: Whenever creating or modifying Page Objects, you MUST immediately execute \`npm run test:sanity\` (or direct test runner).
+### 6. Execution-First SDET Protocol & Mandatory Live-DOM Liveness Parity
+- Every Page Object in \`components/pages/<name>.page.${ext}\` MUST be verified directly against the live DOM before being treated as complete (1:1 strict parity between Page Objects and verified pages).
+- Autonomous Execution: Whenever creating or modifying Page Objects, you MUST immediately verify them against the live application (via the embedded Playwright MCP tools or the direct test runner).
 - Self-Healing vs Real Bugs:
-  * If tests fail due to selector drift / timing, perform 4-Point Trace Triage with **Visual Diff & Screenshot Overlay** (comparing pre/post failure frames to distinguish semantic text/icon shifts from broken rendering), adjust locators and re-run under the Two-Strike Rule.
+  * If verification fails due to selector drift / timing, perform 4-Point Trace Triage with **Visual Diff & Screenshot Overlay** (comparing pre/post failure frames to distinguish semantic text/icon shifts from broken rendering), adjust locators and re-verify under the Two-Strike Rule.
   * If a genuine application defect is found (backend 500, broken UI), document the real bug clearly without masking.
-- Mandatory Handoff Report: Always list created Page Objects, created sanity specs, test execution results (pass/fail counts), and any detected real application defects.
+- Mandatory Handoff Report: Always list created Page Objects, liveness verification results, test execution results (pass/fail counts), and any detected real application defects.
 - Zero Unverified Code Policy: You MUST NOT hand off unverified or failing code to the user.
 
 ### 7. AST Linear Test Synthesis & TMS Tagging Rules
@@ -154,15 +147,15 @@ ${componentSyntax}
 
 ### 10. Protocol 123 SDET Engineering Standard
 Whenever tasked with automating tickets, establishing baselines, or refactoring code by Protocol 123 (e.g. "via 123", "automate via 123", "/123"):
-- **Phase 0 (Baseline):** Confirm clean project state via \`npm run test:sanity\`.
+- **Phase 0 (Baseline):** Confirm clean project state via \`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`.
 - **Phase 1 (Recon & Web Search):** Inspect live DOM, site-map, and launch Web Search subagents to query official docs for target widgets.
 - **Phase 2 (Spec Formulation):** Output the Automation Proposal Artifact before writing code.
 - **Phase 3 (Plan Review & Arbiter):** Review swarm ('assertion-auditor', 'sdet-architect', 'flake-sentinel') audits plan; 'review-arbiter' filters false positives.
 - **Phase 4 (Human Intent Lock):** Present Proposal to user; ZERO code until approved.
-- **Phase 5 (TDD Dual Synthesis):** 'pom-engineer' synthesizes CPOM components + sanity specs, then 'test-automator' writes linear test code.
+- **Phase 5 (TDD Dual Synthesis):** 'pom-engineer' synthesizes CPOM components and verifies each against the live DOM, then 'test-automator' writes linear test code.
 - **Phase 6 (Code Review & Arbiter):** Reviewers inspect diff; 'review-arbiter' evaluates comments and approves.
 - **Phase 7 (Two-Strike Self-Healing):** Isolated test run (\`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`); max 2 attempts, automatic rollback via \`git checkout -- <files>\` if red.
-- **Phase 8 (Quality Gate & Handoff):** Run linters and sanity specs, present Final Handoff Report with Protocol 123 Telemetry Summary table (Phase, Duration, Est. Tokens In/Out, Est. Cost, Status).
+- **Phase 8 (Quality Gate & Handoff):** Run linters and the test suite, present Final Handoff Report with Protocol 123 Telemetry Summary table (Phase, Duration, Est. Tokens In/Out, Est. Cost, Status).
 
 ## Authenticated Pages Edge Cases
 - If \`.auth/user.json\` exists, you MUST NOT automate the login flow.
@@ -512,7 +505,6 @@ export function renderConventionsMd(
 | What | Where | Naming |
 |---|---|---|
 | Page Object class | \`components/pages/\` | \`{name}.page.${ext}\` |
-| POM Sanity test | \`tests/pom-sanity/\` | \`{name}-page.sanity.spec.${ext}\` |
 | Shared reusable widgets | \`components/widgets/\` | \`{name}.widget.${ext}\` |
 | Base smoke test | \`tests/\` | \`smoke.${specExt}\` |
 | Full scenario / regression tests | \`tests/\` | \`{feature}.${specExt}\` |
@@ -544,13 +536,13 @@ ${componentSyntax}
 - You MUST NOT use absolute HTML paths (e.g. \`div > div > span > button\`).
 - You MUST NOT use index chaining unless targeting structured collections.
 
-### 6. Execution-First SDET Protocol & Mandatory Sanity Parity
-- Every Page Object in \`components/pages/<name>.page.${ext}\` MUST have a dedicated \`tests/pom-sanity/{name}-page.sanity.spec.${ext}\` (1:1 strict parity).
-- Autonomous Execution: Whenever creating or modifying Page Objects, you MUST immediately execute \`npm run test:sanity\` (or direct test runner).
+### 6. Execution-First SDET Protocol & Mandatory Live-DOM Liveness Parity
+- Every Page Object in \`components/pages/<name>.page.${ext}\` MUST be verified directly against the live DOM before being treated as complete (1:1 strict parity between Page Objects and verified pages).
+- Autonomous Execution: Whenever creating or modifying Page Objects, you MUST immediately verify them against the live application (via the embedded Playwright MCP tools or the direct test runner).
 - Self-Healing vs Real Bugs:
-  * If tests fail due to selector drift / timing, adjust locators and re-run under the Two-Strike Rule.
+  * If verification fails due to selector drift / timing, adjust locators and re-verify under the Two-Strike Rule.
   * If a genuine application defect is found (backend 500, broken UI), document the real bug clearly without masking.
-- Mandatory Handoff Report: Always list created Page Objects, created sanity specs, test execution results (pass/fail counts), and any detected real application defects.
+- Mandatory Handoff Report: Always list created Page Objects, liveness verification results, test execution results (pass/fail counts), and any detected real application defects.
 - Zero Unverified Code Policy: You MUST NOT hand off unverified or failing code to the user.
 
 ### 7. Bounded DOM Exploration & Anti-Infinite-Scroll Protocol

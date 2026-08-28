@@ -8,7 +8,6 @@ export function renderPackageJson(projectName: string): string {
     type: 'module',
     scripts: {
       test: 'playwright test --project=chromium',
-      'test:sanity': 'playwright test --project=sanity',
       'test:all': 'playwright test',
       'test:ui': 'playwright test --ui',
       'lint:cpom': 'node scripts/lint-cpom.js',

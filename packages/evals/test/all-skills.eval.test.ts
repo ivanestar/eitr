@@ -22,14 +22,13 @@ describe('All 6 Operational Skills Evaluation Benchmark', () => {
   });
 
   // Skill 2: /scan-and-generate-pom
-  it('2. Evaluates /scan-and-generate-pom 1:1 Page Object + sanity test pair', () => {
+  it('2. Evaluates /scan-and-generate-pom 1:1 Page Object + live-DOM liveness verification', () => {
     const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/scan-and-generate-pom')!;
     const simulatedOutput = `
 # Skill: Scan and Generate POM (/scan-and-generate-pom)
 1. Generate Page Object in components/pages/checkout.page.ts with 3-Tier Locator Priority.
 2. Enforce Infinite Scroll & Dynamic Feed Guard (max 2 viewport scrolls).
-3. Generate companion POM sanity test in tests/pom-sanity/checkout.sanity.spec.ts.
-4. Verify with npm run test:sanity.
+3. Perform Live-DOM Liveness Verification directly against the live application.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,
@@ -101,7 +100,7 @@ describe('All 6 Operational Skills Evaluation Benchmark', () => {
 # Skill: Bulk Rescan (/bulk-rescan)
 1. Run eitr rescan across components/pages/.
 2. Update DOM locators using 3-Tier Locator Priority while strictly preserving public method signatures.
-3. Verify zero regressions via npm run test:sanity.
+3. Verify zero regressions via npm test.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

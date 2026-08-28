@@ -18,14 +18,14 @@ export interface RescanCliOptions {
 const RESCAN_USAGE = `Usage: eitr rescan [options] (alias: eitr recon)
 
 Batch updates Page Object locators across the project when UI design changes,
-preserving public method signatures and verifying component sanity.
+preserving public method signatures and verifying component correctness.
 
 Options:
   --page <name>         Specific page name to rescan (e.g. login, dashboard)
   --route <path>        Target route path (e.g. /login, /dashboard)
   --url <url>           Target base URL (optional, auto-detected)
   --storage-state <f>   Path to storage state JSON (default: .auth/user.json if present)
-  --verify              Run POM sanity micro-tests after updating (default: true, use --no-verify to skip)
+  --verify              Run the project's test suite after updating (default: true, use --no-verify to skip)
   --output <dir>        Output directory for components (default: components/pages)
   --cwd <dir>           Working directory (default: current working directory)
   -h, --help            Show this help message
@@ -173,14 +173,14 @@ export async function runRescan(args: string[]): Promise<number> {
 
   // Verification step
   if (opts.verify) {
-    process.stdout.write(`\n[INFO] Running POM Sanity Verification (npm run test:sanity)...\n`);
+    process.stdout.write(`\n[INFO] Running Page Object Verification (npm test)...\n`);
     const isWindows = process.platform === 'win32';
     const npmCmd = isWindows ? 'npm.cmd' : 'npm';
-    const verifyCode = await executeCommand(npmCmd, ['run', 'test:sanity'], cwd);
+    const verifyCode = await executeCommand(npmCmd, ['test'], cwd);
 
     if (verifyCode !== 0) {
       process.stderr.write(
-        `\n[FAIL] POM Sanity Verification failed with exit code ${verifyCode}.\n`,
+        `\n[FAIL] Page Object Verification failed with exit code ${verifyCode}.\n`,
       );
       return 1;
     }

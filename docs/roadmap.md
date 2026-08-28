@@ -8,7 +8,7 @@
 ## Milestone Progress Overview
 
 - [x] **Milestone 1: AI-Layer Redesign & Multi-Assistant Ecosystem (Foundation & Hardening)**
-- [x] **Milestone 2: Auth Bootstrap & Recon 2.0 with Component Sanity Engine and Topology Graph**
+- [x] **Milestone 2: Auth Bootstrap & Recon 2.0 with Topology Graph**
 - [x] **Milestone 3: TMS MCP Integrations, TMS Validator and Automation Pipeline (`/automate-ticket`)**
 - [x] **Milestone 4: Anti-Fake-Green Assertion Engine, TDM Teardown and Trace-Based Self-Healing**
 - [x] **Milestone 5: Ecosystem Orchestration, Bulk Re-Recon and CI/CD Quality Gates**
@@ -37,9 +37,9 @@
 
 ---
 
-## Milestone 2: Auth Bootstrap & Recon 2.0 with Component Sanity Engine
+## Milestone 2: Auth Bootstrap & Recon 2.0 with Topology Graph
 
-**Goal:** Reliable session authentication, deep route mapping, component deduplication, and 3-tier DOM verification.
+**Goal:** Reliable session authentication and deep route mapping with component deduplication.
 
 ### Key Completed Capabilities:
 
@@ -48,8 +48,15 @@
 - **2.2. Route Topology Crawler (`eitr map`):**
   - Autonomous crawling, `docs/site-map.json`, and interactive SVG/HTML `docs/app-graph.html`.
   - Shared Widget Mining (extracting repeating elements into `components/widgets/`).
-- **2.3. 3-Tier Component Sanity Engine:**
-  - Automated `tests/pom-sanity/*.sanity.spec.ts` isolating component liveness checks from business scenario tests.
+
+> **2.3. 3-Tier Component Sanity Engine — removed.** The generated `sanity` Playwright project,
+> the mandatory `test:sanity` CI step, and the dedicated `tests/pom-sanity/*.sanity.spec.ts`
+> pipeline were never fully wired into scaffolded projects and have been removed rather than
+> completed. AI agent and operational-skill system prompts were updated in lockstep: every
+> instruction that previously told an agent to run `npm run test:sanity` or generate a
+> `*.sanity.spec.ts` file now instructs it to verify each Page Object directly against the live
+> DOM instead, with no persistent sanity test artifact and no generated project shipping a
+> dedicated sanity test project or CI gate.
 
 ---
 
@@ -91,7 +98,7 @@
 ### Key Completed Capabilities:
 
 - **5.1. Bulk Re-Recon (`eitr rescan` / `eitr recon`):**
-  - Updates Page Object locators while preserving public method signatures and verifying via sanity micro-tests.
+  - Updates Page Object locators while preserving public method signatures and verifying via the project's test suite (`--verify`, `npm test`).
 - **5.2. CPOM Contract Linter (`scripts/lint-cpom.js`):**
   - Zero-dependency static audit of CPOM rules (no `sleep`, mandatory `Now()`, no assertions in components, fixture DI).
 - **5.3. Pre-Commit Hooks & Docker Preset:**

@@ -2,7 +2,7 @@
 
 export function renderGitHooks(): string {
   return `#!/bin/sh
-# EITR Pre-Commit Quality & Eval Gate
+# Pre-Commit Quality & Eval Gate
 # Ensures zero broken linters or regressions before commit
 
 echo "Running code quality & prompt evaluation checks..."

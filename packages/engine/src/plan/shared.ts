@@ -24,6 +24,7 @@ import { renderCpomLinter } from './templates/cpom-linter.js';
 import { renderDockerfile, renderDockerignore } from './templates/docker.js';
 import { renderAppGraphHtml } from './templates/app-graph-html.js';
 import { renderGitHooks } from './templates/git-hooks.js';
+import { renderOverridesReadme } from './templates/overrides-readme.js';
 
 /**
  * Emits project infrastructure files that are fully independent of the language and automation
@@ -65,6 +66,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderGitHooks() },
+    },
+    {
+      path: 'overrides/README.md',
+      writePolicy: 'create-if-absent',
+      provenance: { origin: 'seed' },
+      source: { kind: 'inline', text: renderOverridesReadme() },
     },
     ...(opts.docker !== false
       ? ([

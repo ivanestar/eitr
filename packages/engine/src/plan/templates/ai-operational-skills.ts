@@ -23,7 +23,7 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 ## 8-Phase SDET Lifecycle
 
 ### Phase 0: Pre-Flight Baseline
-- Execute baseline verification via terminal: \`${isCypress ? 'npm run test:sanity' : 'npm run test:sanity'}\` to confirm clean initial state.
+- Execute baseline verification via terminal: \`npm test\` to confirm clean initial state.
 
 ### Phase 1: Recon, Live Web Search & Ingestion
 1. Requirements Ingestion & GIGO Gate:
@@ -70,8 +70,7 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 
 ### Phase 5: TDD Dual Synthesis
 1. Step 5a (Shared Primitives First):
-   - 'pom-engineer' synthesizes CPOM Page Objects in \`components/pages/\` and dedicated sanity specs in \`tests/pom-sanity/\`.
-   - Executes sanity runner: \`${isCypress ? 'npm run test:sanity' : 'npm run test:sanity'}\`.
+   - 'pom-engineer' synthesizes CPOM Page Objects in \`components/pages/\` and verifies each one against the live DOM.
 2. Step 5b (Linear Test Synthesis):
    - 'test-automator' synthesizes strictly linear test code in \`tests/TC-{id}-{feature}.spec.ts\`.
    - Wrap steps in \`await test.step()\`, inject fixtures via \`test.extend\`, and register teardown via \`apiClient.registerTeardown()\`.
@@ -92,12 +91,11 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 \`\`\`
 
 ### Phase 8: Quality Gate & Final Handoff
-- Run contract audit: \`npm run lint:cpom\` and \`npm run test:sanity\`.
+- Run contract audit: \`npm run lint:cpom\` and \`npm test\`.
 - Present the deterministic Final Handoff Report with Telemetry Summary:
 \`\`\`markdown
 ### Final Handoff Report
 - Created/Updated Page Objects: [List with paths]
-- Created/Updated Sanity Specs: [List with paths]
 - Created Test Specs: [List with paths]
 - Execution Results: Total N, Passed M, Failed 0
 - Real Application Bugs Discovered: [None | Issue details]
@@ -174,7 +172,8 @@ Establishes a reusable authenticated browser state for running tests and reconna
     },
     {
       name: 'scan-and-generate-pom',
-      description: 'Crawls a target page, synthesizes CPOM Page Objects, and creates sanity tests.',
+      description:
+        'Crawls a target page, synthesizes CPOM Page Objects, and verifies their liveness against the live DOM.',
       content: `# Skill: Scan and Generate POM (/scan-and-generate-pom)
 
 ## Purpose
@@ -197,20 +196,19 @@ Inspects live application DOM, extracts semantic elements, groups them into CPOM
    - Generate or update Page Object class inheriting from \`BasePage\`.
    - Group related interactive controls into CPOM primitives (Button, TextInput, Select, Table, Dialog) or collections (\`this.list(ItemComponent, spec)\`).
    - Enforce Method Safety Contract (Actions return Promise<void>, Snapshot readers suffixed with \`Now()\`).
-4. **POM Sanity Spec Generation:**
-   - Generate dedicated POM sanity micro-test in \`tests/pom-sanity/<name>-page.sanity.spec.ts\` verifying with Web-First assertions:
+4. **Live-DOM Liveness Verification:**
+   - Verify every generated Page Object directly against the live application with Web-First assertions before treating it as complete:
      * Tier 1: Uniqueness (\`count === 1\`), bounding box, visibility, hit-test readiness.
      * Tier 2: State readers (\`valueNow()\`, \`optionsNow()\`, \`rowCountNow()\`).
      * Tier 3: Non-destructive triggers (tabs, accordions) without clicking mutating actions.
 5. **Mandatory Execution & Self-Healing Loop:**
-   - Immediately execute the sanity test suite via terminal:
-     \`${isCypress ? 'npm run test:sanity' : 'npx playwright test tests/pom-sanity/ --project=sanity'}\`.
+   - Immediately perform the liveness verification via the embedded Playwright MCP tools or an equivalent live check.
    - If failures occur due to locator drift or selector mismatch:
-     * Inspect error traces, perform live DOM triage, adjust locators in the Page Object or sanity test, and re-run (Two-Strike Rule).
+     * Inspect error traces, perform live DOM triage, adjust locators in the Page Object, and re-verify (Two-Strike Rule).
    - If failures are due to genuine application bugs (e.g. backend 500 error, unhandled JS exception, broken UI component):
-     * Do NOT modify the test to hide the bug. Explicitly document and report the real product defect.
+     * Do NOT modify anything to hide the bug. Explicitly document and report the real product defect.
 6. **Mandatory Handoff Report:**
-   - Present a structured summary listing generated Page Objects, generated sanity specs, test execution status (pass/fail counts), and any detected real application defects.
+   - Present a structured summary listing generated Page Objects, liveness verification status (pass/fail counts), and any detected real application defects.
    - PROHIBIT delivering unverified or red code to the user without explicit defect reporting.
 `,
     },
@@ -231,7 +229,7 @@ Transforms an issue or test case from Jira, TestRail, Zephyr, or Azure DevOps in
    - If Quality Score < 80%, halt execution and present a structured Rejection Report with remediation recommendations for the test author.
 3. **Component Resolution & Gap Analysis:**
    - Consult \`docs/site-map.json\` and \`components/pages/\` to resolve target routes, Page Objects, and shared widgets.
-   - If components are missing, trigger \`/scan-and-generate-pom\` to generate required Page Objects and sanity tests.
+   - If components are missing, trigger \`/scan-and-generate-pom\` to generate and liveness-verify the required Page Objects.
 4. **Human Sign-Off Gateway (Proposal Artifact & Batch Mode):**
    - Single Ticket: Present a concise Markdown automation proposal artifact with Ticket ID, Target Route, Page Objects used, Execution Plan, and TDM strategy.
    - Batch Mode: When automating multiple tickets, synthesize a unified **Batch Proposal Matrix** table enabling **1-Click Batch Approval** across all scenarios at once without chat fatigue.
@@ -276,7 +274,7 @@ Performs root-cause analysis on failing test executions and applies precision fi
    - Test data collision -> switch to dynamic TDM via \`apiClient.createUniqueId()\` / \`createTestEmail()\`.
 4. **Attempt 1 Fix & Isolated Execution:**
    - Apply targeted fix and execute ONLY the isolated failing test spec (e.g. \`npx playwright test tests/TC-XXX.spec.ts\`).
-   - If Page Objects were modified, run \`npm run test:sanity\` to ensure neighbor components remain healthy.
+   - If Page Objects were modified, re-verify them against the live DOM to ensure neighbor components remain healthy.
 5. **Attempt 2 Refined Fix:**
    - If still failing, analyze secondary trace and apply refined fix.
 6. **Rollback & Escalation (Two-Strike Rule):**
@@ -294,15 +292,15 @@ Performs page-level locator updates when application design system or layout cha
 
 ## Workflow
 1. **Impacted Target Identification:**
-   - Run existing POM sanity suite in \`tests/pom-sanity/\` (\`npm run test:sanity\`) to identify broken components.
+   - Run the existing test suite (\`npm test\`) to identify broken components.
 2. **Parallel Worker Swarm (Fan-Out / Fan-In):**
    - Orchestrator dispatches parallel 'pom-engineer' worker subagents (Worker Swarm) across affected non-overlapping routes for high-speed concurrent rescanning.
 3. **Component Locator Update:**
    - Update component locators and selectors inside Page Object classes adhering to 3-Tier Locator Priority.
    - Preserve existing public Page Object method signatures to avoid breaking test spec contracts.
-4. **Component Sanity Verification & Healing:**
-   - Re-run POM sanity micro-tests in \`tests/pom-sanity/\` (\`npm run test:sanity\`) to guarantee 100% component liveness.
-   - If any sanity test fails, apply targeted locator fix under the Two-Strike Rule until Green.
+4. **Component Liveness Verification & Healing:**
+   - Re-verify each updated Page Object against the live DOM to guarantee 100% component liveness.
+   - If any component fails verification, apply targeted locator fix under the Two-Strike Rule until Green.
 5. **Business Suite Regression Confirmation:**
    - Re-run dependent business test suites (\`npm test\`) to confirm all tests pass green without modifying any test spec files.
 `,
@@ -336,8 +334,8 @@ Crawls the application page graph with authenticated session, builds the complet
 5. **Orchestrated Fan-Out to POM Engineers (Optional on User Request):**
    - If the user explicitly requested generating Page Objects for the mapped routes:
      * Dispatch parallel 'pom-engineer' worker subagents across discovered routes (1 route per worker).
-     * Ensure each 'pom-engineer' synthesizes 1:1 Page Objects in \`components/pages/\` AND dedicated \`tests/pom-sanity/<name>-page.sanity.spec.ts\`.
-     * Execute a global barrier synchronization: run \`npm run test:sanity\` to confirm 100% Green component liveness before completing.
+     * Ensure each 'pom-engineer' synthesizes 1:1 Page Objects in \`components/pages/\` AND verifies each one against the live DOM.
+     * Execute a global barrier synchronization: confirm 100% Green component liveness across all workers before completing.
 `,
     },
   ];
@@ -366,7 +364,7 @@ export function planAiOperationalSkills(
     if (assistant === 'gemini' || assistant === 'antigravity') {
       for (const skill of skills) {
         descriptors.push({
-          path: `.gemini/skills/${skill.name}/SKILL.md`,
+          path: `.agents/skills/${skill.name}/SKILL.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {
@@ -423,7 +421,12 @@ ${skill.content}`,
           provenance: { origin: 'project' },
           source: {
             kind: 'inline',
-            text: `# Workflow: ${skill.name}
+            text: `---
+name: ${skill.name}
+description: ${skill.description}
+---
+
+# Workflow: ${skill.name}
 
 ${skill.content}`,
           },

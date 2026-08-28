@@ -1,7 +1,6 @@
 // tests/example.spec.ts: a create-if-absent starting point the user owns. The network-free first
 // test is always green once browsers are installed; the real-app smoke is a test.fixme placeholder
-// (shows as pending, never red) until you add real Page Objects. The CPOM pattern itself is shown
-// in the regenerated tests/cpom-showcase.spec.ts.
+// (shows as pending, never red) until you add real Page Objects.
 export function renderExampleTest(framework?: string): string {
   let frameworkDemo = '';
   if (framework === 'react') {

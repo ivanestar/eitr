@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Protocol 123 Meta-Agents Suite (.gemini/agents/)', () => {
-  const agentsDir = path.resolve(process.cwd(), '.gemini/agents');
+describe('Protocol 123 Meta-Agents Suite (.agents/agents/)', () => {
+  const agentsDir = path.resolve(process.cwd(), '.agents/agents');
 
   const EXPECTED_META_AGENTS = [
     'architect',
@@ -117,7 +117,7 @@ describe('Protocol 123 Meta-Agents Suite (.gemini/agents/)', () => {
 
   it('verifies Protocol 123 SKILL.md integrates web-researcher, review-arbiter, and eval parity', () => {
     const skillContent = fs.readFileSync(
-      path.resolve(process.cwd(), '.gemini/skills/protocol-123/SKILL.md'),
+      path.resolve(process.cwd(), '.agents/skills/protocol-123/SKILL.md'),
       'utf8',
     );
     expect(skillContent).toContain('researcher');

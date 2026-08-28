@@ -1,8 +1,8 @@
 {
   "name": "@eitr/cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "CLI for the EITR universal test framework scaffolder",
-  "license": "FSL-1.1-Apache-2.0",
+  "license": "FSL-1.1-ALv2",
   "private": true,
   "type": "module",
   "bin": {
@@ -12,6 +12,7 @@
     "@eitr/engine": "*"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0"
+    "@types/node": "^20.14.0",
+    "vitest": "^2.0.0"
   }
 }

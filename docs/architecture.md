@@ -338,7 +338,7 @@ Eitr directly generates native rule formats and skills tailored to each selected
 - **Windsurf:** `.windsurf/rules/*.md`
 - **Claude Code:** `CLAUDE.md` and `.claude/skills/*/SKILL.md`
 - **GitHub Copilot:** `.github/copilot-instructions.md`
-- **Gemini / Antigravity:** `.gemini/skills/*/SKILL.md` and `AGENTS.md`
+- **Gemini / Antigravity:** `.agents/skills/*/SKILL.md` and `AGENTS.md`
 - **OpenAI Codex:** `.codex/skills/*/SKILL.md`
 - **Aider:** `.aider.conf.yml`, `CONVENTIONS.md`, and `AGENTS.md`
 
@@ -387,21 +387,21 @@ Generated test repositories are structured with four dedicated AI layers:
 
 ```
 Generated Test Repository
-├── 1. Actors Layer (.gemini/agents/, .claude/agents/, .cursor/rules/, .windsurf/rules/, .codex/agents/, .github/agents/)
+├── 1. Actors Layer (.agents/agents/, .claude/agents/, .cursor/rules/, .windsurf/rules/, .codex/agents/, .github/agents/)
 │   ├── sdet-orchestrator     -- Single facade & DAG task router
 │   ├── tms-validator         -- TMS requirements quality gate, atomicity check & GIGO guard
 │   ├── sdet-architect        -- Architecture governance, DI fixtures & CPOM validation
-│   ├── pom-engineer          -- DOM inspection, Page Object generation & sanity checking
+│   ├── pom-engineer          -- DOM inspection, Page Object generation & live-DOM liveness checking
 │   ├── test-automator        -- Linear test synthesis from TMS, dynamic TDM & fast-path API
 │   ├── assertion-auditor     -- Web-first anti-fake-green guard & mutation verification
 │   └── trace-debugger        -- Playwright trace analysis & Two-Strike self-healing
 │
-├── 2. Workflows Layer (.gemini/skills/, .claude/skills/, .cursor/rules/, .windsurf/workflows/, .codex/skills/, .github/)
+├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/rules/, .windsurf/workflows/, .codex/skills/, .github/)
 │   ├── /auth-bootstrap       -- Session capture (auth.json) and state re-use with SSO fallback
-│   ├── /scan-and-generate-pom-- Live DOM exploration + auto-generated *.sanity.spec.ts
+│   ├── /scan-and-generate-pom-- Live DOM exploration + live-DOM Page Object verification
 │   ├── /automate-ticket      -- End-to-end flow: TMS ticket -> DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
-│   ├── /bulk-rescan          -- Batch locator update on Page Objects verified by sanity tests
+│   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
 │   └── /map-site             -- Route graph crawler, site topology & shared widget mining
 │
 ├── 3. Model Context Protocol (MCP) Layer (.mcp.json, .cursor/mcp.json, .claude/mcp.json, etc.)
@@ -413,20 +413,17 @@ Generated Test Repository
     └── CPOM Contract         -- CONVENTIONS.md (Method Safety Contract & locator hierarchy)
 ```
 
-### 13.3 3-Tier Component Sanity Engine (Non-Destructive Liveness Verification)
+### 13.3 3-Tier Component Sanity Engine — Removed
 
-To eliminate broken, hallucinated, or unclickable Page Object elements, EITR incorporates a 3-tier component verification engine and generates dedicated `tests/pom-sanity/<name>-page.sanity.spec.ts` files:
-
-1. **Tier 1: Passive Liveness & Actionability Guard (Non-destructive & Safe)**
-   - Strict mode uniqueness check (`locator.count() === 1`).
-   - Bounding box and rendered dimensions verification (width > 0, height > 0).
-   - Hit-test verification (element is not obscured by sticky headers or overlays).
-   - Actionability state check (`isEditable()`, `isEnabled()`, `isAttached()`).
-2. **Tier 2: State & Read Sanity (100% Non-destructive Read)**
-   - Verification of point-in-time state methods (`valueNow()`, `placeholderNow()`, `optionsNow()`, `rowCountNow()`, `textNow()`).
-3. **Tier 3: Safe Interaction Testing (Categorized Actionability)**
-   - **Read-Only UI Triggers:** Safe interaction with tabs, accordions, and dropdown toggles with automatic restoration of UI state.
-   - **Protected Mutation Actions:** Buttons matching `submit`, `delete`, `pay`, `remove` are verified via Tier 1 and Tier 2 actionability hit-tests without firing destructive click side-effects.
+The 3-tier component sanity engine (a dedicated `sanity` Playwright project, a mandatory
+`npm run test:sanity` CI step, and generated `tests/pom-sanity/<name>-page.sanity.spec.ts` files)
+was never fully wired into scaffolded projects and has been removed rather than completed.
+Generated projects no longer ship a `sanity` test project, a `test:sanity` script, a mandatory
+sanity CI step, or any generated `tests/pom-sanity/` spec files. AI agent and operational-skill
+system prompts were updated in lockstep: every instruction that previously told an agent to run
+`npm run test:sanity` or generate a `*.sanity.spec.ts` file now instructs it to verify each Page
+Object directly against the live DOM (via the embedded Playwright MCP tools) as part of the normal
+generation loop, with no persistent sanity test artifact and no dependency on the removed CI step.
 
 ### 13.4 Anti-Fake-Green Assertion Engine & Dual-Layer Validation
 
@@ -496,7 +493,7 @@ To eliminate boilerplate code duplication across large applications:
 - **Concurrent Topology Crawler (`eitr map` / `/map-site`):** Authenticated crawler explores internal routes within `baseUrl.origin` using a concurrent worker pool (`concurrency: 4..6`) and URL canonicalization (dropping hashes, sorting query parameters, collapsing duplicate slashes), outputting deterministically sorted `docs/site-map.json` and `docs/APP_GRAPH.md` with Mermaid navigation charts.
 - **Shared Widget Mining (`frequency >= 2`):** Repeating DOM structures (Navbar, Sidebar, UserMenu, DataGrid, Modal) appearing across 2 or more routes are extracted into dedicated classes in `components/widgets/<name>.widget.ts` extending `Component`.
 - **CPOM Composition Contract:** Page Objects compose shared widgets via `this.child(WidgetClass, spec)` without subclassing widget classes.
-- **Global Orchestrator-Worker Swarm Paradigm:** For batch Page Object generation, `sdet-orchestrator` enforces Shared Primitives First (generating widgets), dispatches parallel `pom-engineer` worker subagents across routes (1 route per worker), and executes a global barrier synchronization (`npm run test:sanity`).
+- **Global Orchestrator-Worker Swarm Paradigm:** For batch Page Object generation, `sdet-orchestrator` enforces Shared Primitives First (generating widgets), dispatches parallel `pom-engineer` worker subagents across routes (1 route per worker), and executes a global barrier synchronization confirming 100% live-DOM liveness across all workers.
 - **Zero-Flag URL Resolution:** `eitr auth` and `eitr map` discover target `baseURL` automatically via `resolveTargetUrl` (`process.env.E2E_BASE_URL` -> `.eitr/init.json` -> `playwright.config.ts` -> `.env`).
 
 ### 13.12 Bulk Re-Recon & Page Object Contract Preservation (UI Redesign Resilience)
@@ -505,7 +502,7 @@ When application UI layout, styling, or DOM structure changes:
 
 - **CLI Command `eitr rescan` / `eitr recon`:** Scans live application pages or `docs/site-map.json` and updates Page Object locators adhering to 3-Tier Locator Priority (`getByTestId` -> `getByRole` -> `getByLabel`).
 - **Public Contract Preservation:** Updates locator declarations while preserving all existing public method names, parameters, and return types. This ensures that 50+ dependent test specs continue passing without modifying a single line of test code.
-- **Sanity Verification Barrier (`--verify`):** Automatically triggers `npm run test:sanity` on updated components, preventing regression leakage into version control.
+- **Verification Barrier (`--verify`):** Automatically triggers `npm test` on updated components, preventing regression leakage into version control.
 
 ### 13.13 Static CPOM Contract Linter & Multi-Tier CI/CD Quality Gates
 
@@ -519,23 +516,21 @@ To enforce SDET architectural rigor and prevent flakiness in production CI/CD pi
   5. _Rule 5 (Fixture Dependency Injection):_ Rejects raw `new PageObject(page)` instantiation inside test specs.
 - **Multi-Tier CI/CD Quality Gate:**
   - **Tier 1 (Static Contract Gate):** `npm run lint:cpom` (<1 sec static audit before browser launch).
-  - **Tier 2 (POM Sanity Gate):** `npm run test:sanity` (isolated liveness verification of all Page Objects).
-  - **Tier 3 (Scenario Regression Gate):** `npm test` (full parallel E2E scenario execution with trace artifact uploads).
-- **Sanity Project Isolation:** Micro-tests in `tests/pom-sanity/` run isolated under `--project=sanity` and `npm run test:sanity`, preserving `npm test` exclusively for business tests.
+  - **Tier 2 (Scenario Regression Gate):** `npm test` (full parallel E2E scenario execution with trace artifact uploads).
 
 ### 13.14 Protocol 123 SDET Engineering Standard & Review Arbiter
 
 To ensure enterprise-grade test automation quality without architectural drift or LLM hallucinations:
 
 - **The 8-Phase SDET Lifecycle (Protocol 123 / `/123`):**
-  1. _Phase 0 (Baseline):_ `npm run test:sanity` confirms clean initial baseline.
+  1. _Phase 0 (Baseline):_ `npm test` confirms clean initial baseline.
   2. _Phase 1 (Recon & Web Search):_ `recon-scout` / `pom-engineer` crawls DOM and spawns Web Search subagents to query official framework and UI library docs, formulating concrete engineering recommendations.
   3. _Phase 2 (Spec Formulation):_ `sdet-architect` synthesizes the deterministic Automation Proposal Artifact before writing code.
   4. _Phase 3 (Plan Review Swarm & Arbiter):_ Review swarm (`assertion-auditor`, `sdet-architect`, `flake-sentinel`) audits the plan; `review-arbiter` validates findings and emits the official Review Arbiter Verdict Artifact.
   5. _Phase 4 (Human Intent Lock):_ Human engineer reviews and approves the proposal artifact. ZERO code is written until approved.
-  6. _Phase 5 (TDD Dual Synthesis):_ Shared primitives first (`pom-engineer` creates Page Objects + sanity specs and runs `test:sanity`) -> linear test synthesis (`test-automator`).
+  6. _Phase 5 (TDD Dual Synthesis):_ Shared primitives first (`pom-engineer` creates Page Objects and verifies each against the live DOM) -> linear test synthesis (`test-automator`).
   7. _Phase 6 (Code Review Swarm & Arbiter):_ Reviewers audit git diff; `review-arbiter` adjudicates diff comments and authorizes the commit.
   8. _Phase 7 (Two-Strike Self-Healing):_ Isolated test run; 4-point trace triage in `trace.zip`; max 2 attempts, automatic rollback via `git checkout -- <files>` on repeat failure.
-  9. _Phase 8 (Quality Gate & Handoff):_ `npm run lint:cpom` + `npm run test:sanity` + Final Handoff Report.
+  9. _Phase 8 (Quality Gate & Handoff):_ `npm run lint:cpom` + `npm test` + Final Handoff Report.
 - **The Review Arbiter (`review-arbiter`):** Independent judge meta-agent that cross-references review comments against Ground Truth (`CONVENTIONS.md`, `AGENTS.md`, live DOM), classifying each into `ACCEPTED [CRITICAL/MAJOR]`, `DISMISSED: FALSE_POSITIVE`, `DISMISSED: HALLUCINATED_RULE`, or `DISMISSED: OUT_OF_SCOPE`.
 - **4 Deterministic Report Schemas:** Fixed markdown formats for Automation Proposal, Arbiter Verdict, Two-Strike Triage, and Final Handoff Report.

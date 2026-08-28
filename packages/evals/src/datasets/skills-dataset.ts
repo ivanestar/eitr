@@ -39,22 +39,21 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
   // 2. /scan-and-generate-pom
   {
     skillName: '/scan-and-generate-pom',
-    description: 'Crawls live DOM and creates 1:1 Page Object + POM sanity micro-test',
-    inputScenario: 'Scan checkout page (/checkout) and synthesize Page Object with sanity test',
+    description: 'Crawls live DOM and creates 1:1 Page Object verified against the live DOM',
+    inputScenario: 'Scan checkout page (/checkout) and synthesize a live-DOM-verified Page Object',
     expectedWorkflow: {
       mustContainKeySteps: [
         'components/pages/checkout.page.ts',
-        'tests/pom-sanity/checkout.sanity.spec.ts',
         '3-Tier Locator Priority',
         'Infinite Scroll & Dynamic Feed Guard',
-        'npm run test:sanity',
+        'Live-DOM Liveness Verification',
       ],
       contractGuarantees: [
         'Now() suffix on snapshot getters',
         'No expect() in component',
         'Max 2 Viewport Scrolls for Feeds',
       ],
-      forbiddenPatterns: ['page.waitForTimeout', 'sleep('],
+      forbiddenPatterns: ['page.waitForTimeout', 'sleep(', 'test:sanity', 'pom-sanity'],
     },
   },
   // 3. /automate-ticket
@@ -127,13 +126,13 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'components/pages/',
         'preserving public method signatures',
         '3-Tier Locator Priority',
-        'npm run test:sanity',
+        'npm test',
       ],
       contractGuarantees: [
         'Preserve dependent tests without editing specs',
-        'Sanity verification gate',
+        'Live-DOM liveness verification gate',
       ],
-      forbiddenPatterns: ['delete custom methods', 'break signature'],
+      forbiddenPatterns: ['delete custom methods', 'break signature', 'test:sanity', 'pom-sanity'],
     },
   },
 ];

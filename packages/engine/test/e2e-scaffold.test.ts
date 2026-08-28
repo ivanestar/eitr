@@ -29,12 +29,12 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     expect(linterFile?.source.text).toContain('Rule 5: Fixture Dependency Injection');
   });
 
-  it('renders package.json with lint:cpom and test:sanity scripts', () => {
+  it('renders package.json with lint:cpom script', () => {
     const pkgText = renderPackageJson('my-test-project');
     const pkg = JSON.parse(pkgText);
 
     expect(pkg.scripts['lint:cpom']).toBe('node scripts/lint-cpom.js');
-    expect(pkg.scripts['test:sanity']).toBe('playwright test --project=sanity');
+    expect(pkg.scripts['test:sanity']).toBeUndefined();
     expect(pkg.scripts['test']).toBe('playwright test --project=chromium');
   });
 
@@ -42,8 +42,7 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     const workflow = renderGithubActions('typescript', 'playwright');
     expect(workflow).toContain('Audit CPOM Contract & Anti-Fake-Green Rules');
     expect(workflow).toContain('npm run lint:cpom');
-    expect(workflow).toContain('Run POM Sanity Micro-Tests');
-    expect(workflow).toContain('npm run test:sanity');
+    expect(workflow).not.toContain('test:sanity');
     expect(workflow).toContain('Run Playwright tests');
     expect(workflow).toContain('npm test');
   });
@@ -64,13 +63,13 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     expect(paths).toContain('.mcp.json');
 
     // Agents & Skills
-    expect(paths).toContain('.gemini/agents/sdet-orchestrator/agent.md');
-    expect(paths).toContain('.gemini/agents/tms-validator/agent.md');
-    expect(paths).toContain('.gemini/agents/assertion-auditor/agent.md');
-    expect(paths).toContain('.gemini/agents/trace-debugger/agent.md');
-    expect(paths).toContain('.gemini/skills/heal-test/SKILL.md');
-    expect(paths).toContain('.gemini/skills/automate-ticket/SKILL.md');
-    expect(paths).toContain('.gemini/skills/bulk-rescan/SKILL.md');
+    expect(paths).toContain('.agents/agents/sdet-orchestrator/agent.md');
+    expect(paths).toContain('.agents/agents/tms-validator/agent.md');
+    expect(paths).toContain('.agents/agents/assertion-auditor/agent.md');
+    expect(paths).toContain('.agents/agents/trace-debugger/agent.md');
+    expect(paths).toContain('.agents/skills/heal-test/SKILL.md');
+    expect(paths).toContain('.agents/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.agents/skills/bulk-rescan/SKILL.md');
 
     // Scripts & Infrastructure
     expect(paths).toContain('scripts/lint-cpom.js');

@@ -27,9 +27,9 @@ You serve as the single facade for user requests, dispatching tasks to specializ
 - Enforce the Zero-Emoji policy across all generated code, comments, commit messages, and logs.
 - Never write monolithic or unverified test code directly; always delegate tasks to specialized roles.
 - Orchestrator-Worker Parallel Subagent Swarm:
-  * Whenever a task is parallelizable into independent sub-tasks (e.g. multi-route DOM crawling, batch Page Object synthesis across routes from \`docs/site-map.json\`, multi-suite sanity testing), decompose the task and dispatch independent worker subagents.
+  * Whenever a task is parallelizable into independent sub-tasks (e.g. multi-route DOM crawling, batch Page Object synthesis across routes from \`docs/site-map.json\`, multi-suite scenario testing), decompose the task and dispatch independent worker subagents.
   * Shared Primitives First: Always synthesize shared widgets (\`components/widgets/<name>.widget.ts\`) before launching parallel Page Object workers to prevent locator code duplication.
-  * Fan-Out / Fan-In Barrier: Launch concurrent \`pom-engineer\` subagents (1 isolated route per worker), collect results, and execute a global synchronization barrier (\`npm run test:sanity\`).
+  * Fan-Out / Fan-In Barrier: Launch concurrent \`pom-engineer\` subagents (1 isolated route per worker), collect results, and execute a global synchronization barrier (\`npm test\`).
 
 ## Subagent Routing Matrix
 1. Architecture & Standards -> 'sdet-architect'
@@ -47,10 +47,10 @@ Whenever the user requests automating a ticket, setting up framework baselines, 
 - Phase 2 (Spec Formulation - SDD): Synthesize concise Automation Proposal Artifact (Route, POMs, API Preconditions, Dynamic TDM, Assertion Matrix, Web Research recommendations).
 - Phase 3 (Plan Review Swarm & Arbiter Adjudication): Dispatch review swarm ('assertion-auditor', 'sdet-architect', 'flake-sentinel'). Route raw review comments to 'review-arbiter' to filter false positives and issue the official Arbiter Verdict.
 - Phase 4 (Human Intent Lock): Present Proposal Artifact and Arbiter Verdict to the human engineer. ZERO code is written until approved.
-- Phase 5 (TDD Dual Synthesis): 'pom-engineer' creates/updates CPOM components + runs sanity tests -> 'test-automator' synthesizes linear test code.
+- Phase 5 (TDD Dual Synthesis): 'pom-engineer' creates/updates and verifies CPOM components against the live DOM -> 'test-automator' synthesizes linear test code.
 - Phase 6 (Code Review Swarm & Arbiter Adjudication): Reviewers inspect git diff -> 'review-arbiter' adjudicates and approves diff.
 - Phase 7 (Two-Strike Self-Healing): 'trace-debugger' runs isolated test; 4-point trace triage; max 2 attempts, automatic rollback via git checkout -- <files> if red.
-- Phase 8 (Quality Gate & Handoff): Run linters and sanity specs, generate Final Handoff Report.
+- Phase 8 (Quality Gate & Handoff): Run linters and the test suite, generate Final Handoff Report.
 
 ## Workflow Execution Steps
 1. Parse user intent (e.g. automate ticket, map site routes, generate page objects, debug failing test).
@@ -63,10 +63,10 @@ Whenever the user requests automating a ticket, setting up framework baselines, 
 4. If user requested Page Objects for mapped routes:
    - Extract recurring shared widgets into \`components/widgets/\`.
    - Dispatch parallel 'pom-engineer' worker subagents across discovered routes (1 route per worker).
-   - Ensure 1:1 Page Object and dedicated POM sanity test generation (\`tests/pom-sanity/<name>-page.sanity.spec.ts\`).
-5. Mandatory Execution Quality Gate: Ensure all tests are executed in the terminal (\`npm run test:sanity\` for components/routes, \`npm test\` for scenario tests).
+   - Ensure 1:1 Page Object generation and live-DOM liveness verification for every route (0 unverified pages).
+5. Mandatory Execution Quality Gate: Ensure all tests are executed in the terminal (\`npm test\`).
 6. Autonomous Triage: If tests fail due to selectors/flakiness, route to 'trace-debugger' for Two-Strike self-healing. If a real application defect is found, document it clearly without masking.
-7. Present a concise, structured final report listing created Page Objects, created sanity tests, test execution results (pass/fail counts), and any detected real application bugs.
+7. Present a concise, structured final report listing created Page Objects, test execution results (pass/fail counts), and any detected real application bugs.
 `,
     },
     {
@@ -116,8 +116,8 @@ You are the guardian of architectural integrity for this ${frameworkName} (${lan
   * Analyze \`docs/site-map.json\` to identify UI components appearing across >= 2 routes (e.g. Navbar, Sidebar, UserMenu, DataGrid, Modal).
   * Mandate extracting recurring UI structures into dedicated classes in \`components/widgets/<name>.widget.ts\` extending \`Component\`.
   * Page Objects must strictly extend \`BasePage\` and compose widgets via \`this.child(WidgetClass, spec)\`; subclassing widget classes is STRICTLY PROHIBITED.
-- Enforce Mandatory POM Sanity Test Coverage:
-  * Every Page Object in \`components/pages/<name>.page.ts\` MUST have a dedicated \`tests/pom-sanity/<name>-page.sanity.spec.ts\` test (1:1 strict parity).
+- Enforce Mandatory Live-DOM Liveness Verification:
+  * Every Page Object in \`components/pages/<name>.page.ts\` MUST be verified against the live DOM before being treated as complete (1:1 strict parity between Page Objects and verified pages).
 - Enforce Dependency Injection via test fixtures:
   * ${isCypress ? 'Use Cypress custom commands and fixtures (`cy.fixture()`); avoid monolithic helper imports.' : 'Use test fixture extensions (`test.extend<{ loginPage: LoginPage, dashboardPage: DashboardPage, apiClient: ApiClient }>()`); PROHIBIT direct instantiation like `new LoginPage(page)` inside test files.'}
 - Enforce the Method Safety Contract:
@@ -132,7 +132,7 @@ You are the guardian of architectural integrity for this ${frameworkName} (${lan
       name: 'pom-engineer',
       role: 'Page Object & Component Engineer',
       description:
-        'Inspects DOM, generates CPOM components, and validates liveness with sanity tests.',
+        'Inspects DOM, generates CPOM components, and validates liveness against the live application.',
       systemPrompt: `# Role: POM Engineer
 
 You are responsible for generating, updating, and validating Page Objects and components based on live application DOM.
@@ -146,7 +146,7 @@ You are responsible for generating, updating, and validating Page Objects and co
   * Focus on the assigned route unit in isolation (Work-Unit Isolation).
   * Reuse existing shared widgets in \`components/widgets/<name>.widget.ts\`.
   * Synthesize dedicated Page Object in \`components/pages/<name>.page.ts\`.
-  * For EVERY Page Object, generate a dedicated \`tests/pom-sanity/<name>-page.sanity.spec.ts\` (1:1 strict parity, 0 missing pages).
+  * For EVERY Page Object, verify all locators directly against the live DOM before reporting it complete (1:1 strict parity, 0 unverified pages).
   * Run local verification and return structured JSON/Markdown results to the orchestrator.
 
 ## 3-Tier Locator Priority Hierarchy
@@ -163,27 +163,25 @@ You are responsible for generating, updating, and validating Page Objects and co
 - When inspecting complex UI widgets (e.g. Radix dialogs, shadow DOM, virtualized tables, custom select dropdowns), launch Web Search subagents to inspect official documentation and current testing best practices.
 - Synthesize actionable engineering recommendations for the SDET Architect and Test Automator based on research findings.
 
-## Dedicated POM Sanity Tests & Mandatory Execution Loop
-- 1:1 Strict Parity: For EVERY Page Object created or updated in \`components/pages/<name>.page.ts\`, you MUST generate its dedicated \`tests/pom-sanity/<name>-page.sanity.spec.ts\` micro-test (0 unverified Page Objects).
-- Implement 3-Tier Component Sanity Engine:
+## Live-DOM Liveness Verification & Mandatory Execution Loop
+- 1:1 Strict Parity: For EVERY Page Object created or updated in \`components/pages/<name>.page.ts\`, you MUST verify all of its locators directly against the live application before reporting it complete (0 unverified Page Objects). This verification is a live check, not a persistent generated test file.
+- Apply the 3-Tier Component Liveness Check:
   * Tier 1 (Liveness): Uniqueness (\`count === 1\`), visibility, rendered dimensions, hit-test readiness.
   * Tier 2 (State Read): Safe point-in-time reads (\`valueNow()\`, \`optionsNow()\`, \`rowCountNow()\`).
   * Tier 3 (Interaction): Non-destructive UI triggers (tabs, accordions) without triggering mutating actions (submit, delete, pay).
-- MANDATORY AUTONOMOUS TEST EXECUTION:
-  * You MUST NEVER end your turn without executing the generated sanity tests via your terminal tool:
-    Run \`${isCypress ? 'npm run test:sanity' : 'npx playwright test tests/pom-sanity/ --project=sanity'}\` (or targeted spec execution).
+- MANDATORY AUTONOMOUS VERIFICATION:
+  * You MUST NEVER end your turn without verifying the generated Page Object against the live DOM (via the embedded Playwright MCP tools or an equivalent live check).
 - AUTONOMOUS DEBUGGING & TWO-STRIKE SELF-HEALING:
-  * If tests fail due to locator mismatch, timing, or strict mode violations:
+  * If verification fails due to locator mismatch, timing, or strict mode violations:
     1. Inspect the terminal error output and DOM trace.
-    2. Adjust locators/selectors in the Page Object or sanity test and re-run.
+    2. Adjust locators/selectors in the Page Object and re-verify.
     3. Maximum 2 self-healing attempts.
-  * REAL BUG DETECTION: If a failure is caused by a genuine application defect (e.g. backend 500 error, unhandled JS error, crash, missing feature), DO NOT hide or hack the test. Explicitly log and report the real application bug.
+  * REAL BUG DETECTION: If a failure is caused by a genuine application defect (e.g. backend 500 error, unhandled JS error, crash, missing feature), DO NOT hide or hack the verification. Explicitly log and report the real application bug.
 - MANDATORY HANDOFF REPORT:
   * Your final response MUST include a structured report stating:
     1. List of created/updated Page Objects.
-    2. List of created/updated Sanity Specs.
-    3. Test Execution Results (exact command executed, total tests, passed, failed).
-    4. Verified 100% Green status (or explicit details of any real application defects blocking green runs).
+    2. Liveness Verification Results (locators checked, passed, failed).
+    3. Verified 100% Green status (or explicit details of any real application defects blocking green verification).
 `,
     },
     {
@@ -314,7 +312,7 @@ export function planAiAgents(
     if (assistant === 'gemini' || assistant === 'antigravity') {
       for (const agent of agents) {
         descriptors.push({
-          path: `.gemini/agents/${agent.name}/agent.md`,
+          path: `.agents/agents/${agent.name}/agent.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {
@@ -382,7 +380,12 @@ ${agent.systemPrompt}`,
           provenance: { origin: 'project' },
           source: {
             kind: 'inline',
-            text: `# ${agent.role} (${agent.name})
+            text: `---
+trigger: model_decision
+description: ${agent.description}
+---
+
+# ${agent.role} (${agent.name})
 
 <agent_profile>
 Role: ${agent.role}
@@ -395,28 +398,30 @@ ${agent.systemPrompt}`,
       }
     } else if (assistant === 'codex') {
       for (const agent of agents) {
+        const tomlEscape = (value: string): string => value.replace(/"/g, '\\"');
         descriptors.push({
-          path: `.codex/agents/${agent.name}.md`,
+          path: `.codex/agents/${agent.name}.toml`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {
             kind: 'inline',
-            text: `---
-name: ${agent.name}
-description: ${agent.description}
-role: ${agent.role}
----
-
+            text: `name = "${tomlEscape(agent.name)}"
+description = "${tomlEscape(agent.description)}"
+model = "gpt-5-codex"
+model_reasoning_effort = "medium"
+developer_instructions = """
 # ${agent.role}
 
-${agent.systemPrompt}`,
+${agent.systemPrompt}
+"""
+`,
           },
         });
       }
     } else if (assistant === 'copilot') {
       for (const agent of agents) {
         descriptors.push({
-          path: `.github/agents/${agent.name}.md`,
+          path: `.github/agents/${agent.name}.agent.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {

@@ -84,7 +84,7 @@ export function renderAppGraphHtml(baseUrl?: string): string {
     }
     .node.route rect { fill: #0f766e; stroke: #2dd4bf; }
     .node.page rect { fill: #4338ca; stroke: #818cf8; }
-    .node.sanity rect { fill: #15803d; stroke: #4ade80; }
+    .node.test rect { fill: #15803d; stroke: #4ade80; }
     .sidebar {
       width: 320px;
       background: var(--card-bg);
@@ -97,7 +97,7 @@ export function renderAppGraphHtml(baseUrl?: string): string {
 <body>
   <header>
     <div>
-      <h1>EITR Architecture & Site Topology Graph</h1>
+      <h1>Architecture & Site Topology Graph</h1>
       <small style="color: var(--text-muted);">Target Application: <code>${url}</code></small>
     </div>
     <div class="controls">
@@ -126,25 +126,25 @@ export function renderAppGraphHtml(baseUrl?: string): string {
           <rect x="-75" y="-20" width="150" height="40" />
           <text>DashboardPage (CPOM)</text>
         </g>
-        <g class="node sanity" transform="translate(550, 200)">
+        <g class="node test" transform="translate(550, 200)">
           <rect x="-60" y="-20" width="120" height="40" />
-          <text>login.sanity.spec</text>
+          <text>login.spec</text>
         </g>
-        <g class="node sanity" transform="translate(550, 400)">
+        <g class="node test" transform="translate(550, 400)">
           <rect x="-65" y="-20" width="130" height="40" />
-          <text>dashboard.sanity.spec</text>
+          <text>dashboard.spec</text>
         </g>
       </svg>
     </div>
     <div class="sidebar">
       <h3>Topology Overview</h3>
       <p style="color: var(--text-muted); font-size: 0.9rem;">
-        This interactive graph visualizes the relationship between application routes, Component Page Objects, and verified sanity test suites.
+        This interactive graph visualizes the relationship between application routes, Component Page Objects, and verified test suites.
       </p>
       <ul>
         <li><strong>Routes Mapped:</strong> 2</li>
         <li><strong>Page Objects:</strong> 2</li>
-        <li><strong>Sanity Coverage:</strong> 100%</li>
+        <li><strong>Test Coverage:</strong> 100%</li>
       </ul>
     </div>
   </main>

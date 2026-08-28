@@ -220,7 +220,7 @@ packages/engine/src/plan/templates/python/
    - Producers → `@property` (Python) / getter (TS) returning component instance.
    - Snapshot reads → `_now()` suffix (Python) / `Now()` suffix (TS).
    - 0 assertions inside component or page classes.
-4. **AI rules** — Generate native `.claude/`, `.cursor/`, `.windsurf/`, `.codex/`, or `.gemini/skills/` files. The **stack-scaler** rule must NOT be included.
+4. **AI rules** — Generate native `.claude/`, `.cursor/`, `.windsurf/`, `.codex/`, or `.agents/skills/` files. The **stack-scaler** rule must NOT be included.
 
 ---
 

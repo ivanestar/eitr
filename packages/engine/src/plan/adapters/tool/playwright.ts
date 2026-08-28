@@ -55,7 +55,15 @@ export class PlaywrightAdapter implements ToolAdapter {
         path: 'tests/auth.setup.ts',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'seed' },
-        source: { kind: 'inline', text: renderAuthSetup() },
+        source: {
+          kind: 'inline',
+          text: renderAuthSetup({
+            baseUrl,
+            ...(opts.storageStatePath !== undefined
+              ? { storageStatePath: opts.storageStatePath }
+              : {}),
+          }),
+        },
       },
       {
         path: '.env.example',

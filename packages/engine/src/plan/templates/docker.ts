@@ -118,7 +118,7 @@ cypress/screenshots/
 .git/
 .github/
 .gitlab/
-.gemini/
+.agents/
 .claude/
 .cursor/
 .windsurf/

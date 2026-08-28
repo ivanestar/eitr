@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { GOLDEN_AGENTS_DATASET } from '../src/datasets/agents-dataset.js';
 import { gradeOrchestratorOutput } from '../src/graders/orchestrator-grader.js';
 import { gradeTmsValidatorOutput } from '../src/graders/tms-validator-grader.js';
 import { gradeCpomCode } from '../src/graders/cpom-grader.js';
@@ -10,7 +9,6 @@ import { gradeTriageOutput } from '../src/graders/triage-grader.js';
 describe('All 7 AI Agents Evaluation Benchmark', () => {
   // Agent 1: sdet-orchestrator
   it('1. Evaluates sdet-orchestrator dispatch and routing matrix', () => {
-    const agentCase = GOLDEN_AGENTS_DATASET.find((a) => a.agentName === 'sdet-orchestrator')!;
     const simulatedOutput = `
 Parsed intent: Automate ticket JIRA-404.
 Step 1: Dispatch to tms-validator for GIGO requirements quality check.
@@ -26,7 +24,6 @@ Step 3: Dispatch to pom-engineer and test-automator for linear test synthesis.
 
   // Agent 2: tms-validator
   it('2. Evaluates tms-validator GIGO quality gate and scorecard', () => {
-    const agentCase = GOLDEN_AGENTS_DATASET.find((a) => a.agentName === 'tms-validator')!;
     const simulatedOutput = `
 # TMS Quality Scorecard
 - Overall Score: 30%

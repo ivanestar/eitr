@@ -90,15 +90,20 @@ describe('Target Generators Parity Audit', () => {
       });
 
       if (!generator.automationTool.includes('cypress')) {
-        it('emits framework helpers when profile framework is set', () => {
-          const reactProfile = {
-            ...profile,
-            framework: { value: 'react', label: 'React', confidence: 1 },
-          };
-          const reactFiles = generator.plan(reactProfile, opts);
-          const hasReactHelper = reactFiles.some((f) => f.path.toLowerCase().includes('react'));
-          expect(hasReactHelper).toBe(true);
-        });
+        it.each(['react', 'vue', 'svelte', 'angular'])(
+          'emits framework helpers when profile framework is %s',
+          (framework) => {
+            const frameworkProfile = {
+              ...profile,
+              framework: { value: framework, label: framework, confidence: 1 },
+            };
+            const frameworkFiles = generator.plan(frameworkProfile, opts);
+            const hasFrameworkHelper = frameworkFiles.some((f) =>
+              f.path.toLowerCase().includes(framework),
+            );
+            expect(hasFrameworkHelper).toBe(true);
+          },
+        );
       }
     });
   }

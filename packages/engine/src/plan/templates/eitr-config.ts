@@ -41,13 +41,7 @@ export const eitrConfig = {
   projects: [
     {
       name: 'chromium',
-      testIgnore: [/.*\\.sanity\\.spec\\.(ts|js)/, /\\.probe\\./],
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'sanity',
-      testDir: './tests/pom-sanity',
-      testMatch: /.*\\.sanity\\.spec\\.(ts|js)/,
+      testIgnore: [/\\.probe\\./],
       use: { ...devices['Desktop Chrome'] },
     },
   ],

@@ -510,64 +510,6 @@ public class SmokeTest : PageTest
 `;
 }
 
-export function renderCsharpCpomShowcaseTest(): string {
-  return `using Microsoft.Playwright.NUnit;
-using NUnit.Framework;
-using Components.Pages;
-
-namespace Tests;
-
-[Parallelizable(ParallelScope.Self)]
-[TestFixture]
-public class CpomShowcaseTest : PageTest
-{
-    [Test]
-    public async Task ShowcaseLoginTest()
-    {
-        await Page.SetContentAsync(@"
-            <form>
-              <label for='user'>Username</label>
-              <input id='user' type='text' />
-              <label for='pass'>Password</label>
-              <input id='pass' type='password' />
-              <button type='submit'>Log In</button>
-            </form>
-        ");
-
-        var loginPage = new LoginPage(Page);
-        await loginPage.LoginAsync("admin", "secret123");
-    }
-}
-`;
-}
-
-export function renderCsharpApiShowcaseTest(): string {
-  return `using NUnit.Framework;
-using Shared.Utils;
-
-namespace Tests;
-
-[TestFixture]
-public class ApiShowcaseTest
-{
-    [Test]
-    public async Task ApiGetTest()
-    {
-        try
-        {
-            var client = new ApiClient("https://jsonplaceholder.typicode.com/");
-            var response = await client.GetAsync("posts/1");
-            Assert.That((int)response.StatusCode, Is.EqualTo(200));
-        }
-        catch (Exception ex)
-        {
-            Assert.Ignore($"Skipping API test due to network unavailability: \${ex.Message}");
-        }
-    }
-}
-`;
-}
-
 export function renderCsharpReactHelpers(): string {
   return `using System.Threading.Tasks;
 using Microsoft.Playwright;

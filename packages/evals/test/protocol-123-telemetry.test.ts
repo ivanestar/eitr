@@ -34,7 +34,7 @@ describe('Task 1: Token, Cost & Time Telemetry in Protocol 123', () => {
   });
 
   it('AC-3: protocol-123 SKILL.md and AGENTS.md include Telemetry Summary in Phase 8', () => {
-    const skillPath = path.resolve(process.cwd(), '.gemini/skills/protocol-123/SKILL.md');
+    const skillPath = path.resolve(process.cwd(), '.agents/skills/protocol-123/SKILL.md');
     const skillContent = fs.readFileSync(skillPath, 'utf8');
     expect(skillContent).toContain('Protocol 123 Telemetry Summary');
     expect(skillContent).toContain('Est. Tokens');

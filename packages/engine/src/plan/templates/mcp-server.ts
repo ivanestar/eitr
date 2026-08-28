@@ -44,7 +44,7 @@ const CACHE_DIR = join(process.cwd(), '.tms-cache');
 
 function logDebug(msg) {
   if (process.env.DEBUG_MCP) {
-    process.stderr.write(\`[EITR-MCP] \${msg}\\n\`);
+    process.stderr.write(\`[TMS-BRIDGE] \${msg}\\n\`);
   }
 }
 
@@ -135,7 +135,7 @@ function handleToolsList() {
         type: 'object',
         properties: {
           specPath: { type: 'string', description: 'Relative path to test spec file (e.g. "tests/TC-1042.spec.ts")' },
-          project: { type: 'string', description: 'Optional project name (e.g. "chromium", "sanity")' },
+          project: { type: 'string', description: 'Optional project name (e.g. "chromium")' },
           headed: { type: 'boolean', description: 'Run in headed browser mode' },
           timeoutMs: { type: 'number', description: 'Timeout in ms (default 60000)' }
         },
@@ -432,7 +432,7 @@ export function httpGet(urlStr, headers = {}) {
         port: u.port || (u.protocol === 'https:' ? 443 : 80),
         path: u.pathname + u.search,
         method: 'GET',
-        headers: { 'User-Agent': 'EITR-MCP-Bridge/1.0', ...headers },
+        headers: { 'User-Agent': 'TMS-Bridge/1.0', ...headers },
         timeout: 10000,
       };
 
@@ -469,7 +469,7 @@ export function httpPost(urlStr, body, headers = {}) {
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(dataStr),
-          'User-Agent': 'EITR-MCP-Bridge/1.0',
+          'User-Agent': 'TMS-Bridge/1.0',
           ...headers,
         },
         timeout: 10000,

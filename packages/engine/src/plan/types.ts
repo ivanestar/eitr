@@ -16,10 +16,8 @@ export interface PlanOptions {
   aiAssistants?: string[];
   // Selected Test Management System (TMS) for MCP integration
   tmsProvider?: string;
-  // Default storageState file path baked into emitted playwright.config.ts (Stage 2).
+  // Default storageState file path baked into emitted auth-setup.ts (Stage 2).
   storageStatePath?: string;
-  // When true, emit co-located *.sanity.spec.ts files next to Page Object blueprints (Stage 2).
-  generateSanitySpecs?: boolean;
   // When false, suppress Dockerfile and .dockerignore emission.
   docker?: boolean;
 }

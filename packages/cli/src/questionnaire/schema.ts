@@ -135,6 +135,7 @@ const AI_ASSISTANT_CHOICES: readonly Choice[] = [
   { label: 'Windsurf (.windsurf)', value: 'windsurf' },
   { label: 'Codex CLI (.codex/skills)', value: 'codex' },
   { label: 'GitHub Copilot (.github/copilot)', value: 'copilot' },
+  { label: 'Aider (.aider.conf.yml)', value: 'aider' },
 ];
 
 export function isToolSupportedByLanguage(tool: string, language: string): boolean {
