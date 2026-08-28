@@ -26,6 +26,9 @@ AutomatedTests/
 .eitr/
 .eitr-tmp/
 
+# Internal-only planning doc - not part of the public repo
+docs/roadmap.md
+
 # Environment variables and secrets
 .env
 .env.*
