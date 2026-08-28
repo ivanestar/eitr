@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, basename } from 'node:path';
+import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { runNew } from '../src/commands/new.js';
+import { toProjectName } from '../src/commands/generate.js';
 
 const tmpDirs: string[] = [];
 
@@ -256,7 +257,10 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       ]);
 
       expect(exitCode).toBe(0);
-      const csprojName = `${basename(cwd)}.csproj`;
+      // The generator derives the project name via toProjectName() (lowercased + sanitized),
+      // not the raw temp-dir basename - matching that here avoids a case-sensitive-filesystem
+      // mismatch (masked on Windows by its case-insensitive FS, real on Linux CI).
+      const csprojName = `${toProjectName(cwd)}.csproj`;
       expect(existsSync(join(cwd, csprojName))).toBe(true);
       expect(existsSync(join(cwd, 'components', 'BasePage.cs'))).toBe(true);
       expect(existsSync(join(cwd, 'components', 'primitives', 'Button.cs'))).toBe(true);

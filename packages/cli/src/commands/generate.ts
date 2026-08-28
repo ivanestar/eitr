@@ -38,7 +38,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 // A safe npm "name" from the project folder basename.
-function toProjectName(dir: string): string {
+export function toProjectName(dir: string): string {
   const base = path
     .basename(dir)
     .toLowerCase()
