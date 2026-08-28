@@ -112,8 +112,16 @@ if (statSync(claudeSkillsDir, { throwIfNoEntry: false })) {
 // still fails (the anchor text has to match, not just the position).
 const KNOWN_LEGITIMATE_RESIDUE = [
   { kind: 'agent', slug: 'core-developer', claudeAnchor: 'No Full-File Overwrites' },
-  { kind: 'skill', slug: 'project-memory-keeper', claudeAnchor: 'Use the `@@EDIT@@` tool to update the sections' },
-  { kind: 'skill', slug: 'project-memory-keeper', claudeAnchor: 'Did not use `@@EDIT@@` for targeted update' },
+  {
+    kind: 'skill',
+    slug: 'project-memory-keeper',
+    claudeAnchor: 'Use the `@@EDIT@@` tool to update the sections',
+  },
+  {
+    kind: 'skill',
+    slug: 'project-memory-keeper',
+    claudeAnchor: 'Did not use `@@EDIT@@` for targeted update',
+  },
 ];
 
 function isKnownResidue(pair, claudeLine) {
@@ -132,7 +140,9 @@ for (const pair of pairs) {
 
   if (!claudeExists || !agentsExists) {
     realDriftCount++;
-    report.push(`[MISSING MIRROR] ${pair.kind} "${pair.slug}": ${claudeExists ? pair.agentsPath : pair.claudePath} does not exist`);
+    report.push(
+      `[MISSING MIRROR] ${pair.kind} "${pair.slug}": ${claudeExists ? pair.agentsPath : pair.claudePath} does not exist`,
+    );
     continue;
   }
 
@@ -154,10 +164,14 @@ for (const pair of pairs) {
 }
 
 if (realDriftCount > 0) {
-  console.error(`[check-mirror-parity] ${realDriftCount} new drift line(s) found across ${pairs.length} pair(s) (${knownResidueCount} known-legitimate line(s) excluded):`);
+  console.error(
+    `[check-mirror-parity] ${realDriftCount} new drift line(s) found across ${pairs.length} pair(s) (${knownResidueCount} known-legitimate line(s) excluded):`,
+  );
   console.error(report.join('\n'));
   process.exit(1);
 } else {
-  console.log(`[check-mirror-parity] OK - ${pairs.length} agent/skill pair(s) checked, 0 new drift (${knownResidueCount} known-legitimate line(s) excluded).`);
+  console.log(
+    `[check-mirror-parity] OK - ${pairs.length} agent/skill pair(s) checked, 0 new drift (${knownResidueCount} known-legitimate line(s) excluded).`,
+  );
   process.exit(0);
 }

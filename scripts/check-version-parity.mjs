@@ -6,11 +6,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
 const sources = [
-  { label: 'packages/engine/src/version.ts', file: 'packages/engine/src/version.ts', kind: 'version-ts' },
+  {
+    label: 'packages/engine/src/version.ts',
+    file: 'packages/engine/src/version.ts',
+    kind: 'version-ts',
+  },
   { label: 'package.json', file: 'package.json', kind: 'package-json' },
   { label: 'packages/cli/package.json', file: 'packages/cli/package.json', kind: 'package-json' },
-  { label: 'packages/engine/package.json', file: 'packages/engine/package.json', kind: 'package-json' },
-  { label: 'packages/evals/package.json', file: 'packages/evals/package.json', kind: 'package-json' },
+  {
+    label: 'packages/engine/package.json',
+    file: 'packages/engine/package.json',
+    kind: 'package-json',
+  },
+  {
+    label: 'packages/evals/package.json',
+    file: 'packages/evals/package.json',
+    kind: 'package-json',
+  },
   { label: 'CHANGELOG.md (head entry)', file: 'CHANGELOG.md', kind: 'changelog' },
 ];
 
@@ -25,13 +37,21 @@ function extractVersion(source) {
 
   if (source.kind === 'version-ts') {
     const match = content.match(/ENGINE_VERSION\s*=\s*['"]([^'"]+)['"]/);
-    return { ...source, version: match ? match[1] : null, error: match ? null : 'PATTERN NOT FOUND' };
+    return {
+      ...source,
+      version: match ? match[1] : null,
+      error: match ? null : 'PATTERN NOT FOUND',
+    };
   }
 
   if (source.kind === 'package-json') {
     try {
       const json = JSON.parse(content);
-      return { ...source, version: json.version ?? null, error: json.version ? null : 'NO "version" FIELD' };
+      return {
+        ...source,
+        version: json.version ?? null,
+        error: json.version ? null : 'NO "version" FIELD',
+      };
     } catch {
       return { ...source, version: null, error: 'INVALID JSON' };
     }
@@ -39,7 +59,11 @@ function extractVersion(source) {
 
   if (source.kind === 'changelog') {
     const match = content.match(/##\s*\[([^\]]+)\]/);
-    return { ...source, version: match ? match[1] : null, error: match ? null : 'NO [X.Y.Z] HEADER FOUND' };
+    return {
+      ...source,
+      version: match ? match[1] : null,
+      error: match ? null : 'NO [X.Y.Z] HEADER FOUND',
+    };
   }
 
   return { ...source, version: null, error: 'UNKNOWN SOURCE KIND' };
@@ -84,6 +108,8 @@ if (mismatches.length > 0) {
   printTable();
   process.exit(1);
 } else {
-  console.log(`[check-version-parity] OK - all ${results.length} sources agree on version "${expected}".`);
+  console.log(
+    `[check-version-parity] OK - all ${results.length} sources agree on version "${expected}".`,
+  );
   process.exit(0);
 }
