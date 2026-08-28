@@ -5,16 +5,16 @@
   "license": "FSL-1.1-ALv2",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist",
-    "assets"
-  ],
   "devDependencies": {
     "@playwright/test": "1.51.1",
     "@types/node": "^20.14.0",

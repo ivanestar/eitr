@@ -520,11 +520,3 @@ export function getPlannedInstallSteps(
     },
   ];
 }
-
-export function getPlannedInstallCommands(
-  language?: string,
-  automationTool?: string,
-  projectDirOrRel: string = '.',
-): string[] {
-  return getPlannedInstallSteps(language, automationTool, projectDirOrRel).map((s) => s.command);
-}

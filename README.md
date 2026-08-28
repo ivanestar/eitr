@@ -1,7 +1,7 @@
 # EITR: Universal Test Automation Platform Scaffolder
 
 [![CI](https://github.com/ivanestar/eitr/actions/workflows/ci.yml/badge.svg)](https://github.com/ivanestar/eitr/actions/workflows/ci.yml)
-[![License: Fair Source (FSL-1.1)](https://img.shields.io/badge/License-Fair%20Source%20(FSL--1.1)-orange.svg)](https://fsl.software/FSL-1.1-ALv2.template.md)
+[![License: Fair Source (FSL-1.1)](<https://img.shields.io/badge/License-Fair%20Source%20(FSL--1.1)-orange.svg>)](https://fsl.software/FSL-1.1-ALv2.template.md)
 [![npm version](https://img.shields.io/npm/v/@onlytests/eitr.svg)](https://www.npmjs.com/package/@onlytests/eitr)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 [![CLA Assistant](https://img.shields.io/badge/CLA-Assistant-blue.svg)](.github/workflows/cla.yml)
