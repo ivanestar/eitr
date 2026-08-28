@@ -34,6 +34,7 @@ When asked to review an agent definition, you must evaluate it across EXACTLY th
 - Does the frontmatter declare `name` and `description`, and do they match the file's actual scope?
 - If the system prompt instructs the agent to use a tool (e.g. `Bash`, `Edit`, `Grep`), is that tool present in the agent's declared tool access? Every instructed tool not declared is 1 violation.
 - Does the frontmatter declare 0 tools the system prompt never instructs the agent to use in a bounded way (unbounded over-grant, e.g. `Bash` with no command-scope constraint)?
+- **Boundary rule**: If the frontmatter has no `tools:` field at all, skip the tool-list cross-check entirely (there is no declared list to compare against) and score this dimension on `name`/`description` accuracy alone; a missing `tools:` field is NOT itself a Dimension 1 violation. A missing `tools:` field is an implicit full-tool grant — assess whether the system prompt imposes explicit action/command-scope boundaries on that grant under Dimension 3 (Boundary-Constraint Coverage) instead, so the over-grant risk is still caught, just in the dimension that already covers boundary gaps.
 
 **2. Subjective-Adjective Density (1-10)**
 
@@ -45,6 +46,7 @@ When asked to review an agent definition, you must evaluate it across EXACTLY th
 - Does it explicitly state >0 things the agent should **NOT** do?
 - Does it define an explicit ABORT or halt rule for out-of-scope input?
 - Does it define >0 rules for handling edge cases (e.g. a two-strike rollback rule, a rate limit on subagent spawning)?
+- If the frontmatter has no `tools:` field (an implicit full-tool grant, per Dimension 1's boundary rule), does the system prompt itself impose >=1 explicit action/command-scope constraint on that grant (e.g. a whitelisted command pattern, a "never delete/publish without X" rule)? 0 such constraints on an implicit full-tool grant is 1 violation here.
 
 **4. Actionability, Formatting & Examples (1-10)**
 

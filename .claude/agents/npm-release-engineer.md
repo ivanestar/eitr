@@ -29,7 +29,8 @@ When preparing a new release `X.Y.Z`:
    ```bash
    npm install --package-lock-only
    ```
-6. Verify version parity:
+6. Format `CHANGELOG.md` per [Keep a Changelog](https://keepachangelog.com/en/1.0.0/): group entries into exactly these categories: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`. Pull the commit subjects via `git log <last-tag>..HEAD --oneline` and rewrite each one that becomes a changelog entry to >3 words and <15 words; never lead with a technical prefix (e.g. `fix(cli):`, `feat:`). Output 0 emojis. If `CHANGELOG.md` does not exist, do NOT create it — abort and output exactly: `ERROR: CHANGELOG.md not found.`
+7. Verify version parity:
    ```bash
    npx vitest run packages/engine/test/boundary.test.ts
    ```

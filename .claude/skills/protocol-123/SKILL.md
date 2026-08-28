@@ -1,6 +1,6 @@
 ---
 name: protocol-123
-description: Strict 8-phase multi-agent autonomous engineering and bugfixing pipeline triggered by '123' or 'по 123'. Enforces SDD-first specification, multi-agent plan review, user sign-off gateway, TDD-driven execution (Red-Green-Refactor), multi-agent code/test review, two-strike self-healing, and QA verification.
+description: Strict 9-phase multi-agent autonomous engineering and bugfixing pipeline triggered by '123' or 'по 123'. Enforces SDD-first specification, multi-agent plan review, user sign-off gateway, TDD-driven execution (Red-Green-Refactor), multi-agent code/test review, two-strike self-healing, and QA verification.
 ---
 
 # The 123 Protocol Skill (v2.1)
@@ -108,7 +108,7 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 ### Phase 8: QA Guard, Evals Benchmark, Doc Sync & Final Report
 
 - **Mandatory Pre-Test Build**: `qa-guard` MUST ALWAYS execute `npm run build` (compiling all TypeScript sources and runtime JS assets) **BEFORE** running test suites, ensuring that tests run against fresh build artifacts.
-- **Continuous Prompt Benchmark**: Execute `npm run eval` (44+ deterministic eval tests) to guarantee 0 regressions across all AI agents, skills, and assistant rules.
+- **Continuous Prompt Benchmark**: Execute the full `npm run eval` suite (84 deterministic eval tests across 16 files, verified fresh via `npm run eval` — re-check this count rather than trusting it, as it drifts as tests are added) to guarantee 0 regressions across all AI agents, skills, and assistant rules.
 - **Targeted Tests**: Run targeted vitest files for modified modules.
 - **Agent `doc-sync-enforcer`**: Synchronize `CHANGELOG.md`, `README.md`, `ARCHITECTURE.md`, `TODO.md`, `ENGINE_VERSION` in `packages/engine/src/version.ts`, and workspace package manifests (`package.json`, `packages/*/package.json`).
 - **Final Report**: Deliver a structured, high-signal summary report in chat, including the **Protocol 123 Telemetry Summary** table:
