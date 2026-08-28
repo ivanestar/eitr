@@ -1,6 +1,6 @@
-# Project Rules & Agent Instructions
+# Project Rules & Agent Instructions (Claude Code)
 
-This document defines the strict behavioral, architectural, and operational rules for AI assistants (like Antigravity, Claude, Cursor, Aider) working in the EITR repository.
+This document defines the strict behavioral, architectural, and operational rules for Claude Code working in the EITR repository. It is the Claude Code counterpart of `AGENTS.md` (the shared rule set also used by Antigravity CLI and other assistants): the same rules, kept as an independent, self-contained copy with Claude Code's own tool names, paths, and conventions substituted in. See Section 15 for how the two files are kept in sync.
 
 ## 1. Operational Principles & Autonomy
 
@@ -9,7 +9,7 @@ This document defines the strict behavioral, architectural, and operational rule
 - **Master Batch SDD Planning Mode**: When executing groups of related improvements or refactorings, synthesize a unified Master Batch Architectural Plan (SDD) with a combined Executive Summary and AC Matrix to allow 1-click batch approval instead of sequential chat round-trips.
 - **Zero-Hallucination**: Never invent architectural patterns, internal abstractions, or framework features. Always analyze existing patterns (e.g., using search tools) before writing code or making architectural changes.
 - **Fail-Fast & Self-Heal**: If tests, compilation, or linting fails after your changes, DO NOT immediately stop and ask the user for help. Read the error logs, identify the root cause, and make at least one autonomous attempt to fix the issue. If the baseline tools (linter/test runner) are broken _before_ you start, fix the environment first rather than adapting code to broken tools.
-- **Context Freshness**: Never edit files "from memory". You must always read the file (via `view_file` or equivalent) before modifying it, even if you read it 10 minutes ago, to avoid line-shift conflicts.
+- **Context Freshness**: Never edit files "from memory". You must always read the file (via `Read` or equivalent) before modifying it, even if you read it 10 minutes ago, to avoid line-shift conflicts.
 - **Conversational Drift & Context Exhaustion**: If a session runs too long or context becomes overloaded, stop. Summarize the progress in a markdown artifact, present it to the user, and request a context reset (starting a new session) to prevent logic degradation.
 
 ## 2. Advanced Safety & Fallback Protocols
@@ -21,13 +21,13 @@ This document defines the strict behavioral, architectural, and operational rule
 
 ## 3. Token Economy & File Modification Limits
 
-- **Precision Edits over Rewrites**: For files larger than 100 lines, NEVER overwrite the entire file just to change a few lines. You must use targeted text replacement (chunk editing, AST modifications) to prevent accidental code deletion due to token truncation.
+- **Precision Edits over Rewrites**: For files larger than 100 lines, NEVER overwrite the entire file just to change a few lines. You must use targeted text replacement (`Edit`, AST modifications) to prevent accidental code deletion due to token truncation.
 - **Blind Spots & Search Limits**: Do not attempt to read or grep massive auto-generated files or directories (e.g., `package-lock.json`, `.git/`, `dist/`, `.next/`, `node_modules/`). Impose strict depth limits on recursive directory searches to prevent token overflow and crashes.
 
 ## 4. Scope Discipline & Code Style
 
 - **Strict Scope Boundaries**: Modify ONLY the code necessary to complete the task. Absolute ban on "opportunistic refactoring" (cleaning up unrelated functions just because they look imperfect).
-- **Codebase Cleanliness (No Trash Files)**: NEVER leave temporary files, execution artifacts (like `.eitr`, `.gemini`, `.claude`, `temp-cypress`), or agent planning files (like `cli_e2e_plan.md`) in the repository root or packages. All temporary test projects must be generated inside a dedicated sandbox directory or system `tmp` dir and immediately cleaned up after the task. All agent plans must be saved via the UI artifacts feature (in `<appDataDir>\brain\<conversation-id>`) and NOT as markdown files in the actual EITR source tree.
+- **Codebase Cleanliness (No Trash Files)**: NEVER leave temporary files, execution artifacts (like `.eitr`, `.gemini`, `.claude`, `temp-cypress`), or agent planning files (like `cli_e2e_plan.md`) in the repository root or packages. All temporary test projects must be generated inside a dedicated sandbox directory or system `tmp` dir and immediately cleaned up after the task. All agent plans must be saved via the artifacts feature and NOT as markdown files in the actual EITR source tree.
 - **Style & Paradigm Mimicry**: Fully adopt the local coding style (indentation, naming conventions, export patterns). Never introduce new npm packages or utilities if the project already has an equivalent.
 
 ## 5. Execution & Debugging
@@ -43,10 +43,10 @@ This document defines the strict behavioral, architectural, and operational rule
 ## 6. Decision Making, Swarms & Interaction
 
 - **Technical vs Business Decisions**: Independently investigate and resolve technical implementations. Only consult the user for decisions impacting business logic or UX. When doing so, provide pros/cons and a `(Recommended)` option.
-- **Swarm Pattern & Model Routing (Architect-Worker Paradigm)**: For massive structural refactors or deep exploration tasks, do not pollute your primary context. Spawn specialized subagents to research, draft, or review code. Use model routing to optimize resources: the primary agent (`pro` model) should act as the Architect to create strict Markdown plans and handle complex logic. For generating large volumes of standard code (e.g., scaffolding tests, CPOM components), delegate the execution to a `flash` subagent via `invoke_subagent`, and have the `pro` agent review the final result.
+- **Swarm Pattern & Model Routing (Architect-Worker Paradigm)**: For massive structural refactors or deep exploration tasks, do not pollute your primary context. Spawn specialized subagents via the `Agent` tool to research, draft, or review code. Use model routing to optimize resources: the primary agent (`model: sonnet`) should act as the Architect to create strict Markdown plans and handle complex logic. For generating large volumes of standard code (e.g., scaffolding tests, CPOM components), delegate the execution to a subagent pinned to a cheaper/faster model (`model: haiku` in its frontmatter) via the `Agent` tool, and have the primary agent review the final result. Do NOT route to `opus` — restrict model routing to `sonnet` and `haiku` only.
 - **Global Orchestrator-Worker Swarm for Independent Workloads (Fan-Out / Fan-In Paradigm)**:
   - Whenever a task or workflow is decomposable into independent, non-overlapping sub-tasks (e.g. multi-route site crawling, batch Page Object generation across mapped routes, multi-suite validation, or independent multi-file audits), NEVER process them in a slow sequential loop.
-  - The central Orchestrator agent maintains the global state and queue, dispatches parallel worker subagents (1 work-unit per worker), enforces **Shared Primitives First** (synthesizing shared dependencies before workers begin), and executes a strict **Barrier Synchronization** with unified test verification.
+  - The central Orchestrator agent maintains the global state and queue, dispatches parallel worker subagents (1 work-unit per worker) via the `Agent` tool, enforces **Shared Primitives First** (synthesizing shared dependencies before workers begin), and executes a strict **Barrier Synchronization** with unified test verification.
 - **Subagent Failure Handling**: Always monitor and set timeouts for your subagents. If a subagent gets stuck in a failure loop or exceeds its deadline, do not respawn it infinitely. Terminate the subagent, rethink the strategy, or escalate to the user.
 - **Inter-Agent Data Protocol**: When delegating tasks, instruct subagents to return complex findings as structured Markdown artifacts or JSON rather than dumping unstructured text into the chat.
 - **Language**: All plans, questions, and responses in the chat must be written in clear, simple Russian.
@@ -86,8 +86,8 @@ This document defines the strict behavioral, architectural, and operational rule
 ## 11. Self-Reflection & Autonomous Learning
 
 - **End-of-Task Reflection**: After successfully resolving a complex bug, deciphering an undocumented architectural quirk, or struggling with a specific environment issue (e.g., Windows `spawn` path escapes), you MUST perform a brief self-reflection before ending your turn. Ask yourself: _"Is there a generic lesson here that future AI agents working on this project need to know to avoid stepping on the same rake?"_
-- **Autonomous Knowledge Persistence**: If the answer is yes, do NOT wait for the user to tell you to remember it. You must autonomously update this `AGENTS.md` file (or the relevant agent/rule file) with a concise, actionable new rule to prevent the mistake from happening again.
-- **Agent Creation Protocol**: When creating or heavily refactoring an AI agent file (in `.gemini/agents/`, with its `.claude/agents/` counterpart kept in sync per Section 15), you MUST automatically invoke a swarm of `agent-reviewer` subagents for 2-3 iterations. You must harden the agent against subjective adjectives and unmeasurable instructions based on their feedback BEFORE saving and committing the final version.
+- **Autonomous Knowledge Persistence**: If the answer is yes, do NOT wait for the user to tell you to remember it. You must autonomously update this `CLAUDE.md` file (or the relevant agent/rule file) with a concise, actionable new rule to prevent the mistake from happening again — and mirror the same lesson into `AGENTS.md` per Section 15.
+- **Agent Creation Protocol**: When creating or heavily refactoring an AI agent file (in `.claude/agents/`, with its `.gemini/agents/` counterpart kept in sync per Section 15), you MUST automatically invoke a swarm of `agent-reviewer` subagents for 2-3 iterations. You must harden the agent against subjective adjectives and unmeasurable instructions based on their feedback BEFORE saving and committing the final version.
 - **The `/learn` Protocol**: If you notice an overarching change in user preferences or workflow, proactively suggest that the user invoke the `/learn` slash command to permanently persist the new behavior across the entire AI ecosystem.
 
 ## 12. Documentation & Architecture Drift Prevention
@@ -98,7 +98,7 @@ This document defines the strict behavioral, architectural, and operational rule
 
 ## 13. Mandatory Agent-Driven Pipeline & Pre-Action Check
 
-- **Pre-Action Agent & Skill Check**: BEFORE performing ANY action (absolutely before every tool call or code edit), check if a specialized agent exists in `.gemini/agents/` suitable for the task (e.g. `qa-guard`, `npm-release-engineer`), and check if a specific workflow skill exists in `.gemini/skills/` (e.g. `ast-template-engineer`) that provides mandatory knowledge. Agents are actors to execute tasks, whereas Skills are declarative workflows and rules for the current agent to read and follow.
+- **Pre-Action Agent & Skill Check**: BEFORE performing ANY action (absolutely before every tool call or code edit), check if a specialized agent exists in `.claude/agents/` suitable for the task (e.g. `qa-guard`, `npm-release-engineer`), and check if a specific workflow skill exists in `.claude/skills/` (e.g. `ast-template-engineer`) that provides mandatory knowledge. Agents are actors to execute tasks, whereas Skills are declarative workflows and rules for the current agent to read and follow.
 - **Mandatory 5-Stage Workflow Before Writing Code**: Before writing even a single line of code, you MUST strictly execute the following pipeline in order:
   1. **`Architect`**: Inspect context, analyze existing working implementations across the ENTIRE stack (`schema.ts`, `driver.ts`, `prompt.ts`, `reducer.ts`, `generate.ts`, `plan.ts`, templates, unit tests, docs), formulation of a complete end-to-end plan with zero missing touchpoints.
   2. **`core-developer`**: Execute targeted code modifications adhering strictly to project paradigms and holistic pattern mimicry.
@@ -118,7 +118,7 @@ The 123 Protocol is an advanced, deterministic 9-phase multi-agent engineering p
   - The 123 Protocol is activated **STRICTLY AND ONLY** when the user explicitly invokes it using the keyword **"123"** (e.g., _"123"_, _"сделай по 123"_, _"таска по 123"_, _"исправь по 123"_, _"123-fast"_).
   - For standard requests without the keyword "123", execute the task directly in standard mode without running the 9-phase swarm.
   - **Proactive Suggestion (User Decision Gateway)**: If a user request involves complex architectural refactorings or high-risk multi-file changes, the assistant may proactively propose running it via Protocol 123 (e.g. _"Хотите выполнить эту задачу по протоколу 123 с полным мульти-агентным ревью?"_). The 123 pipeline is launched ONLY if the user explicitly agrees.
-- **Full Protocol Definition Lives in the Skill**: The complete 9-phase lifecycle (Pre-Flight Baseline, Research, SDD Plan Formulation, Plan Review Swarm, User Approval Gateway, TDD Execution, Code Review Swarm, Self-Healing, QA/Doc Sync/Telemetry Report) is intentionally NOT duplicated here to keep this always-loaded file lean — it is the single source of truth in `.gemini/skills/protocol-123/SKILL.md`. Once the trigger above fires, load that skill and treat it as mandatory reading; never improvise the phases from memory.
+- **Full Protocol Definition Lives in the Skill**: The complete 9-phase lifecycle (Pre-Flight Baseline, Research, SDD Plan Formulation, Plan Review Swarm, User Approval Gateway, TDD Execution, Code Review Swarm, Self-Healing, QA/Doc Sync/Telemetry Report) is intentionally NOT duplicated here to keep this always-loaded file lean — it is the single source of truth in `.claude/skills/protocol-123/SKILL.md`. Once the trigger above fires, that skill loads its full body automatically; treat it as mandatory reading and never improvise the phases from memory.
 
 ## 15. Multi-System AI Artifact Parity
 

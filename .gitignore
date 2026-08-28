@@ -40,3 +40,6 @@ eval-results/
 .venv/
 **/sandbox/
 TODO.md
+
+# Personal Claude Code session settings (not shared team config)
+.claude/settings.local.json
