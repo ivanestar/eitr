@@ -35,12 +35,14 @@ jobs:
       - name: Build All Packages
         run: npm run build
 
-      # Runs the full engine + CLI unit/integration suite (60+ files, up from the previous
-      # 3-file boundary-test-only gate). One file remains excluded pending its own pre-existing,
-      # unrelated fix — tracked as debt in TODO.md rather than silently skipped here (not
-      # regressed by this change; was already red on main before this workflow was widened):
-      #   - terminal-e2e.test.ts: spawns the real CLI end-to-end (long real-process runtime) and
-      #     has 1 pre-existing failing assertion. Run manually via `npm run test:e2e`.
+      # Runs the full engine + CLI unit/integration suite (60+ files). terminal-e2e.test.ts (spawns
+      # the real CLI end-to-end, including real npm/pip/mvn/gradle installs) previously had 1
+      # failing assertion ("3. CPOM Contract Linter Negative Tests" - a clean-state re-run
+      # returning exit code 1 instead of 0) and was excluded here as tracked debt in TODO.md.
+      # Re-verified 2026-08-29: 5 separate runs (isolated via -t, the full file alone x3, and
+      # alongside the rest of packages/cli/test) all pass with no failures - the assertion could
+      # not be reproduced, so it's very likely a side effect of an earlier, unrelated fix. Restored
+      # to the gate rather than left excluded on an unconfirmed guess.
       # contract.test.ts's 4 manual-setTimeout findings in the shipped runtime components were
       # fixed (waitForAnimations now uses Locator.evaluate's own `timeout` option and
       # page.waitForFunction's native polling instead of a hand-rolled Promise.race/setTimeout) -
@@ -49,7 +51,11 @@ jobs:
       # provider APIs, requires API key secrets, and is non-deterministic by design (see
       # npm run eval:live / eval:sonnet / etc. for on-demand live grading).
       - name: Run Full Test Suite
-        run: npx vitest run packages/engine/test packages/cli/test --exclude "**/terminal-e2e.test.ts"
+        run: npx vitest run packages/engine/test packages/cli/test
 
       - name: Run Deterministic Eval Suite
         run: npm run eval
+
+      # packages/evals/test/e2e/cli.test.ts (16 real npm/pip/mvn/gradle scaffold-and-build
+      # combinations, ~6-7 minutes) is intentionally NOT run here - it runs nightly instead via
+      # nightly.yml, to keep this push/PR gate fast. Run it locally with `npm run test:e2e:pairwise`.

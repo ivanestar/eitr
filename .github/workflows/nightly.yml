@@ -1,0 +1,52 @@
+name: Nightly Full Suite
+
+# Runs the complete gate (same steps as ci.yml) plus the slow pairwise CLI E2E suite
+# (packages/evals/test/e2e/cli.test.ts - 16 real npm/pip/mvn/gradle scaffold-and-build
+# combinations, ~6-7 minutes) that is deliberately NOT part of every push/PR run in ci.yml to
+# keep that feedback loop fast. Scheduled at 03:00 UTC daily (~04:00 CET / ~05:00 CEST Warsaw
+# time - GitHub Actions cron is fixed UTC and does not shift for DST, so the local time drifts by
+# an hour across the year; 03:00 UTC keeps it inside the requested 04:00-05:00 Warsaw window
+# either way).
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    name: Nightly Build & Full Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Code Formatting Check
+        run: npm run format:check
+
+      - name: Build All Packages
+        run: npm run build
+
+      - name: Run Full Test Suite
+        run: npx vitest run packages/engine/test packages/cli/test
+
+      - name: Run Deterministic Eval Suite
+        run: npm run eval
+
+      # The one suite ci.yml deliberately excludes from every push/PR - see the header comment.
+      - name: Run Pairwise CLI E2E Suite
+        run: npm run test:e2e:pairwise

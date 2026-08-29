@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-08-29
 
+- **Both tracked CI regressions fixed, restored to automated gates:**
+  - **`terminal-e2e.test.ts`** was excluded from `ci.yml`'s full-test-suite step over 1
+    pre-existing failing assertion ("3. CPOM Contract Linter Negative Tests"). Re-verified via 5
+    separate runs (isolated, the full file alone x3, and alongside the rest of `packages/cli/test`)
+    - all pass, the failure could not be reproduced (very likely fixed as a side effect of an
+      earlier, unrelated batch). Restored to `ci.yml`'s gate.
+  - **`packages/evals/test/e2e/cli.test.ts`** (16 pairwise CLI combinations with real
+    npm/pip/mvn/gradle scaffold-and-build verification) had 7 failures: 4 Cypress combinations
+    asserted successful generation instead of the intentional 0.5.2 Cypress-withhold gate
+    rejecting it, and 3 C# combinations compared the generated `.csproj` filename against the raw
+    sandbox directory basename instead of `toProjectName(dir, 'csharp')`'s PascalCase output (the
+    same class of bug fixed for a different test file in 0.5.1). Both fixed. This file turned out
+    to be wired into no npm script and no CI workflow at all - nothing had run it since it was
+    written, which is why both regressions went unnoticed for multiple releases. Added
+    `npm run test:e2e:pairwise` and a new `.github/workflows/nightly.yml` (03:00 UTC daily cron,
+    also `workflow_dispatch`) that runs the complete gate (typecheck, format check, build, full
+    test suite, eval suite) plus this pairwise suite - kept out of the push/PR `ci.yml` gate to
+    keep that feedback loop fast, per explicit request rather than adding ~6-7 minutes to every
+    push/PR run.
 - **Medium backlog batch (dead code, doc drift, dependency audits, ESLint):**
   - **Deduplicated stack-detection heuristics:** the CLI questionnaire's URL pre-fill hint (`packages/cli/src/questionnaire/detect.ts`) and the engine's own `recon()` (`packages/engine/src/detect/recon.ts`, which drives actual generation decisions) each hand-rolled a separate framework/UI-library regex heuristic that could disagree on the same URL. Extracted a single shared heuristics module (`packages/engine/src/detect/stack-heuristics.ts`); `detect.ts` now just calls `recon()`. `recon()`'s own heuristics were also strengthened in the process (dropped false-positive-prone signals like bare `id="root"`/`id="app"`, added Next.js/Nuxt/SvelteKit-specific build-artifact signatures) - two existing `recon.test.ts` fixtures were updated to use realistic signal strength to match.
   - **Removed unreachable `defaultOutputDirForAutomationTool` branches:** `webdriverio`/`selenium`/`junit`/`nunit` cases could never be hit - `AUTOMATION_TOOL_CHOICES` never offers those values and `validateAnswer` rejects any out-of-choice-set value before this function runs.

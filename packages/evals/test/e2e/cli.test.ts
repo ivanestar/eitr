@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, extname, resolve, basename } from 'node:path';
+import { join, extname, resolve } from 'node:path';
 import { spawnSync, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { TEST_COMBINATIONS, verifyFullCoverage } from '../../src/pairwise.js';
 import { startServer, stopServer, type ServerInstance } from './server.js';
+import { toProjectName } from '../../../cli/src/commands/generate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
@@ -146,6 +147,16 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
           },
         );
 
+        // Cypress is withheld from release pending a native CPOM redesign (see the SUPPORTED
+        // matrix comment in packages/cli/src/commands/generate.ts) - the withhold gate rejects
+        // it with exit code 1 and generates nothing, same as e2e.full-cycle.test.ts asserts.
+        if (combo.automationTool === 'cypress') {
+          expect(cliResult.status).toBe(1);
+          expect(cliResult.stderr).toContain('not one of the available choices');
+          expect(existsSync(join(sandboxDir, 'package.json'))).toBe(false);
+          return;
+        }
+
         expect(
           cliResult.status,
           `CLI execution failed (exit code ${cliResult.status}).\nSTDOUT: ${cliResult.stdout}\nSTDERR: ${cliResult.stderr}`,
@@ -156,7 +167,9 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
           expect(existsSync(join(sandboxDir, 'pyproject.toml'))).toBe(true);
           expect(existsSync(join(sandboxDir, 'conftest.py'))).toBe(true);
         } else if (combo.language === 'csharp') {
-          const csprojName = `${basename(sandboxDir)}.csproj`;
+          // The generator derives the project name via toProjectName() - PascalCase for csharp
+          // (see the 0.5.1 CHANGELOG entry) - not the raw sandbox directory basename.
+          const csprojName = `${toProjectName(sandboxDir, 'csharp')}.csproj`;
           expect(existsSync(join(sandboxDir, csprojName))).toBe(true);
         } else if (combo.language === 'java') {
           if (combo.automationTool.includes('gradle')) {
