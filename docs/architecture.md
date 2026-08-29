@@ -17,6 +17,29 @@ Confirmed with the user after the earlier design drifted into a TS/Playwright lo
 **Flow:** minimal CLI questionnaire → quick headless recon of the target's start page → generate the
 framework core tuned to the detected stack.
 
+## Long-term product vision (2026-08-29) — deterministic base for a full SDET ecosystem
+
+The scaffolder itself (this document's main subject) is deliberately the FIRST, deterministic layer
+of a larger intended product, not the whole product. Stated by the project owner: the goal is that a
+SDET arrives on a project, runs EITR once to deterministically stand up a framework core that is
+genuinely production-grade (not cosmetic scaffolding), and from that point works with AI assistants
+*on top of* that base for the rest of the engagement — growing the framework and discharging ongoing
+QA responsibility — rather than EITR being a one-shot tool with no further role. The MCP bridge, the
+multi-assistant slash-command layer, and the TMS integrations exist because of this: they are the
+seams through which AI agents keep operating on the generated framework long after `eitr new` exits,
+not incidental extras. Planned/considered extensions along this axis (not yet built - see TODO.md's
+"Идеи буста" section) include agents for requirements analysis and test-case generation driven from
+application analysis or existing documentation, and other pieces that fit "one place, full SDET
+lifecycle" access rather than a disconnected tool.
+
+**Why this raises the bar on the deterministic base's own correctness**: because agents are expected
+to build on top of the generated framework indefinitely, a defect in the base layer does not stay a
+one-time bug - it gets inherited and amplified by every agent action layered on top of it afterward.
+This is the concrete reason CPOM-contract correctness, cross-platform generation reliability, and
+CI verification depth (Section 12/13 of `CLAUDE.md`/`AGENTS.md`) matter more here than they would for
+a disposable one-shot generator, and should be weighed accordingly when triaging what's worth fixing
+before a release vs. deferring.
+
 1. **CLI questionnaire (minimal).** Ask ONLY what inspection can't determine: the **start-page URL**,
    output location, TS + Playwright confirm, optional stack hints. **Never ask for login /
    credentials / auth — ever.**
