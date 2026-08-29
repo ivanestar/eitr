@@ -40,6 +40,18 @@ CI verification depth (Section 12/13 of `CLAUDE.md`/`AGENTS.md`) matter more her
 a disposable one-shot generator, and should be weighed accordingly when triaging what's worth fixing
 before a release vs. deferring.
 
+**Governing design principle: augmentation, not replacement.** The project owner has stated this
+explicitly and it should shape every future agent/automation design in this ecosystem: the goal is
+NOT to remove the human SDET from any decision - it is to let one strong SDET operate at the
+throughput of several by having tools and agents handle context assembly and analysis, while the
+SDET retains all architectural and consequential decisions. Concretely, this means: a proposed design
+that has an agent autonomously merge, auto-approve, or take an irreversible/consequential action
+without a human decision point is the WRONG default shape for this ecosystem, even where it is
+technically feasible - prefer designs where the agent's output is a fully-prepared decision (a
+diagnosis, a draft PR, an assembled context bundle) that a human still explicitly triggers or
+approves. This is a stronger, first-class constraint, not merely a cautious MVP stepping stone to be
+relaxed later.
+
 1. **CLI questionnaire (minimal).** Ask ONLY what inspection can't determine: the **start-page URL**,
    output location, TS + Playwright confirm, optional stack hints. **Never ask for login /
    credentials / auth — ever.**
