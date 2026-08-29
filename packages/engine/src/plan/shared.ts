@@ -163,7 +163,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             path: '.aider.conf.yml',
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
-            source: { kind: 'inline', text: renderAiderConf() },
+            source: { kind: 'inline', text: renderAiderConf(opts.automationTool, opts.language) },
           },
         ] as FileDescriptor[])
       : []),

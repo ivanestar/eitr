@@ -571,10 +571,29 @@ ${componentSyntax}
 `;
 }
 
-export function renderAiderConf(): string {
+export function renderAiderConf(automationTool: string = 'playwright', language?: string): string {
+  const isCypress = automationTool.toLowerCase().includes('cypress');
+  const isPython = language === 'python';
+  const isDotnet = language === 'csharp';
+  const isJava = language === 'java';
+
+  const testCmd = isCypress
+    ? 'npx cypress run'
+    : isPython
+      ? 'pytest'
+      : isDotnet
+        ? 'dotnet test'
+        : isJava
+          ? 'mvn test'
+          : 'npx playwright test';
+
+  const hasCpomLinter = !isPython && !isDotnet && !isJava;
+
   return `read:
   - CONVENTIONS.md
-`;
+test-cmd: ${testCmd}
+auto-test: false
+${hasCpomLinter ? 'lint-cmd: npm run lint:cpom\nauto-lint: false\n' : ''}`;
 }
 
 export function renderAgentsMd(

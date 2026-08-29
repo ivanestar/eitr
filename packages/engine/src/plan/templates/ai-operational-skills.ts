@@ -144,33 +144,6 @@ Establishes a reusable authenticated browser state for running tests and reconna
 `,
     },
     {
-      name: 'auth-bootstrap',
-      description:
-        'Captures, validates, and manages authenticated browser sessions for testing (/auth-setup, /auth-bootstrap).',
-      content: `# Skill: Auth Bootstrap (/auth-bootstrap)
-
-## Purpose
-Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones.
-
-## Workflow
-1. **Execution Mode Decision:**
-   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write JWT/session token directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
-   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
-     * If \`process.env.TOTP_SECRET\` is provided, automatically generate TOTP 2FA code (RFC 6238).
-     * If developer session cookies are available, import them directly into storageState.
-     * Fallback to headed browser session with manual prompt to the engineer.
-2. **Session Serialization:**
-   - Capture cookies, localStorage, session tokens, and headers.
-   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
-3. **CI Environment Alignment:**
-   - For CI/CD runs, configure Service Account token injection via environment variables (\`process.env.AUTH_TOKEN\` / \`process.env.E2E_API_TOKEN\`).
-4. **Fixture Integration:**
-   - Generate or update authentication fixtures in the test project to preload \`.auth/user.json\` into browser context.
-5. **Verification:**
-   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
-`,
-    },
-    {
       name: 'scan-and-generate-pom',
       description:
         'Crawls a target page, synthesizes CPOM Page Objects, and verifies their liveness against the live DOM.',
@@ -317,7 +290,7 @@ Crawls the application page graph with authenticated session, builds the complet
 ## Workflow
 1. **Authenticated Session Loading:**
    - Load authenticated storage state from \`.auth/user.json\` (or fallback to \`auth.json\`).
-   - If not authenticated, prompt engineer to execute \`/auth-bootstrap\`.
+   - If not authenticated, prompt engineer to execute \`/auth-setup\`.
 2. **Concurrent Route Exploration & Pagination Normalization (Worker Pool):**
    - Execute parallel crawling with worker pool (\`concurrency = 4..6\`) and canonical URL normalization.
    - Automatically strip volatile pagination and cursor query parameters (\`page\`, \`offset\`, \`cursor\`, \`limit\`, \`per_page\`) to collapse dynamic feeds into single canonical routes and eliminate crawler loop traps.

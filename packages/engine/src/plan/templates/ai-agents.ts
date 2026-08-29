@@ -5,6 +5,8 @@ interface AgentDefinition {
   role: string;
   description: string;
   systemPrompt: string;
+  /** Least-privilege Claude Code tool scope for this agent's role. */
+  tools: readonly string[];
 }
 
 function buildAgentDefinitions(tool: string, language: string): AgentDefinition[] {
@@ -16,6 +18,7 @@ function buildAgentDefinitions(tool: string, language: string): AgentDefinition[
       name: 'sdet-orchestrator',
       role: 'Principal SDET Lead & Automation Orchestrator',
       description: 'Single facade and coordinator for the AI-First SDET platform workflows.',
+      tools: ['Read', 'Glob', 'Grep', 'Bash'],
       systemPrompt: `# Role: SDET Orchestrator
 
 You are the central coordinator for the automated testing lifecycle in this ${frameworkName} (${language}) repository.
@@ -74,6 +77,7 @@ Whenever the user requests automating a ticket, setting up framework baselines, 
       role: 'TMS Requirements Quality Validator',
       description:
         'Validates test case atomicity, expected results, and TDM prerequisites before automation.',
+      tools: ['Read', 'Glob', 'Grep'],
       systemPrompt: `# Role: TMS Validator
 
 You inspect and validate requirements extracted from Test Management Systems (Jira, TestRail, Zephyr, Azure DevOps) before test automation begins.
@@ -106,6 +110,7 @@ You serve as the Garbage-In Garbage-Out (GIGO) protection guard.
       name: 'sdet-architect',
       role: 'SDET Framework Architect',
       description: 'Enforces CPOM design patterns, architectural boundaries, and AST quality.',
+      tools: ['Read', 'Glob', 'Grep'],
       systemPrompt: `# Role: SDET Architect
 
 You are the guardian of architectural integrity for this ${frameworkName} (${language}) test repository.
@@ -133,6 +138,7 @@ You are the guardian of architectural integrity for this ${frameworkName} (${lan
       role: 'Page Object & Component Engineer',
       description:
         'Inspects DOM, generates CPOM components, and validates liveness against the live application.',
+      tools: ['Read', 'Write', 'Bash', 'Glob', 'Grep'],
       systemPrompt: `# Role: POM Engineer
 
 You are responsible for generating, updating, and validating Page Objects and components based on live application DOM.
@@ -188,6 +194,7 @@ You are responsible for generating, updating, and validating Page Objects and co
       name: 'test-automator',
       role: 'Automated Test Engineer',
       description: 'Synthesizes clean, linear, and deterministic test scripts from TMS test cases.',
+      tools: ['Read', 'Write', 'Bash', 'Glob', 'Grep'],
       systemPrompt: `# Role: Test Automator
 
 You transform structured TMS test cases (Jira, TestRail, Zephyr, Azure DevOps) into production-grade automated tests.
@@ -209,6 +216,7 @@ You transform structured TMS test cases (Jira, TestRail, Zephyr, Azure DevOps) i
       role: 'Quality & Assertion Auditor',
       description:
         'Guards against fake-green tests, verifies business invariants, and audits mutations.',
+      tools: ['Read', 'Glob', 'Grep'],
       systemPrompt: `# Role: Assertion Auditor
 
 You audit automated tests to eliminate false-positive ("fake-green") test executions.
@@ -231,6 +239,7 @@ You audit automated tests to eliminate false-positive ("fake-green") test execut
       role: 'Trace & Flakiness Debugger',
       description:
         'Analyzes Playwright traces and logs to perform self-healing under the Two-Strike Rule.',
+      tools: ['Read', 'Write', 'Bash', 'Glob', 'Grep'],
       systemPrompt: `# Role: Trace Debugger
 
 You diagnose and resolve test execution failures using execution traces, network waterfalls, and console logs.
@@ -261,6 +270,7 @@ You diagnose and resolve test execution failures using execution traces, network
       role: 'Independent Review Arbiter & Quality Judge',
       description:
         'Adjudicates multi-agent plan and code reviews, filters hallucinations and false positives, and issues authoritative actionable verdicts.',
+      tools: ['Read', 'Glob', 'Grep'],
       systemPrompt: `# Role: Review Arbiter
 
 You are the authoritative judge for all multi-agent plan and code reviews in this ${frameworkName} (${language}) repository.
@@ -339,11 +349,7 @@ ${agent.systemPrompt}`,
 name: ${agent.name}
 description: ${agent.description}
 tools:
-  - Read
-  - Write
-  - Bash
-  - Glob
-  - Grep
+${agent.tools.map((t) => `  - ${t}`).join('\n')}
 ---
 
 # ${agent.role}

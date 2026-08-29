@@ -435,7 +435,7 @@ Generated Test Repository
 │   └── trace-debugger        -- Playwright trace analysis & Two-Strike self-healing
 │
 ├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/rules/, .windsurf/workflows/, .codex/skills/, .github/)
-│   ├── /auth-bootstrap       -- Session capture (auth.json) and state re-use with SSO fallback
+│   ├── /auth-setup           -- Session capture (auth.json) and state re-use with SSO fallback
 │   ├── /scan-and-generate-pom-- Live DOM exploration + live-DOM Page Object verification
 │   ├── /automate-ticket      -- End-to-end flow: TMS ticket -> DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop

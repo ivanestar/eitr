@@ -4,7 +4,7 @@
 
 export interface GoldenSkillCase {
   skillName:
-    | '/auth-bootstrap'
+    | '/auth-setup'
     | '/scan-and-generate-pom'
     | '/automate-ticket'
     | '/heal-test'
@@ -20,9 +20,9 @@ export interface GoldenSkillCase {
 }
 
 export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
-  // 1. /auth-bootstrap
+  // 1. /auth-setup
   {
-    skillName: '/auth-bootstrap',
+    skillName: '/auth-setup',
     description: 'Authenticates browser session and serializes credentials into auth.json',
     inputScenario: 'Run session capture for protected dashboard behind SSO login',
     expectedWorkflow: {

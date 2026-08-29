@@ -575,17 +575,17 @@ Orchestrate automation for Jira ticket AZURE-505 ("User Checkout Flow") and upda
     },
   );
 
-  // ── Eval 12: Live Operational Skill Protocol (/heal-test & /auth-bootstrap) ───
+  // ── Eval 12: Live Operational Skill Protocol (/heal-test & /auth-setup) ───
   it(
-    '12. Live Operational Skill Protocol (/heal-test Two-Strike Rule & /auth-bootstrap)',
+    '12. Live Operational Skill Protocol (/heal-test Two-Strike Rule & /auth-setup)',
     { timeout: 120_000 },
     async () => {
       const systemInstruction = `You are an SDET operational skills engineer.
-Explain the execution protocols for /heal-test (single-spec isolation, 4-point triage, Two-Strike Rule rollback via git checkout --) and /auth-bootstrap (SSO headed vs token, session serialization into auth.json, storageState preload).
+Explain the execution protocols for /heal-test (single-spec isolation, 4-point triage, Two-Strike Rule rollback via git checkout --) and /auth-setup (SSO headed vs token, session serialization into auth.json, storageState preload).
 Adhere strictly to Zero-Emoji and Zero Lock-in rules.`;
 
       const userPrompt = `
-Describe the execution protocol for /heal-test and /auth-bootstrap.
+Describe the execution protocol for /heal-test and /auth-setup.
 `;
 
       const result = await runEvalPrompt(userPrompt, systemInstruction);

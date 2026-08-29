@@ -3,11 +3,11 @@ import { GOLDEN_SKILLS_DATASET } from '../src/datasets/skills-dataset.js';
 import { gradeSkillCompliance } from '../src/graders/skills-grader.js';
 
 describe('All 6 Operational Skills Evaluation Benchmark', () => {
-  // Skill 1: /auth-bootstrap
-  it('1. Evaluates /auth-bootstrap workflow and session serialization', () => {
-    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/auth-bootstrap')!;
+  // Skill 1: /auth-setup
+  it('1. Evaluates /auth-setup workflow and session serialization', () => {
+    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/auth-setup')!;
     const simulatedOutput = `
-# Skill: Auth Bootstrap (/auth-bootstrap)
+# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
 1. Execution Mode Decision: Use headed mode for interactive SSO or headless API for token endpoints.
 2. Session Serialization: Store cookies and localStorage in auth.json (create-if-absent, excluded from version control).
 3. Integration: Load auth.json into Playwright storageState fixture.

@@ -118,7 +118,7 @@ function auditFile(filePath) {
 
     // Rule 4: Unawaited Promise Guard in Tests
     if (isTest) {
-      if (/expect\\s*\\([\\s\\S]*?\\.(?:isVisible|isEnabled|isChecked|isHidden)\\(\\)\\s*\\)\\s*\\.toBeTruthy\\(\\)|\bexpect\\s*\\([\\s\\S]*?\\.(?:isVisible|isEnabled|isChecked|isHidden)\\(\\)\\s*\\)\\s*\\.toBeFalsy\\(\\)/.test(line)) {
+      if (/expect\\s*\\([\\s\\S]*?\\.(?:isVisible|isEnabled|isChecked|isHidden|isDisabled|isEditable)\\(\\)\\s*\\)\\s*\\.(?:toBeTruthy|toBeFalsy)\\(\\)/.test(line)) {
         violations.push({
           file: relPath,
           line: lineNum,
