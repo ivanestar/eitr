@@ -590,7 +590,8 @@ function renderWizardHeader(stepIndex?: number): string {
     '',
     'CI/CD',
     'AI Rules',
-    'TMS / MCP',
+    'Tracker',
+    'TMS',
     'Review',
   ];
   const parts: string[] = [];
