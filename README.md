@@ -14,7 +14,7 @@ EITR is a zero-lock-in scaffolding engine that generates the **Core** of resilie
 ## Core Principles
 
 1. **100% Zero Lock-in:** Generated code is completely autonomous with zero runtime dependencies on `@eitr/engine`. The framework belongs 100% to your team.
-2. **Polyglot & Multi-Tool:** Full native Playwright support across 5 languages (TypeScript, JavaScript, Python, C# (.NET), and Java). Cypress is supported natively for TypeScript and JavaScript only, matching Cypress's own language runtime.
+2. **Polyglot:** Full native Playwright support across 5 languages (TypeScript, JavaScript, Python, C# (.NET), and Java). Cypress support (TypeScript/JavaScript) is temporarily withheld pending a CPOM primitive redesign native to its own retry/command-chain model.
 3. **Component Page Object Model (CPOM):** Typed base classes (`BasePage`, `Component`, `Collection`, `Container`) and production-grade primitives (`Button`, `TextInput`, `Table`, `Dialog`, `DragAndDrop`, `Canvas`) enforcing strict separation of state reads (`Now()` suffixes) and user actions.
 4. **AI-Native & MCP Integration:** An embedded, zero-dependency JSON-RPC MCP Stdio server (`scripts/mcp-server/`) allowing AI assistants to directly run isolated tests, inspect semantic DOM trees, fetch TMS test cases, and post execution results.
 5. **Zero-Emoji Policy:** Clean, professional engineering style with zero visual noise across code, CLI outputs, and documentation.

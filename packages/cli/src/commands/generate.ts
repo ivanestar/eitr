@@ -38,13 +38,27 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 // A safe npm "name" from the project folder basename.
-export function toProjectName(dir: string): string {
+// npm/pip/Java package naming all favor lowercase-kebab, so that's the default. .NET's own
+// convention (assembly name, root namespace) is PascalCase - a lowercase-kebab .csproj name is
+// valid but reads as foreign to any C# developer, so csharp gets its own transform.
+export function toProjectName(dir: string, language?: string): string {
   const base = path
     .basename(dir)
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/^[-_.]+|[-_.]+$/g, '');
-  return base || 'playwright-tests';
+  const sanitized = base || 'playwright-tests';
+
+  if (language === 'csharp') {
+    const pascal = sanitized
+      .split(/[-_.]+/)
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join('');
+    return pascal || 'PlaywrightTests';
+  }
+
+  return sanitized;
 }
 
 export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Promise<number> {
@@ -89,11 +103,14 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
 
   // Extensible supported-combo list. Add a new entry here when a new
   // TargetGenerator is registered in packages/engine/src/plan/plan.ts.
+  // Cypress (typescript/javascript) is temporarily withheld from release pending a
+  // CPOM primitive redesign native to Cypress's own retry/command-chain model rather
+  // than the Playwright-shaped one it currently reuses - the generator code itself is
+  // untouched and still works, it is just not offered to users yet. Re-add both entries
+  // here (and the questionnaire/schema.ts choices) when that redesign lands.
   const SUPPORTED: Array<{ language: string; automationTool: string }> = [
     { language: 'typescript', automationTool: 'playwright' },
     { language: 'javascript', automationTool: 'playwright' },
-    { language: 'typescript', automationTool: 'cypress' },
-    { language: 'javascript', automationTool: 'cypress' },
     { language: 'python', automationTool: 'playwright' },
     { language: 'python', automationTool: 'pytest' },
     { language: 'csharp', automationTool: 'playwright' },
@@ -181,7 +198,7 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
 
   const genPlan = plan(profile, {
     baseUrl: urlCheck.value,
-    projectName: toProjectName(outputRoot),
+    projectName: toProjectName(outputRoot, language),
     language,
     automationTool: tool,
     ...(answers.ciCd !== undefined ? { ciCd: answers.ciCd } : {}),

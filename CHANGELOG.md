@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-08-29
+
+- **C# Project Naming Fixed to .NET Convention:** `toProjectName()` (`packages/cli/src/commands/generate.ts`) previously lowercased every language's project name identically (npm/pip-style kebab-case), producing `.csproj` files and implicit assembly names like `mytestproject.csproj` for C# - a direct violation of .NET's own PascalCase convention. `toProjectName()` now takes an optional `language` argument and PascalCases the sanitized name specifically for `csharp`; all other languages keep the existing lowercase-kebab behavior (correct for npm/pip/Java package naming).
+- **Cypress Temporarily Withheld from Release:** Cypress (TypeScript/JavaScript) generation is disabled at the CLI's language/tool support gate (`SUPPORTED` array in `generate.ts`, `AUTOMATION_TOOL_CHOICES`/`isToolSupportedByLanguage` in `schema.ts`) pending a CPOM primitive redesign native to Cypress's own command-chain/retry model rather than reusing the Playwright-shaped one. The generator and template code are untouched and still fully functional - only the CLI's questionnaire and flag validation stop offering it, returning the existing "not implemented yet" error if requested directly. `README.md`, `CONTRIBUTING.md`, `docs/architecture.md`, and the root `package.json` description updated to match; `e2e.full-cycle.test.ts`'s 2 Cypress cases now assert the withhold-gate rejects generation instead of asserting Cypress output, so the gate itself stays covered.
+
 ## [0.5.1] - 2026-08-28
 
 - **CI Reliability Fixes (found by a real Linux CI failure after the 0.5.0 batch widened the test gate):**

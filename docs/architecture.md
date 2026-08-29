@@ -8,7 +8,10 @@
 ## Direction change (2026-07-17) — universal, CORE-ONLY scaffolder
 
 The product is a **universal polyglot scaffolder that generates the CORE of a UI-test framework**
-(Playwright or Cypress; across TypeScript, JavaScript, Python, Java, or C#) — nothing app-specific.
+(Playwright; across TypeScript, JavaScript, Python, Java, or C#) — nothing app-specific. Cypress
+(TypeScript/JavaScript) support exists in the codebase but is temporarily withheld from the CLI
+pending a CPOM primitive redesign native to its own retry/command-chain model rather than the
+Playwright-shaped one it currently reuses.
 Confirmed with the user after the earlier design drifted into a TS/Playwright login-specific slice.
 
 **Flow:** minimal CLI questionnaire → quick headless recon of the target's start page → generate the
@@ -91,7 +94,7 @@ login-smoke e2e never went green here.
 
 ## 1. Purpose & goals (SUPERSEDED by the pivot above where it conflicts)
 
-Scaffold a **polyglot UI-test framework (Playwright or Cypress)** into a **test repository**,
+Scaffold a **polyglot UI-test framework (Playwright; Cypress withheld pending a native redesign)** into a **test repository**,
 tuned to the _product's_ frontend stack, and **verify** the result against the real app.
 
 **Unit of value = a verified login + one green smoke test against the real app** — NOT
@@ -448,7 +451,7 @@ When generated tests fail during live execution:
 
 ### 13.6 Zero Lock-in Principle
 
-All generated Page Objects, tests, and configuration files remain 100% self-contained standard projects (TypeScript, Python, Java, C#, or Cypress) without any proprietary runtime dependency on EITR.
+All generated Page Objects, tests, and configuration files remain 100% self-contained standard projects (TypeScript, Python, Java, or C#) without any proprietary runtime dependency on EITR.
 
 ### 13.7 Test Data Management (TDM) & Teardown Protocol
 

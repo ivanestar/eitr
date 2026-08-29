@@ -156,9 +156,10 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
     { timeout: 60000 },
   );
 
-  // 4. TypeScript + Cypress
+  // 4. TypeScript + Cypress - withheld from release (see SUPPORTED comment in generate.ts);
+  // verifies the withhold-gate actually blocks generation rather than that Cypress still works.
   it(
-    '4/5: E2E Full Cycle — TypeScript + Cypress (questionnaire -> generate -> structure check -> cleanup)',
+    '4/5: E2E Full Cycle — TypeScript + Cypress (withheld: gate rejects, generates nothing)',
     async () => {
       const cwd = makeTempCwd();
 
@@ -182,22 +183,17 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
         'gitlab',
       ]);
 
-      expect(exitCode).toBe(0);
-      expect(existsSync(join(cwd, 'cypress.config.ts'))).toBe(true);
-      expect(existsSync(join(cwd, 'package.json'))).toBe(true);
-      expect(existsSync(join(cwd, 'components', 'base', 'base-page.ts'))).toBe(true);
-      expect(existsSync(join(cwd, 'cypress', 'e2e', 'smoke.cy.ts'))).toBe(true);
-
-      if (existsSync(join(process.cwd(), 'node_modules', 'cypress'))) {
-        execSync('npx tsc --noEmit', { cwd, stdio: 'inherit' });
-      }
+      expect(exitCode).toBe(1);
+      expect(existsSync(join(cwd, 'cypress.config.ts'))).toBe(false);
+      expect(existsSync(join(cwd, 'package.json'))).toBe(false);
     },
     { timeout: 60000 },
   );
 
-  // 5. JavaScript + Cypress
+  // 5. JavaScript + Cypress - withheld from release (see SUPPORTED comment in generate.ts);
+  // verifies the withhold-gate actually blocks generation rather than that Cypress still works.
   it(
-    '5/5: E2E Full Cycle — JavaScript + Cypress (questionnaire -> generate -> structure check -> cleanup)',
+    '5/5: E2E Full Cycle — JavaScript + Cypress (withheld: gate rejects, generates nothing)',
     async () => {
       const cwd = makeTempCwd();
 
@@ -221,11 +217,9 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
         'gitlab',
       ]);
 
-      expect(exitCode).toBe(0);
-      expect(existsSync(join(cwd, 'cypress.config.js'))).toBe(true);
-      expect(existsSync(join(cwd, 'package.json'))).toBe(true);
-      expect(existsSync(join(cwd, 'components', 'base', 'base-page.js'))).toBe(true);
-      expect(existsSync(join(cwd, 'cypress', 'e2e', 'smoke.cy.js'))).toBe(true);
+      expect(exitCode).toBe(1);
+      expect(existsSync(join(cwd, 'cypress.config.js'))).toBe(false);
+      expect(existsSync(join(cwd, 'package.json'))).toBe(false);
     },
     { timeout: 60000 },
   );
@@ -257,10 +251,10 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       ]);
 
       expect(exitCode).toBe(0);
-      // The generator derives the project name via toProjectName() (lowercased + sanitized),
+      // The generator derives the project name via toProjectName() - PascalCase for csharp,
       // not the raw temp-dir basename - matching that here avoids a case-sensitive-filesystem
       // mismatch (masked on Windows by its case-insensitive FS, real on Linux CI).
-      const csprojName = `${toProjectName(cwd)}.csproj`;
+      const csprojName = `${toProjectName(cwd, 'csharp')}.csproj`;
       expect(existsSync(join(cwd, csprojName))).toBe(true);
       expect(existsSync(join(cwd, 'components', 'BasePage.cs'))).toBe(true);
       expect(existsSync(join(cwd, 'components', 'primitives', 'Button.cs'))).toBe(true);

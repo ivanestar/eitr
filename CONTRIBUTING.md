@@ -28,7 +28,7 @@ Before submitting any Pull Request, all contributors must agree to the **[Indivi
 ## Contribution Guidelines
 
 1. **Zero-Emoji Policy:** We enforce a strict zero-emoji policy across code, commit messages, CLI logs, templates, and markdown documentation.
-2. **5-Language Parity:** If you introduce a new CPOM primitive, synthetic data helper, or generator feature, it must be implemented across all supported languages (TypeScript, JavaScript, Python, C#, Java) and runners (Playwright, Cypress).
+2. **5-Language Parity:** If you introduce a new CPOM primitive, synthetic data helper, or generator feature, it must be implemented across all supported languages (TypeScript, JavaScript, Python, C#, Java) for Playwright. Cypress support exists in the codebase but is currently withheld from the CLI pending a CPOM redesign native to its own retry model - do not add new Cypress-facing work until that lands.
 3. **Targeted Tests:** Every feature or bug fix must include isolated unit/eval tests under `packages/*/test/`.
 4. **Zero Lock-in:** Generator templates must never inject `@eitr/engine` as a runtime dependency into generated user projects.
 5. **Code Style & Type Safety:** Run `npm run format:check` and `npm run typecheck` before submitting your PR.

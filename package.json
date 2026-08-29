@@ -1,13 +1,13 @@
 {
   "name": "@onlytests/eitr",
-  "description": "Universal zero-lock-in UI test framework scaffolder (Playwright/Cypress)",
+  "description": "Universal zero-lock-in UI test framework scaffolder (Playwright)",
   "bin": {
     "eitr": "./dist/bin/eitr.js"
   },
   "files": [
     "dist"
   ],
-  "version": "0.5.1",
+  "version": "0.5.2",
   "type": "module",
   "engines": {
     "node": ">=18.0.0",

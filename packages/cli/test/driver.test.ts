@@ -296,7 +296,7 @@ describe('runQuestionnaire — non-interactive', () => {
     const fake = createFakeIo({});
     const result = await runQuestionnaire(fake.io, {
       mode: 'non-interactive',
-      prefill: { startUrl: 'https://x.io', language: 'typescript', automationTool: 'cypress' },
+      prefill: { startUrl: 'https://x.io', language: 'java', automationTool: 'playwright-gradle' },
     });
 
     expect(result).toEqual({
@@ -305,8 +305,8 @@ describe('runQuestionnaire — non-interactive', () => {
         schemaVersion: 1,
         aiAssistants: [],
         startUrl: 'https://x.io/',
-        outputDir: 'CypressTests',
-        stackHints: { language: 'typescript', automationTool: 'cypress' },
+        outputDir: 'PlaywrightJavaTests',
+        stackHints: { language: 'java', automationTool: 'playwright-gradle' },
       },
     });
   });
@@ -315,7 +315,11 @@ describe('runQuestionnaire — non-interactive', () => {
     const fake = createFakeIo({});
     const result = await runQuestionnaire(fake.io, {
       mode: 'non-interactive',
-      prefill: { startUrl: 'https://x.io', language: 'python', automationTool: 'cypress' },
+      prefill: {
+        startUrl: 'https://x.io',
+        language: 'python',
+        automationTool: 'playwright-gradle',
+      },
     });
 
     expect(result.status).toBe('error');
@@ -353,8 +357,8 @@ describe('runQuestionnaire — language and automation tool interactive filterin
     const fake = createFakeIo({
       text: { startUrl: ['https://app.com'] },
       select: {
-        language: ['typescript', 'python'],
-        automationTool: ['cypress'],
+        language: ['java', 'typescript'],
+        automationTool: ['playwright-gradle'],
         ciCd: ['none'],
         review: ['edit:language', 'submit'],
       },
@@ -367,8 +371,8 @@ describe('runQuestionnaire — language and automation tool interactive filterin
     });
     expect(result.status).toBe('ok');
     if (result.status === 'ok') {
-      // It should have reset from cypress to playwright because python does not support cypress.
-      expect(result.answers.stackHints?.language).toBe('python');
+      // It should have reset from playwright-gradle to playwright because typescript does not support playwright-gradle.
+      expect(result.answers.stackHints?.language).toBe('typescript');
       expect(result.answers.stackHints?.automationTool).toBe('playwright');
     }
     expect(fake.notes.some((n) => /resetting E2E automation tool to Playwright/i.test(n))).toBe(

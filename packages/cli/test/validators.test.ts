@@ -69,7 +69,7 @@ describe('validateAnswer choice validation', () => {
   });
 
   it('rejects tools not supported by the chosen language', () => {
-    const res = validateAnswer(toolQuestion, 'cypress', { language: 'python' });
+    const res = validateAnswer(toolQuestion, 'playwright-gradle', { language: 'python' });
     expect(res.ok).toBe(false);
     if (!res.ok) {
       expect(res.error).toContain('is not supported for language "python"');

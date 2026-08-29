@@ -112,11 +112,13 @@ const LANGUAGE_CHOICES: readonly Choice[] = [
   { label: 'Java (JDK 17+)', value: 'java' },
 ];
 
+// Cypress is temporarily withheld from the questionnaire pending a CPOM primitive redesign
+// native to its own retry/command-chain model - see the SUPPORTED-combo comment in
+// packages/cli/src/commands/generate.ts. Not deleted, just not offered.
 const AUTOMATION_TOOL_CHOICES: readonly Choice[] = [
   { label: 'Playwright', value: 'playwright' },
   { label: 'Playwright (Maven)', value: 'playwright-maven' },
   { label: 'Playwright (Gradle)', value: 'playwright-gradle' },
-  { label: 'Cypress', value: 'cypress' },
   { label: 'Pytest + Playwright', value: 'pytest' },
 ];
 
@@ -142,7 +144,7 @@ export function isToolSupportedByLanguage(tool: string, language: string): boole
   switch (language) {
     case 'javascript':
     case 'typescript':
-      return tool === 'playwright' || tool === 'cypress';
+      return tool === 'playwright';
     case 'python':
       return tool === 'playwright' || tool === 'pytest';
     case 'csharp':
