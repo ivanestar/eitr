@@ -1,6 +1,6 @@
 {
   "name": "@eitr/cli",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "CLI for the EITR universal test framework scaffolder",
   "license": "Apache-2.0",
   "private": true,

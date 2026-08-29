@@ -51,7 +51,7 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     const result = plan(dummyProfile, {
       language: 'typescript',
       automationTool: 'playwright',
-      tmsProvider: 'azure-devops',
+      tmsProviders: ['azure-devops'],
       ciCd: 'github',
     });
 

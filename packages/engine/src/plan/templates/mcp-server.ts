@@ -2,12 +2,14 @@
 import type { FileDescriptor } from '../../types/generation-plan.js';
 
 export function planMcpServer(
-  tmsProvider: string = 'none',
+  taskTracker: string = 'none',
+  tmsProviders: readonly string[] = [],
   aiAssistants?: readonly string[],
   automationTool: string = 'playwright',
   language: string = 'typescript',
 ): FileDescriptor[] {
-  const hasTms = tmsProvider && tmsProvider !== 'none';
+  const hasTaskTracker = taskTracker && taskTracker !== 'none';
+  const hasTms = hasTaskTracker || tmsProviders.length > 0;
   const hasAssistants = aiAssistants && aiAssistants.length > 0;
 
   if (!hasTms && !hasAssistants) {
@@ -38,9 +40,30 @@ import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, readdir
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const TMS_PROVIDER = process.env.TMS_PROVIDER || '${tmsProvider}';
-const adapter = getAdapter(TMS_PROVIDER);
+const TASK_TRACKER = process.env.TASK_TRACKER || '${taskTracker}';
+const TMS_PROVIDERS = (process.env.TMS_PROVIDERS || '${tmsProviders.join(',')}')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+// Deduplicated set of every provider this bridge is wired for (task tracker + every selected
+// TMS). mcp__tms__* tools take an optional 'provider' argument that must be one of these;
+// when exactly one provider is configured it's used automatically.
+const CONFIGURED_PROVIDERS = Array.from(
+  new Set([...(TASK_TRACKER && TASK_TRACKER !== 'none' ? [TASK_TRACKER] : []), ...TMS_PROVIDERS])
+);
 const CACHE_DIR = join(process.cwd(), '.tms-cache');
+
+function resolveProvider(explicit) {
+  if (explicit) {
+    if (!CONFIGURED_PROVIDERS.includes(explicit)) {
+      return { error: \`Provider "\${explicit}" is not configured. Configured providers: \${CONFIGURED_PROVIDERS.join(', ') || 'none'}\` };
+    }
+    return { provider: explicit };
+  }
+  if (CONFIGURED_PROVIDERS.length === 1) return { provider: CONFIGURED_PROVIDERS[0] };
+  if (CONFIGURED_PROVIDERS.length === 0) return { error: 'No task tracker or TMS provider is configured.' };
+  return { error: \`Multiple providers are configured (\${CONFIGURED_PROVIDERS.join(', ')}) — pass "provider" to disambiguate.\` };
+}
 
 // Dual-era MCP server (spec 2026-07-28): serves legacy 'initialize'-handshake clients
 // (2025-11-25 and earlier) unchanged, and modern clients that declare their protocol
@@ -64,10 +87,16 @@ function ensureCacheDir() {
   }
 }
 
-function getCachedCase(caseId) {
+// Cache files are namespaced by provider so the same case id (e.g. a short numeric TestRail id)
+// can't collide with an unrelated id from a different configured provider.
+function cacheFile(provider, caseId) {
+  const safeId = \`\${provider}_\${String(caseId)}\`.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return join(CACHE_DIR, \`\${safeId}.json\`);
+}
+
+function getCachedCase(provider, caseId) {
   try {
-    const safeId = String(caseId).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const file = join(CACHE_DIR, \`\${safeId}.json\`);
+    const file = cacheFile(provider, caseId);
     if (existsSync(file)) {
       return JSON.parse(readFileSync(file, 'utf8'));
     }
@@ -77,21 +106,18 @@ function getCachedCase(caseId) {
   return null;
 }
 
-function saveCachedCase(caseId, data) {
+function saveCachedCase(provider, caseId, data) {
   try {
     ensureCacheDir();
-    const safeId = String(caseId).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const file = join(CACHE_DIR, \`\${safeId}.json\`);
-    writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+    writeFileSync(cacheFile(provider, caseId), JSON.stringify(data, null, 2), 'utf8');
   } catch (err) {
     logDebug(\`Cache write error for \${caseId}: \${err.message}\`);
   }
 }
 
-function invalidateCachedCase(caseId) {
+function invalidateCachedCase(provider, caseId) {
   try {
-    const safeId = String(caseId).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const file = join(CACHE_DIR, \`\${safeId}.json\`);
+    const file = cacheFile(provider, caseId);
     if (existsSync(file)) unlinkSync(file);
   } catch (err) {
     logDebug(\`Cache invalidate error for \${caseId}: \${err.message}\`);
@@ -172,7 +198,7 @@ function handleToolsList() {
     }
   ];
 
-  if (TMS_PROVIDER && TMS_PROVIDER !== 'none') {
+  if (CONFIGURED_PROVIDERS.length > 0) {
     tools.push(
       {
         name: 'mcp__tms__get_test_case',
@@ -290,6 +316,21 @@ function handleToolsList() {
         }
       }
     );
+    // Every mcp__tms__* tool takes an optional 'provider' argument — required only when more
+    // than one provider (task tracker + TMS selections) is configured for this bridge.
+    const providerDescription =
+      CONFIGURED_PROVIDERS.length > 1
+        ? \`Which configured provider to target — REQUIRED since multiple are configured (\${CONFIGURED_PROVIDERS.join(', ')}).\`
+        : \`Which configured provider to target (optional — defaults to the sole configured provider "\${CONFIGURED_PROVIDERS[0] || 'none'}").\`;
+    for (const tool of tools) {
+      if (tool.name.indexOf('mcp__tms__') === 0) {
+        tool.inputSchema.properties.provider = {
+          type: 'string',
+          enum: CONFIGURED_PROVIDERS,
+          description: providerDescription
+        };
+      }
+    }
   }
 
   return { tools };
@@ -316,52 +357,61 @@ async function handleToolCall(name, args) {
       };
       return { content: [{ type: 'text', text: JSON.stringify(snapshot, null, 2) }] };
     }
-    if (name === 'mcp__tms__get_test_case') {
-      const cached = getCachedCase(args.caseId);
-      if (cached) {
-        logDebug(\`Serving case \${args.caseId} from local cache\`);
-        return { content: [{ type: 'text', text: JSON.stringify(cached, null, 2) }] };
+    if (name.indexOf('mcp__tms__') === 0) {
+      const resolved = resolveProvider(args.provider);
+      if (resolved.error) {
+        return { content: [{ type: 'text', text: JSON.stringify({ error: resolved.error }, null, 2) }], isError: true };
       }
-      const data = await adapter.getTestCase(args.caseId);
-      if (data && !data.error) {
-        saveCachedCase(args.caseId, data);
+      const provider = resolved.provider;
+      const adapter = getAdapter(provider);
+
+      if (name === 'mcp__tms__get_test_case') {
+        const cached = getCachedCase(provider, args.caseId);
+        if (cached) {
+          logDebug(\`Serving case \${args.caseId} from local cache\`);
+          return { content: [{ type: 'text', text: JSON.stringify(cached, null, 2) }] };
+        }
+        const data = await adapter.getTestCase(args.caseId);
+        if (data && !data.error) {
+          saveCachedCase(provider, args.caseId, data);
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
       }
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-    }
-    if (name === 'mcp__tms__get_suite_context') {
-      const data = await adapter.getSuiteCases(args.suiteId, args);
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-    }
-    if (name === 'mcp__tms__list_test_plans') {
-      const data = await adapter.listTestPlans(args.query, args.maxResults);
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-    }
-    if (name === 'mcp__tms__create_test_run') {
-      const data = await adapter.createTestRun(args);
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-    }
-    if (name === 'mcp__tms__post_test_result') {
-      const res = await adapter.postTestResult(args);
-      return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] };
-    }
-    if (name === 'mcp__tms__search') {
-      const data = await adapter.searchIssues(args.query, args.maxResults);
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-    }
-    if (name === 'mcp__tms__create_issue') {
-      const data = await adapter.createIssue(args);
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-    }
-    if (name === 'mcp__tms__update_issue') {
-      const { caseId, ...fields } = args;
-      const data = await adapter.updateIssue(caseId, fields);
-      if (data && !data.error) invalidateCachedCase(caseId);
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-    }
-    if (name === 'mcp__tms__delete_issue') {
-      const data = await adapter.deleteIssue(args.caseId);
-      if (data && !data.error) invalidateCachedCase(args.caseId);
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      if (name === 'mcp__tms__get_suite_context') {
+        const data = await adapter.getSuiteCases(args.suiteId, args);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      if (name === 'mcp__tms__list_test_plans') {
+        const data = await adapter.listTestPlans(args.query, args.maxResults);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      if (name === 'mcp__tms__create_test_run') {
+        const data = await adapter.createTestRun(args);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      if (name === 'mcp__tms__post_test_result') {
+        const res = await adapter.postTestResult(args);
+        return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] };
+      }
+      if (name === 'mcp__tms__search') {
+        const data = await adapter.searchIssues(args.query, args.maxResults);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      if (name === 'mcp__tms__create_issue') {
+        const data = await adapter.createIssue(args);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      if (name === 'mcp__tms__update_issue') {
+        const { caseId, provider: _p, ...fields } = args;
+        const data = await adapter.updateIssue(caseId, fields);
+        if (data && !data.error) invalidateCachedCase(provider, caseId);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      if (name === 'mcp__tms__delete_issue') {
+        const data = await adapter.deleteIssue(args.caseId);
+        if (data && !data.error) invalidateCachedCase(provider, args.caseId);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
     }
     throw new Error(\`Unknown tool: \${name}\`);
   } catch (err) {

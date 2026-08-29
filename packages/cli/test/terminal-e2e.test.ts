@@ -110,7 +110,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
           'github',
           '--ai-assistants',
           'antigravity,cursor,claude',
-          '--tms-provider',
+          '--tms-providers',
           'azure-devops',
         ],
         cwd,

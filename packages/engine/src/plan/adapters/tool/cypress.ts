@@ -169,7 +169,10 @@ export class CypressAdapter implements ToolAdapter {
         path: '.env.example',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'project' },
-        source: { kind: 'inline', text: renderEnvExample(baseUrl) },
+        source: {
+          kind: 'inline',
+          text: renderEnvExample(baseUrl, opts.taskTracker, opts.tmsProviders),
+        },
       },
       {
         path: 'README.md',

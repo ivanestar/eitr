@@ -203,7 +203,8 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
     automationTool: tool,
     ...(answers.ciCd !== undefined ? { ciCd: answers.ciCd } : {}),
     ...(answers.aiAssistants !== undefined ? { aiAssistants: answers.aiAssistants } : {}),
-    ...(answers.tmsProvider !== undefined ? { tmsProvider: answers.tmsProvider } : {}),
+    ...(answers.taskTracker !== undefined ? { taskTracker: answers.taskTracker } : {}),
+    ...(answers.tmsProviders !== undefined ? { tmsProviders: answers.tmsProviders } : {}),
   });
   const result = await apply(genPlan, outputRoot, { pendingRecon: false });
 

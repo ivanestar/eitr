@@ -8,15 +8,15 @@ import { renderApiClient } from '../src/plan/templates/api-client.js';
 import { renderFixtures } from '../src/plan/templates/fixtures.js';
 
 describe('MCP TMS & AI-First Subsystem Generators', () => {
-  it('returns empty array when tmsProvider is none or omitted', () => {
-    expect(planMcpServer('none')).toEqual([]);
-    expect(planMcpConfigs('none', false)).toEqual([]);
+  it('returns empty array when taskTracker/tmsProviders are none or omitted', () => {
+    expect(planMcpServer('none', [])).toEqual([]);
+    expect(planMcpConfigs('none', [], false)).toEqual([]);
     expect(planAiAgents([])).toEqual([]);
     expect(planAiOperationalSkills([])).toEqual([]);
   });
 
   it('generates standalone MCP server files for azure-devops', () => {
-    const files = planMcpServer('azure-devops');
+    const files = planMcpServer('none', ['azure-devops']);
     expect(files.length).toBe(6);
     const paths = files.map((f) => f.path);
     expect(paths).toContain('.mcp/tms-bridge/index.js');
@@ -39,7 +39,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
   });
 
   it('generates multi-editor MCP configs for testrail including Playwright MCP and proxy env vars', () => {
-    const files = planMcpConfigs('testrail');
+    const files = planMcpConfigs('none', ['testrail']);
     expect(files.length).toBe(6);
     const paths = files.map((f) => f.path);
     expect(paths).toContain('.mcp.json');
@@ -58,23 +58,23 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
   });
 
   it('generates MCP configs ONLY for selected AI assistants and handles aliases and empty lists', () => {
-    const cursorOnly = planMcpConfigs('testrail', true, ['cursor']);
+    const cursorOnly = planMcpConfigs('none', ['testrail'], true, ['cursor']);
     expect(cursorOnly.map((f) => f.path)).toEqual(['.cursor/mcp.json']);
 
-    const empty = planMcpConfigs('testrail', true, []);
+    const empty = planMcpConfigs('none', ['testrail'], true, []);
     expect(empty).toEqual([]);
 
-    const aliases = planMcpConfigs('none', true, ['gemini', 'claude-code', 'vscode']);
+    const aliases = planMcpConfigs('none', [], true, ['gemini', 'claude-code', 'vscode']);
     expect(aliases.map((f) => f.path)).toEqual([
       '.mcp.json',
       '.claude/mcp.json',
       '.vscode/mcp.json',
     ]);
 
-    const windsurfCodex = planMcpConfigs('none', true, ['windsurf', 'codex']);
+    const windsurfCodex = planMcpConfigs('none', [], true, ['windsurf', 'codex']);
     expect(windsurfCodex.map((f) => f.path)).toEqual(['.windsurf/mcp.json', '.codex/mcp.json']);
 
-    const unknownAssistant = planMcpConfigs('none', true, ['aider', 'unknown']);
+    const unknownAssistant = planMcpConfigs('none', [], true, ['aider', 'unknown']);
     expect(unknownAssistant).toEqual([]);
   });
 
@@ -264,7 +264,8 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
   it('includes MCP files, AI agents, and operational skills in planSharedScaffold', () => {
     const files = planSharedScaffold({
-      tmsProvider: 'zephyr',
+      taskTracker: 'jira',
+      tmsProviders: ['zephyr'],
       aiAssistants: ['gemini', 'cursor', 'claude'],
     });
     const paths = files.map((f) => f.path);

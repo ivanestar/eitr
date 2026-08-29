@@ -103,6 +103,15 @@ export function validateAnswer(
     if (invalid) {
       return { ok: false, error: `"${invalid}" is not one of the available choices.` };
     }
+    if (question.id === 'tmsProviders') {
+      const requiresJira = rawArray.filter((v) => v === 'xray' || v === 'zephyr');
+      if (requiresJira.length > 0 && answers?.taskTracker !== 'jira') {
+        return {
+          ok: false,
+          error: `${requiresJira.join(', ')} require${requiresJira.length === 1 ? 's' : ''} Jira as the Task Tracker (their Test/Test Execution issues live in Jira) — select Jira as the task tracker first.`,
+        };
+      }
+    }
     return { ok: true, value: rawArray as any };
   }
   switch (question.id) {

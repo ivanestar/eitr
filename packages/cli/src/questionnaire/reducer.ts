@@ -23,8 +23,11 @@ export function answersToInitAnswers(answers: Record<QuestionId, any>): InitAnsw
     outputDir: answers.outputDir,
     ...(answers.ciCd && answers.ciCd !== 'none' ? { ciCd: answers.ciCd } : {}),
     ...(answers.aiAssistants !== undefined ? { aiAssistants: answers.aiAssistants } : {}),
-    ...(answers.tmsProvider && answers.tmsProvider !== 'none'
-      ? { tmsProvider: answers.tmsProvider }
+    ...(answers.taskTracker && answers.taskTracker !== 'none'
+      ? { taskTracker: answers.taskTracker }
+      : {}),
+    ...(answers.tmsProviders && answers.tmsProviders.length > 0
+      ? { tmsProviders: answers.tmsProviders }
       : {}),
   };
 

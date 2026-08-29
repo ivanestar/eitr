@@ -38,8 +38,14 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
   const ciCd = opts.ciCd ?? 'none';
 
   const files: FileDescriptor[] = [
-    ...planMcpServer(opts.tmsProvider, opts.aiAssistants, opts.automationTool, opts.language),
-    ...planMcpConfigs(opts.tmsProvider, true, opts.aiAssistants),
+    ...planMcpServer(
+      opts.taskTracker,
+      opts.tmsProviders,
+      opts.aiAssistants,
+      opts.automationTool,
+      opts.language,
+    ),
+    ...planMcpConfigs(opts.taskTracker, opts.tmsProviders, true, opts.aiAssistants),
     ...planAiAgents(opts.aiAssistants, opts.automationTool, opts.language),
     ...planAiOperationalSkills(opts.aiAssistants, opts.automationTool, opts.language),
     // ── Project meta ────────────────────────────────────────────────────────

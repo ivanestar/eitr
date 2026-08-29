@@ -45,20 +45,24 @@ describe('runQuestionnaire — interactive', () => {
       'select:automationTool',
       'select:ciCd',
       'multiSelect:aiAssistants',
-      'select:tmsProvider',
+      'select:taskTracker',
+      'multiSelect:tmsProviders',
       'select:review',
     ]);
   });
 
-  it('persists tmsProvider when selected in questionnaire', async () => {
+  it('persists taskTracker and tmsProviders when selected in questionnaire', async () => {
     const fake = createFakeIo({
       text: { startUrl: ['https://app.example.com/login'] },
       select: {
         language: ['typescript'],
         automationTool: ['playwright'],
         ciCd: ['none'],
-        tmsProvider: ['azure-devops'],
+        taskTracker: ['jira'],
         review: ['submit'],
+      },
+      multiSelect: {
+        tmsProviders: [['xray']],
       },
     });
     const result = await runQuestionnaire(fake.io, {
@@ -69,7 +73,8 @@ describe('runQuestionnaire — interactive', () => {
 
     expect(result.status).toBe('ok');
     if (result.status === 'ok') {
-      expect(result.answers.tmsProvider).toBe('azure-devops');
+      expect(result.answers.taskTracker).toBe('jira');
+      expect(result.answers.tmsProviders).toEqual(['xray']);
     }
   });
 

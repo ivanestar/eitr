@@ -307,7 +307,8 @@ export function createPromptSession(input: InputStream, output: OutputStream): P
         { label: 'Automation tool', value: answers.automationTool || '' },
         { label: 'CI/CD integration', value: answers.ciCd || 'none' },
         { label: 'AI Assistants', value: answers.aiAssistants || '' },
-        { label: 'TMS Provider (MCP)', value: answers.tmsProvider || 'none' },
+        { label: 'Task Tracker (MCP)', value: answers.taskTracker || 'none' },
+        { label: 'TMS Providers (MCP)', value: answers.tmsProviders || 'none' },
       ];
 
       const hasDetected =

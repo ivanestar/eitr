@@ -4,7 +4,7 @@
 
 export interface GoldenTmsTicket {
   id: string;
-  source: 'azure-devops' | 'jira-xray' | 'testrail';
+  source: 'azure-devops' | 'xray' | 'testrail';
   title: string;
   description: string;
   steps: { action: string; expectedResult: string }[];
@@ -46,7 +46,7 @@ export const GOLDEN_TMS_TICKETS: GoldenTmsTicket[] = [
   },
   {
     id: 'TC-102-INVALID-MONOLITH',
-    source: 'jira-xray',
+    source: 'xray',
     title: 'E2E Full Platform Regression Testing',
     description:
       'Test all features from login to profile settings, cart, payment, logout, and password reset.',

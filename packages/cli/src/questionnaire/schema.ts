@@ -10,19 +10,32 @@ export type QuestionId =
   | 'uiLibrary'
   | 'ciCd'
   | 'aiAssistants'
-  | 'tmsProvider';
+  | 'taskTracker'
+  | 'tmsProviders';
 
 export interface Choice {
   readonly label: string;
   readonly value: string;
 }
 
-const TMS_CHOICES: readonly Choice[] = [
-  { label: 'Azure DevOps (Work Items / Test Plans)', value: 'azure-devops' },
-  { label: 'TestRail REST API', value: 'testrail' },
-  { label: 'Jira / Xray Cloud API', value: 'jira-xray' },
-  { label: 'Zephyr Scale / Squad API', value: 'zephyr' },
+// Task/issue tracker — where tickets/bugs live. Xray and Zephyr are Jira apps (their Test/Test
+// Execution issues are Jira issues), so selecting either of them as a TMS below requires Jira
+// selected here — enforced in validators.ts.
+const TASK_TRACKER_CHOICES: readonly Choice[] = [
+  { label: 'Jira', value: 'jira' },
+  { label: 'Azure DevOps (Work Items)', value: 'azure-devops' },
   { label: 'None / Skip', value: 'none' },
+];
+
+// Test Management System(s) — where test cases/plans/runs live. Multi-select: a project
+// commonly pairs one task tracker with one or more of these (e.g. Jira + TestRail, or just Xray
+// on top of Jira). Azure DevOps can be selected here too since it has native Test Plans on the
+// same account as its Work Items.
+const TMS_CHOICES: readonly Choice[] = [
+  { label: 'Azure DevOps (Test Plans)', value: 'azure-devops' },
+  { label: 'TestRail REST API', value: 'testrail' },
+  { label: 'Jira Xray Cloud API (requires Jira as Task Tracker)', value: 'xray' },
+  { label: 'Zephyr Scale API (requires Jira as Task Tracker)', value: 'zephyr' },
 ];
 
 export interface TextQuestion {
@@ -220,10 +233,18 @@ export const QUESTIONS: readonly Question[] = [
   },
   {
     kind: 'select',
-    id: 'tmsProvider',
-    message: 'Test Management System (TMS) for MCP integration',
-    choices: TMS_CHOICES,
+    id: 'taskTracker',
+    message: 'Task/issue tracker for MCP integration',
+    choices: TASK_TRACKER_CHOICES,
     default: 'none',
+  },
+  {
+    kind: 'multiselect',
+    id: 'tmsProviders',
+    message:
+      'Test Management System(s) for MCP integration \x1b[22m\x1b[90m(Space to toggle, Enter to confirm)\x1b[39m',
+    choices: TMS_CHOICES,
+    default: [],
   },
 ];
 
@@ -242,7 +263,8 @@ export interface InitAnswers {
   readonly stackHints?: StackHints;
   readonly ciCd?: string;
   readonly aiAssistants?: string[];
-  readonly tmsProvider?: string;
+  readonly taskTracker?: string;
+  readonly tmsProviders?: string[];
   readonly skipInstall?: boolean;
 }
 
@@ -256,5 +278,6 @@ export const FLAG_OF: Record<QuestionId, string> = {
   uiLibrary: 'ui-library',
   ciCd: 'ci-cd',
   aiAssistants: 'ai-assistants',
-  tmsProvider: 'tms-provider',
+  taskTracker: 'task-tracker',
+  tmsProviders: 'tms-providers',
 };

@@ -6,6 +6,7 @@ describe('MCP Test Runner Bridge (mcp__run_test, mcp__inspect_dom)', () => {
   it('AC-1 & AC-2: planMcpServer provides mcp__run_test and mcp__inspect_dom tool definitions and handlers', () => {
     const files = planMcpServer(
       'none',
+      [],
       ['cursor', 'claude', 'antigravity'],
       'playwright',
       'typescript',
@@ -23,9 +24,10 @@ describe('MCP Test Runner Bridge (mcp__run_test, mcp__inspect_dom)', () => {
     expect(code).toContain('status');
   });
 
-  it('AC-3: planSharedScaffold emits MCP server when AI assistants are enabled even with tmsProvider: none', () => {
+  it('AC-3: planSharedScaffold emits MCP server when AI assistants are enabled even with no task tracker/TMS configured', () => {
     const files = planSharedScaffold({
-      tmsProvider: 'none',
+      taskTracker: 'none',
+      tmsProviders: [],
       aiAssistants: ['cursor', 'claude'],
       automationTool: 'playwright',
       language: 'typescript',
@@ -37,7 +39,7 @@ describe('MCP Test Runner Bridge (mcp__run_test, mcp__inspect_dom)', () => {
   });
 
   it('AC-4: Zero-Emoji compliance across generated MCP server', () => {
-    const files = planMcpServer('jira', ['cursor'], 'playwright', 'typescript');
+    const files = planMcpServer('jira', [], ['cursor'], 'playwright', 'typescript');
     const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
 
     for (const file of files) {

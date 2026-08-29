@@ -151,7 +151,8 @@ export function createFakeIo(script: FakeScript): FakeIo {
           'edit:uiLibrary',
           'edit:ciCd',
           'edit:aiAssistants',
-          'edit:tmsProvider',
+          'edit:taskTracker',
+          'edit:tmsProviders',
         ],
       };
       calls.push(call);

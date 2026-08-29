@@ -22,7 +22,9 @@ Options:
   --language <id>      Programming language: javascript|typescript|python|java|csharp
   --automation-tool <id> E2E automation tool
   --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,windsurf,codex,copilot
-  --tms-provider <id>    TMS provider: azure-devops|testrail|jira-xray|zephyr|none
+  --task-tracker <id>    Task/issue tracker: jira|azure-devops|none
+  --tms-providers <ids>  Test Management System(s) (comma-separated): azure-devops,testrail,xray,zephyr
+                          (xray/zephyr require --task-tracker jira)
   -h, --help           Show this help
 `;
 
@@ -36,7 +38,8 @@ export const INIT_ARG_OPTIONS = {
   'ui-library': { type: 'string' },
   'ci-cd': { type: 'string' },
   'ai-assistants': { type: 'string' },
-  'tms-provider': { type: 'string' },
+  'task-tracker': { type: 'string' },
+  'tms-providers': { type: 'string' },
   // Accepted (and ignored) here so `eitr new --storage-state` parses; `new` forwards it to generate.
   'storage-state': { type: 'string' },
   yes: { type: 'boolean' },
@@ -100,7 +103,10 @@ export async function collectInit(argv: string[]): Promise<CollectResult> {
   if (values['ai-assistants'] !== undefined) {
     prefill.aiAssistants = values['ai-assistants'] as string;
   }
-  if (values['tms-provider'] !== undefined) prefill.tmsProvider = values['tms-provider'];
+  if (values['task-tracker'] !== undefined) prefill.taskTracker = values['task-tracker'];
+  if (values['tms-providers'] !== undefined) {
+    prefill.tmsProviders = values['tms-providers'] as string;
+  }
 
   const mode: Mode = values.yes ? 'non-interactive' : 'interactive';
 

@@ -14,8 +14,10 @@ export interface PlanOptions {
   ciCd?: string;
   // Selected AI Assistants
   aiAssistants?: string[];
-  // Selected Test Management System (TMS) for MCP integration
-  tmsProvider?: string;
+  // Selected task/issue tracker for MCP integration (Xray/Zephyr in tmsProviders require 'jira' here).
+  taskTracker?: string;
+  // Selected Test Management System(s) (TMS) for MCP integration — multi-select.
+  tmsProviders?: string[];
   // Default storageState file path baked into emitted auth-setup.ts (Stage 2).
   storageStatePath?: string;
   // When false, suppress Dockerfile and .dockerignore emission.
