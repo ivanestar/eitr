@@ -191,29 +191,19 @@ jobs:
 `;
 }
 
-// Dependabot version + security-update config, generated alongside the GitHub Actions workflow.
-// The 'github-actions' entry is unconditional (keeps the generated workflow's own action pins
-// current); the second entry tracks whichever language-specific package ecosystem the project
-// actually uses.
-export function renderDependabotConfig(language?: string, automationTool?: string): string {
-  const ecosystem =
-    language === 'python'
-      ? 'pip'
-      : language === 'csharp'
-        ? 'nuget'
-        : language === 'java'
-          ? automationTool?.includes('gradle')
-            ? 'gradle'
-            : 'maven'
-          : 'npm';
-
+// Dependabot config, generated alongside the GitHub Actions workflow. Deliberately covers only
+// 'github-actions' (keeps the generated workflow's own action pins current, low-risk since it's
+// just YAML action-version pins, not application runtime code) - NOT the project's own
+// application-dependency ecosystem (npm/pip/nuget/maven/gradle). A routine "there's a newer
+// version" PR costs real integration-debugging effort disproportionate to how trivial the bump
+// itself is; that cost only makes sense when there's an actual reason to take it on. Real CVE
+// coverage comes from GitHub's native Dependabot security updates (Settings > Code security on
+// the project's own GitHub repo once pushed), which need no config here and only open a PR when a
+// dependency has a known vulnerability.
+export function renderDependabotConfig(): string {
   return `version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-  - package-ecosystem: "${ecosystem}"
     directory: "/"
     schedule:
       interval: "weekly"

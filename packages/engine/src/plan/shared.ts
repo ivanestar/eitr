@@ -209,7 +209,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       path: '.github/dependabot.yml',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
-      source: { kind: 'inline', text: renderDependabotConfig(opts.language, opts.automationTool) },
+      source: { kind: 'inline', text: renderDependabotConfig() },
     });
   } else if (ciCd === 'gitlab') {
     files.push({
