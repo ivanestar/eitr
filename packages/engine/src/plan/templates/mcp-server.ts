@@ -195,7 +195,9 @@ function handleToolsList() {
             caseId: { type: 'string', description: 'Test Case ID' },
             status: { type: 'string', enum: ['passed', 'failed', 'skipped', 'blocked'], description: 'Execution status' },
             comment: { type: 'string', description: 'Execution log or failure summary' },
-            durationMs: { type: 'number', description: 'Execution duration in milliseconds' }
+            durationMs: { type: 'number', description: 'Execution duration in milliseconds' },
+            testExecutionKey: { type: 'string', description: 'Xray Test Execution issue key (Xray only; falls back to XRAY_TEST_EXECUTION_KEY env var)' },
+            testPointId: { type: 'string', description: 'Azure DevOps test point id (ADO only; falls back to AZURE_DEVOPS_TEST_POINT_ID env var)' }
           },
           required: ['caseId', 'status']
         }
@@ -479,18 +481,27 @@ export function getAdapter(provider) {
   }
 
   if (p === 'xray') {
+    async function authenticateXrayCloud(clientId, clientSecret) {
+      const authRes = await httpPost('https://xray.cloud.getxray.app/api/v2/authenticate', { client_id: clientId, client_secret: clientSecret });
+      if (authRes.status !== 200) return { error: \`Xray Cloud auth error: \${authRes.status}\` };
+      const token = typeof authRes.data === 'string' ? authRes.data.replace(/"/g, '') : '';
+      if (!token) return { error: 'Xray Cloud auth did not return a token' };
+      return { token };
+    }
+    async function xrayCloudGraphql(token, query) {
+      return httpPost('https://xray.cloud.getxray.app/api/v2/graphql', { query }, { Authorization: \`Bearer \${token}\` });
+    }
     return {
       async getTestCase(caseId) {
         const clientId = process.env.XRAY_CLIENT_ID;
         const clientSecret = process.env.XRAY_CLIENT_SECRET;
         if (clientId && clientSecret) {
           // Xray Cloud: exchange client_id/client_secret for a bearer token, then query steps via GraphQL.
-          const authRes = await httpPost('https://xray.cloud.getxray.app/api/v2/authenticate', { client_id: clientId, client_secret: clientSecret });
-          if (authRes.status !== 200) return { error: \`Xray Cloud auth error: \${authRes.status}\` };
-          const token = typeof authRes.data === 'string' ? authRes.data.replace(/"/g, '') : '';
-          if (!token) return { error: 'Xray Cloud auth did not return a token' };
-          const query = { query: \`query { getTest(issueId: "\${caseId}") { jira(fields: ["summary", "description", "labels"]) steps { action data result } } }\` };
-          const res = await httpPost('https://xray.cloud.getxray.app/api/v2/graphql', query, { Authorization: \`Bearer \${token}\` });
+          const auth = await authenticateXrayCloud(clientId, clientSecret);
+          if (auth.error) return { error: auth.error };
+          const token = auth.token;
+          const query = \`query { getTest(issueId: "\${caseId}") { jira(fields: ["summary", "description", "labels"]) steps { action data result } } }\`;
+          const res = await xrayCloudGraphql(token, query);
           if (res.status !== 200) return { error: \`Xray Cloud GraphQL error: \${res.status}\` };
           const test = res.data && res.data.data && res.data.data.getTest;
           if (!test) return { error: 'Xray Cloud: test not found' };
@@ -536,10 +547,42 @@ export function getAdapter(provider) {
       },
       async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
       async postTestResult(args) {
-        // Not implemented: Xray's execution-result publish endpoint was not independently
-        // verified against official docs (anti-bot blocked live access during research).
-        // Fetch (getTestCase) is real; do not claim result publishing works until verified.
-        return { success: false, error: 'Xray result publishing is not implemented yet — verify the official Xray REST/GraphQL execution-result endpoint before wiring this up.' };
+        const clientId = process.env.XRAY_CLIENT_ID;
+        const clientSecret = process.env.XRAY_CLIENT_SECRET;
+        const executionKey = args.testExecutionKey || process.env.XRAY_TEST_EXECUTION_KEY;
+        if (!clientId || !clientSecret) {
+          // Xray Server/DC result publishing was not independently verified against official
+          // docs (anti-bot blocked live access during research) — do not fabricate an endpoint.
+          return { success: false, error: 'Xray Server/DC result publishing is not implemented — only Xray Cloud (XRAY_CLIENT_ID/XRAY_CLIENT_SECRET) is supported for postTestResult.' };
+        }
+        if (!executionKey) {
+          return { success: false, error: 'Missing Test Execution key — pass testExecutionKey or set XRAY_TEST_EXECUTION_KEY' };
+        }
+        const auth = await authenticateXrayCloud(clientId, clientSecret);
+        if (auth.error) return { success: false, error: auth.error };
+        const token = auth.token;
+
+        // Resolve Jira's internal numeric issue ids for the Test and the Test Execution — Xray's
+        // getTestRun query takes issue ids, not issue keys.
+        const testLookup = await xrayCloudGraphql(token, \`query { getTests(jql: "key = \\\\"\${args.caseId}\\\\"", limit: 1) { results { issueId } } }\`);
+        const testIssueId = testLookup.data && testLookup.data.data && testLookup.data.data.getTests && testLookup.data.data.getTests.results[0] && testLookup.data.data.getTests.results[0].issueId;
+        if (!testIssueId) return { success: false, error: \`Xray Cloud: could not resolve Test issue id for \${args.caseId}\` };
+
+        const execLookup = await xrayCloudGraphql(token, \`query { getTestExecutions(jql: "key = \\\\"\${executionKey}\\\\"", limit: 1) { results { issueId } } }\`);
+        const execIssueId = execLookup.data && execLookup.data.data && execLookup.data.data.getTestExecutions && execLookup.data.data.getTestExecutions.results[0] && execLookup.data.data.getTestExecutions.results[0].issueId;
+        if (!execIssueId) return { success: false, error: \`Xray Cloud: could not resolve Test Execution issue id for \${executionKey}\` };
+
+        const runLookup = await xrayCloudGraphql(token, \`query { getTestRun(testIssueId: "\${testIssueId}", testExecIssueId: "\${execIssueId}") { id } }\`);
+        const testRunId = runLookup.data && runLookup.data.data && runLookup.data.data.getTestRun && runLookup.data.data.getTestRun.id;
+        if (!testRunId) return { success: false, error: 'Xray Cloud: could not resolve test run id for the given Test + Test Execution pair' };
+
+        // Default Xray status names — projects with a custom status scheme may need different values.
+        const status = args.status === 'passed' ? 'PASSED' : args.status === 'failed' ? 'FAILED' : args.status === 'blocked' ? 'ABORTED' : 'TODO';
+        const mutateRes = await xrayCloudGraphql(token, \`mutation { updateTestRunStatus(id: "\${testRunId}", status: "\${status}") }\`);
+        if (mutateRes.status !== 200 || (mutateRes.data && mutateRes.data.errors)) {
+          return { success: false, error: \`Xray Cloud: updateTestRunStatus failed (\${mutateRes.status})\` };
+        }
+        return { success: true, id: args.caseId, status: args.status };
       }
     };
   }

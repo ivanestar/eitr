@@ -79,6 +79,7 @@ export function planMcpConfigs(
     } else if (provider === 'xray') {
       providerEnv.XRAY_CLIENT_ID = '${env:XRAY_CLIENT_ID}';
       providerEnv.XRAY_CLIENT_SECRET = '${env:XRAY_CLIENT_SECRET}';
+      providerEnv.XRAY_TEST_EXECUTION_KEY = '${env:XRAY_TEST_EXECUTION_KEY}';
       providerEnv.JIRA_HOST = '${env:JIRA_HOST}';
       providerEnv.JIRA_API_TOKEN = '${env:JIRA_API_TOKEN}';
     } else if (provider === 'zephyr') {
