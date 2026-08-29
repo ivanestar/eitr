@@ -34,7 +34,7 @@ export function planMcpServer(
 // Communicates over standard IO (stdio) using standard JSON-RPC 2.0 (Model Context Protocol)
 
 import { getAdapter } from './adapters.js';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -85,6 +85,16 @@ function saveCachedCase(caseId, data) {
     writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
   } catch (err) {
     logDebug(\`Cache write error for \${caseId}: \${err.message}\`);
+  }
+}
+
+function invalidateCachedCase(caseId) {
+  try {
+    const safeId = String(caseId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const file = join(CACHE_DIR, \`\${safeId}.json\`);
+    if (existsSync(file)) unlinkSync(file);
+  } catch (err) {
+    logDebug(\`Cache invalidate error for \${caseId}: \${err.message}\`);
   }
 }
 
@@ -201,6 +211,57 @@ function handleToolsList() {
           },
           required: ['caseId', 'status']
         }
+      },
+      {
+        name: 'mcp__tms__search',
+        description: 'Search or list tickets/test cases in the configured TMS (JQL for Jira/Xray, WIQL for Azure DevOps, plain-text title filter for TestRail/Zephyr).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'JQL/WIQL query, or a plain-text filter — depends on the provider; omit to list recent items' },
+            maxResults: { type: 'number', description: 'Maximum number of results (default 25)' }
+          }
+        }
+      },
+      {
+        name: 'mcp__tms__create_issue',
+        description: 'Create a new ticket (Jira/Xray/Azure DevOps issue) or test case (TestRail/Zephyr) in the configured TMS.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            summary: { type: 'string', description: 'Title / summary' },
+            description: { type: 'string', description: 'Plain-text description / objective' },
+            issueType: { type: 'string', description: 'Jira/Xray/ADO only — e.g. "Bug", "Task", "Story" (default "Bug"). Ignored for TestRail/Zephyr, which always create a test case.' },
+            projectKey: { type: 'string', description: 'Jira/Xray/Zephyr project key override (falls back to JIRA_PROJECT_KEY / ZEPHYR_PROJECT_KEY env var)' },
+            sectionId: { type: 'string', description: 'TestRail section id override (falls back to TESTRAIL_SECTION_ID env var)' }
+          },
+          required: ['summary']
+        }
+      },
+      {
+        name: 'mcp__tms__update_issue',
+        description: 'Update the summary, description, and/or status of an existing ticket/test case in the configured TMS.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            caseId: { type: 'string', description: 'Issue key / test case ID to update' },
+            summary: { type: 'string' },
+            description: { type: 'string' },
+            status: { type: 'string', description: 'Jira/Xray — must match an available workflow transition name. Azure DevOps — a valid System.State value. Ignored for TestRail/Zephyr (use mcp__tms__post_test_result for execution status instead).' }
+          },
+          required: ['caseId']
+        }
+      },
+      {
+        name: 'mcp__tms__delete_issue',
+        description: 'Delete a ticket/test case in the configured TMS. Not available for Zephyr Scale (no public delete endpoint) or Xray Server/DC (unverified) — both return an explicit error rather than silently no-op.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            caseId: { type: 'string', description: 'Issue key / test case ID to delete' }
+          },
+          required: ['caseId']
+        }
       }
     );
   }
@@ -248,6 +309,25 @@ async function handleToolCall(name, args) {
     if (name === 'mcp__tms__post_test_result') {
       const res = await adapter.postTestResult(args);
       return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] };
+    }
+    if (name === 'mcp__tms__search') {
+      const data = await adapter.searchIssues(args.query, args.maxResults);
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    if (name === 'mcp__tms__create_issue') {
+      const data = await adapter.createIssue(args);
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    if (name === 'mcp__tms__update_issue') {
+      const { caseId, ...fields } = args;
+      const data = await adapter.updateIssue(caseId, fields);
+      if (data && !data.error) invalidateCachedCase(caseId);
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    if (name === 'mcp__tms__delete_issue') {
+      const data = await adapter.deleteIssue(args.caseId);
+      if (data && !data.error) invalidateCachedCase(args.caseId);
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
     }
     throw new Error(\`Unknown tool: \${name}\`);
   } catch (err) {
@@ -328,7 +408,122 @@ process.stdin.on('data', async (chunk) => {
 `;
 
   const adaptersCode = `// Universal Multi-TMS Adapter implementations
-import { httpGet, httpPost } from './http.js';
+import { httpGet, httpPost, httpPut, httpPatch, httpDelete } from './http.js';
+
+// Flattens an Atlassian Document Format (ADF) rich-text node (what Jira REST v3 returns for
+// description/comment fields) into plain text. Falls back to the value itself if it's already
+// a plain string (older API shapes), or '' if empty/absent.
+function adfToPlainText(adf) {
+  if (!adf) return '';
+  if (typeof adf === 'string') return adf;
+  const parts = [];
+  function walk(node) {
+    if (!node) return;
+    if (node.type === 'text') { parts.push(node.text || ''); return; }
+    if (Array.isArray(node.content)) {
+      for (const child of node.content) walk(child);
+    }
+    if (node.type === 'paragraph' || node.type === 'heading') parts.push('\\n');
+  }
+  walk(adf);
+  return parts.join('').replace(/\\n{3,}/g, '\\n\\n').trim();
+}
+
+// Converts plain text into a minimal valid ADF document for writing back to Jira REST v3.
+function plainTextToAdf(text) {
+  const paragraphs = String(text || '').split(/\\n+/).filter(Boolean);
+  return {
+    type: 'doc',
+    version: 1,
+    content: paragraphs.length
+      ? paragraphs.map((p) => ({ type: 'paragraph', content: [{ type: 'text', text: p }] }))
+      : [{ type: 'paragraph', content: [] }]
+  };
+}
+
+// Generic Jira issue CRUD shared by the 'jira' and 'xray' adapters — Xray's Test/Test Execution/
+// Test Plan issues ARE Jira issues, so generic field management goes through the same core Jira
+// REST API v3 rather than Xray's specialized (steps/results) GraphQL surface.
+function createJiraIssueCrud() {
+  return {
+    async searchIssues(query, maxResults) {
+      const host = process.env.JIRA_HOST;
+      const email = process.env.JIRA_EMAIL;
+      const token = process.env.JIRA_API_TOKEN;
+      if (!host || !email || !token) return { error: 'Missing Jira environment variables' };
+      const authHeader = 'Basic ' + Buffer.from(\`\${email}:\${token}\`).toString('base64');
+      const jql = query || 'ORDER BY created DESC';
+      // GET /rest/api/3/search was removed by Atlassian (returns 410, migrate to /search/jql —
+      // see https://developer.atlassian.com/changelog/#CHANGE-2046). The new endpoint only
+      // returns 'id' unless 'fields' is explicitly requested, and paginates via nextPageToken
+      // instead of startAt (not used here — a single page is enough for this tool's purpose).
+      const url = \`\${host.replace(/\\/+$/, '')}/rest/api/3/search/jql?jql=\${encodeURIComponent(jql)}&maxResults=\${maxResults || 25}&fields=summary,status\`;
+      const res = await httpGet(url, { Authorization: authHeader });
+      if (res.status !== 200) return { error: \`Jira search error: \${res.status}\` };
+      const results = (res.data.issues || []).map((i) => ({
+        id: i.key,
+        title: (i.fields && i.fields.summary) || '',
+        status: (i.fields && i.fields.status && i.fields.status.name) || ''
+      }));
+      return { results };
+    },
+    async createIssue(fields) {
+      const host = process.env.JIRA_HOST;
+      const email = process.env.JIRA_EMAIL;
+      const token = process.env.JIRA_API_TOKEN;
+      const projectKey = fields.projectKey || process.env.JIRA_PROJECT_KEY;
+      if (!host || !email || !token) return { error: 'Missing Jira environment variables' };
+      if (!projectKey) return { error: 'Missing projectKey — pass fields.projectKey or set JIRA_PROJECT_KEY' };
+      const authHeader = 'Basic ' + Buffer.from(\`\${email}:\${token}\`).toString('base64');
+      const body = {
+        fields: {
+          project: { key: projectKey },
+          summary: fields.summary || 'Untitled',
+          issuetype: { name: fields.issueType || 'Bug' },
+          ...(fields.description ? { description: plainTextToAdf(fields.description) } : {})
+        }
+      };
+      const res = await httpPost(\`\${host.replace(/\\/+$/, '')}/rest/api/3/issue\`, body, { Authorization: authHeader });
+      if (res.status !== 201 && res.status !== 200) return { error: \`Jira create error: \${res.status}\`, details: res.data };
+      return { id: res.data.key, title: fields.summary || '' };
+    },
+    async updateIssue(caseId, fields) {
+      const host = process.env.JIRA_HOST;
+      const email = process.env.JIRA_EMAIL;
+      const token = process.env.JIRA_API_TOKEN;
+      if (!host || !email || !token) return { error: 'Missing Jira environment variables' };
+      const authHeader = 'Basic ' + Buffer.from(\`\${email}:\${token}\`).toString('base64');
+      const updateFields = {};
+      if (fields.summary) updateFields.summary = fields.summary;
+      if (fields.description) updateFields.description = plainTextToAdf(fields.description);
+      if (Object.keys(updateFields).length === 0 && !fields.status) return { error: 'No fields to update' };
+      if (Object.keys(updateFields).length > 0) {
+        const res = await httpPut(\`\${host.replace(/\\/+$/, '')}/rest/api/3/issue/\${caseId}\`, { fields: updateFields }, { Authorization: authHeader });
+        if (res.status !== 204) return { error: \`Jira update error: \${res.status}\` };
+      }
+      if (fields.status) {
+        // Jira status changes go through the transitions endpoint, not a plain field PUT.
+        const transRes = await httpGet(\`\${host.replace(/\\/+$/, '')}/rest/api/3/issue/\${caseId}/transitions\`, { Authorization: authHeader });
+        const match = transRes.data && Array.isArray(transRes.data.transitions) &&
+          transRes.data.transitions.find((t) => t.name.toLowerCase() === String(fields.status).toLowerCase());
+        if (!match) return { error: \`Jira status "\${fields.status}" is not a valid transition from the current state\` };
+        const transitionRes = await httpPost(\`\${host.replace(/\\/+$/, '')}/rest/api/3/issue/\${caseId}/transitions\`, { transition: { id: match.id } }, { Authorization: authHeader });
+        if (transitionRes.status !== 204) return { error: \`Jira transition error: \${transitionRes.status}\` };
+      }
+      return { id: caseId, updated: true };
+    },
+    async deleteIssue(caseId) {
+      const host = process.env.JIRA_HOST;
+      const email = process.env.JIRA_EMAIL;
+      const token = process.env.JIRA_API_TOKEN;
+      if (!host || !email || !token) return { error: 'Missing Jira environment variables' };
+      const authHeader = 'Basic ' + Buffer.from(\`\${email}:\${token}\`).toString('base64');
+      const res = await httpDelete(\`\${host.replace(/\\/+$/, '')}/rest/api/3/issue/\${caseId}\`, { Authorization: authHeader });
+      if (res.status !== 204) return { error: \`Jira delete error: \${res.status}\` };
+      return { id: caseId, deleted: true };
+    }
+  };
+}
 
 function parseAdoXmlSteps(xml) {
   if (!xml || typeof xml !== 'string') return [];
@@ -399,6 +594,68 @@ export function getAdapter(provider) {
         const res = await httpPost(url, body, { Authorization: authHeader });
         if (res.status !== 200 && res.status !== 201) return { success: false, error: \`Azure DevOps API error: \${res.status}\` };
         return { success: true, id: args.caseId, status: args.status };
+      },
+      async searchIssues(query, maxResults) {
+        const org = process.env.AZURE_DEVOPS_ORG;
+        const project = process.env.AZURE_DEVOPS_PROJECT;
+        const pat = process.env.AZURE_DEVOPS_PAT;
+        if (!org || !project || !pat) return { error: 'Missing Azure DevOps environment variables' };
+        const authHeader = 'Basic ' + Buffer.from(':' + pat).toString('base64');
+        const wiql = query || \`SELECT [System.Id], [System.Title] FROM WorkItems WHERE [System.TeamProject] = '\${project}' ORDER BY [System.ChangedDate] DESC\`;
+        const wiqlRes = await httpPost(\`https://dev.azure.com/\${org}/\${project}/_apis/wit/wiql?api-version=7.0\`, { query: wiql }, { Authorization: authHeader });
+        if (wiqlRes.status !== 200) return { error: \`ADO WIQL error: \${wiqlRes.status}\` };
+        const ids = (wiqlRes.data.workItems || []).slice(0, maxResults || 25).map((w) => w.id);
+        if (ids.length === 0) return { results: [] };
+        const idsRes = await httpGet(\`https://dev.azure.com/\${org}/\${project}/_apis/wit/workitems?ids=\${ids.join(',')}&api-version=7.0\`, { Authorization: authHeader });
+        if (idsRes.status !== 200) return { error: \`ADO work items fetch error: \${idsRes.status}\` };
+        const results = (idsRes.data.value || []).map((w) => ({
+          id: String(w.id),
+          title: w.fields['System.Title'] || '',
+          status: w.fields['System.State'] || ''
+        }));
+        return { results };
+      },
+      async createIssue(fields) {
+        const org = process.env.AZURE_DEVOPS_ORG;
+        const project = process.env.AZURE_DEVOPS_PROJECT;
+        const pat = process.env.AZURE_DEVOPS_PAT;
+        if (!org || !project || !pat) return { error: 'Missing Azure DevOps environment variables' };
+        const authHeader = 'Basic ' + Buffer.from(':' + pat).toString('base64');
+        const issueType = fields.issueType || 'Bug';
+        const patch = [{ op: 'add', path: '/fields/System.Title', value: fields.summary || 'Untitled' }];
+        if (fields.description) patch.push({ op: 'add', path: '/fields/System.Description', value: fields.description });
+        const url = \`https://dev.azure.com/\${org}/\${project}/_apis/wit/workitems/$\${encodeURIComponent(issueType)}?api-version=7.0\`;
+        const res = await httpPost(url, patch, { Authorization: authHeader, 'Content-Type': 'application/json-patch+json' });
+        if (res.status !== 200 && res.status !== 201) return { error: \`ADO create error: \${res.status}\`, details: res.data };
+        return { id: String(res.data.id), title: (res.data.fields && res.data.fields['System.Title']) || '' };
+      },
+      async updateIssue(caseId, fields) {
+        const org = process.env.AZURE_DEVOPS_ORG;
+        const project = process.env.AZURE_DEVOPS_PROJECT;
+        const pat = process.env.AZURE_DEVOPS_PAT;
+        if (!org || !project || !pat) return { error: 'Missing Azure DevOps environment variables' };
+        const authHeader = 'Basic ' + Buffer.from(':' + pat).toString('base64');
+        const patch = [];
+        if (fields.summary) patch.push({ op: 'add', path: '/fields/System.Title', value: fields.summary });
+        if (fields.description) patch.push({ op: 'add', path: '/fields/System.Description', value: fields.description });
+        if (fields.status) patch.push({ op: 'add', path: '/fields/System.State', value: fields.status });
+        if (patch.length === 0) return { error: 'No fields to update' };
+        const url = \`https://dev.azure.com/\${org}/\${project}/_apis/wit/workitems/\${caseId}?api-version=7.0\`;
+        const res = await httpPatch(url, patch, { Authorization: authHeader, 'Content-Type': 'application/json-patch+json' });
+        if (res.status !== 200) return { error: \`ADO update error: \${res.status}\`, details: res.data };
+        return { id: caseId, updated: true };
+      },
+      async deleteIssue(caseId) {
+        const org = process.env.AZURE_DEVOPS_ORG;
+        const project = process.env.AZURE_DEVOPS_PROJECT;
+        const pat = process.env.AZURE_DEVOPS_PAT;
+        if (!org || !project || !pat) return { error: 'Missing Azure DevOps environment variables' };
+        const authHeader = 'Basic ' + Buffer.from(':' + pat).toString('base64');
+        // Soft-delete by default (ADO moves it to the project Recycle Bin, recoverable for 30 days).
+        const url = \`https://dev.azure.com/\${org}/\${project}/_apis/wit/workitems/\${caseId}?api-version=7.0\`;
+        const res = await httpDelete(url, { Authorization: authHeader });
+        if (res.status !== 200 && res.status !== 204) return { error: \`ADO delete error: \${res.status}\` };
+        return { id: caseId, deleted: true };
       }
     };
   }
@@ -451,6 +708,62 @@ export function getAdapter(provider) {
         const res = await httpPost(url, body, { Authorization: authHeader });
         if (res.status !== 200) return { success: false, error: \`TestRail API error: \${res.status}\` };
         return { success: true, id: args.caseId, status: args.status };
+      },
+      async searchIssues(query, maxResults) {
+        const host = process.env.TESTRAIL_HOST;
+        const user = process.env.TESTRAIL_USERNAME;
+        const key = process.env.TESTRAIL_API_KEY;
+        const projectId = process.env.TESTRAIL_PROJECT_ID;
+        if (!host || !user || !key || !projectId) {
+          return { error: 'Missing TestRail environment variables (TESTRAIL_HOST/USERNAME/API_KEY/PROJECT_ID)' };
+        }
+        const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
+        const url = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/get_cases/\${projectId}\`;
+        const res = await httpGet(url, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`TestRail API error: \${res.status}\` };
+        const cases = Array.isArray(res.data) ? res.data : res.data.cases || [];
+        const filtered = query ? cases.filter((c) => (c.title || '').toLowerCase().includes(String(query).toLowerCase())) : cases;
+        const results = filtered.slice(0, maxResults || 25).map((c) => ({ id: \`C\${c.id}\`, title: c.title || '', status: '' }));
+        return { results };
+      },
+      async createIssue(fields) {
+        const host = process.env.TESTRAIL_HOST;
+        const user = process.env.TESTRAIL_USERNAME;
+        const key = process.env.TESTRAIL_API_KEY;
+        const sectionId = fields.sectionId || process.env.TESTRAIL_SECTION_ID;
+        if (!host || !user || !key) return { error: 'Missing TestRail environment variables' };
+        if (!sectionId) return { error: 'Missing sectionId — pass fields.sectionId or set TESTRAIL_SECTION_ID' };
+        const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
+        const body = { title: fields.summary || 'Untitled', custom_preconds: fields.description || '' };
+        const res = await httpPost(\`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/add_case/\${sectionId}\`, body, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`TestRail create error: \${res.status}\`, details: res.data };
+        return { id: \`C\${res.data.id}\`, title: res.data.title || '' };
+      },
+      async updateIssue(caseId, fields) {
+        const host = process.env.TESTRAIL_HOST;
+        const user = process.env.TESTRAIL_USERNAME;
+        const key = process.env.TESTRAIL_API_KEY;
+        if (!host || !user || !key) return { error: 'Missing TestRail environment variables' };
+        const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
+        const cleanId = String(caseId).replace(/^C/i, '');
+        const body = {};
+        if (fields.summary) body.title = fields.summary;
+        if (fields.description) body.custom_preconds = fields.description;
+        if (Object.keys(body).length === 0) return { error: 'No fields to update' };
+        const res = await httpPost(\`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/update_case/\${cleanId}\`, body, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`TestRail update error: \${res.status}\`, details: res.data };
+        return { id: caseId, updated: true };
+      },
+      async deleteIssue(caseId) {
+        const host = process.env.TESTRAIL_HOST;
+        const user = process.env.TESTRAIL_USERNAME;
+        const key = process.env.TESTRAIL_API_KEY;
+        if (!host || !user || !key) return { error: 'Missing TestRail environment variables' };
+        const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
+        const cleanId = String(caseId).replace(/^C/i, '');
+        const res = await httpPost(\`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/delete_case/\${cleanId}\`, {}, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`TestRail delete error: \${res.status}\` };
+        return { id: caseId, deleted: true };
       }
     };
   }
@@ -470,13 +783,14 @@ export function getAdapter(provider) {
         return {
           id: res.data.key,
           title: f.summary || '',
-          description: typeof f.description === 'string' ? f.description : '',
+          description: adfToPlainText(f.description),
           steps: [],
           tags: f.labels || []
         };
       },
       async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
-      async postTestResult(args) { return { success: true, id: args.caseId, status: args.status }; }
+      async postTestResult(args) { return { success: true, id: args.caseId, status: args.status }; },
+      ...createJiraIssueCrud()
     };
   }
 
@@ -540,7 +854,7 @@ export function getAdapter(provider) {
         return {
           id: issueRes.data.key || String(caseId),
           title: f.summary || '',
-          description: typeof f.description === 'string' ? f.description : '',
+          description: adfToPlainText(f.description),
           steps,
           tags: f.labels || []
         };
@@ -583,7 +897,8 @@ export function getAdapter(provider) {
           return { success: false, error: \`Xray Cloud: updateTestRunStatus failed (\${mutateRes.status})\` };
         }
         return { success: true, id: args.caseId, status: args.status };
-      }
+      },
+      ...createJiraIssueCrud()
     };
   }
 
@@ -630,6 +945,49 @@ export function getAdapter(provider) {
         }, { Authorization: \`Bearer \${token}\` });
         if (res.status !== 200 && res.status !== 201) return { success: false, error: \`Zephyr Scale API error: \${res.status}\` };
         return { success: true, id: args.caseId, status: args.status };
+      },
+      async searchIssues(query, maxResults) {
+        const token = process.env.ZEPHYR_API_TOKEN;
+        const baseUrl = process.env.ZEPHYR_BASE_URL || 'https://api.zephyrscale.smartbear.com/v2';
+        const projectKey = process.env.ZEPHYR_PROJECT_KEY;
+        if (!token || !projectKey) return { error: 'Missing ZEPHYR_API_TOKEN/ZEPHYR_PROJECT_KEY environment variables' };
+        const authHeader = \`Bearer \${token}\`;
+        const url = \`\${baseUrl.replace(/\\/+$/, '')}/testcases?projectKey=\${encodeURIComponent(projectKey)}&maxResults=\${maxResults || 25}\`;
+        const res = await httpGet(url, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`Zephyr Scale API error: \${res.status}\` };
+        const values = (res.data && res.data.values) || [];
+        const filtered = query ? values.filter((v) => (v.name || '').toLowerCase().includes(String(query).toLowerCase())) : values;
+        return { results: filtered.map((v) => ({ id: v.key, title: v.name || '', status: (v.status && v.status.name) || '' })) };
+      },
+      async createIssue(fields) {
+        const token = process.env.ZEPHYR_API_TOKEN;
+        const baseUrl = process.env.ZEPHYR_BASE_URL || 'https://api.zephyrscale.smartbear.com/v2';
+        const projectKey = fields.projectKey || process.env.ZEPHYR_PROJECT_KEY;
+        if (!token || !projectKey) return { error: 'Missing ZEPHYR_API_TOKEN/ZEPHYR_PROJECT_KEY environment variables' };
+        const authHeader = \`Bearer \${token}\`;
+        const body = { projectKey, name: fields.summary || 'Untitled', objective: fields.description || '' };
+        const res = await httpPost(\`\${baseUrl.replace(/\\/+$/, '')}/testcases\`, body, { Authorization: authHeader });
+        if (res.status !== 201 && res.status !== 200) return { error: \`Zephyr Scale create error: \${res.status}\`, details: res.data };
+        return { id: res.data.key, title: fields.summary || '' };
+      },
+      async updateIssue(caseId, fields) {
+        const token = process.env.ZEPHYR_API_TOKEN;
+        const baseUrl = process.env.ZEPHYR_BASE_URL || 'https://api.zephyrscale.smartbear.com/v2';
+        if (!token) return { error: 'Missing ZEPHYR_API_TOKEN environment variable' };
+        const authHeader = \`Bearer \${token}\`;
+        const body = {};
+        if (fields.summary) body.name = fields.summary;
+        if (fields.description) body.objective = fields.description;
+        if (Object.keys(body).length === 0) return { error: 'No fields to update' };
+        const res = await httpPut(\`\${baseUrl.replace(/\\/+$/, '')}/testcases/\${caseId}\`, body, { Authorization: authHeader });
+        if (res.status !== 200 && res.status !== 204) return { error: \`Zephyr Scale update error: \${res.status}\`, details: res.data };
+        return { id: caseId, updated: true };
+      },
+      async deleteIssue(caseId) {
+        // Not implemented: Zephyr Scale's public API does not appear to expose test-case
+        // deletion — corroborated by an independent third-party Zephyr Scale MCP server
+        // implementation, which also has no delete tool. Do not fabricate an endpoint.
+        return { error: 'Zephyr Scale test-case deletion is not implemented — the public API does not appear to expose a delete endpoint.' };
       }
     };
   }
@@ -649,7 +1007,11 @@ export function getAdapter(provider) {
       };
     },
     async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
-    async postTestResult(args) { return { success: true, id: args.caseId, status: args.status }; }
+    async postTestResult(args) { return { success: true, id: args.caseId, status: args.status }; },
+    async searchIssues(query) { return { results: [{ id: 'MOCK-1', title: \`Mock result for "\${query || ''}"\`, status: 'Open' }] }; },
+    async createIssue(fields) { return { id: 'MOCK-1', title: fields.summary || 'Untitled' }; },
+    async updateIssue(caseId) { return { id: caseId, updated: true }; },
+    async deleteIssue(caseId) { return { id: caseId, deleted: true }; }
   };
 }
 `;
@@ -659,53 +1021,19 @@ import https from 'node:https';
 import http from 'node:http';
 import { URL } from 'node:url';
 
-export function httpGet(urlStr, headers = {}) {
+function httpRequest(method, urlStr, body, headers = {}) {
   return new Promise((resolve) => {
     try {
       const u = new URL(urlStr);
       const client = u.protocol === 'https:' ? https : http;
+      const dataStr = body !== undefined && body !== null ? (typeof body === 'string' ? body : JSON.stringify(body)) : null;
       const opts = {
         hostname: u.hostname,
         port: u.port || (u.protocol === 'https:' ? 443 : 80),
         path: u.pathname + u.search,
-        method: 'GET',
-        headers: { 'User-Agent': 'TMS-Bridge/1.0', ...headers },
-        timeout: 10000,
-      };
-
-      const req = client.request(opts, (res) => {
-        let body = '';
-        res.on('data', (c) => { body += c; });
-        res.on('end', () => {
-          let data = body;
-          try { data = JSON.parse(body); } catch {}
-          resolve({ status: res.statusCode, data });
-        });
-      });
-
-      req.on('error', (err) => resolve({ status: 500, error: err.message }));
-      req.on('timeout', () => { req.destroy(); resolve({ status: 408, error: 'Request timeout' }); });
-      req.end();
-    } catch (e) {
-      resolve({ status: 500, error: e.message });
-    }
-  });
-}
-
-export function httpPost(urlStr, body, headers = {}) {
-  return new Promise((resolve) => {
-    try {
-      const u = new URL(urlStr);
-      const client = u.protocol === 'https:' ? https : http;
-      const dataStr = typeof body === 'string' ? body : JSON.stringify(body);
-      const opts = {
-        hostname: u.hostname,
-        port: u.port || (u.protocol === 'https:' ? 443 : 80),
-        path: u.pathname + u.search,
-        method: 'POST',
+        method,
         headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(dataStr),
+          ...(dataStr ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(dataStr) } : {}),
           'User-Agent': 'TMS-Bridge/1.0',
           ...headers,
         },
@@ -717,20 +1045,26 @@ export function httpPost(urlStr, body, headers = {}) {
         res.on('data', (c) => { respBody += c; });
         res.on('end', () => {
           let data = respBody;
-          try { data = JSON.parse(respBody); } catch {}
+          try { data = respBody ? JSON.parse(respBody) : null; } catch {}
           resolve({ status: res.statusCode, data });
         });
       });
 
       req.on('error', (err) => resolve({ status: 500, error: err.message }));
       req.on('timeout', () => { req.destroy(); resolve({ status: 408, error: 'Request timeout' }); });
-      req.write(dataStr);
+      if (dataStr) req.write(dataStr);
       req.end();
     } catch (e) {
       resolve({ status: 500, error: e.message });
     }
   });
 }
+
+export function httpGet(urlStr, headers = {}) { return httpRequest('GET', urlStr, null, headers); }
+export function httpPost(urlStr, body, headers = {}) { return httpRequest('POST', urlStr, body, headers); }
+export function httpPut(urlStr, body, headers = {}) { return httpRequest('PUT', urlStr, body, headers); }
+export function httpPatch(urlStr, body, headers = {}) { return httpRequest('PATCH', urlStr, body, headers); }
+export function httpDelete(urlStr, headers = {}) { return httpRequest('DELETE', urlStr, null, headers); }
 `;
 
   return [

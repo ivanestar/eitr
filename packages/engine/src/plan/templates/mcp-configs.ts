@@ -72,16 +72,20 @@ export function planMcpConfigs(
       providerEnv.TESTRAIL_USERNAME = '${env:TESTRAIL_USERNAME}';
       providerEnv.TESTRAIL_API_KEY = '${env:TESTRAIL_API_KEY}';
       providerEnv.TESTRAIL_RUN_ID = '${env:TESTRAIL_RUN_ID}';
+      providerEnv.TESTRAIL_PROJECT_ID = '${env:TESTRAIL_PROJECT_ID}';
+      providerEnv.TESTRAIL_SECTION_ID = '${env:TESTRAIL_SECTION_ID}';
     } else if (provider === 'jira') {
       providerEnv.JIRA_HOST = '${env:JIRA_HOST}';
       providerEnv.JIRA_EMAIL = '${env:JIRA_EMAIL}';
       providerEnv.JIRA_API_TOKEN = '${env:JIRA_API_TOKEN}';
+      providerEnv.JIRA_PROJECT_KEY = '${env:JIRA_PROJECT_KEY}';
     } else if (provider === 'xray') {
       providerEnv.XRAY_CLIENT_ID = '${env:XRAY_CLIENT_ID}';
       providerEnv.XRAY_CLIENT_SECRET = '${env:XRAY_CLIENT_SECRET}';
       providerEnv.XRAY_TEST_EXECUTION_KEY = '${env:XRAY_TEST_EXECUTION_KEY}';
       providerEnv.JIRA_HOST = '${env:JIRA_HOST}';
       providerEnv.JIRA_API_TOKEN = '${env:JIRA_API_TOKEN}';
+      providerEnv.JIRA_PROJECT_KEY = '${env:JIRA_PROJECT_KEY}';
     } else if (provider === 'zephyr') {
       providerEnv.ZEPHYR_API_TOKEN = '${env:ZEPHYR_API_TOKEN}';
       providerEnv.ZEPHYR_BASE_URL = '${env:ZEPHYR_BASE_URL}';
