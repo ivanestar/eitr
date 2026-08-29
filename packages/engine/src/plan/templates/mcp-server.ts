@@ -187,13 +187,39 @@ function handleToolsList() {
       },
       {
         name: 'mcp__tms__get_suite_context',
-        description: 'Fetch all surrounding test cases in a test suite.',
+        description: 'List the test cases contained in a suite/section/folder. ADO: needs planId too. TestRail: section id. Xray: Test Plan issue key. Zephyr: Test Cycle key. Not applicable to plain Jira.',
         inputSchema: {
           type: 'object',
           properties: {
-            suiteId: { type: 'string', description: 'The ID or name of the test suite' }
+            suiteId: { type: 'string', description: 'Suite / section id, Test Plan key, or Test Cycle key, depending on provider' },
+            planId: { type: 'string', description: 'Azure DevOps only — the parent Test Plan id (falls back to AZURE_DEVOPS_PLAN_ID env var)' }
           },
           required: ['suiteId']
+        }
+      },
+      {
+        name: 'mcp__tms__list_test_plans',
+        description: 'List test plans (Azure DevOps, Xray) or test cycles (Zephyr — the closest equivalent; TestRail test plans are also supported). Not applicable to plain Jira.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Optional JQL filter (Xray only); ignored by other providers' },
+            maxResults: { type: 'number', description: 'Maximum number of results (default 25)' }
+          }
+        }
+      },
+      {
+        name: 'mcp__tms__create_test_run',
+        description: 'Create a new test run / test cycle to publish results into via mcp__tms__post_test_result. For Xray, this creates a Test Execution issue directly (Test Executions ARE Jira issues).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Run / cycle / Test Execution name' },
+            planId: { type: 'string', description: 'Azure DevOps only — parent Test Plan id (falls back to AZURE_DEVOPS_PLAN_ID env var)' },
+            suiteId: { type: 'string', description: 'TestRail only — suite id the run covers (falls back to TESTRAIL_SUITE_ID env var)' },
+            projectKey: { type: 'string', description: 'Xray/Zephyr only — project key override' }
+          },
+          required: ['name']
         }
       },
       {
@@ -303,7 +329,15 @@ async function handleToolCall(name, args) {
       return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
     }
     if (name === 'mcp__tms__get_suite_context') {
-      const data = await adapter.getSuiteCases(args.suiteId);
+      const data = await adapter.getSuiteCases(args.suiteId, args);
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    if (name === 'mcp__tms__list_test_plans') {
+      const data = await adapter.listTestPlans(args.query, args.maxResults);
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    if (name === 'mcp__tms__create_test_run') {
+      const data = await adapter.createTestRun(args);
       return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
     }
     if (name === 'mcp__tms__post_test_result') {
@@ -441,6 +475,12 @@ function plainTextToAdf(text) {
   };
 }
 
+// Escapes a value for safe interpolation into a double-quoted GraphQL string literal
+// (Xray Cloud queries below build JQL fragments via string interpolation).
+function gqlEscape(str) {
+  return String(str).replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"');
+}
+
 // Generic Jira issue CRUD shared by the 'jira' and 'xray' adapters — Xray's Test/Test Execution/
 // Test Plan issues ARE Jira issues, so generic field management goes through the same core Jira
 // REST API v3 rather than Xray's specialized (steps/results) GraphQL surface.
@@ -571,7 +611,49 @@ export function getAdapter(provider) {
           tags: (fields['System.Tags'] || '').split(';').map(t => t.trim()).filter(Boolean)
         };
       },
-      async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
+      async getSuiteCases(suiteId, extra) {
+        const org = process.env.AZURE_DEVOPS_ORG;
+        const project = process.env.AZURE_DEVOPS_PROJECT;
+        const pat = process.env.AZURE_DEVOPS_PAT;
+        const planId = (extra && extra.planId) || process.env.AZURE_DEVOPS_PLAN_ID;
+        if (!org || !project || !pat) return { error: 'Missing Azure DevOps environment variables' };
+        if (!planId) return { error: 'Missing planId — pass planId or set AZURE_DEVOPS_PLAN_ID' };
+        const authHeader = 'Basic ' + Buffer.from(':' + pat).toString('base64');
+        const url = \`https://dev.azure.com/\${org}/\${project}/_apis/testplan/Plans/\${planId}/Suites/\${suiteId}/TestCase?api-version=7.0\`;
+        const res = await httpGet(url, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`ADO suite fetch error: \${res.status}\` };
+        const cases = (res.data.value || []).map((tc) => ({
+          id: String(tc.workItem && tc.workItem.id),
+          title: (tc.workItem && tc.workItem.name) || ''
+        }));
+        return { suiteId, cases };
+      },
+      async listTestPlans(query, maxResults) {
+        const org = process.env.AZURE_DEVOPS_ORG;
+        const project = process.env.AZURE_DEVOPS_PROJECT;
+        const pat = process.env.AZURE_DEVOPS_PAT;
+        if (!org || !project || !pat) return { error: 'Missing Azure DevOps environment variables' };
+        const authHeader = 'Basic ' + Buffer.from(':' + pat).toString('base64');
+        const url = \`https://dev.azure.com/\${org}/\${project}/_apis/testplan/plans?api-version=7.0\`;
+        const res = await httpGet(url, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`ADO test plans fetch error: \${res.status}\` };
+        const results = (res.data.value || []).slice(0, maxResults || 25).map((p) => ({ id: String(p.id), name: p.name || '' }));
+        return { results };
+      },
+      async createTestRun(fields) {
+        const org = process.env.AZURE_DEVOPS_ORG;
+        const project = process.env.AZURE_DEVOPS_PROJECT;
+        const pat = process.env.AZURE_DEVOPS_PAT;
+        const planId = fields.planId || process.env.AZURE_DEVOPS_PLAN_ID;
+        if (!org || !project || !pat) return { error: 'Missing Azure DevOps environment variables' };
+        if (!planId) return { error: 'Missing planId — pass planId or set AZURE_DEVOPS_PLAN_ID' };
+        const authHeader = 'Basic ' + Buffer.from(':' + pat).toString('base64');
+        const body = { name: fields.name || 'Untitled run', plan: { id: planId }, isAutomated: true };
+        const url = \`https://dev.azure.com/\${org}/\${project}/_apis/test/runs?api-version=7.0\`;
+        const res = await httpPost(url, body, { Authorization: authHeader });
+        if (res.status !== 200 && res.status !== 201) return { error: \`ADO create run error: \${res.status}\`, details: res.data };
+        return { id: String(res.data.id), name: res.data.name || '' };
+      },
       async postTestResult(args) {
         const org = process.env.AZURE_DEVOPS_ORG;
         const project = process.env.AZURE_DEVOPS_PROJECT;
@@ -686,7 +768,52 @@ export function getAdapter(provider) {
           tags: []
         };
       },
-      async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
+      async getSuiteCases(suiteId) {
+        const host = process.env.TESTRAIL_HOST;
+        const user = process.env.TESTRAIL_USERNAME;
+        const key = process.env.TESTRAIL_API_KEY;
+        const projectId = process.env.TESTRAIL_PROJECT_ID;
+        if (!host || !user || !key || !projectId) {
+          return { error: 'Missing TestRail environment variables (TESTRAIL_HOST/USERNAME/API_KEY/PROJECT_ID)' };
+        }
+        const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
+        const url = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/get_cases/\${projectId}&section_id=\${suiteId}\`;
+        const res = await httpGet(url, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`TestRail API error: \${res.status}\` };
+        const cases = Array.isArray(res.data) ? res.data : res.data.cases || [];
+        return { suiteId, cases: cases.map((c) => ({ id: \`C\${c.id}\`, title: c.title || '' })) };
+      },
+      async listTestPlans(query, maxResults) {
+        const host = process.env.TESTRAIL_HOST;
+        const user = process.env.TESTRAIL_USERNAME;
+        const key = process.env.TESTRAIL_API_KEY;
+        const projectId = process.env.TESTRAIL_PROJECT_ID;
+        if (!host || !user || !key || !projectId) {
+          return { error: 'Missing TestRail environment variables (TESTRAIL_HOST/USERNAME/API_KEY/PROJECT_ID)' };
+        }
+        const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
+        const url = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/get_plans/\${projectId}\`;
+        const res = await httpGet(url, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`TestRail API error: \${res.status}\` };
+        const plans = Array.isArray(res.data) ? res.data : res.data.plans || [];
+        return { results: plans.slice(0, maxResults || 25).map((p) => ({ id: String(p.id), name: p.name || '' })) };
+      },
+      async createTestRun(fields) {
+        const host = process.env.TESTRAIL_HOST;
+        const user = process.env.TESTRAIL_USERNAME;
+        const key = process.env.TESTRAIL_API_KEY;
+        const projectId = process.env.TESTRAIL_PROJECT_ID;
+        const suiteId = fields.suiteId || process.env.TESTRAIL_SUITE_ID;
+        if (!host || !user || !key || !projectId) {
+          return { error: 'Missing TestRail environment variables (TESTRAIL_HOST/USERNAME/API_KEY/PROJECT_ID)' };
+        }
+        const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
+        const body = { name: fields.name || 'Untitled run', include_all: true, ...(suiteId ? { suite_id: suiteId } : {}) };
+        const url = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/add_run/\${projectId}\`;
+        const res = await httpPost(url, body, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`TestRail create run error: \${res.status}\`, details: res.data };
+        return { id: String(res.data.id), name: res.data.name || '' };
+      },
       async postTestResult(args) {
         const host = process.env.TESTRAIL_HOST;
         const user = process.env.TESTRAIL_USERNAME;
@@ -788,7 +915,15 @@ export function getAdapter(provider) {
           tags: f.labels || []
         };
       },
-      async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
+      async getSuiteCases(suiteId) {
+        return { error: 'Plain Jira has no built-in test-suite concept — use the Xray or Zephyr provider for suite/plan queries.' };
+      },
+      async listTestPlans() {
+        return { error: 'Plain Jira has no built-in test-plan concept — use the Xray or Zephyr provider for suite/plan queries.' };
+      },
+      async createTestRun() {
+        return { error: 'Plain Jira has no built-in test-run concept — use the Xray or Zephyr provider.' };
+      },
       async postTestResult(args) { return { success: true, id: args.caseId, status: args.status }; },
       ...createJiraIssueCrud()
     };
@@ -859,7 +994,41 @@ export function getAdapter(provider) {
           tags: f.labels || []
         };
       },
-      async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
+      async getSuiteCases(suiteId) {
+        const clientId = process.env.XRAY_CLIENT_ID;
+        const clientSecret = process.env.XRAY_CLIENT_SECRET;
+        if (!clientId || !clientSecret) {
+          return { error: 'Xray Server/DC Test Plan listing is not implemented — only Xray Cloud is supported for this tool.' };
+        }
+        const auth = await authenticateXrayCloud(clientId, clientSecret);
+        if (auth.error) return { error: auth.error };
+        const res = await xrayCloudGraphql(auth.token, \`query { getTestPlans(jql: "key = \\\\"\${gqlEscape(suiteId)}\\\\"", limit: 1) { results { tests(limit: 100) { results { jira(fields: ["key", "summary"]) } } } } }\`);
+        const plan = res.data && res.data.data && res.data.data.getTestPlans && res.data.data.getTestPlans.results[0];
+        if (!plan) return { error: \`Xray Cloud: Test Plan \${suiteId} not found\` };
+        const cases = ((plan.tests && plan.tests.results) || []).map((t) => ({
+          id: (t.jira && t.jira.key) || '',
+          title: (t.jira && t.jira.summary) || ''
+        }));
+        return { suiteId, cases };
+      },
+      async listTestPlans(query, maxResults) {
+        const clientId = process.env.XRAY_CLIENT_ID;
+        const clientSecret = process.env.XRAY_CLIENT_SECRET;
+        if (!clientId || !clientSecret) {
+          return { error: 'Xray Server/DC test-plan listing is not implemented — only Xray Cloud is supported for this tool.' };
+        }
+        const auth = await authenticateXrayCloud(clientId, clientSecret);
+        if (auth.error) return { error: auth.error };
+        const jql = gqlEscape(query || 'ORDER BY created DESC');
+        const res = await xrayCloudGraphql(auth.token, \`query { getTestPlans(jql: "\${jql}", limit: \${maxResults || 25}) { results { issueId jira(fields: ["key", "summary"]) } } }\`);
+        const results = (res.data && res.data.data && res.data.data.getTestPlans && res.data.data.getTestPlans.results) || [];
+        return { results: results.map((p) => ({ id: (p.jira && p.jira.key) || p.issueId, name: (p.jira && p.jira.summary) || '' })) };
+      },
+      async createTestRun(fields) {
+        // Test Executions in Xray ARE Jira issues — create one directly via the shared Jira
+        // issue CRUD rather than a bespoke endpoint.
+        return createJiraIssueCrud().createIssue({ ...fields, summary: fields.name || fields.summary, issueType: 'Test Execution' });
+      },
       async postTestResult(args) {
         const clientId = process.env.XRAY_CLIENT_ID;
         const clientSecret = process.env.XRAY_CLIENT_SECRET;
@@ -878,11 +1047,11 @@ export function getAdapter(provider) {
 
         // Resolve Jira's internal numeric issue ids for the Test and the Test Execution — Xray's
         // getTestRun query takes issue ids, not issue keys.
-        const testLookup = await xrayCloudGraphql(token, \`query { getTests(jql: "key = \\\\"\${args.caseId}\\\\"", limit: 1) { results { issueId } } }\`);
+        const testLookup = await xrayCloudGraphql(token, \`query { getTests(jql: "key = \\\\"\${gqlEscape(args.caseId)}\\\\"", limit: 1) { results { issueId } } }\`);
         const testIssueId = testLookup.data && testLookup.data.data && testLookup.data.data.getTests && testLookup.data.data.getTests.results[0] && testLookup.data.data.getTests.results[0].issueId;
         if (!testIssueId) return { success: false, error: \`Xray Cloud: could not resolve Test issue id for \${args.caseId}\` };
 
-        const execLookup = await xrayCloudGraphql(token, \`query { getTestExecutions(jql: "key = \\\\"\${executionKey}\\\\"", limit: 1) { results { issueId } } }\`);
+        const execLookup = await xrayCloudGraphql(token, \`query { getTestExecutions(jql: "key = \\\\"\${gqlEscape(executionKey)}\\\\"", limit: 1) { results { issueId } } }\`);
         const execIssueId = execLookup.data && execLookup.data.data && execLookup.data.data.getTestExecutions && execLookup.data.data.getTestExecutions.results[0] && execLookup.data.data.getTestExecutions.results[0].issueId;
         if (!execIssueId) return { success: false, error: \`Xray Cloud: could not resolve Test Execution issue id for \${executionKey}\` };
 
@@ -926,7 +1095,46 @@ export function getAdapter(provider) {
           tags: caseRes.data.labels || []
         };
       },
-      async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
+      async getSuiteCases(suiteId) {
+        const token = process.env.ZEPHYR_API_TOKEN;
+        const baseUrl = process.env.ZEPHYR_BASE_URL || 'https://api.zephyrscale.smartbear.com/v2';
+        if (!token) return { error: 'Missing ZEPHYR_API_TOKEN environment variable' };
+        const authHeader = \`Bearer \${token}\`;
+        // Treats suiteId as a Test Cycle key and lists the test cases linked to it via
+        // executions. Best-effort: the exact query parameter name for filtering
+        // /testexecutions by cycle was not independently verified against live Zephyr Scale
+        // (no live access during development) — verify against a real instance before relying
+        // on this in production.
+        const url = \`\${baseUrl.replace(/\\/+$/, '')}/testexecutions?testCycle=\${encodeURIComponent(suiteId)}&maxResults=100\`;
+        const res = await httpGet(url, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`Zephyr Scale API error: \${res.status}\` };
+        const values = (res.data && res.data.values) || [];
+        return { suiteId, cases: values.map((v) => ({ id: (v.testCase && v.testCase.key) || '', title: '' })) };
+      },
+      async listTestPlans(query, maxResults) {
+        const token = process.env.ZEPHYR_API_TOKEN;
+        const baseUrl = process.env.ZEPHYR_BASE_URL || 'https://api.zephyrscale.smartbear.com/v2';
+        const projectKey = process.env.ZEPHYR_PROJECT_KEY;
+        if (!token || !projectKey) return { error: 'Missing ZEPHYR_API_TOKEN/ZEPHYR_PROJECT_KEY environment variables' };
+        const authHeader = \`Bearer \${token}\`;
+        // Zephyr Scale's closest equivalent to a "test plan" is a Test Cycle.
+        const url = \`\${baseUrl.replace(/\\/+$/, '')}/testcycles?projectKey=\${encodeURIComponent(projectKey)}&maxResults=\${maxResults || 25}\`;
+        const res = await httpGet(url, { Authorization: authHeader });
+        if (res.status !== 200) return { error: \`Zephyr Scale API error: \${res.status}\` };
+        const values = (res.data && res.data.values) || [];
+        return { results: values.map((c) => ({ id: c.key, name: c.name || '' })) };
+      },
+      async createTestRun(fields) {
+        const token = process.env.ZEPHYR_API_TOKEN;
+        const baseUrl = process.env.ZEPHYR_BASE_URL || 'https://api.zephyrscale.smartbear.com/v2';
+        const projectKey = fields.projectKey || process.env.ZEPHYR_PROJECT_KEY;
+        if (!token || !projectKey) return { error: 'Missing ZEPHYR_API_TOKEN/ZEPHYR_PROJECT_KEY environment variables' };
+        const authHeader = \`Bearer \${token}\`;
+        const body = { projectKey, name: fields.name || 'Untitled cycle' };
+        const res = await httpPost(\`\${baseUrl.replace(/\\/+$/, '')}/testcycles\`, body, { Authorization: authHeader });
+        if (res.status !== 201 && res.status !== 200) return { error: \`Zephyr Scale create cycle error: \${res.status}\`, details: res.data };
+        return { id: res.data.key, name: fields.name || '' };
+      },
       async postTestResult(args) {
         const token = process.env.ZEPHYR_API_TOKEN;
         const baseUrl = process.env.ZEPHYR_BASE_URL || 'https://api.zephyrscale.smartbear.com/v2';
@@ -1006,7 +1214,9 @@ export function getAdapter(provider) {
         tags: ['smoke', 'automated']
       };
     },
-    async getSuiteCases(suiteId) { return { suiteId, cases: [] }; },
+    async getSuiteCases(suiteId) { return { suiteId, cases: [{ id: 'MOCK-1', title: 'Mock case' }] }; },
+    async listTestPlans() { return { results: [{ id: 'MOCK-PLAN-1', name: 'Mock plan' }] }; },
+    async createTestRun(fields) { return { id: 'MOCK-RUN-1', name: fields.name || 'Untitled' }; },
     async postTestResult(args) { return { success: true, id: args.caseId, status: args.status }; },
     async searchIssues(query) { return { results: [{ id: 'MOCK-1', title: \`Mock result for "\${query || ''}"\`, status: 'Open' }] }; },
     async createIssue(fields) { return { id: 'MOCK-1', title: fields.summary || 'Untitled' }; },

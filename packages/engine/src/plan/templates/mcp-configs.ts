@@ -67,6 +67,7 @@ export function planMcpConfigs(
       providerEnv.AZURE_DEVOPS_PAT = '${env:AZURE_DEVOPS_PAT}';
       providerEnv.AZURE_DEVOPS_RUN_ID = '${env:AZURE_DEVOPS_RUN_ID}';
       providerEnv.AZURE_DEVOPS_TEST_POINT_ID = '${env:AZURE_DEVOPS_TEST_POINT_ID}';
+      providerEnv.AZURE_DEVOPS_PLAN_ID = '${env:AZURE_DEVOPS_PLAN_ID}';
     } else if (provider === 'testrail') {
       providerEnv.TESTRAIL_HOST = '${env:TESTRAIL_HOST}';
       providerEnv.TESTRAIL_USERNAME = '${env:TESTRAIL_USERNAME}';
@@ -74,6 +75,7 @@ export function planMcpConfigs(
       providerEnv.TESTRAIL_RUN_ID = '${env:TESTRAIL_RUN_ID}';
       providerEnv.TESTRAIL_PROJECT_ID = '${env:TESTRAIL_PROJECT_ID}';
       providerEnv.TESTRAIL_SECTION_ID = '${env:TESTRAIL_SECTION_ID}';
+      providerEnv.TESTRAIL_SUITE_ID = '${env:TESTRAIL_SUITE_ID}';
     } else if (provider === 'jira') {
       providerEnv.JIRA_HOST = '${env:JIRA_HOST}';
       providerEnv.JIRA_EMAIL = '${env:JIRA_EMAIL}';
