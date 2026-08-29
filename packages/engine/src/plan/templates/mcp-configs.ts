@@ -94,9 +94,6 @@ export function planMcpConfigs(
       args: ['.mcp/tms-bridge/index.js'],
       env: {
         TMS_PROVIDER: tmsProvider,
-        TMS_URL: '${env:TMS_URL}',
-        TMS_USER: '${env:TMS_USER}',
-        TMS_API_KEY: '${env:TMS_API_KEY}',
         ...providerEnv,
         HTTP_PROXY: '${env:HTTP_PROXY}',
         HTTPS_PROXY: '${env:HTTPS_PROXY}',
