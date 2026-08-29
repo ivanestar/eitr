@@ -23,7 +23,7 @@ The scaffolder itself (this document's main subject) is deliberately the FIRST, 
 of a larger intended product, not the whole product. Stated by the project owner: the goal is that a
 SDET arrives on a project, runs EITR once to deterministically stand up a framework core that is
 genuinely production-grade (not cosmetic scaffolding), and from that point works with AI assistants
-*on top of* that base for the rest of the engagement — growing the framework and discharging ongoing
+_on top of_ that base for the rest of the engagement — growing the framework and discharging ongoing
 QA responsibility — rather than EITR being a one-shot tool with no further role. The MCP bridge, the
 multi-assistant slash-command layer, and the TMS integrations exist because of this: they are the
 seams through which AI agents keep operating on the generated framework long after `eitr new` exits,
