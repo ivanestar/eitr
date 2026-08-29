@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-08-29
 
+- **Dependabot removed entirely, both from EITR's own repo and the generated-project template
+  (2026-08-30 follow-up):** per explicit user feedback ("не нравится, только мешает" - don't like
+  it, it only gets in the way), superseding the earlier security-only scoping in this same
+  release. Removed `.github/dependabot.yml` from EITR's own repo and `renderDependabotConfig()`
+  (and its `planFiles()` wiring) from `packages/engine/src/plan/templates/cicd.ts` /
+  `shared.ts` - no generated project gets a `dependabot.yml` anymore. Disabled GitHub's native
+  vulnerability-alerts and automated-security-fixes on EITR's own repo via the REST API (verified
+  via a 404 "Vulnerability alerts are disabled" response). The generated-project template never
+  had a way to toggle those repo-level settings for an end user's future GitHub repo in the first
+  place (they're per-repo settings, not something a local scaffold can set) - only the config file
+  is affected there.
+- **CLA process removed entirely (2026-08-30 follow-up):** the Contributor License Agreement
+  workflow (`.github/workflows/cla.yml`, the `cla-signatures` storage branch, `CLA.md`, and every
+  reference to it in `README.md`/`CONTRIBUTING.md`/`.github/pull_request_template.md`) has been
+  removed. Rationale: its only substantive function beyond the Apache-2.0 license itself was
+  preserving the right to relicense an external contributor's code in the future - moot with no
+  external contributors expected, and the process had already cost real debugging effort earlier
+  in this same release (the branch-protection conflict fixed above). Re-add if/when the project
+  actually starts accepting outside contributions, rather than maintaining it speculatively.
 - **Dependabot scoped down to security-only (2026-08-30 follow-up):** the `.github/dependabot.yml`
   added earlier in this release (both for EITR's own repo and the generated-project template,
   `renderDependabotConfig` in `cicd.ts`) originally included a routine version-update entry for

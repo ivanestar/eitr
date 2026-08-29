@@ -5,7 +5,6 @@ import { renderEditorConfig } from './templates/editorconfig.js';
 import { renderVscodeExtensions, renderVscodeLaunch } from './templates/vscode.js';
 import {
   renderGithubActions,
-  renderDependabotConfig,
   renderGitlabCi,
   renderJenkinsfile,
   renderTeamcityInstructions,
@@ -204,12 +203,6 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderGithubActions(opts.language, opts.automationTool) },
-    });
-    files.push({
-      path: '.github/dependabot.yml',
-      writePolicy: 'create-if-absent',
-      provenance: { origin: 'project' },
-      source: { kind: 'inline', text: renderDependabotConfig() },
     });
   } else if (ciCd === 'gitlab') {
     files.push({

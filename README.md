@@ -4,7 +4,6 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/@onlytests/eitr.svg)](https://www.npmjs.com/package/@onlytests/eitr)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
-[![CLA Assistant](https://img.shields.io/badge/CLA-Assistant-blue.svg)](.github/workflows/cla.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
 
 EITR is a zero-lock-in scaffolding engine that generates the **Core** of resilient, enterprise-grade, and AI-native UI test automation frameworks. It autonomously inspects your web application, scaffolds a Component Page Object Model (CPOM) architecture, connects your test suite to your Test Management System (Jira Xray, Azure DevOps, TestRail, Zephyr), and configures an embedded Model Context Protocol (MCP) bridge for AI assistants (Cursor, Claude Code, Windsurf, Copilot, Antigravity, Aider).
@@ -183,9 +182,9 @@ core/ (BasePage, Component, Collection, Container)
 
 ---
 
-## Contributing & Contributor License Agreement (CLA)
+## Contributing
 
-We welcome contributions from the community! Before submitting a pull request, please read [CONTRIBUTING.md](CONTRIBUTING.md) and note that all contributors must accept our [Individual Contributor License Agreement (CLA)](CLA.md) via the automated CLA Assistant bot.
+Before submitting a pull request, please read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 If you are an AI assistant or human engineer contributing to EITR, also review [AGENTS.md](./AGENTS.md) and [docs/architecture.md](./docs/architecture.md) before submitting modifications.
 
