@@ -42,6 +42,12 @@ const TMS_PROVIDER = process.env.TMS_PROVIDER || '${tmsProvider}';
 const adapter = getAdapter(TMS_PROVIDER);
 const CACHE_DIR = join(process.cwd(), '.tms-cache');
 
+// Dual-era MCP server (spec 2026-07-28): serves legacy 'initialize'-handshake clients
+// (2025-11-25 and earlier) unchanged, and modern clients that declare their protocol
+// version per-request via params._meta['io.modelcontextprotocol/protocolVersion'].
+const SUPPORTED_PROTOCOL_VERSIONS = ['2026-07-28', '2025-11-25'];
+const SERVER_INFO = { name: 'tms-bridge', version: '1.0.0' };
+
 function logDebug(msg) {
   if (process.env.DEBUG_MCP) {
     process.stderr.write(\`[TMS-BRIDGE] \${msg}\\n\`);
@@ -262,14 +268,42 @@ process.stdin.on('data', async (chunk) => {
       const req = JSON.parse(line);
       logDebug(\`Received: \${req.method}\`);
 
+      const requestedVersion = req.params && req.params._meta &&
+        req.params._meta['io.modelcontextprotocol/protocolVersion'];
+
       if (req.method === 'initialize') {
+        // Legacy handshake path (protocol revisions 2025-11-25 and earlier).
         sendResponse({
           jsonrpc: '2.0',
           id: req.id,
           result: {
             protocolVersion: '2025-11-25',
             capabilities: { tools: {} },
-            serverInfo: { name: 'tms-bridge', version: '1.0.0' }
+            serverInfo: SERVER_INFO
+          }
+        });
+      } else if (requestedVersion && !SUPPORTED_PROTOCOL_VERSIONS.includes(requestedVersion)) {
+        // Modern per-request negotiation (2026-07-28+): reject unsupported versions.
+        sendResponse({
+          jsonrpc: '2.0',
+          id: req.id,
+          error: {
+            code: -32022,
+            message: 'Unsupported protocol version',
+            data: { supported: SUPPORTED_PROTOCOL_VERSIONS, requested: requestedVersion }
+          }
+        });
+      } else if (req.method === 'server/discover') {
+        // Mandatory modern discovery RPC (spec 2026-07-28).
+        sendResponse({
+          jsonrpc: '2.0',
+          id: req.id,
+          result: {
+            resultType: 'complete',
+            supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
+            capabilities: { tools: {} },
+            _meta: { 'io.modelcontextprotocol/serverInfo': SERVER_INFO },
+            instructions: 'Bridges Playwright test execution and TMS test-case/result operations over stdio JSON-RPC.'
           }
         });
       } else if (req.method === 'tools/list') {
