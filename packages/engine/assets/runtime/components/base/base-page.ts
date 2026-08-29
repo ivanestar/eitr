@@ -40,16 +40,13 @@ export abstract class BasePage {
    * Eliminates layout shifting flakes during page navigation and heavy renders with zero arbitrary sleep.
    */
   async waitForAnimations(opts?: { timeout?: number }): Promise<void> {
-    await this.page.evaluate(async (timeout) => {
-      const animations = document.getAnimations ? document.getAnimations() : [];
-      await Promise.all(
-        animations.map((anim) =>
-          Promise.race([
-            anim.finished,
-            new Promise((resolve) => setTimeout(resolve, timeout ?? 5000)),
-          ]),
-        ),
-      );
-    }, opts?.timeout);
+    await this.page.waitForFunction(
+      () => {
+        const animations = document.getAnimations ? document.getAnimations() : [];
+        return animations.every((anim) => anim.playState !== 'running');
+      },
+      undefined,
+      { timeout: opts?.timeout ?? 5000 },
+    );
   }
 }

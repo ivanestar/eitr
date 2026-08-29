@@ -36,19 +36,20 @@ jobs:
         run: npm run build
 
       # Runs the full engine + CLI unit/integration suite (60+ files, up from the previous
-      # 3-file boundary-test-only gate). Two files remain excluded pending their own pre-existing,
-      # unrelated fixes — both tracked as debt in TODO.md rather than silently skipped here (none
-      # regressed by this change; both were already red on main before this workflow was widened):
+      # 3-file boundary-test-only gate). One file remains excluded pending its own pre-existing,
+      # unrelated fix — tracked as debt in TODO.md rather than silently skipped here (not
+      # regressed by this change; was already red on main before this workflow was widened):
       #   - terminal-e2e.test.ts: spawns the real CLI end-to-end (long real-process runtime) and
       #     has 1 pre-existing failing assertion. Run manually via `npm run test:e2e`.
-      #   - contract.test.ts: 1 assertion flags 4 pre-existing `setTimeout`-based waits in the
-      #     shipped runtime asset components (packages/engine/assets/runtime{,-js}), unrelated to
-      #     any template touched by this change.
+      # contract.test.ts's 4 manual-setTimeout findings in the shipped runtime components were
+      # fixed (waitForAnimations now uses Locator.evaluate's own `timeout` option and
+      # page.waitForFunction's native polling instead of a hand-rolled Promise.race/setTimeout) -
+      # it now runs as part of the gate below rather than being excluded.
       # live-evals.test.ts is intentionally out of scope for both steps below: it calls live LLM
       # provider APIs, requires API key secrets, and is non-deterministic by design (see
       # npm run eval:live / eval:sonnet / etc. for on-demand live grading).
       - name: Run Full Test Suite
-        run: npx vitest run packages/engine/test packages/cli/test --exclude "**/terminal-e2e.test.ts" --exclude "**/contract.test.ts"
+        run: npx vitest run packages/engine/test packages/cli/test --exclude "**/terminal-e2e.test.ts"
 
       - name: Run Deterministic Eval Suite
         run: npm run eval

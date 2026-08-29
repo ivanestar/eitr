@@ -101,17 +101,14 @@ export abstract class Component {
    * Eliminates UI race conditions on animated dialogs, accordions, and dropdowns with zero arbitrary sleep.
    */
   async waitForAnimations(opts?: { timeout?: number }): Promise<void> {
-    await this.locator.evaluate(async (element, timeout) => {
-      const animations = element.getAnimations ? element.getAnimations({ subtree: true }) : [];
-      await Promise.all(
-        animations.map((anim) =>
-          Promise.race([
-            anim.finished,
-            new Promise((resolve) => setTimeout(resolve, timeout ?? 5000)),
-          ]),
-        ),
-      );
-    }, opts?.timeout);
+    await this.locator.evaluate(
+      async (element) => {
+        const animations = element.getAnimations ? element.getAnimations({ subtree: true }) : [];
+        await Promise.all(animations.map((anim) => anim.finished));
+      },
+      undefined,
+      { timeout: opts?.timeout ?? 5000 },
+    );
   }
 
   // --- Point-in-time reads (NON-retrying snapshots; suffixed …Now) ---
