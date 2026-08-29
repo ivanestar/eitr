@@ -609,7 +609,7 @@ function createJiraIssueCrud() {
       if (!host || !email || !token) return { error: 'Missing Jira environment variables' };
       const authHeader = 'Basic ' + Buffer.from(\`\${email}:\${token}\`).toString('base64');
       const res = await httpDelete(\`\${host.replace(/\\/+$/, '')}/rest/api/3/issue/\${caseId}\`, { Authorization: authHeader });
-      if (res.status !== 204) return { error: \`Jira delete error: \${res.status}\` };
+      if (res.status !== 204) return { error: \`Jira delete error: \${res.status}\`, details: res.data };
       return { id: caseId, deleted: true };
     }
   };
@@ -786,7 +786,7 @@ export function getAdapter(provider) {
         // Soft-delete by default (ADO moves it to the project Recycle Bin, recoverable for 30 days).
         const url = \`https://dev.azure.com/\${org}/\${project}/_apis/wit/workitems/\${caseId}?api-version=7.0\`;
         const res = await httpDelete(url, { Authorization: authHeader });
-        if (res.status !== 200 && res.status !== 204) return { error: \`ADO delete error: \${res.status}\` };
+        if (res.status !== 200 && res.status !== 204) return { error: \`ADO delete error: \${res.status}\`, details: res.data };
         return { id: caseId, deleted: true };
       }
     };
@@ -939,7 +939,7 @@ export function getAdapter(provider) {
         const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
         const cleanId = String(caseId).replace(/^C/i, '');
         const res = await httpPost(\`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/delete_case/\${cleanId}\`, {}, { Authorization: authHeader });
-        if (res.status !== 200) return { error: \`TestRail delete error: \${res.status}\` };
+        if (res.status !== 200) return { error: \`TestRail delete error: \${res.status}\`, details: res.data };
         return { id: caseId, deleted: true };
       }
     };
@@ -981,7 +981,9 @@ export function getAdapter(provider) {
 
   if (p === 'xray') {
     async function authenticateXrayCloud(clientId, clientSecret) {
-      const authRes = await httpPost('https://xray.cloud.getxray.app/api/v2/authenticate', { client_id: clientId, client_secret: clientSecret });
+      // Observed in practice taking up to ~40s to respond — well above the client's own 45s
+      // default, so give it explicit headroom rather than relying on the default alone.
+      const authRes = await httpPost('https://xray.cloud.getxray.app/api/v2/authenticate', { client_id: clientId, client_secret: clientSecret }, {}, 60000);
       if (authRes.status !== 200) return { error: \`Xray Cloud auth error: \${authRes.status}\` };
       const token = typeof authRes.data === 'string' ? authRes.data.replace(/"/g, '') : '';
       if (!token) return { error: 'Xray Cloud auth did not return a token' };
@@ -995,14 +997,17 @@ export function getAdapter(provider) {
         const clientId = process.env.XRAY_CLIENT_ID;
         const clientSecret = process.env.XRAY_CLIENT_SECRET;
         if (clientId && clientSecret) {
-          // Xray Cloud: exchange client_id/client_secret for a bearer token, then query steps via GraphQL.
+          // Xray Cloud: exchange client_id/client_secret for a bearer token, then query steps via
+          // GraphQL. getTest(issueId) takes Jira's internal numeric id, not the human-readable
+          // key — go through getTests(jql) instead, same as every other Xray Cloud lookup here,
+          // so a caller-supplied key like "PROJ-123" actually resolves.
           const auth = await authenticateXrayCloud(clientId, clientSecret);
           if (auth.error) return { error: auth.error };
           const token = auth.token;
-          const query = \`query { getTest(issueId: "\${caseId}") { jira(fields: ["summary", "description", "labels"]) steps { action data result } } }\`;
+          const query = \`query { getTests(jql: "key = \\\\"\${gqlEscape(caseId)}\\\\"", limit: 1) { results { jira(fields: ["summary", "description", "labels"]) steps { action data result } } } }\`;
           const res = await xrayCloudGraphql(token, query);
           if (res.status !== 200) return { error: \`Xray Cloud GraphQL error: \${res.status}\` };
-          const test = res.data && res.data.data && res.data.data.getTest;
+          const test = res.data && res.data.data && res.data.data.getTests && res.data.data.getTests.results[0];
           if (!test) return { error: 'Xray Cloud: test not found' };
           const jf = test.jira || {};
           const steps = (test.steps || []).map((s, i) => ({
@@ -1013,7 +1018,7 @@ export function getAdapter(provider) {
           return {
             id: String(caseId),
             title: jf.summary || '',
-            description: typeof jf.description === 'string' ? jf.description : '',
+            description: adfToPlainText(jf.description),
             steps,
             tags: jf.labels || []
           };
@@ -1281,7 +1286,13 @@ import https from 'node:https';
 import http from 'node:http';
 import { URL } from 'node:url';
 
-function httpRequest(method, urlStr, body, headers = {}) {
+// Default timeout is deliberately generous (not the more typical 10s) because at least one real
+// provider endpoint (Xray Cloud's POST /authenticate) has been observed taking ~40s to respond in
+// practice — a tight timeout there produces a false "Request timeout" failure on an otherwise
+// working call. Override per-call via the timeoutMs parameter where a tighter bound makes sense.
+const DEFAULT_TIMEOUT_MS = 45000;
+
+function httpRequest(method, urlStr, body, headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   return new Promise((resolve) => {
     try {
       const u = new URL(urlStr);
@@ -1297,7 +1308,7 @@ function httpRequest(method, urlStr, body, headers = {}) {
           'User-Agent': 'TMS-Bridge/1.0',
           ...headers,
         },
-        timeout: 10000,
+        timeout: timeoutMs,
       };
 
       const req = client.request(opts, (res) => {
@@ -1311,7 +1322,7 @@ function httpRequest(method, urlStr, body, headers = {}) {
       });
 
       req.on('error', (err) => resolve({ status: 500, error: err.message }));
-      req.on('timeout', () => { req.destroy(); resolve({ status: 408, error: 'Request timeout' }); });
+      req.on('timeout', () => { req.destroy(); resolve({ status: 408, error: \`Request timeout after \${timeoutMs}ms\` }); });
       if (dataStr) req.write(dataStr);
       req.end();
     } catch (e) {
@@ -1320,11 +1331,11 @@ function httpRequest(method, urlStr, body, headers = {}) {
   });
 }
 
-export function httpGet(urlStr, headers = {}) { return httpRequest('GET', urlStr, null, headers); }
-export function httpPost(urlStr, body, headers = {}) { return httpRequest('POST', urlStr, body, headers); }
-export function httpPut(urlStr, body, headers = {}) { return httpRequest('PUT', urlStr, body, headers); }
-export function httpPatch(urlStr, body, headers = {}) { return httpRequest('PATCH', urlStr, body, headers); }
-export function httpDelete(urlStr, headers = {}) { return httpRequest('DELETE', urlStr, null, headers); }
+export function httpGet(urlStr, headers = {}, timeoutMs) { return httpRequest('GET', urlStr, null, headers, timeoutMs); }
+export function httpPost(urlStr, body, headers = {}, timeoutMs) { return httpRequest('POST', urlStr, body, headers, timeoutMs); }
+export function httpPut(urlStr, body, headers = {}, timeoutMs) { return httpRequest('PUT', urlStr, body, headers, timeoutMs); }
+export function httpPatch(urlStr, body, headers = {}, timeoutMs) { return httpRequest('PATCH', urlStr, body, headers, timeoutMs); }
+export function httpDelete(urlStr, headers = {}, timeoutMs) { return httpRequest('DELETE', urlStr, null, headers, timeoutMs); }
 `;
 
   return [
