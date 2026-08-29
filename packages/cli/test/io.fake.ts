@@ -15,9 +15,11 @@ import type { InstallStep } from '../src/commands/install.js';
 // re-ask surfaces as a test failure, never a hang) and on a select value outside the option set
 // (keeps "options are closed" real). It resolves on a microtask so a missing `await` surfaces.
 
+type NavSentinel = Cancelled | typeof NAV_LEFT | typeof NAV_RIGHT;
+
 export interface FakeScript {
   text?: Record<string, (string | Cancelled)[]>;
-  select?: Record<string, (string | Cancelled)[]>;
+  select?: Record<string, (string | NavSentinel)[]>;
   multiSelect?: Record<string, (string[] | Cancelled)[]>;
 }
 
@@ -46,7 +48,7 @@ function clone<T>(
 
 export function createFakeIo(script: FakeScript): FakeIo {
   const text = clone<string>(script.text);
-  const select = clone<string>(script.select);
+  const select = clone<string>(script.select) as Record<string, (string | NavSentinel)[]>;
   const multiSelect = clone<string[]>(script.multiSelect);
   const calls: FakeCall[] = [];
   const notes: string[] = [];
@@ -98,8 +100,9 @@ export function createFakeIo(script: FakeScript): FakeIo {
         }
         throw new Error(`fake io: no scripted select answer left for "${spec.id}"`);
       }
-      const next = queue.shift() as string | Cancelled;
-      if (next !== CANCELLED && !spec.choices.some((c) => c.value === next)) {
+      const next = queue.shift() as string | NavSentinel;
+      const isSentinel = next === CANCELLED || next === NAV_LEFT || next === NAV_RIGHT;
+      if (!isSentinel && !spec.choices.some((c) => c.value === next)) {
         throw new Error(
           `fake io: scripted select value "${String(next)}" is not a choice for "${spec.id}"`,
         );

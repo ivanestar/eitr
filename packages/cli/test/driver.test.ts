@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runQuestionnaire } from '../src/questionnaire/driver.js';
-import { CANCELLED } from '../src/questionnaire/io.js';
+import { CANCELLED, NAV_LEFT } from '../src/questionnaire/io.js';
 import { createFakeIo } from './io.fake.js';
 
 // Stub that prevents real HTTP calls during unit tests
@@ -76,6 +76,35 @@ describe('runQuestionnaire — interactive', () => {
       expect(result.answers.taskTracker).toBe('jira');
       expect(result.answers.tmsProviders).toEqual(['xray']);
     }
+  });
+
+  it('left-arrow navigation glides past framework/uiLibrary (skipInteractive hints) instead of asking them', async () => {
+    const fake = createFakeIo({
+      text: { startUrl: ['https://app.example.com/login'] },
+      select: {
+        language: ['typescript'],
+        // First answer 'playwright' on the forward pass; a left-press from ciCd should glide
+        // all the way back to this question (skipping framework/uiLibrary) and re-ask it once.
+        automationTool: ['playwright', 'playwright'],
+        // First call returns NAV_LEFT (triggers the back-glide); second call (after re-landing
+        // on automationTool and walking forward again) actually answers it.
+        ciCd: [NAV_LEFT, 'none'],
+        taskTracker: ['none'],
+        review: ['submit'],
+      },
+    });
+    const result = await runQuestionnaire(fake.io, {
+      mode: 'interactive',
+      prefill: {},
+      detect: noDetect,
+    });
+
+    expect(result.status).toBe('ok');
+    const askedIds = fake.calls.map((c) => `${c.type}:${c.id}`);
+    expect(askedIds).not.toContain('select:framework');
+    expect(askedIds).not.toContain('select:uiLibrary');
+    // automationTool must have been asked twice: once forward, once after the back-glide landed on it.
+    expect(askedIds.filter((c) => c === 'select:automationTool')).toHaveLength(2);
   });
 
   it('re-asks the SAME question after an invalid URL, then accepts', async () => {

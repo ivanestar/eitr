@@ -340,8 +340,16 @@ export async function runQuestionnaire(io: IoPort, opts: RunOptions): Promise<Qu
 
     if (outcome.kind === 'nav') {
       if (outcome.direction === 'left') {
+        // Glide back past auto-detected hint questions (framework/uiLibrary) — they're never
+        // directly editable through step navigation, forward or backward; only detectStack()
+        // (re-run when startUrl changes) sets them. Landing on one via a left-press would
+        // surface a question the user never asked to answer.
         if (step > 0) {
-          step--;
+          let target = step - 1;
+          while (target > 0 && QUESTIONS[target].skipInteractive) {
+            target--;
+          }
+          step = target;
           manuallyNavigated.add(step);
         }
       } else if (outcome.direction === 'right') {
@@ -349,7 +357,19 @@ export async function runQuestionnaire(io: IoPort, opts: RunOptions): Promise<Qu
         const currentVal = answers[q.id] ?? resolveDefaultValue(q, answers);
         if (currentVal !== undefined) {
           answers[q.id] = currentVal;
-          step++;
+          // Same glide as the left-arrow branch: never manually land on an auto-detected hint
+          // question moving forward either. Give each skipped-over question its default, same
+          // as the main forward-skip path does.
+          let target = step + 1;
+          while (target < QUESTIONS.length && QUESTIONS[target].skipInteractive) {
+            const skipped = QUESTIONS[target];
+            if (answers[skipped.id] === undefined) {
+              answers[skipped.id] =
+                skipped.kind === 'select' ? skipped.default : (skipped.default ?? '');
+            }
+            target++;
+          }
+          step = target;
           manuallyNavigated.add(step);
         }
       }
