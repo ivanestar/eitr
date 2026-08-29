@@ -108,7 +108,7 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 ### Phase 8: QA Guard, Evals Benchmark, Doc Sync & Final Report
 
 - **Mandatory Pre-Test Build**: `qa-guard` MUST ALWAYS execute `npm run build` (compiling all TypeScript sources and runtime JS assets) **BEFORE** running test suites, ensuring that tests run against fresh build artifacts.
-- **Continuous Prompt Benchmark**: Execute the full `npm run eval` suite (90 deterministic eval tests across 17 files as of 2026-08-29, verified fresh via `npm run eval` — re-check this count rather than trusting it, as it drifts as tests are added; the suite runs in CI via the "Run Deterministic Eval Suite" step in `.github/workflows/ci.yml`) to guarantee 0 regressions across all AI agents, skills, and assistant rules.
+- **Continuous Prompt Benchmark**: Execute the full `npm run eval` suite (deterministic eval tests across every file listed in the `"eval"` script in the root `package.json` — never hardcode a test/file count here, it drifts every time a test is added; run `npm run eval` itself to see the current total; the suite also runs in CI via the "Run Deterministic Eval Suite" step in `.github/workflows/ci.yml`) to guarantee 0 regressions across all AI agents, skills, and assistant rules.
 - **Targeted Tests**: Run targeted vitest files for modified modules.
 - **Agent `doc-sync-enforcer`**: Synchronize `CHANGELOG.md`, `README.md`, `ARCHITECTURE.md`, `TODO.md`, `ENGINE_VERSION` in `packages/engine/src/version.ts`, and workspace package manifests (`package.json`, `packages/*/package.json`).
 - **Final Report**: Deliver a structured, high-signal summary report in chat, including the **Protocol 123 Telemetry Summary** table:
