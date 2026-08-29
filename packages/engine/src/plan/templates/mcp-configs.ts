@@ -59,6 +59,35 @@ export function planMcpConfigs(
   }
 
   if (hasTms) {
+    const provider = tmsProvider.toLowerCase();
+    const providerEnv: Record<string, string> = {};
+    if (provider === 'ado' || provider === 'azure' || provider === 'azure-devops') {
+      providerEnv.AZURE_DEVOPS_ORG = '${env:AZURE_DEVOPS_ORG}';
+      providerEnv.AZURE_DEVOPS_PROJECT = '${env:AZURE_DEVOPS_PROJECT}';
+      providerEnv.AZURE_DEVOPS_PAT = '${env:AZURE_DEVOPS_PAT}';
+      providerEnv.AZURE_DEVOPS_RUN_ID = '${env:AZURE_DEVOPS_RUN_ID}';
+      providerEnv.AZURE_DEVOPS_TEST_POINT_ID = '${env:AZURE_DEVOPS_TEST_POINT_ID}';
+    } else if (provider === 'testrail') {
+      providerEnv.TESTRAIL_HOST = '${env:TESTRAIL_HOST}';
+      providerEnv.TESTRAIL_USERNAME = '${env:TESTRAIL_USERNAME}';
+      providerEnv.TESTRAIL_API_KEY = '${env:TESTRAIL_API_KEY}';
+      providerEnv.TESTRAIL_RUN_ID = '${env:TESTRAIL_RUN_ID}';
+    } else if (provider === 'jira') {
+      providerEnv.JIRA_HOST = '${env:JIRA_HOST}';
+      providerEnv.JIRA_EMAIL = '${env:JIRA_EMAIL}';
+      providerEnv.JIRA_API_TOKEN = '${env:JIRA_API_TOKEN}';
+    } else if (provider === 'xray') {
+      providerEnv.XRAY_CLIENT_ID = '${env:XRAY_CLIENT_ID}';
+      providerEnv.XRAY_CLIENT_SECRET = '${env:XRAY_CLIENT_SECRET}';
+      providerEnv.JIRA_HOST = '${env:JIRA_HOST}';
+      providerEnv.JIRA_API_TOKEN = '${env:JIRA_API_TOKEN}';
+    } else if (provider === 'zephyr') {
+      providerEnv.ZEPHYR_API_TOKEN = '${env:ZEPHYR_API_TOKEN}';
+      providerEnv.ZEPHYR_BASE_URL = '${env:ZEPHYR_BASE_URL}';
+      providerEnv.ZEPHYR_PROJECT_KEY = '${env:ZEPHYR_PROJECT_KEY}';
+      providerEnv.ZEPHYR_TEST_CYCLE_KEY = '${env:ZEPHYR_TEST_CYCLE_KEY}';
+    }
+
     servers['tms-bridge'] = {
       command: 'node',
       args: ['.mcp/tms-bridge/index.js'],
@@ -67,6 +96,7 @@ export function planMcpConfigs(
         TMS_URL: '${env:TMS_URL}',
         TMS_USER: '${env:TMS_USER}',
         TMS_API_KEY: '${env:TMS_API_KEY}',
+        ...providerEnv,
         HTTP_PROXY: '${env:HTTP_PROXY}',
         HTTPS_PROXY: '${env:HTTPS_PROXY}',
       },
