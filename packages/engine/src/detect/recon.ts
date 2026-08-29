@@ -1,5 +1,10 @@
 import { promises as fs } from 'node:fs';
 import type { UiLibrary, FrontendFramework } from '../types/stack-profile.js';
+import {
+  extractPageAssets,
+  detectFrameworkHeuristic,
+  detectUiLibrariesHeuristic,
+} from './stack-heuristics.js';
 
 export interface ReconResult {
   framework?: FrontendFramework;
@@ -27,6 +32,7 @@ export async function recon(url: string, opts: ReconOptions = {}): Promise<Recon
   };
 
   let html: string;
+  let poweredByHeader = '';
   try {
     const headers: Record<string, string> = {
       'User-Agent':
@@ -62,100 +68,27 @@ export async function recon(url: string, opts: ReconOptions = {}): Promise<Recon
     }
 
     html = await response.text();
+    poweredByHeader = response.headers?.get('x-powered-by') ?? '';
   } catch (err) {
     // Gracefully fallback on any network, DNS, or timeout error
     return result;
   }
 
-  // 1. Framework detection
-  if (
-    /ng-version|ng-component|<app-root>|ng-app|_ngcontent-|ng-reflect-/i.test(html) ||
-    /src="[^"]*angular[^"]*"/i.test(html)
-  ) {
-    result.framework = 'angular';
-  } else if (
-    /_reactRootContainer|react-data-attr|data-reactroot|__NEXT_DATA__/i.test(html) ||
-    /src="[^"]*react[^"]*"/i.test(html) ||
-    /id="root"/i.test(html)
-  ) {
-    result.framework = 'react';
-  } else if (
-    /data-v-|__vue_app__|__NUXT__/i.test(html) ||
-    /src="[^"]*vue[^"]*"/i.test(html) ||
-    /id="app"/i.test(html)
-  ) {
-    result.framework = 'vue';
-  } else if (
-    /class="[^"]*\bsvelte-[a-z0-9]+/i.test(html) ||
-    /svelte-[a-z0-9]{5,8}/i.test(html) ||
-    /__svelte/i.test(html)
-  ) {
-    result.framework = 'svelte';
-  }
+  // 1 & 2. Framework and UI library detection — shared heuristics also used by the CLI
+  // questionnaire's pre-fill hint (packages/cli/src/questionnaire/detect.ts), so the wizard's
+  // hint and the actual generation-time detection can never disagree about a given URL.
+  const assets = extractPageAssets(html, poweredByHeader);
+  const framework = detectFrameworkHeuristic(assets);
+  if (framework) result.framework = framework;
 
-  // 2. UI Library detection
-  // MUI classes check (e.g. MuiButton-root, MuiInput-input)
-  if (/class="[^"]*\bMui[A-Z][a-zA-Z0-9]*-/i.test(html)) {
+  for (const match of detectUiLibrariesHeuristic(assets)) {
     result.uiLibraries.push({
-      id: 'mui',
+      id: match.id,
       version: 'unknown',
       dependencyKind: 'direct',
       confidence: 'medium',
       source: 'live',
-      evidence: [{ file: 'live-dom', matchedPattern: 'Mui*-classes' }],
-    });
-  }
-
-  // Ant Design classes check (e.g. ant-btn, ant-input)
-  if (/class="[^"]*\bant-[a-z]+/i.test(html)) {
-    result.uiLibraries.push({
-      id: 'antd',
-      version: 'unknown',
-      dependencyKind: 'direct',
-      confidence: 'medium',
-      source: 'live',
-      evidence: [{ file: 'live-dom', matchedPattern: 'ant-classes' }],
-    });
-  }
-
-  // Radix UI check
-  if (/data-radix-/i.test(html) || /radix-/i.test(html)) {
-    result.uiLibraries.push({
-      id: 'radix',
-      version: 'unknown',
-      dependencyKind: 'direct',
-      confidence: 'medium',
-      source: 'live',
-      evidence: [{ file: 'live-dom', matchedPattern: 'radix-attributes' }],
-    });
-  }
-
-  // Chakra UI check
-  if (/class="[^"]*\bchakra-[a-z]+/i.test(html) || /data-chakra-component/i.test(html)) {
-    result.uiLibraries.push({
-      id: 'chakra',
-      version: 'unknown',
-      dependencyKind: 'direct',
-      confidence: 'medium',
-      source: 'live',
-      evidence: [{ file: 'live-dom', matchedPattern: 'chakra-classes' }],
-    });
-  }
-
-  // Tailwind CSS stylesheet or class pattern check
-  if (
-    /tailwind/i.test(html) ||
-    /class="[^"]*\b(flex|grid|block|hidden|relative|absolute)\b[^"]*\b(items-center|justify-between|flex-col)\b[^"]*"/i.test(
-      html,
-    )
-  ) {
-    result.uiLibraries.push({
-      id: 'tailwind',
-      version: 'unknown',
-      dependencyKind: 'direct',
-      confidence: 'medium',
-      source: 'live',
-      evidence: [{ file: 'live-dom', matchedPattern: 'tailwind-classes' }],
+      evidence: [{ file: 'live-dom', matchedPattern: match.matchedPattern }],
     });
   }
 

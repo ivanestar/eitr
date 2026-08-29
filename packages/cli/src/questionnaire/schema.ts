@@ -80,18 +80,12 @@ export function defaultOutputDirForAutomationTool(tool?: string, language?: stri
   switch (t) {
     case 'playwright':
       return 'PlaywrightTests';
+    // 'cypress' is withheld from AUTOMATION_TOOL_CHOICES pending a native CPOM redesign (see the
+    // comment above that constant) but intentionally kept reachable here for when it returns.
     case 'cypress':
       return 'CypressTests';
-    case 'webdriverio':
-      return 'WebdriverIOTests';
-    case 'selenium':
-      return 'SeleniumTests';
     case 'pytest':
       return 'PytestTests';
-    case 'junit':
-      return 'JUnitTests';
-    case 'nunit':
-      return 'PlaywrightCsharpTests';
     default:
       return DEFAULT_OUTPUT_DIR;
   }

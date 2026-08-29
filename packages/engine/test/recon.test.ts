@@ -18,7 +18,7 @@ describe('recon (live URL profiling)', () => {
       <html>
         <head>
           <title>React App</title>
-          <script src="/static/js/react.production.min.js"></script>
+          <script src="/static/js/main.a1b2c3d4.chunk.js"></script>
         </head>
         <body>
           <div id="root">
@@ -48,7 +48,7 @@ describe('recon (live URL profiling)', () => {
           <title>Vue App</title>
         </head>
         <body>
-          <div id="app" data-v-123456>
+          <div id="app" data-v-1234567>
             <button class="ant-btn ant-btn-primary" data-test-id="submit-btn">Submit</button>
           </div>
         </body>

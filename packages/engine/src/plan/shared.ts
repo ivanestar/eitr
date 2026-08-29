@@ -5,6 +5,7 @@ import { renderEditorConfig } from './templates/editorconfig.js';
 import { renderVscodeExtensions, renderVscodeLaunch } from './templates/vscode.js';
 import {
   renderGithubActions,
+  renderDependabotConfig,
   renderGitlabCi,
   renderJenkinsfile,
   renderTeamcityInstructions,
@@ -21,6 +22,7 @@ import {
   renderCopilotInstructions,
 } from './templates/ai-rules.js';
 import { renderCpomLinter } from './templates/cpom-linter.js';
+import { renderEslintConfig } from './templates/eslint-config.js';
 import { renderDockerfile, renderDockerignore } from './templates/docker.js';
 import { renderAppGraphHtml } from './templates/app-graph-html.js';
 import { renderGitHooks } from './templates/git-hooks.js';
@@ -109,6 +111,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderCpomLinter() },
           },
+          {
+            path: 'eslint.config.js',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderEslintConfig() },
+          },
         ] as FileDescriptor[])
       : []),
     ...(opts.aiAssistants === undefined || opts.aiAssistants.includes('claude')
@@ -196,6 +204,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderGithubActions(opts.language, opts.automationTool) },
+    });
+    files.push({
+      path: '.github/dependabot.yml',
+      writePolicy: 'create-if-absent',
+      provenance: { origin: 'project' },
+      source: { kind: 'inline', text: renderDependabotConfig(opts.language, opts.automationTool) },
     });
   } else if (ciCd === 'gitlab') {
     files.push({

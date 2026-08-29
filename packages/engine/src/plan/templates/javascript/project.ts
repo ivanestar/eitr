@@ -110,11 +110,14 @@ export function renderJsPackageJson(projectName: string): string {
     "test:all": "playwright test",
     "test:ui": "playwright test --ui",
     "lint:cpom": "node scripts/lint-cpom.js",
+    "lint:eslint": "eslint .",
     "report": "playwright show-report"
   },
   "devDependencies": {
     "@playwright/test": "1.51.1",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "eslint": "^9.9.0",
+    "eslint-plugin-playwright": "^1.6.2"
   }
 }
 `;

@@ -19,6 +19,8 @@ jobs:
         python-version: '3.11'
     - name: Install dependencies
       run: pip install -e .[api]
+    - name: Dependency Vulnerability Audit
+      run: pip install pip-audit && pip-audit
     - name: Install Playwright Browsers
       run: playwright install --with-deps
     - name: Run Pytest
@@ -50,6 +52,8 @@ jobs:
         dotnet-version: '8.0.x'
     - name: Build
       run: dotnet build
+    - name: Dependency Vulnerability Audit
+      run: dotnet list package --vulnerable --include-transitive
     - name: Install Playwright Browsers
       run: pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps
     - name: Run tests
@@ -137,6 +141,8 @@ jobs:
         cache: 'npm'
     - name: Install dependencies
       run: npm ci
+    - name: Dependency Vulnerability Audit
+      run: npm audit --audit-level=high
     - name: Run Cypress tests
       run: npx cypress run
     - uses: actions/upload-artifact@v4
@@ -168,6 +174,8 @@ jobs:
         cache: 'npm'
     - name: Install dependencies
       run: npm ci
+    - name: Dependency Vulnerability Audit
+      run: npm audit --audit-level=high
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
@@ -180,6 +188,35 @@ jobs:
         name: playwright-report
         path: playwright-report/
         retention-days: 30
+`;
+}
+
+// Dependabot version + security-update config, generated alongside the GitHub Actions workflow.
+// The 'github-actions' entry is unconditional (keeps the generated workflow's own action pins
+// current); the second entry tracks whichever language-specific package ecosystem the project
+// actually uses.
+export function renderDependabotConfig(language?: string, automationTool?: string): string {
+  const ecosystem =
+    language === 'python'
+      ? 'pip'
+      : language === 'csharp'
+        ? 'nuget'
+        : language === 'java'
+          ? automationTool?.includes('gradle')
+            ? 'gradle'
+            : 'maven'
+          : 'npm';
+
+  return `version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "${ecosystem}"
+    directory: "/"
+    schedule:
+      interval: "weekly"
 `;
 }
 
@@ -196,6 +233,7 @@ pytest-playwright-tests:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
     - pip install -e .[api]
+    - pip install pip-audit && pip-audit
     - pytest --junitxml=test-results/junit-results.xml
   artifacts:
     when: always
@@ -217,6 +255,7 @@ dotnet-playwright-tests:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
     - dotnet build
+    - dotnet list package --vulnerable --include-transitive
     - pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps
     - dotnet test --logger "junit;LogFilePath=test-results/junit-results.xml"
   artifacts:
@@ -263,6 +302,7 @@ cypress-tests:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
     - npm ci
+    - npm audit --audit-level=high
     - npx cypress run
   artifacts:
     when: always
@@ -284,6 +324,7 @@ playwright-tests:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
     - npm ci
+    - npm audit --audit-level=high
     - npm run lint:cpom
     - npm test
   artifacts:
@@ -306,6 +347,11 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
         stage('Install') {
             steps {
                 sh 'pip install -e .[api]'
+            }
+        }
+        stage('Dependency Vulnerability Audit') {
+            steps {
+                sh 'pip install pip-audit && pip-audit'
             }
         }
         stage('Test') {
@@ -332,6 +378,11 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
         stage('Build') {
             steps {
                 sh 'dotnet build'
+            }
+        }
+        stage('Dependency Vulnerability Audit') {
+            steps {
+                sh 'dotnet list package --vulnerable --include-transitive'
             }
         }
         stage('Install Browsers') {
@@ -390,6 +441,11 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
                 sh 'npm ci'
             }
         }
+        stage('Dependency Vulnerability Audit') {
+            steps {
+                sh 'npm audit --audit-level=high'
+            }
+        }
         stage('Test') {
             steps {
                 sh 'npx cypress run'
@@ -413,6 +469,11 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
         stage('Install') {
             steps {
                 sh 'npm ci'
+            }
+        }
+        stage('Dependency Vulnerability Audit') {
+            steps {
+                sh 'npm audit --audit-level=high'
             }
         }
         stage('Test') {
