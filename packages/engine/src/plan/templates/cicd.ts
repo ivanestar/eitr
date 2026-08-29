@@ -131,9 +131,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: 18
+        cache: 'npm'
     - name: Install dependencies
       run: npm ci
     - name: Run Cypress tests
@@ -161,9 +162,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: 18
+        cache: 'npm'
     - name: Install dependencies
       run: npm ci
     - name: Install Playwright Browsers

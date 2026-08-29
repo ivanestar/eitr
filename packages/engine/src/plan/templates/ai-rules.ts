@@ -741,7 +741,7 @@ export function renderWindsurfApi(tool?: string): string {
 }
 
 export function renderCopilotInstructions(tool?: string, language?: string): string {
-  return `# GitHub Copilot Workspace Workspace Instructions
+  return `# GitHub Copilot Workspace Instructions
 
 ## Framework Harmonization
 ${renderAiHarmonizeText(tool, language)}

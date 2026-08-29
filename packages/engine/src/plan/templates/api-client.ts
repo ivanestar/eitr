@@ -2,6 +2,7 @@
 
 export function renderApiClient(): string {
   return `import type { APIRequestContext, APIResponse } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 
 export interface ApiClientOptions {
   baseURL?: string;
@@ -108,11 +109,7 @@ export class ApiClient {
    * Generate an RFC4122 v4 compliant test UUID without external dependencies.
    */
   createTestUuid(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
+    return randomUUID();
   }
 
   /**

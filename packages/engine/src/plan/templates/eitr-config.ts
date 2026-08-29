@@ -44,6 +44,17 @@ export const eitrConfig = {
       testIgnore: [/\\.probe\\./],
       use: { ...devices['Desktop Chrome'] },
     },
+    // Uncomment to run the suite cross-browser too:
+    // {
+    //   name: 'firefox',
+    //   testIgnore: [/\\.probe\\./],
+    //   use: { ...devices['Desktop Firefox'] },
+    // },
+    // {
+    //   name: 'webkit',
+    //   testIgnore: [/\\.probe\\./],
+    //   use: { ...devices['Desktop Safari'] },
+    // },
   ],
   // webServer: {
   //   command: '${serverCmd}',
