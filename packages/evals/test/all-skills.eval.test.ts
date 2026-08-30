@@ -98,7 +98,7 @@ describe('All 6 Operational Skills Evaluation Benchmark', () => {
     const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/bulk-rescan')!;
     const simulatedOutput = `
 # Skill: Bulk Rescan (/bulk-rescan)
-1. Run eitr rescan across components/pages/.
+1. Update Page Object locators across components/pages/.
 2. Update DOM locators using 3-Tier Locator Priority while strictly preserving public method signatures.
 3. Verify zero regressions via npm test.
 `;

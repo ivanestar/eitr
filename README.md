@@ -37,21 +37,18 @@ The wizard inspects your target URL, asks for your language/CI/TMS choices, and 
 1. **`eitr new`** - scaffold the framework against your app's URL.
 2. **`.env`** - fill in credentials (app login, TMS tokens) in the generated `.env`.
 3. **`eitr auth`** - opens a browser, you log in once (SSO/MFA included), session gets saved to `.auth/user.json` so tests run authenticated.
-4. **`eitr map <url>`** - crawls the app, produces a route map and a visual dashboard (`docs/app-graph.html`).
-5. **Write or generate Page Objects and tests.** If you're using an AI editor, the generated project ships slash commands (`/scan-and-generate-pom`, `/automate-ticket`, `/tms-triage`, `/heal-test`) that read the app DOM, TMS tickets, and trace files to do this for you.
-6. **`npx playwright test`** - run it. `eitr rescan` re-verifies locators after UI changes.
+4. **Map the app and write Page Objects and tests.** In an AI editor, slash commands (`/map-site`, `/scan-and-generate-pom`, `/automate-ticket`, `/tms-triage`, `/bulk-rescan`, `/heal-test`) read the live app DOM, TMS tickets, and trace files to do this for you.
+5. **`npx playwright test`** - run it.
 
 ---
 
 ## CLI Commands
 
-| Command                            | Description                                                |
-| ---------------------------------- | ---------------------------------------------------------- |
-| `npx eitr new`                     | Scaffold a new framework                                   |
-| `npx eitr auth`                    | Capture an authenticated session into `.auth/user.json`    |
-| `npx eitr map <url>`               | Crawl the app, generate a route map and topology dashboard |
-| `npx eitr rescan` (alias: `recon`) | Re-verify locators and Page Objects after UI changes       |
-| `npx eitr doctor --ai`             | Check environment and AI-tooling setup                     |
+| Command                | Description                                             |
+| ---------------------- | ------------------------------------------------------- |
+| `npx eitr new`         | Scaffold a new framework                                |
+| `npx eitr auth`        | Capture an authenticated session into `.auth/user.json` |
+| `npx eitr doctor --ai` | Check environment and AI-tooling setup                  |
 
 ---
 

@@ -122,7 +122,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
     inputScenario: 'Batch rescan all Page Objects after global UI redesign',
     expectedWorkflow: {
       mustContainKeySteps: [
-        'eitr rescan',
+        'Page Object locators',
         'components/pages/',
         'preserving public method signatures',
         '3-Tier Locator Priority',

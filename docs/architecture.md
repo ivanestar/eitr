@@ -526,21 +526,28 @@ To guarantee scalability, zero-hallucination code generation, and developer gove
 
 ### 13.11 Site Map Topology & Cross-Page Shared Widget Deduplication Engine
 
-To eliminate boilerplate code duplication across large applications:
+To eliminate boilerplate code duplication across large applications. This is an AI-assistant-driven
+skill (`/map-site`), not a standalone CLI command - it needs a live browser/DOM to crawl, which only
+the AI assistant's own terminal session has; a `eitr map` CLI command existed at one point but only
+ever produced hardcoded, fabricated route/component data (never a real crawl) and was removed rather
+than kept as dead weight duplicating this skill.
 
-- **Concurrent Topology Crawler (`eitr map` / `/map-site`):** Authenticated crawler explores internal routes within `baseUrl.origin` using a concurrent worker pool (`concurrency: 4..6`) and URL canonicalization (dropping hashes, sorting query parameters, collapsing duplicate slashes), outputting deterministically sorted `docs/site-map.json` and `docs/APP_GRAPH.md` with Mermaid navigation charts.
+- **Concurrent Topology Crawler (`/map-site`):** Authenticated crawler explores internal routes within `baseUrl.origin` using a concurrent worker pool (`concurrency: 4..6`) and URL canonicalization (dropping hashes, sorting query parameters, collapsing duplicate slashes), outputting deterministically sorted `docs/site-map.json` and `docs/APP_GRAPH.md` with Mermaid navigation charts.
 - **Shared Widget Mining (`frequency >= 2`):** Repeating DOM structures (Navbar, Sidebar, UserMenu, DataGrid, Modal) appearing across 2 or more routes are extracted into dedicated classes in `components/widgets/<name>.widget.ts` extending `Component`.
 - **CPOM Composition Contract:** Page Objects compose shared widgets via `this.child(WidgetClass, spec)` without subclassing widget classes.
 - **Global Orchestrator-Worker Swarm Paradigm:** For batch Page Object generation, `sdet-orchestrator` enforces Shared Primitives First (generating widgets), dispatches parallel `pom-engineer` worker subagents across routes (1 route per worker), and executes a global barrier synchronization confirming 100% live-DOM liveness across all workers.
-- **Zero-Flag URL Resolution:** `eitr auth` and `eitr map` discover target `baseURL` automatically via `resolveTargetUrl` (`process.env.E2E_BASE_URL` -> `.eitr/init.json` -> `playwright.config.ts` -> `.env`).
+- **Zero-Flag URL Resolution:** `eitr auth` discovers target `baseURL` automatically via `resolveTargetUrl` (`process.env.E2E_BASE_URL` -> `.eitr/init.json` -> `playwright.config.ts` -> `.env`).
 
 ### 13.12 Bulk Re-Recon & Page Object Contract Preservation (UI Redesign Resilience)
 
-When application UI layout, styling, or DOM structure changes:
+When application UI layout, styling, or DOM structure changes. Also an AI-assistant-driven skill
+(`/bulk-rescan`), not a CLI command, for the same reason as 13.11 - a `eitr rescan`/`eitr recon` CLI
+command existed but never actually rewrote a locator or verified anything against a live DOM; it only
+printed status lines claiming success. Removed rather than kept as a false-success trap.
 
-- **CLI Command `eitr rescan` / `eitr recon`:** Scans live application pages or `docs/site-map.json` and updates Page Object locators adhering to 3-Tier Locator Priority (`getByTestId` -> `getByRole` -> `getByLabel`).
+- **Skill `/bulk-rescan`:** Re-inspects live application pages (or `docs/site-map.json`) and updates Page Object locators adhering to 3-Tier Locator Priority (`getByTestId` -> `getByRole` -> `getByLabel`).
 - **Public Contract Preservation:** Updates locator declarations while preserving all existing public method names, parameters, and return types. This ensures that 50+ dependent test specs continue passing without modifying a single line of test code.
-- **Verification Barrier (`--verify`):** Automatically triggers `npm test` on updated components, preventing regression leakage into version control.
+- **Verification Barrier:** Re-runs `npm test` on updated components, preventing regression leakage into version control.
 
 ### 13.13 Static CPOM Contract Linter & Multi-Tier CI/CD Quality Gates
 
