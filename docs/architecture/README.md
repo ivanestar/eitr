@@ -23,6 +23,11 @@ integrations exist because of this: they are the seams through which AI agents k
 generated framework long after `eitr new` exits. See
 [`ai-agent-integration.md`](ai-agent-integration.md).
 
+EITR's intended audience is not limited to the project owner's own consulting work: the direction is
+open-source adoption by other SDETs and teams, with no paid-product timeline attached. This raises
+the bar on onboarding clarity and documentation quality relative to a purely personal tool, without
+implying multi-tenant infrastructure or a hosted product line.
+
 **Because agents build on the generated framework indefinitely, a defect in the deterministic base
 does not stay a one-time bug - it gets inherited and amplified by every agent action layered on top
 of it afterward.** This is the concrete reason CPOM-contract correctness, cross-platform generation
