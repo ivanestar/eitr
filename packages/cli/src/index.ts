@@ -5,8 +5,6 @@ import { runInit } from './commands/init.js';
 import { runGenerate } from './commands/generate.js';
 import { runInstallCommand } from './commands/install-command.js';
 import { runAuth } from './commands/auth.js';
-import { runMap } from './commands/map.js';
-import { runRescan } from './commands/rescan.js';
 import { runDoctor } from './commands/doctor.js';
 
 import { ENGINE_VERSION } from '@eitr/engine';
@@ -32,8 +30,6 @@ Commands:
   generate   Read .eitr/init.json and write + install the framework project
   install    (Re)install an already-generated project (npm install + browsers)
   auth       Capture browser session credentials and save to auth.json
-  map        Crawl application routes, build site-map.json and detect shared widgets
-  rescan     Batch updates Page Object locators on UI redesign (alias: recon)
   doctor     Check system environment (Node.js, npm, Python, Git, Playwright)
 
 Run "eitr <command> --help" for command-specific flags.
@@ -61,11 +57,6 @@ async function main(): Promise<number> {
       return runInstallCommand(rest);
     case 'auth':
       return runAuth(rest);
-    case 'map':
-      return runMap(rest);
-    case 'rescan':
-    case 'recon':
-      return runRescan(rest);
     case 'doctor':
       return runDoctor(rest);
     default:

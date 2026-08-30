@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-08-29
 
+- **`docs/architecture.md` restructured into `docs/architecture/` (arc42-lite + ADRs)
+  (2026-08-30 follow-up):** the single 464-line file mixed a living system description with dated
+  changelog-style narration ("Direction change (2026-07-17)", "Confirmed with the user after...",
+  "Status: PIVOTED", "(HARDENED)"/"(SUPERSEDED)" markers) and a build-sequencing plan for a design
+  that had already shipped past it. Per explicit user direction and following researched industry
+  practice ([arc42](https://arc42.org/documentation/) for the overall structure,
+  [Nygard-format ADRs](https://adr.github.io/) for individual decisions), split it into
+  `docs/architecture/README.md` (arc42-lite overview: introduction & goals, non-goals, quality
+  requirements, glossary, a "where to find things" index) plus topic files
+  (`data-and-component-model.md`, `generation-engine.md`, `ai-agent-integration.md`,
+  `quality-gates.md`, `known-gaps.md`) and a `decisions/` directory with 9 ADRs (Context / Decision
+  / Alternatives Considered / Consequences) for the real forks-in-the-road - including one for the
+  just-completed `eitr map`/`rescan` removal and one for today's Deterministic-Over-AI rule.
+  Dropped stale content rather than migrating it verbatim: the old design's `verify` CLI command and
+  scanned-`LoginPage` login seed, both superseded by the AI-driven live-DOM verification approach
+  the rest of this document already describes, and the "Slice 1/2/3" build-sequencing plan, which
+  described work long since completed. Updated every cross-reference to the old single file
+  (`README.md`, `CONTRIBUTING.md`, `CLAUDE.md`/`AGENTS.md`, the `framework-quality-audit` skill) and
+  added a new `architecture-doc-writer` skill (mirrored to both `.claude/skills/` and
+  `.agents/skills/`) recording the structure/format standard for future architecture-doc changes -
+  including the hard rule that dated narration belongs in `CHANGELOG.md`, never in
+  `docs/architecture/`.
+- **`eitr map` and `eitr rescan`/`recon` CLI commands removed - both were non-functional
+  (2026-08-30 follow-up):** per user direction, site mapping and locator rescanning should happen
+  through the AI assistant's own terminal session (the `/map-site` and `/bulk-rescan` skills, which
+  already existed and describe a real live-DOM-driven workflow), not as human-typed CLI verbs.
+  Investigating the actual CLI implementations before removing them surfaced a serious,
+  independent finding: `crawlSiteMap()` (`eitr map`) never crawled anything - its "worker loop"
+  returned hardcoded route/component data (`['/login', '/dashboard', '/settings', '/users',
+'/reports']`, fixed component lists per path substring, `status: 200` always) regardless of the
+  target URL. `runRescan()` (`eitr rescan`/`recon`) never inspected a live DOM or rewrote a single
+  locator either - it only printed `[OK] Page Object contract verified & preserved` for files it
+  found already present, including the fabricated closing claim `"All Page Objects verified 100%
+Green against live DOM!"` with no DOM ever touched. Both commands' usage text and this project's
+  own `docs/architecture.md`/`docs/roadmap.md` had described them as real crawling/rescanning this
+  whole time. Removed `packages/cli/src/commands/map.ts` and `rescan.ts` (plus their
+  `packages/cli/src/index.ts` registration and their now-obsolete unit tests) rather than fixed, since
+  the working replacement already exists as the two AI-driven skills. Updated
+  `docs/architecture.md` Sections 13.11/13.12 and `docs/roadmap.md` 2.2/5.1 to describe the
+  skill-based mechanism instead of the removed CLI commands (also fixing roadmap.md's separate,
+  pre-existing inaccuracy claiming the crawler produced `docs/app-graph.html` - that file is an
+  unrelated static template, the crawler only ever wrote `docs/site-map.json`/`docs/APP_GRAPH.md`).
+  Updated the `/bulk-rescan` eval dataset/test (`packages/evals/src/datasets/skills-dataset.ts`,
+  `packages/evals/test/all-skills.eval.test.ts`) to stop requiring literal `"eitr rescan"` text in
+  the skill's simulated output, since that skill never actually invoked the now-removed command.
 - **Dependabot removed entirely, both from EITR's own repo and the generated-project template
   (2026-08-30 follow-up):** per explicit user feedback ("не нравится, только мешает" - don't like
   it, it only gets in the way), superseding the earlier security-only scoping in this same

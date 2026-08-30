@@ -6,7 +6,7 @@ EITR is designed with uncompromising SDET rigor, polyglot parity across 5 langua
 
 - **Main Documentation:** [README.md](README.md)
 - **Public License:** [Apache-2.0](LICENSE)
-- **Architecture Guide:** [docs/architecture.md](docs/architecture.md)
+- **Architecture Guide:** [docs/architecture/](docs/architecture/README.md)
 - **Issue Tracker:** [GitHub Issues](https://github.com/ivanestar/eitr/issues)
 
 ---

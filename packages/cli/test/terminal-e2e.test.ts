@@ -159,7 +159,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
 
   // ── Scenario 2: Modular Pipeline Execution ──────────────────────────────────
   it(
-    '2. Modular Pipeline — init -> generate -> rescan -> doctor',
+    '2. Modular Pipeline — init -> generate -> doctor',
     async () => {
       const cwd = makeTempCwd();
 
@@ -197,15 +197,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       expect(existsSync(path.join(cwd, 'playwright.config.js'))).toBe(true);
       expect(existsSync(path.join(cwd, 'scripts', 'lint-cpom.js'))).toBe(true);
 
-      // Step C: eitr rescan
-      const rescanRes = await runProcess(
-        'node',
-        [cliPath, 'rescan', '--cwd', cwd, '--no-verify'],
-        cwd,
-      );
-      expect(rescanRes.code).toBe(0);
-
-      // Step D: eitr doctor
+      // Step C: eitr doctor
       const doctorRes = await runProcess('node', [cliPath, 'doctor', '--cwd', cwd], cwd);
       expect(doctorRes.code).toBe(0);
       expect(doctorRes.stdout).toContain('Node.js');
