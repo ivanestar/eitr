@@ -10,6 +10,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/stop-format-changed-files.mjs"
+          }
+        ]
+      }
     ]
   }
 }
