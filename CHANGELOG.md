@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-08-29
 
+- **Dependabot scoped down to security-only (2026-08-30 follow-up):** the `.github/dependabot.yml`
+  added earlier in this release (both for EITR's own repo and the generated-project template,
+  `renderDependabotConfig` in `cicd.ts`) originally included a routine version-update entry for
+  the project's own package ecosystem (npm/pip/nuget/maven/gradle) alongside `github-actions`.
+  Removed per explicit feedback: a routine "there's a newer version" PR costs real
+  integration-debugging effort disproportionate to how trivial the bump itself is - that cost only
+  makes sense when there's an actual reason (a real vulnerability) to take it on. Both configs now
+  cover only `github-actions` (low-risk YAML action-version pins, not application runtime code).
+  `renderDependabotConfig()` dropped its now-unused `language`/`automationTool` parameters. Real
+  CVE coverage comes from GitHub's native Dependabot security updates instead, which need no
+  `dependabot.yml` entry - enabled directly on EITR's own repo via the vulnerability-alerts and
+  automated-security-fixes API endpoints; end users of generated projects can enable the same
+  toggle in their own repo's Settings > Code security once pushed to GitHub.
 - **Both tracked CI regressions fixed, restored to automated gates:**
   - **`terminal-e2e.test.ts`** was excluded from `ci.yml`'s full-test-suite step over 1
     pre-existing failing assertion ("3. CPOM Contract Linter Negative Tests"). Re-verified via 5
