@@ -190,7 +190,22 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
 
         // 3. Dynamic execution / dry-run check where applicable
         if (combo.language === 'python') {
-          const output = execSync('python -m pytest --collect-only', {
+          // `eitr new`'s auto-install (runInstall in packages/cli/src/commands/install.ts)
+          // creates a project-local .venv and installs pytest/pytest-playwright into it -
+          // dependencies never land in the system python, so verification must go through the
+          // same .venv, not a bare `python` from PATH (which has no reason to have pytest).
+          const isWindows = process.platform === 'win32';
+          const venvPython = join(
+            sandboxDir,
+            '.venv',
+            isWindows ? 'Scripts' : 'bin',
+            isWindows ? 'python.exe' : 'python',
+          );
+          expect(
+            existsSync(venvPython),
+            `Expected eitr new's auto-install to create a .venv at ${venvPython}`,
+          ).toBe(true);
+          const output = execSync(`"${venvPython}" -m pytest --collect-only`, {
             cwd: sandboxDir,
             encoding: 'utf8',
             stdio: 'pipe',
