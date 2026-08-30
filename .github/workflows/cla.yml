@@ -22,6 +22,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           path-to-signatures: '.github/cla-signatures/signatures.json'
-          path-to-cla: 'https://github.com/ivanestar/eitr/blob/main/CLA.md'
-          branch: 'main'
+          path-to-document: 'https://github.com/ivanestar/eitr/blob/main/CLA.md'
+          # Signatures are stored on a dedicated, deliberately UNPROTECTED branch - the action
+          # commits directly to this branch (not via a PR), which fails outright if branch
+          # protection (e.g. a required status check on `main`) blocks that direct push.
+          branch: 'cla-signatures'
           allowlist: bot*,dependabot[bot],renovate[bot],ivanestar
