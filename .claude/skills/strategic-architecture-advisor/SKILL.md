@@ -35,8 +35,12 @@ liable to be wrong. At minimum, research:
 - Context engineering / AI coding agent orchestration practice (this governs how EITR's own
   generated `CLAUDE.md`/`AGENTS.md`/skill files should be structured, and whether the
   `sdet-orchestrator` swarm-dispatch pattern matches current best practice or predates it).
-- Brownfield/legacy test-suite adoption and migration strategy - this is the axis most likely to
-  reveal a real gap, since EITR's flow is currently greenfield-shaped by default.
+- Brownfield/legacy test-suite handling - EITR always builds a fresh, deterministic framework core
+  regardless of what already exists on a project (never adopts or wraps an existing suite - see
+  `decisions/0001-deterministic-core-only-scaffolder.md`); an existing suite, if any, is at most a
+  _reference source_ to mine for signal (routes, locators, business-flow intent) feeding that same
+  fresh generation. Research migration/adoption practice for what it reveals about extracting signal
+  from legacy code, not to build an adoption path EITR deliberately doesn't want.
 - The MCP ecosystem's current state (spec version, conformance-tooling norms) - EITR embeds an MCP
   server in every generated project, so protocol drift is a direct maintenance risk.
 
@@ -56,6 +60,26 @@ to verify, taking a DOM/auth shortcut that skips the real user path), context-wi
 failure modes at the scale this project's own agents will hit, and any independent team building
 something structurally similar to a piece of EITR's own architecture - convergent validation (or
 convergent disagreement) from an unrelated team is stronger signal than either result alone.
+
+### Also mandatory: per-provider changelogs/deprecations, and a careful OSS scan
+
+Model/tool providers ship and deprecate capabilities fast enough that a session's own recommendation
+can be built on a foundation that's already shifted. Check current changelogs and release notes for
+at least: **Anthropic (mandatory - Claude models, Claude Code, the Agent SDK, MCP itself)**, then as
+many of the following as time allows - OpenAI (Codex CLI, Agents SDK, API deprecations), xAI (Grok
+models, Grok Build), Google (Gemini models, Antigravity CLI), and the tools this project's own
+generated skills target or could target (Cursor, Windsurf, Copilot, Aider, and newer entrants like
+Cline/Roo Code/Kilo Code/opencode/Grok Build that may not be in EITR's current 7-assistant list -
+check `ai-agent-integration.md` against the current list before assuming it's complete). Also check
+Playwright itself (not just MCP) - Microsoft's own guidance on agent-facing browser automation has
+changed direction before (e.g. recommending a CLI over MCP for a large agent-token-cost reduction)
+and a finding like that is exactly the kind of foundational shift this session exists to catch.
+
+Separately, scan public GitHub/GitLab repositories for patterns worth learning from - **ideas and
+approaches only, never copied code**. Note the license of anything cited (prefer MIT/Apache/BSD
+examples when citing a specific implementation approach) and never suggest vendoring or adapting
+code from a repository without explicitly flagging its license and getting the user's confirmation
+first - this session proposes patterns for EITR to build its own way, not a source of code to import.
 
 ## The SDET day-1 flow matrix
 
