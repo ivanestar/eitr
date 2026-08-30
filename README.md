@@ -70,7 +70,7 @@ core/                     BasePage, Component, Collection, Container
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). If you're an AI assistant working on EITR itself, also read [AGENTS.md](./AGENTS.md) and [docs/architecture.md](./docs/architecture.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). If you're an AI assistant working on EITR itself, also read [AGENTS.md](./AGENTS.md) and [docs/architecture/](./docs/architecture/README.md).
 
 ---
 

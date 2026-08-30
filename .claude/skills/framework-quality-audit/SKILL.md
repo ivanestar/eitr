@@ -7,7 +7,7 @@ description: On-demand, unbiased multi-angle quality audit of an EITR-generated 
 
 ## Purpose
 
-EITR's core product bet (see `docs/architecture.md`, "Long-term product vision") is that the
+EITR's core product bet (see `docs/architecture/README.md` Section 1, "Introduction & Goals") is that the
 generated framework is the deterministic first layer of a larger SDET ecosystem, not a disposable
 scaffold. That means generation quality has to be checked periodically, per stack combination, with
 a report that is **comparable across runs** — same categories, same scoring rigor, same layout —
