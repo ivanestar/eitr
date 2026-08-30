@@ -116,54 +116,6 @@ def test_page_has_non_empty_title(page: Page) -> None:
 `;
 }
 
-// ── Seed files ─────────────────────────────────────────────────────────────
-
-/** components/pages/login_page_example.py */
-export function renderPythonLoginPageExample(): string {
-  return `"""LoginPage — worked example of a Page Object using framework components.
-Adapt selectors and URLs to match your application. Then delete this comment.
-"""
-from __future__ import annotations
-
-from playwright.sync_api import Page
-
-from components.base.base_page import BasePage
-from components.primitives.button import Button
-from components.primitives.text_input import TextInput
-
-
-class LoginPage(BasePage):
-    """Page Object for a standard username/password login form."""
-
-    URL = "/login"
-
-    def navigate(self) -> None:
-        self._page.goto(self.URL)
-
-    # ── Producers ────────────────────────────────────────────────────────────
-
-    @property
-    def username_input(self) -> TextInput:
-        return self._scope(TextInput, self._root.get_by_label("Username"))
-
-    @property
-    def password_input(self) -> TextInput:
-        return self._scope(TextInput, self._root.get_by_label("Password"))
-
-    @property
-    def login_button(self) -> Button:
-        return self._scope(Button, self._root.get_by_role("button", name="Log in"))
-
-    # ── Actions ─────────────────────────────────────────────────────────────
-
-    def login(self, username: str, password: str) -> None:
-        """Fill credentials and submit the form."""
-        self.username_input.fill(username)
-        self.password_input.fill(password)
-        self.login_button.click()
-`;
-}
-
 /** shared/utils/api_client.py */
 export function renderPythonApiClient(opts: Pick<PythonProjectOpts, 'baseUrl'>): string {
   return `"""ApiClient — thin httpx wrapper for REST and GraphQL API test steps.

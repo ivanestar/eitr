@@ -210,46 +210,6 @@ setup('authenticate', async ({ page }) => {
 `;
 }
 
-/** components/pages/login-page.example.js */
-export function renderJsLoginPageExample(): string {
-  return `// LoginPage — worked example of a Page Object using framework components.
-// Adapt selectors and URLs to match your application. Then delete this comment.
-import { BasePage } from '../../components/base/base-page.js';
-import { Button } from '../../components/primitives/button.js';
-import { TextInput } from '../../components/primitives/text-input.js';
-
-export class LoginPage extends BasePage {
-  path = '/login';
-
-  async goto() {
-    await this.page.goto(this.path);
-  }
-
-  // ── Producers ────────────────────────────────────────────────────────────
-
-  get usernameInput() {
-    return this.child(TextInput, { kind: 'label', label: 'Username' });
-  }
-
-  get passwordInput() {
-    return this.child(TextInput, { kind: 'label', label: 'Password' });
-  }
-
-  get loginButton() {
-    return this.child(Button, { kind: 'role', role: 'button', name: 'Log in' });
-  }
-
-  // ── Actions ─────────────────────────────────────────────────────────────
-
-  async login(username, password) {
-    await this.usernameInput.fill(username);
-    await this.passwordInput.fill(password);
-    await this.loginButton.click();
-  }
-}
-`;
-}
-
 /** shared/utils/api-client.js */
 export function renderJsApiClient(): string {
   return `/**

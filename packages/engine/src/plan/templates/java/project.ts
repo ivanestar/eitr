@@ -535,51 +535,6 @@ public class RadioGroup extends Container {
 `;
 }
 
-export function renderJavaLoginPageExample(): string {
-  return `package components.pages;
-
-import components.BasePage;
-import components.primitives.Button;
-import components.primitives.TextInput;
-import com.microsoft.playwright.Page;
-
-/**
- * Example Login Page using CPOM structure.
- */
-public class LoginPageExample extends BasePage {
-    private final String baseUrl;
-
-    public LoginPageExample(Page page, String baseUrl) {
-        super(page);
-        this.baseUrl = baseUrl;
-    }
-
-    @Override
-    public void navigate() {
-        page.navigate(baseUrl + "/login");
-    }
-
-    public TextInput usernameInput() {
-        return new TextInput(page.locator("input[name='username'], input[type='text']"));
-    }
-
-    public TextInput passwordInput() {
-        return new TextInput(page.locator("input[name='password'], input[type='password']"));
-    }
-
-    public Button submitButton() {
-        return new Button(page.locator("button[type='submit']"));
-    }
-
-    public void login(String username, String password) {
-        usernameInput().fill(username);
-        passwordInput().fill(password);
-        submitButton().click();
-    }
-}
-`;
-}
-
 export function renderJavaApiClient(): string {
   return `package shared.utils;
 
