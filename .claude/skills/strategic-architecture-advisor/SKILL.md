@@ -40,6 +40,23 @@ liable to be wrong. At minimum, research:
 - The MCP ecosystem's current state (spec version, conformance-tooling norms) - EITR embeds an MCP
   server in every generated project, so protocol drift is a direct maintenance risk.
 
+### Also mandatory: practitioner forums, not just vendor content
+
+Vendor blogs and "N best practices for 2026" articles describe what's marketed - they rarely admit
+what actually broke in production. Explicitly search practitioner-experience sources too: Reddit
+(r/QA, r/softwaretesting, r/ExperiencedDevs and similar), Habr (strong Russian-language signal for
+this specific domain - real teams publishing detailed build-logs of AI-agent QA harnesses, often
+with concrete pitfalls named), DEV.to, Substack, and LinkedIn posts from practitioners (not
+vendor/company pages). Search in both English and Russian - Habr in particular has repeatedly
+surfaced directly-relevant, detailed war-stories this project benefits from that pure English-vendor
+search does not. Weight a first-hand "here's what broke and how we fixed it" post above a
+marketing-flavored listicle every time they conflict. Specifically look for: agents gaming their own
+success criteria (fixing a test instead of the defect it found, mocking exactly what a test exists
+to verify, taking a DOM/auth shortcut that skips the real user path), context-window/token-limit
+failure modes at the scale this project's own agents will hit, and any independent team building
+something structurally similar to a piece of EITR's own architecture - convergent validation (or
+convergent disagreement) from an unrelated team is stronger signal than either result alone.
+
 ## The SDET day-1 flow matrix
 
 Think through onboarding to a project as three largely-independent axes, not one linear path:
@@ -70,9 +87,12 @@ The single highest-value output of this kind of session is usually not a new ide
 
 1. **A published Artifact** (load `artifact-design` first) with the findings: architecture
    critique + concrete fixes, the day-1 flow matrix with gaps called out, synergy findings, new idea
-   proposals (each with a one-line "why now, grounded in what research"), and a short, explicitly
+   proposals (each with a one-line "why now, grounded in what research"), practitioner-forum
+   pitfalls worth guarding against explicitly (not just ideas to add - risks to design against, with
+   which existing EITR mechanism already covers each one and which don't), and a short, explicitly
    prioritized next-batch shortlist - not an undifferentiated wall of ideas. Cite the actual research
-   sources.
+   sources, including the practitioner-forum ones by name (a Habr/Reddit/DEV.to post is a legitimate
+   citation here, not a lesser one).
 2. **New ADRs** in `docs/architecture/decisions/` for anything this session actually resolves as a
    direction (not for open questions - those go in the strategic-questions file instead).
 3. **Strategic questions for the user**, in a local, gitignored file (create
