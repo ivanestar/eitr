@@ -16,7 +16,8 @@ Generated Test Repository
 │   ├── pom-engineer          -- DOM inspection, Page Object generation & live-DOM liveness checking
 │   ├── test-automator        -- Linear test synthesis from TMS, dynamic TDM & fast-path API
 │   ├── assertion-auditor     -- Web-first anti-fake-green guard & mutation verification
-│   └── trace-debugger        -- Playwright trace analysis & Two-Strike self-healing
+│   ├── trace-debugger        -- Playwright trace analysis & Two-Strike self-healing
+│   └── review-arbiter        -- Independent Review Arbiter, adjudicates multi-agent findings (Protocol 123)
 │
 ├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/rules/, .windsurf/workflows/, .codex/skills/, .github/)
 │   ├── /auth-setup           -- Session capture (auth.json) and state re-use with SSO fallback
@@ -28,7 +29,7 @@ Generated Test Repository
 │
 ├── 3. Model Context Protocol (MCP) Layer (.mcp.json, .cursor/mcp.json, .claude/mcp.json, etc.)
 │   ├── Playwright MCP        -- Live DOM querying, selector evaluation, visual feedback
-│   └── TMS Bridge MCP        -- TestRail / Zephyr / Jira / ADO test case extraction (.mcp/tms-bridge/)
+│   └── TMS Bridge MCP        -- TestRail / Zephyr / Jira Xray / ADO test case extraction (.mcp/tms-bridge/)
 │
 └── 4. Lifecycle Guards, Hooks & Rules Layer
     ├── Root Context          -- AGENTS.md, CLAUDE.md, .windsurfrules, copilot-instructions.md

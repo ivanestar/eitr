@@ -37,7 +37,7 @@ The wizard inspects your target URL, asks for your language/CI/TMS choices, and 
 1. **`eitr new`** - scaffold the framework against your app's URL.
 2. **`.env`** - fill in credentials (app login, TMS tokens) in the generated `.env`.
 3. **`eitr auth`** - opens a browser, you log in once (SSO/MFA included), session gets saved to `.auth/user.json` so tests run authenticated.
-4. **Map the app and write Page Objects and tests.** In an AI editor, slash commands (`/map-site`, `/scan-and-generate-pom`, `/automate-ticket`, `/tms-triage`, `/bulk-rescan`, `/heal-test`) read the live app DOM, TMS tickets, and trace files to do this for you.
+4. **Map the app and write Page Objects and tests.** In an AI editor, slash commands (`/map-site`, `/scan-and-generate-pom`, `/automate-ticket`, `/bulk-rescan`, `/heal-test`) read the live app DOM, TMS tickets, and trace files to do this for you.
 5. **`npx playwright test`** - run it.
 
 ---
