@@ -29,7 +29,7 @@ When preparing a new release `X.Y.Z`:
    ```bash
    npm install --package-lock-only
    ```
-6. Format `CHANGELOG.md` per [Keep a Changelog](https://keepachangelog.com/en/1.0.0/): group entries into exactly these categories: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`. Pull the commit subjects via `git log <last-tag>..HEAD --oneline` and rewrite each one that becomes a changelog entry to >3 words and <15 words; never lead with a technical prefix (e.g. `fix(cli):`, `feat:`). Output 0 emojis. If `CHANGELOG.md` does not exist, do NOT create it — abort and output exactly: `ERROR: CHANGELOG.md not found.`
+6. Format `CHANGELOG.md` per [Keep a Changelog 2.0.0](https://keepachangelog.com/en/2.0.0/): group entries into exactly these categories: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`. Pull the commit subjects via `git log <last-tag>..HEAD --oneline` and rewrite each one that becomes a changelog entry to >3 words and <15 words; never lead with a technical prefix (e.g. `fix(cli):`, `feat:`). Where the reason for a change is genuinely recoverable (a linked ADR, a `known-gaps.md`/`TODO.md` item, a spec), add a short why-clause - never invent one; a terse what-only entry beats a fabricated reason. Output 0 emojis. If `CHANGELOG.md` does not exist, do NOT create it — abort and output exactly: `ERROR: CHANGELOG.md not found.`
 7. Verify version parity:
    ```bash
    npx vitest run packages/engine/test/boundary.test.ts
@@ -87,7 +87,13 @@ Simulate packaging and verify tarball contents:
    ```bash
    node scripts/git-safe-commit.mjs "chore(release): vX.Y.Z" --tag vX.Y.Z
    ```
-3. Push commit and tags to GitHub:
+3. **STOP - human confirmation gate:** present the Stage 3 dry-run tarball summary and the
+   assembled `CHANGELOG.md` diff to the user, and do not proceed to step 4 below or to Stage 5
+   until the user explicitly confirms this release in this same conversation. Never push or publish
+   on an implicit "go ahead" inferred from the original release request alone - `git push` and
+   `npm publish` are irreversible, publicly visible actions and require their own explicit human
+   decision point (see `docs/architecture/README.md`'s "augmentation, not replacement" principle).
+4. Push commit and tags to GitHub:
    ```bash
    git push origin main --tags
    ```
@@ -126,7 +132,8 @@ Simulate packaging and verify tarball contents:
 4. Ran static quality gates (format, typecheck, build, Cyrillic scan, Zero-Emoji scan).
 5. Executed npm publish --dry-run -> verified @onlytests/eitr, 112.7 KB, public access.
 6. Committed via node scripts/git-safe-commit.mjs "chore(release): v0.4.1" --tag v0.4.1 (23:00 OpSec timestamp).
-7. Executed npm publish -> Verified npm view @onlytests/eitr version.
+7. Presented the dry-run summary and CHANGELOG.md diff, and stopped for explicit user confirmation.
+8. User confirmed -> pushed commit/tags to GitHub, then executed npm publish -> verified npm view @onlytests/eitr version.
 ```
 
 ### Bad Example (Dangerous / Careless Release)
@@ -143,5 +150,9 @@ Simulate packaging and verify tarball contents:
 ## Operational Rules & Safety Mandates
 
 - **Zero Tolerance for Broken Baseline:** Never publish if any test, typecheck, or format check fails.
+- **Human Confirmation Gate:** Never execute Stage 4 step 4 (`git push`) or Stage 5 step 2
+  (`npm publish`) without an explicit, in-conversation user confirmation given after presenting the
+  Stage 3 dry-run and the `CHANGELOG.md` diff - these are irreversible, publicly visible actions and
+  the release request alone is never sufficient authorization to run them.
 - **Strict Scope Guard:** Ensure root `package.json` publishes only under the `@onlytests/eitr` scope with `"publishConfig": { "access": "public" }`.
 - **Zero Lock-in & Zero Emojis:** Enforce strict Zero-Emoji policy and Zero Lock-in in all generated assets.

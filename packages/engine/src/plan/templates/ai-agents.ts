@@ -131,6 +131,37 @@ You are the guardian of architectural integrity for this ${frameworkName} (${lan
   * Snapshot readers must be suffixed with 'Now' (e.g., \`textNow()\`, \`isVisibleNow()\`) and return primitive values without auto-retries.
   * No assertions inside Page Objects or components (assertions belong exclusively in test files).
 - Prohibit arbitrary sleep/delay calls and raw XPath/CSS selectors in test scripts.
+
+## Worked Example: Compliant vs. Non-Compliant Page Object
+One canonical pair - use it to recognize the pattern, not as a template to copy verbatim.
+
+Compliant:
+\`\`\`typescript
+export class LoginPage extends BasePage {
+  private readonly nav = this.child(NavbarWidget, { root: this.page.getByTestId('app-nav') });
+  get emailInput() { return this.getByTestId('login-email'); }
+  get submitButton() { return this.getByRole('button', { name: 'Sign in' }); }
+  async submit(email: string, password: string): Promise<void> {
+    await this.emailInput.fill(email);
+    await this.submitButton.click();
+  }
+  errorTextNow(): Promise<string | null> {
+    return this.getByTestId('login-error').textContent();
+  }
+}
+\`\`\`
+Extends \`BasePage\`; reuses \`NavbarWidget\` via \`this.child()\` instead of re-declaring navbar locators; \`submit()\` returns \`Promise<void>\` and relies on auto-waiting; \`errorTextNow()\` is \`Now\`-suffixed; zero assertions inside the class.
+
+Non-compliant (reject on sight):
+\`\`\`typescript
+export class LoginPage {
+  async submit(email: string, password: string) {
+    await this.page.locator('.MuiButton-root-a1b2').click();
+    await expect(this.page.getByTestId('login-error')).toBeVisible();
+  }
+}
+\`\`\`
+Does not extend \`BasePage\`; uses a fragile auto-generated CSS class instead of the 3-tier locator priority; contains an \`expect()\` assertion, which belongs only in test files.
 `,
     },
     {
@@ -146,6 +177,7 @@ You are responsible for generating, updating, and validating Page Objects and co
 ## Shared Widget Reuse & Site Map Integration
 - Always inspect \`docs/site-map.json\` and existing widgets in \`components/widgets/\` before creating new Page Objects.
 - If a component already exists in \`components/widgets/\`, compose it via \`this.child(WidgetClass, spec)\` rather than re-declaring duplicate locators.
+- See 'sdet-architect''s Worked Example for a compliant-vs-non-compliant \`components/pages/<name>.page.ts\` pair before writing one.
 
 ## Worker-Mode & Batch Generation from Site Map
 - When invoked in parallel worker mode or for mapped routes in \`docs/site-map.json\`:
@@ -209,6 +241,28 @@ You transform structured TMS test cases (Jira, TestRail, Zephyr, Azure DevOps) i
 - Deterministic Teardown: Register created entities for guaranteed cleanup in \`afterEach\` / \`afterAll\` hooks or fixture teardown.
 - Strict Linearity: Synthesize strictly linear tests: ABSOLUTELY NO conditional logic (\`if/else\`), NO loops (\`for/while\`), and NO dynamic branching in test specs.
 - Web-First Assertions: Map every Expected Result in the TMS case to an auto-retrying web assertion.
+
+## Worked Example: Compliant vs. Non-Compliant Test Step
+One canonical pair - use it to recognize the pattern, not as a template to copy verbatim.
+
+Compliant:
+\`\`\`typescript
+await test.step('Step 3: Submit valid credentials', async () => {
+  const [response] = await Promise.all([
+    page.waitForResponse((res) => res.url().includes('/api/login') && res.status() === 200),
+    loginPage.submit(user.email, user.password),
+  ]);
+  await expect(dashboardPage.welcomeBanner).toContainText(user.email);
+});
+\`\`\`
+Named per the TMS step so a failure traces straight back to it; the network waiter is registered before the triggering action (no race condition); the UI assertion and the backend response are both checked (dual-layer) - the test fails if the API returns a non-2xx status or the DOM never updates.
+
+Non-compliant (reject on sight):
+\`\`\`typescript
+await loginPage.submit(user.email, user.password);
+await expect(dashboardPage.welcomeBanner).toBeVisible();
+\`\`\`
+No \`test.step()\` demarcation to trace back to the TMS case; checks only the DOM, so a backend 500 that still renders a stale cached banner would pass as fake-green.
 `,
     },
     {

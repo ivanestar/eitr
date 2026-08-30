@@ -380,32 +380,6 @@ public class RadioGroup : Container
 `;
 }
 
-export function renderCsharpLoginPage(): string {
-  return `using Microsoft.Playwright;
-using Components.Primitives;
-
-namespace Components.Pages;
-
-public class LoginPage : BasePage
-{
-    public override string Path => "/login";
-
-    public TextInput UsernameInput => new(Page.GetByLabel("Username"));
-    public TextInput PasswordInput => new(Page.GetByLabel("Password"));
-    public Button SubmitButton => new(Page.GetByRole(AriaRole.Button, new() { Name = "Log In" }));
-
-    public LoginPage(IPage page) : base(page) { }
-
-    public async Task LoginAsync(string username, string password)
-    {
-        await UsernameInput.FillAsync(username);
-        await PasswordInput.FillAsync(password);
-        await SubmitButton.ClickAsync();
-    }
-}
-`;
-}
-
 export function renderCsharpApiClient(): string {
   return `using System.Net.Http;
 

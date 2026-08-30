@@ -550,50 +550,6 @@ export * from './table${ext}';
 `;
 }
 
-/** components/pages/login-page.example.ts or .js */
-export function renderCypressLoginPageExample(isTs: boolean): string {
-  const baseImport = isTs ? '../base/base-page' : '../base/base-page.js';
-  const primImport = isTs ? '../primitives' : '../primitives/index.js';
-  if (isTs) {
-    return `import { BasePage } from '${baseImport}';
-import { TextInput, Button } from '${primImport}';
-
-export class LoginPage extends BasePage {
-  readonly path = '/login';
-
-  readonly usernameInput = new TextInput('input[name="username"]');
-  readonly passwordInput = new TextInput('input[name="password"]');
-  readonly submitButton = new Button('button[type="submit"]');
-
-  login(username: string, password: string): void {
-    this.usernameInput.fill(username);
-    this.passwordInput.fill(password);
-    this.submitButton.click();
-  }
-}
-`;
-  }
-
-  return `import { BasePage } from '${baseImport}';
-import { TextInput, Button } from '${primImport}';
-
-export class LoginPage extends BasePage {
-  constructor() {
-    super('/login');
-    this.usernameInput = new TextInput('input[name="username"]');
-    this.passwordInput = new TextInput('input[name="password"]');
-    this.submitButton = new Button('button[type="submit"]');
-  }
-
-  login(username, password) {
-    this.usernameInput.fill(username);
-    this.passwordInput.fill(password);
-    this.submitButton.click();
-  }
-}
-`;
-}
-
 /** shared/utils/api-client.ts or .js */
 export function renderCypressApiClient(isTs: boolean): string {
   if (isTs) {
