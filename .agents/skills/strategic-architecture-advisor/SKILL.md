@@ -8,7 +8,7 @@ description: Acts as a strategic architect-advisor for EITR's own product direct
 ## Purpose
 
 This is a periodic, deep-thinking session, not a code-review pass. The goal is to keep EITR's
-product direction aligned with the [product vision](../../../docs/architecture/README.md#1-introduction--goals)
+product direction aligned with the [product vision](../../../docs/architecture/README.md) (Section 1)
 ("one SDET + an AI-assistant subscription performs at the throughput of several, via agentic work
 on a deterministic base") and with what the industry actually looks like _right now_, not at
 training-cutoff. Load [`architecture-doc-writer`](../architecture-doc-writer/SKILL.md) alongside
@@ -80,6 +80,22 @@ approaches only, never copied code**. Note the license of anything cited (prefer
 examples when citing a specific implementation approach) and never suggest vendoring or adapting
 code from a repository without explicitly flagging its license and getting the user's confirmation
 first - this session proposes patterns for EITR to build its own way, not a source of code to import.
+
+### Also mandatory: everything EITR actually generates for, not just the AI layer
+
+The provider/OSS scan above covers the AI-tooling ecosystem; separately and just as mandatory, check
+official docs/changelogs/new-features/deprecations for the _target stack_ EITR generates
+config/code for - i.e. everything the questionnaire (`packages/cli/src/questionnaire/schema.ts`)
+actually offers, plus anything credibly on its near-term roadmap. Concretely, at minimum: Playwright
+itself (not just MCP - new APIs, component-testing maturity, trace-viewer changes), Cypress (even
+withheld from the CLI today per `decisions/`, its own roadmap still matters for if/when that
+changes), each of the 5 target languages' own toolchains (TypeScript, JavaScript/Node, Python,
+C#/.NET, Java), the 4 CI/CD targets (GitHub Actions, GitLab CI, Jenkins, TeamCity), Docker, and the
+TMS integrations (Jira/Xray, Azure DevOps, TestRail, Zephyr). Include tools not yet integrated but
+plausible near-term additions the user has flagged (e.g. Allure reporting) - research them now so a
+future integration starts from current API shape, not stale assumptions. A breaking API change or a
+new capability in any of these is exactly as load-bearing for EITR as an AI-provider change - the
+generated output is only as current as this research is.
 
 ## The SDET day-1 flow matrix
 
