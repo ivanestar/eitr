@@ -43,6 +43,7 @@ eval-results/
 .venv/
 **/sandbox/
 TODO.md
+docs/architecture/STRATEGY-QUESTIONS.md
 
 # Personal Claude Code session settings (not shared team config)
 .claude/settings.local.json
