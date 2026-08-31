@@ -450,6 +450,7 @@ export function planAiAgents(
 name: ${agent.name}
 description: ${agent.description}
 role: ${agent.role}
+subagent: true
 ---
 
 ${agent.systemPrompt}`,
@@ -480,15 +481,14 @@ ${agent.systemPrompt}`,
     } else if (assistant === 'cursor') {
       for (const agent of agents) {
         descriptors.push({
-          path: `.cursor/rules/agent-${agent.name}.mdc`,
+          path: `.cursor/skills/${agent.name}/SKILL.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {
             kind: 'inline',
             text: `---
+name: ${agent.name}
 description: ${agent.description}
-globs: tests/**/*.ts, components/**/*.ts
-alwaysApply: false
 ---
 
 # ${agent.role}

@@ -1,6 +1,8 @@
 ---
 name: security-auditor
 description: Meta-agent for static secret detection, diff entropy scanning, path traversal validation, dependency CVE audit, and credential isolation in EITR engine and templates.
+tools: Read, Grep, Glob, PowerShell
+model: sonnet
 ---
 
 # Security Auditor Meta-Agent

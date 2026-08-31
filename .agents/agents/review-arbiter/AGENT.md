@@ -1,6 +1,7 @@
 ---
 name: review-arbiter
 description: Authoritative LLM-as-a-Judge meta-agent that adjudicates multi-agent plan and code reviews in Protocol 123, filtering false positives, hallucinations, and out-of-scope nitpicks before issuing the actionable Arbiter Verdict.
+subagent: true
 ---
 
 # Role: Review Arbiter (The Review Judge)

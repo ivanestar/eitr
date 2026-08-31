@@ -52,7 +52,8 @@
     "esbuild": "^0.28.1",
     "prettier": "^3.3.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "vitest": "^2.0.0",
+    "yaml": "^2.5.0"
   },
   "publishConfig": {
     "access": "public"
@@ -68,7 +69,7 @@
     "test": "vitest run",
     "test:e2e": "vitest run packages/cli/test/terminal-e2e.test.ts",
     "test:e2e:pairwise": "vitest run packages/evals/test/e2e/cli.test.ts",
-    "eval": "vitest run packages/evals/test/all-agents.eval.test.ts packages/evals/test/all-skills.eval.test.ts packages/evals/test/all-rules.eval.test.ts packages/evals/test/offline-evals.test.ts packages/evals/test/eval-validator.test.ts packages/evals/test/protocol-123-meta-agents.test.ts packages/evals/test/protocol-123-sdet.test.ts packages/evals/test/protocol-123-telemetry.test.ts packages/evals/test/tdm-synthetic-data.test.ts packages/evals/test/docker-preset.test.ts packages/evals/test/visual-diff-healing.test.ts packages/evals/test/animation-sync-helper.test.ts packages/evals/test/polyglot-tdm-parity.test.ts packages/evals/test/master-batch-improvements.test.ts packages/evals/test/mcp-bridge.eval.test.ts packages/evals/test/test-format-sota.eval.test.ts packages/evals/test/quality-and-reliability-hardening.test.ts",
+    "eval": "vitest run packages/evals/test/all-agents.eval.test.ts packages/evals/test/all-dev-agents.eval.test.ts packages/evals/test/all-skills.eval.test.ts packages/evals/test/all-dev-skills.eval.test.ts packages/evals/test/all-rules.eval.test.ts packages/evals/test/offline-evals.test.ts packages/evals/test/eval-validator.test.ts packages/evals/test/protocol-123-meta-agents.test.ts packages/evals/test/protocol-123-sdet.test.ts packages/evals/test/protocol-123-telemetry.test.ts packages/evals/test/tdm-synthetic-data.test.ts packages/evals/test/docker-preset.test.ts packages/evals/test/visual-diff-healing.test.ts packages/evals/test/animation-sync-helper.test.ts packages/evals/test/polyglot-tdm-parity.test.ts packages/evals/test/master-batch-improvements.test.ts packages/evals/test/mcp-bridge.eval.test.ts packages/evals/test/test-format-sota.eval.test.ts packages/evals/test/quality-and-reliability-hardening.test.ts",
     "eval:live": "vitest run packages/evals/test/live-evals.test.ts",
     "eval:sonnet": "vitest run packages/evals/test/live-evals.test.ts -- --sonnet",
     "eval:opus": "vitest run packages/evals/test/live-evals.test.ts -- --opus",

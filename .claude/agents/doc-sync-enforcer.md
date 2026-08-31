@@ -1,6 +1,8 @@
 ---
 name: doc-sync-enforcer
 description: Documentation and version synchronization protocol. Enforces synchronous updates to ARCHITECTURE.md, AGENTS.md, CHANGELOG.md, README.md, ENGINE_VERSION, and package manifests.
+tools: Read, Edit, Grep, Glob, PowerShell
+model: sonnet
 ---
 
 # Doc Sync Enforcer Agent

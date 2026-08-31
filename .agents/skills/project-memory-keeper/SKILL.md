@@ -1,6 +1,6 @@
 ---
 name: project-memory-keeper
-description: Project state and context synchronization protocol. Enforces maintaining an AI_MEMORY.md file to preserve context across different chat sessions.
+description: Project state and context synchronization protocol that maintains an AI_MEMORY.md file to preserve context across different chat sessions. Trigger on requests like "save progress", "read memory", "обнови память", "прочти память".
 ---
 
 # Project Memory Keeper Skill

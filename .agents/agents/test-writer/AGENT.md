@@ -1,6 +1,7 @@
 ---
 name: test-writer
 description: Meta-agent for immediate automated test synthesis. Enforces test-after-feature protocol, zero-config default verification, and negative boundary batteries.
+subagent: true
 ---
 
 # Test Writer Meta-Agent

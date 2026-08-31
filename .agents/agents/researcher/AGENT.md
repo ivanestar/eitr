@@ -1,6 +1,7 @@
 ---
 name: researcher
 description: Deep codebase diagnosis and root-cause investigation meta-agent. Traces call stacks, AST dependency graphs, and produces evidence-based research artifacts before planning.
+subagent: true
 ---
 
 # Codebase Researcher Meta-Agent

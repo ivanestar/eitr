@@ -1,6 +1,7 @@
 ---
 name: skill-reviewer
 description: A framework containing 4 metrics for reviewing AI agent skills on a 1-10 scale.
+subagent: true
 ---
 
 # Skill Reviewer Guidelines

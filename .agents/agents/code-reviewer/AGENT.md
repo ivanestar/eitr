@@ -1,6 +1,7 @@
 ---
 name: code-reviewer
 description: Comprehensive Code Review protocol. Verifies implementation against Architect plans, enforces Holistic Pattern Mimicry, and checks for edge cases before finalizing tasks.
+subagent: true
 ---
 
 # Eitr Code Reviewer Skill

@@ -78,7 +78,11 @@ original Markdown setup guide and a `.teamcity/settings.kts` Kotlin DSL Configur
 covering the same steps, per JetBrains' own default onboarding path since 2019. Generated CI
 templates also include a dependency-vulnerability audit step (`npm audit`/`pip-audit`/`dotnet list
 package --vulnerable`, per language) ahead of the test run; Java's Maven/Gradle CI templates do not
-yet have an equivalent step (tracked separately, not part of the CPOM gate). GitHub Actions
+yet have an equivalent zero-config audit step (tracked separately, not part of the CPOM gate) on any
+provider. For GitHub Actions specifically, a generated `.github/dependabot.yml` (Java/Maven or
+Java/Gradle ecosystem, weekly) gives Java projects a real, zero-config alternative signal
+(version-update/security PRs) - GitLab CI/Jenkins/TeamCity's Java branches still have no equivalent,
+since none of those providers auto-consumes a Dependabot-style manifest. GitHub Actions
 workflows declare a least-privilege `permissions:` block and a `concurrency`/cancel-in-progress
 group; GitLab CI configs declare a top-level `workflow: rules` guard against duplicate
 push/merge-request pipelines. TS/JS and Python shard the Tier 2 run 4-way on all 4 generated CI

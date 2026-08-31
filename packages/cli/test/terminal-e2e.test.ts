@@ -135,9 +135,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       expect(existsSync(path.join(cwd, '.agents', 'agents', 'sdet-orchestrator', 'agent.md'))).toBe(
         true,
       );
-      expect(existsSync(path.join(cwd, '.agents', 'skills', 'automate-ticket', 'SKILL.md'))).toBe(
-        true,
-      );
+      expect(existsSync(path.join(cwd, '.agents', 'skills', 'automate-ticket.md'))).toBe(true);
 
       // 3. Run real "node scripts/lint-cpom.js" in generated project
       const linterRes = await runProcess('node', [path.join(cwd, 'scripts/lint-cpom.js')], cwd);

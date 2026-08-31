@@ -1,6 +1,7 @@
 ---
 name: ast-template-engineer
-description: Protocol for safely modifying TypeScript AST templates. Enforces compilation checks and strict fallback rules.
+description: Protocol for safely modifying TypeScript AST templates, enforcing compilation checks and a strict two-strike fallback rule. Trigger on requests like "edit the template", "modify packages/engine/src/plan/templates", "update the AST generator".
+paths: packages/engine/src/**/templates/*.ts
 ---
 
 # AST Template Engineer Skill

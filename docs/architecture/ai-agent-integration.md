@@ -9,7 +9,7 @@ Every generated test repository is structured with four dedicated AI layers:
 
 ```
 Generated Test Repository
-├── 1. Actors Layer (.agents/agents/, .claude/agents/, .cursor/rules/, .windsurf/rules/, .codex/agents/, .github/agents/)
+├── 1. Actors Layer (.agents/agents/, .claude/agents/, .cursor/skills/, .windsurf/rules/, .codex/agents/, .github/agents/)
 │   ├── sdet-orchestrator     -- Single facade & DAG task router
 │   ├── tms-validator         -- TMS requirements quality gate, atomicity check & GIGO guard
 │   ├── sdet-architect        -- Architecture governance, DI fixtures & CPOM validation
@@ -19,7 +19,7 @@ Generated Test Repository
 │   ├── trace-debugger        -- Playwright trace analysis & Two-Strike self-healing
 │   └── review-arbiter        -- Independent Review Arbiter, adjudicates multi-agent findings (Protocol 123)
 │
-├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/rules/, .windsurf/workflows/, .codex/skills/, .github/)
+├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/skills/, .windsurf/workflows/, .codex/skills/, .github/)
 │   ├── /auth-setup           -- Session capture (auth.json) and state re-use with SSO fallback
 │   ├── /scan-and-generate-pom-- Live DOM exploration + live-DOM Page Object verification
 │   ├── /automate-ticket      -- End-to-end flow: TMS ticket -> DLP -> Intent -> AST Code -> Green run
@@ -46,11 +46,14 @@ for why these are not, and cannot correctly be, plain CLI commands.
 EITR generates native rule/skill formats for each selected AI assistant during scaffolding, rather
 than one shared format every assistant has to interpret:
 
-- **Cursor:** `.cursor/rules/*.mdc` (glob targets and frontmatter)
+- **Cursor:** `.cursor/skills/*/SKILL.md` (agents auto-invocable; operational skills carry
+  `disable-model-invocation: true` to keep them explicit-only, per Cursor's own agent-vs-skill
+  distinction - `.cursor/rules/*.mdc` is auto-injected context, not a command/skill primitive)
 - **Windsurf:** `.windsurf/rules/*.md`
 - **Claude Code:** `CLAUDE.md` and `.claude/skills/*/SKILL.md`
 - **GitHub Copilot:** `.github/copilot-instructions.md`
-- **Antigravity:** `.agents/skills/*/SKILL.md` and `AGENTS.md`
+- **Antigravity:** `.agents/agents/*/agent.md` and `.agents/skills/*.md` (flat file per skill, not a
+  `SKILL.md`-per-folder layout) and `AGENTS.md`
 - **OpenAI Codex:** `.codex/skills/*/SKILL.md`
 - **Aider:** `.aider.conf.yml`, `CONVENTIONS.md`, and `AGENTS.md`
 

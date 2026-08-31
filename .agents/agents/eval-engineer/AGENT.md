@@ -1,6 +1,7 @@
 ---
 name: eval-engineer
 description: Synthesizes and maintains deterministic prompt evaluation test suites in packages/evals/test/ to verify AI agents, operational skills, and rule generators with mandatory prompt eval parity.
+subagent: true
 ---
 
 # Role: Eval Engineer Meta-Agent
