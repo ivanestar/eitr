@@ -11,6 +11,10 @@ import {
   renderCsharpTextInput,
   renderCsharpCheckbox,
   renderCsharpNativeSelect,
+  renderCsharpSelect,
+  renderCsharpElement,
+  renderCsharpHeading,
+  renderCsharpFrameContainer,
   renderCsharpLink,
   renderCsharpFileInput,
   renderCsharpRadio,
@@ -58,6 +62,12 @@ export class CsharpAdapter implements LanguageAdapter {
         source: { kind: 'inline', text: renderCsharpBasePage() },
       },
       {
+        path: 'components/FrameContainer.cs',
+        writePolicy: 'regenerate',
+        provenance: { origin: 'base' },
+        source: { kind: 'inline', text: renderCsharpFrameContainer() },
+      },
+      {
         path: 'components/primitives/Button.cs',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
@@ -80,6 +90,24 @@ export class CsharpAdapter implements LanguageAdapter {
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
         source: { kind: 'inline', text: renderCsharpNativeSelect() },
+      },
+      {
+        path: 'components/primitives/Select.cs',
+        writePolicy: 'regenerate',
+        provenance: { origin: 'primitive' },
+        source: { kind: 'inline', text: renderCsharpSelect() },
+      },
+      {
+        path: 'components/primitives/Element.cs',
+        writePolicy: 'regenerate',
+        provenance: { origin: 'primitive' },
+        source: { kind: 'inline', text: renderCsharpElement() },
+      },
+      {
+        path: 'components/primitives/Heading.cs',
+        writePolicy: 'regenerate',
+        provenance: { origin: 'primitive' },
+        source: { kind: 'inline', text: renderCsharpHeading() },
       },
       {
         path: 'components/primitives/Link.cs',

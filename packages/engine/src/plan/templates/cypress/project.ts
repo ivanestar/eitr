@@ -347,6 +347,140 @@ export class NativeSelect extends Component {
 `;
 }
 
+/** components/primitives/select.ts or .js */
+export function renderCypressSelect(isTs: boolean): string {
+  const compImport = isTs ? '../base/component' : '../base/component.js';
+  if (isTs) {
+    return `import { Component } from '${compImport}';
+
+/**
+ * A custom select / combobox whose options render in an overlay (portal) at the
+ * page root rather than inside the trigger's DOM subtree — so the listbox is
+ * resolved from the document root, not from the trigger.
+ *
+ * For a native <select> element, use NativeSelect instead.
+ */
+export class Select extends Component {
+  constructor(
+    selector: string,
+    private readonly listboxSelector: string,
+    private readonly optionSelector: string,
+    private readonly reveal: 'none' | 'click' | 'hover' = 'click',
+    parent?: Component
+  ) {
+    super(selector, parent);
+  }
+
+  open(): Cypress.Chainable<JQuery<HTMLElement>> {
+    if (this.reveal === 'none') {
+      return this.locator();
+    }
+    if (this.reveal === 'hover') {
+      return this.locator().trigger('mouseover');
+    }
+    return this.locator().click();
+  }
+
+  listbox(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.get(this.listboxSelector).last();
+  }
+
+  options(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return this.listbox().find(this.optionSelector);
+  }
+
+  choose(name: string): Cypress.Chainable<JQuery<HTMLElement>> {
+    this.open();
+    return this.options().contains(name).click();
+  }
+}
+`;
+  }
+  return `import { Component } from '${compImport}';
+
+/**
+ * A custom select / combobox whose options render in an overlay (portal) at the
+ * page root rather than inside the trigger's DOM subtree — so the listbox is
+ * resolved from the document root, not from the trigger.
+ *
+ * For a native <select> element, use NativeSelect instead.
+ */
+export class Select extends Component {
+  constructor(selector, listboxSelector, optionSelector, reveal = 'click', parent) {
+    super(selector, parent);
+    this.listboxSelector = listboxSelector;
+    this.optionSelector = optionSelector;
+    this.reveal = reveal;
+  }
+
+  open() {
+    if (this.reveal === 'none') {
+      return this.locator();
+    }
+    if (this.reveal === 'hover') {
+      return this.locator().trigger('mouseover');
+    }
+    return this.locator().click();
+  }
+
+  listbox() {
+    return cy.get(this.listboxSelector).last();
+  }
+
+  options() {
+    return this.listbox().find(this.optionSelector);
+  }
+
+  choose(name) {
+    this.open();
+    return this.options().contains(name).click();
+  }
+}
+`;
+}
+
+/** components/primitives/element.ts or .js */
+export function renderCypressElement(isTs: boolean): string {
+  const compImport = isTs ? '../base/component' : '../base/component.js';
+  if (isTs) {
+    return `import { Component } from '${compImport}';
+
+/**
+ * A generic UI element (e.g. heading, block, container, image, or paragraph).
+ */
+export class Element extends Component {}
+`;
+  }
+  return `import { Component } from '${compImport}';
+
+/**
+ * A generic UI element (e.g. heading, block, container, image, or paragraph).
+ */
+export class Element extends Component {}
+`;
+}
+
+/** components/primitives/heading.ts or .js */
+export function renderCypressHeading(isTs: boolean): string {
+  const compImport = isTs ? '../base/component' : '../base/component.js';
+  if (isTs) {
+    return `import { Component } from '${compImport}';
+
+/**
+ * A semantic heading element (\`<h1>\`-\`<h6>\` or role="heading").
+ */
+export class Heading extends Component {}
+`;
+  }
+  return `import { Component } from '${compImport}';
+
+/**
+ * A semantic heading element (\`<h1>\`-\`<h6>\` or role="heading").
+ */
+export class Heading extends Component {}
+`;
+}
+
 /** components/primitives/link.ts or .js */
 export function renderCypressLink(isTs: boolean): string {
   const compImport = isTs ? '../base/component' : '../base/component.js';
@@ -409,6 +543,9 @@ export * from './text-input${ext}';
 export * from './checkbox${ext}';
 export * from './radio${ext}';
 export * from './native-select${ext}';
+export * from './select${ext}';
+export * from './element${ext}';
+export * from './heading${ext}';
 export * from './link${ext}';
 export * from './file-input${ext}';
 `;

@@ -12,8 +12,8 @@
 
 /** components/__init__.py */
 export function renderPythonComponentsInit(): string {
-  return `from .base import BasePage, Collection, Component, Container, Scope
-from .primitives import Button, Checkbox, FileInput, Link, NativeSelect, RadioButton, RadioGroup, Select, TextInput
+  return `from .base import BasePage, Collection, Component, Container, FrameContainer, Scope
+from .primitives import Button, Checkbox, Element, FileInput, Heading, Link, NativeSelect, RadioButton, RadioGroup, Select, TextInput
 from .widgets import Dialog, Table
 
 __all__ = [
@@ -24,7 +24,10 @@ __all__ = [
     "Component",
     "Container",
     "Dialog",
+    "Element",
     "FileInput",
+    "FrameContainer",
+    "Heading",
     "Link",
     "NativeSelect",
     "RadioButton",
@@ -43,9 +46,10 @@ export function renderPythonBaseInit(): string {
 from .collection import Collection
 from .component import Component
 from .container import Container
+from .frame_container import FrameContainer
 from .scope import Scope
 
-__all__ = ["BasePage", "Collection", "Component", "Container", "Scope"]
+__all__ = ["BasePage", "Collection", "Component", "Container", "FrameContainer", "Scope"]
 `;
 }
 
@@ -194,6 +198,45 @@ class Container(Component):
 `;
 }
 
+/** components/base/frame_container.py */
+export function renderPythonFrameContainer(): string {
+  return `"""FrameContainer — a container representing an embedded iframe."""
+from __future__ import annotations
+
+from typing import Type, TypeVar, Union
+
+from playwright.sync_api import FrameLocator, Locator, Page
+
+from .component import Component
+from .collection import Collection
+
+T = TypeVar("T", bound=Component)
+
+
+class FrameContainer(Component):
+    """
+    A container representing an embedded iframe.
+    Encapsulates the FrameLocator and provides child/list scoping within that frame.
+    """
+
+    def __init__(self, scope: Union[Page, Locator], selector: str) -> None:
+        if not hasattr(scope, "frame_locator"):
+            raise TypeError("FrameContainer requires a scope supporting frame_locator")
+        super().__init__(scope.locator(selector))
+        self.frame: FrameLocator = scope.frame_locator(selector)
+
+    # ── Producers ────────────────────────────────────────────────────────────
+
+    def _child_in_frame(self, cls: Type[T], selector: str) -> T:
+        """Declare a child component inside this iframe."""
+        return cls(self.frame.locator(selector))
+
+    def _list_in_frame(self, cls: Type[T], selector: str) -> Collection[T]:
+        """Declare a collection of components inside this iframe."""
+        return Collection(cls, self.frame.locator(selector))
+`;
+}
+
 /** components/base/collection.py */
 export function renderPythonCollection(): string {
   return `"""Collection — an ordered, iterable sequence of homogeneous components."""
@@ -327,7 +370,9 @@ class BasePage(Scope):
 export function renderPythonPrimitivesInit(): string {
   return `from .button import Button
 from .checkbox import Checkbox
+from .element import Element
 from .file_input import FileInput
+from .heading import Heading
 from .link import Link
 from .native_select import NativeSelect
 from .radio import RadioButton, RadioGroup
@@ -337,7 +382,9 @@ from .text_input import TextInput
 __all__ = [
     "Button",
     "Checkbox",
+    "Element",
     "FileInput",
+    "Heading",
     "Link",
     "NativeSelect",
     "RadioButton",
@@ -430,36 +477,69 @@ class Checkbox(Component):
 
 /** components/primitives/select.py */
 export function renderPythonSelect(): string {
-  return `"""Select — a native <select> dropdown element."""
+  return `"""Select — a custom select / combobox whose listbox renders in an overlay."""
 from __future__ import annotations
 
-from typing import Optional
+from playwright.sync_api import Locator
 
 from ..base.component import Component
+from ..base.collection import Collection
+
+
+class Option(Component):
+    """A single option within a Select's listbox."""
 
 
 class Select(Component):
     """
-    Wraps a native HTML <select> element.
-    For custom UI-library dropdowns, extend Container and use locator-based actions.
+    A custom select / combobox whose options render in an overlay (portal) at the
+    page root rather than inside the trigger's DOM subtree — so the listbox is
+    resolved from the page, not from the trigger.
+
+    For a native <select> element, use NativeSelect instead.
     """
+
+    def __init__(
+        self,
+        trigger: Locator,
+        listbox: str,
+        option: str,
+        reveal: str = "click",
+    ) -> None:
+        super().__init__(trigger)
+        self._listbox_selector = listbox
+        self._option_selector = option
+        self._reveal = reveal
 
     # ── Actions ─────────────────────────────────────────────────────────────
 
-    def select_option(
-        self,
-        value: Optional[str] = None,
-        label: Optional[str] = None,
-        index: Optional[int] = None,
-    ) -> None:
-        """Select an option by value, visible label, or zero-based index."""
-        self._root.select_option(value=value, label=label, index=index)
+    def open(self) -> None:
+        """Open the dropdown (skipped if reveal is 'none')."""
+        if self._reveal == "none":
+            return
+        if self._reveal == "hover":
+            self._root.hover()
+        else:
+            self._root.click()
 
-    # ── Snapshot reads ───────────────────────────────────────────────────────
+    def choose(self, name: str) -> None:
+        """Open the dropdown and click the first option matching *name*."""
+        self.open()
+        self.options().filter(has_text=name).first.click()
 
-    def value_now(self) -> str:
-        """Return the currently selected option value."""
-        return self._root.input_value()
+    # ── Producers ────────────────────────────────────────────────────────────
+
+    def listbox(self) -> Locator:
+        """The listbox overlay, resolved from the page root (topmost via .last)."""
+        return self._root.page.locator(self._listbox_selector).last
+
+    def options(self) -> Locator:
+        """The options within the (opened) listbox."""
+        return self.listbox().locator(self._option_selector)
+
+    def option_items(self) -> Collection[Option]:
+        """The options within the (opened) listbox, as a typed Collection."""
+        return Collection(Option, self.options())
 `;
 }
 
@@ -499,6 +579,32 @@ class NativeSelect(Component):
     def value_now(self) -> str:
         """Return the currently selected option value."""
         return self._root.input_value()
+`;
+}
+
+/** components/primitives/element.py */
+export function renderPythonElement(): string {
+  return `"""Element — a generic UI element."""
+from __future__ import annotations
+
+from ..base.component import Component
+
+
+class Element(Component):
+    """A generic UI element (e.g. heading, block, container, image, or paragraph)."""
+`;
+}
+
+/** components/primitives/heading.py */
+export function renderPythonHeading(): string {
+  return `"""Heading — a semantic heading element."""
+from __future__ import annotations
+
+from ..base.component import Component
+
+
+class Heading(Component):
+    """A semantic heading element (<h1>-<h6> or role='heading')."""
 `;
 }
 

@@ -273,6 +273,123 @@ public class NativeSelect : Component
 `;
 }
 
+export function renderCsharpSelect(): string {
+  return `using Microsoft.Playwright;
+
+namespace Components.Primitives;
+
+/// <summary>
+/// A custom select / combobox whose options render in an overlay (portal) at the
+/// page root rather than inside the trigger's DOM subtree — so the listbox is
+/// resolved from the page, not from the trigger.
+///
+/// For a native &lt;select&gt; element, use NativeSelect instead.
+/// </summary>
+public class Select : Component
+{
+    private readonly string _listboxSelector;
+    private readonly string _optionSelector;
+    private readonly string _reveal;
+
+    public Select(ILocator trigger, string listboxSelector, string optionSelector, string reveal = "click")
+        : base(trigger)
+    {
+        _listboxSelector = listboxSelector;
+        _optionSelector = optionSelector;
+        _reveal = reveal;
+    }
+
+    public async Task OpenAsync()
+    {
+        if (_reveal == "none")
+        {
+            return;
+        }
+        if (_reveal == "hover")
+        {
+            await Locator.HoverAsync();
+        }
+        else
+        {
+            await Locator.ClickAsync();
+        }
+    }
+
+    public ILocator Listbox() => Locator.Page.Locator(_listboxSelector).Last;
+
+    public ILocator Options() => Listbox().Locator(_optionSelector);
+
+    public async Task ChooseAsync(string name)
+    {
+        await OpenAsync();
+        await Options().Filter(new() { HasText = name }).First.ClickAsync();
+    }
+}
+`;
+}
+
+export function renderCsharpElement(): string {
+  return `using Microsoft.Playwright;
+
+namespace Components.Primitives;
+
+/// <summary>
+/// A generic UI element (e.g. heading, block, container, image, or paragraph).
+/// </summary>
+public class Element : Component
+{
+    public Element(ILocator locator) : base(locator) { }
+}
+`;
+}
+
+export function renderCsharpHeading(): string {
+  return `using Microsoft.Playwright;
+
+namespace Components.Primitives;
+
+/// <summary>
+/// A semantic heading element (&lt;h1&gt;-&lt;h6&gt; or role="heading").
+/// </summary>
+public class Heading : Component
+{
+    public Heading(ILocator locator) : base(locator) { }
+}
+`;
+}
+
+export function renderCsharpFrameContainer(): string {
+  return `using System;
+using Microsoft.Playwright;
+
+namespace Components;
+
+/// <summary>
+/// A container representing an embedded iframe.
+/// Encapsulates the IFrameLocator and provides child/list scoping within that frame.
+/// </summary>
+public class FrameContainer : Component
+{
+    public IFrameLocator Frame { get; }
+
+    public FrameContainer(ILocator scope, string selector) : base(scope.Locator(selector))
+    {
+        Frame = scope.FrameLocator(selector);
+    }
+
+    public T ChildInFrame<T>(string selector) where T : Scope
+    {
+        return (T)Activator.CreateInstance(typeof(T), Frame.Locator(selector))!;
+    }
+
+    public Collection<T> ListInFrame<T>(string selector) where T : Scope
+    {
+        return new Collection<T>(Frame.Locator(selector));
+    }
+}
+`;
+}
+
 export function renderCsharpLink(): string {
   return `using Microsoft.Playwright;
 
