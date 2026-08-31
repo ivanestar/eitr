@@ -10,6 +10,7 @@ import {
   renderTeamcityInstructions,
   renderTeamcityKotlinDsl,
   renderTeamcityDslPom,
+  renderDependabotConfig,
 } from './templates/cicd.js';
 import { planMcpServer } from './templates/mcp-server.js';
 import { planMcpConfigs } from './templates/mcp-configs.js';
@@ -246,6 +247,17 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderGithubActions(opts.language, opts.automationTool) },
     });
+    if (opts.language === 'java') {
+      files.push({
+        path: '.github/dependabot.yml',
+        writePolicy: 'create-if-absent',
+        provenance: { origin: 'project' },
+        source: {
+          kind: 'inline',
+          text: renderDependabotConfig(opts.language, opts.automationTool),
+        },
+      });
+    }
   } else if (ciCd === 'gitlab') {
     files.push({
       path: '.gitlab-ci.yml',

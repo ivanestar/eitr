@@ -259,7 +259,8 @@ function handleToolsList() {
             comment: { type: 'string', description: 'Execution log or failure summary' },
             durationMs: { type: 'number', description: 'Execution duration in milliseconds' },
             testExecutionKey: { type: 'string', description: 'Xray Test Execution issue key (Xray only; falls back to XRAY_TEST_EXECUTION_KEY env var)' },
-            testPointId: { type: 'string', description: 'Azure DevOps test point id (ADO only; falls back to AZURE_DEVOPS_TEST_POINT_ID env var)' }
+            testPointId: { type: 'string', description: 'Azure DevOps test point id (ADO only; falls back to AZURE_DEVOPS_TEST_POINT_ID env var)' },
+            attachments: { type: 'array', items: { type: 'string' }, description: 'Optional local file paths to upload as attachments/evidence after a successful result post. Per-file upload success/failure is reported back in the response.' }
           },
           required: ['caseId', 'status']
         }
@@ -333,7 +334,11 @@ function handleToolsList() {
     }
   }
 
-  return { tools };
+  // resultType: 'complete' is required on all results per spec 2026-07-28. ttlMs/cacheScope
+  // (CacheableResult) are required on list-endpoints specifically - a static conservative value
+  // is safe here since the tool list is fixed per-process (depends only on process-start-time
+  // env vars, never mutated afterward).
+  return { tools, resultType: 'complete', ttlMs: 60000, cacheScope: 'session' };
 }
 
 async function handleToolCall(name, args) {
@@ -440,6 +445,14 @@ process.stdin.on('data', async (chunk) => {
 
       const requestedVersion = req.params && req.params._meta &&
         req.params._meta['io.modelcontextprotocol/protocolVersion'];
+      // Read-and-log only: no capability-gated behavior varies today based on
+      // clientCapabilities/clientInfo. This is intentional (not a fabricated feature) - just
+      // observability for future per-client behavior differentiation. Parse-tolerant of absence.
+      const clientCapabilities = req.params && req.params._meta && req.params._meta.clientCapabilities;
+      const clientInfo = req.params && req.params._meta && req.params._meta.clientInfo;
+      if (clientCapabilities || clientInfo) {
+        logDebug(\`Client _meta: \${JSON.stringify({ clientCapabilities, clientInfo })}\`);
+      }
 
       if (req.method === 'initialize') {
         // Legacy handshake path (protocol revisions 2025-11-25 and earlier).
@@ -480,7 +493,7 @@ process.stdin.on('data', async (chunk) => {
         sendResponse({ jsonrpc: '2.0', id: req.id, result: handleToolsList() });
       } else if (req.method === 'tools/call') {
         const result = await handleToolCall(req.params.name, req.params.arguments || {});
-        sendResponse({ jsonrpc: '2.0', id: req.id, result });
+        sendResponse({ jsonrpc: '2.0', id: req.id, result: { ...result, resultType: 'complete' } });
       } else if (req.id) {
         sendResponse({ jsonrpc: '2.0', id: req.id, result: {} });
       }
@@ -492,7 +505,27 @@ process.stdin.on('data', async (chunk) => {
 `;
 
   const adaptersCode = `// Universal Multi-TMS Adapter implementations
-import { httpGet, httpPost, httpPut, httpPatch, httpDelete } from './http.js';
+import { httpGet, httpPost, httpPut, httpPatch, httpDelete, httpPostMultipart } from './http.js';
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
+
+// Shared attachment-upload runner: given an optional list of local file paths and a per-file
+// uploader callback, returns null when no attachments were requested (today's default -
+// zero-config behavior is unchanged), or an array of per-file { file, success, error? } results.
+// A failed individual upload does not fail the overall postTestResult call - the status post
+// already succeeded by the time attachments are attempted.
+async function uploadAttachmentsIfAny(paths, uploaderFn) {
+  if (!paths || !Array.isArray(paths) || paths.length === 0) return null;
+  const results = [];
+  for (const filePath of paths) {
+    try {
+      results.push(await uploaderFn(filePath));
+    } catch (err) {
+      results.push({ file: filePath, success: false, error: err.message });
+    }
+  }
+  return results;
+}
 
 // Flattens an Atlassian Document Format (ADF) rich-text node (what Jira REST v3 returns for
 // description/comment fields) into plain text. Falls back to the value itself if it's already
@@ -725,7 +758,24 @@ export function getAdapter(provider) {
         }];
         const res = await httpPost(url, body, { Authorization: authHeader });
         if (res.status !== 200 && res.status !== 201) return { success: false, error: \`Azure DevOps API error: \${res.status}\` };
-        return { success: true, id: args.caseId, status: args.status };
+        const resultId = res.data && Array.isArray(res.data.value) && res.data.value[0] && res.data.value[0].id;
+        const attachments = await uploadAttachmentsIfAny(args.attachments, async (filePath) => {
+          if (!resultId) return { file: filePath, success: false, error: 'No test result id returned from Azure DevOps to attach to' };
+          let fileBuf;
+          try { fileBuf = readFileSync(filePath); } catch (e) { return { file: filePath, success: false, error: e.message }; }
+          // Azure DevOps attachments use a JSON body with a base64 'stream' field, not multipart.
+          const attUrl = \`https://dev.azure.com/\${org}/\${project}/_apis/test/Runs/\${runId}/Results/\${resultId}/attachments?api-version=7.1\`;
+          const attBody = {
+            stream: fileBuf.toString('base64'),
+            fileName: basename(filePath),
+            comment: 'Attached by automated test execution',
+            attachmentType: 'GeneralAttachment'
+          };
+          const upRes = await httpPost(attUrl, attBody, { Authorization: authHeader });
+          const ok = upRes.status === 200 || upRes.status === 201;
+          return { file: filePath, success: ok, ...(ok ? {} : { error: \`Azure DevOps attachment error: \${upRes.status}\` }) };
+        });
+        return { success: true, id: args.caseId, status: args.status, ...(attachments ? { attachments } : {}) };
       },
       async searchIssues(query, maxResults) {
         const org = process.env.AZURE_DEVOPS_ORG;
@@ -827,11 +877,29 @@ export function getAdapter(provider) {
           return { error: 'Missing TestRail environment variables (TESTRAIL_HOST/USERNAME/API_KEY/PROJECT_ID)' };
         }
         const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
-        const url = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/get_cases/\${projectId}&section_id=\${suiteId}\`;
-        const res = await httpGet(url, { Authorization: authHeader });
-        if (res.status !== 200) return { error: \`TestRail API error: \${res.status}\` };
-        const cases = Array.isArray(res.data) ? res.data : res.data.cases || [];
-        return { suiteId, cases: cases.map((c) => ({ id: \`C\${c.id}\`, title: c.title || '' })) };
+        // Real pagination: TestRail hard-caps get_cases at 250 records/page and silently
+        // truncates a single unpaginated call. Loop offset until a short page comes back,
+        // capped at 10 pages / 2500 records total - if the cap is hit, report truncated: true
+        // rather than looping unbounded.
+        const pageSize = 250;
+        let offset = 0;
+        let allCases = [];
+        let truncated = false;
+        for (let page = 0; page < 10; page++) {
+          const url = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/get_cases/\${projectId}&section_id=\${suiteId}&limit=\${pageSize}&offset=\${offset}\`;
+          const res = await httpGet(url, { Authorization: authHeader });
+          if (res.status !== 200) return { error: \`TestRail API error: \${res.status}\` };
+          const pageCases = Array.isArray(res.data) ? res.data : res.data.cases || [];
+          allCases = allCases.concat(pageCases);
+          if (pageCases.length < pageSize) break;
+          offset += pageSize;
+          if (page === 9) truncated = true;
+        }
+        return {
+          suiteId,
+          cases: allCases.map((c) => ({ id: \`C\${c.id}\`, title: c.title || '' })),
+          ...(truncated ? { truncated: true } : {})
+        };
       },
       async listTestPlans(query, maxResults) {
         const host = process.env.TESTRAIL_HOST;
@@ -842,11 +910,26 @@ export function getAdapter(provider) {
           return { error: 'Missing TestRail environment variables (TESTRAIL_HOST/USERNAME/API_KEY/PROJECT_ID)' };
         }
         const authHeader = 'Basic ' + Buffer.from(\`\${user}:\${key}\`).toString('base64');
-        const url = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/get_plans/\${projectId}\`;
-        const res = await httpGet(url, { Authorization: authHeader });
-        if (res.status !== 200) return { error: \`TestRail API error: \${res.status}\` };
-        const plans = Array.isArray(res.data) ? res.data : res.data.plans || [];
-        return { results: plans.slice(0, maxResults || 25).map((p) => ({ id: String(p.id), name: p.name || '' })) };
+        // Same real-pagination guard as getSuiteCases above - get_plans is subject to the same
+        // silent 250-record page cap.
+        const pageSize = 250;
+        let offset = 0;
+        let allPlans = [];
+        let truncated = false;
+        for (let page = 0; page < 10; page++) {
+          const url = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/get_plans/\${projectId}&limit=\${pageSize}&offset=\${offset}\`;
+          const res = await httpGet(url, { Authorization: authHeader });
+          if (res.status !== 200) return { error: \`TestRail API error: \${res.status}\` };
+          const pagePlans = Array.isArray(res.data) ? res.data : res.data.plans || [];
+          allPlans = allPlans.concat(pagePlans);
+          if (pagePlans.length < pageSize || allPlans.length >= (maxResults || 25)) break;
+          offset += pageSize;
+          if (page === 9) truncated = true;
+        }
+        return {
+          results: allPlans.slice(0, maxResults || 25).map((p) => ({ id: String(p.id), name: p.name || '' })),
+          ...(truncated ? { truncated: true } : {})
+        };
       },
       async createTestRun(fields) {
         const host = process.env.TESTRAIL_HOST;
@@ -884,7 +967,14 @@ export function getAdapter(provider) {
         };
         const res = await httpPost(url, body, { Authorization: authHeader });
         if (res.status !== 200) return { success: false, error: \`TestRail API error: \${res.status}\` };
-        return { success: true, id: args.caseId, status: args.status };
+        const resultId = res.data && res.data.id;
+        const attachments = await uploadAttachmentsIfAny(args.attachments, async (filePath) => {
+          if (!resultId) return { file: filePath, success: false, error: 'No result id returned from TestRail to attach to' };
+          const uploadUrl = \`\${host.replace(/\\/+$/, '')}/index.php?/api/v2/add_attachment_to_result/\${resultId}\`;
+          const upRes = await httpPostMultipart(uploadUrl, filePath, 'attachment', {}, { Authorization: authHeader });
+          return { file: filePath, success: upRes.status === 200, ...(upRes.status === 200 ? {} : { error: \`TestRail attachment error: \${upRes.status}\` }) };
+        });
+        return { success: true, id: args.caseId, status: args.status, ...(attachments ? { attachments } : {}) };
       },
       async searchIssues(query, maxResults) {
         const host = process.env.TESTRAIL_HOST;
@@ -1120,7 +1210,22 @@ export function getAdapter(provider) {
         if (mutateRes.status !== 200 || (mutateRes.data && mutateRes.data.errors)) {
           return { success: false, error: \`Xray Cloud: updateTestRunStatus failed (\${mutateRes.status})\` };
         }
-        return { success: true, id: args.caseId, status: args.status };
+        // Evidence/attachments: Xray Cloud's addEvidenceToTestRun GraphQL mutation (base64 file
+        // data) — not independently re-verified live (docs.getxray.app blocked automated
+        // fetches during development); implemented from prior documented knowledge of the Xray
+        // Cloud GraphQL evidence surface. Verify against a live Xray Cloud account before
+        // depending on this in production.
+        const attachments = await uploadAttachmentsIfAny(args.attachments, async (filePath) => {
+          let fileBuf;
+          try { fileBuf = readFileSync(filePath); } catch (e) { return { file: filePath, success: false, error: e.message }; }
+          const b64 = fileBuf.toString('base64');
+          const fname = gqlEscape(basename(filePath));
+          const mutation = \`mutation { addEvidenceToTestRun(id: "\${testRunId}", evidence: [{filename: "\${fname}", mimeType: "application/octet-stream", data: "\${b64}"}]) { addedEvidence { id } warnings } }\`;
+          const upRes = await xrayCloudGraphql(token, mutation);
+          const ok = upRes.status === 200 && !(upRes.data && upRes.data.errors);
+          return { file: filePath, success: ok, ...(ok ? {} : { error: \`Xray Cloud: addEvidenceToTestRun failed (\${upRes.status})\` }) };
+        });
+        return { success: true, id: args.caseId, status: args.status, ...(attachments ? { attachments } : {}) };
       },
       ...createJiraIssueCrud()
     };
@@ -1207,7 +1312,15 @@ export function getAdapter(provider) {
           comment: args.comment || ''
         }, { Authorization: \`Bearer \${token}\` });
         if (res.status !== 200 && res.status !== 201) return { success: false, error: \`Zephyr Scale API error: \${res.status}\` };
-        return { success: true, id: args.caseId, status: args.status };
+        const executionRef = res.data && (res.data.key || res.data.id);
+        const attachments = await uploadAttachmentsIfAny(args.attachments, async (filePath) => {
+          if (!executionRef) return { file: filePath, success: false, error: 'No test execution id/key returned from Zephyr Scale to attach to' };
+          const uploadUrl = \`\${baseUrl.replace(/\\/+$/, '')}/testexecutions/\${executionRef}/attachments\`;
+          const upRes = await httpPostMultipart(uploadUrl, filePath, 'file', {}, { Authorization: \`Bearer \${token}\` });
+          const ok = upRes.status === 200 || upRes.status === 201;
+          return { file: filePath, success: ok, ...(ok ? {} : { error: \`Zephyr Scale attachment error: \${upRes.status}\` }) };
+        });
+        return { success: true, id: args.caseId, status: args.status, ...(attachments ? { attachments } : {}) };
       },
       async searchIssues(query, maxResults) {
         const token = process.env.ZEPHYR_API_TOKEN;
@@ -1285,6 +1398,8 @@ export function getAdapter(provider) {
 import https from 'node:https';
 import http from 'node:http';
 import { URL } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 // Default timeout is deliberately generous (not the more typical 10s) because at least one real
 // provider endpoint (Xray Cloud's POST /authenticate) has been observed taking ~40s to respond in
@@ -1297,14 +1412,16 @@ function httpRequest(method, urlStr, body, headers = {}, timeoutMs = DEFAULT_TIM
     try {
       const u = new URL(urlStr);
       const client = u.protocol === 'https:' ? https : http;
-      const dataStr = body !== undefined && body !== null ? (typeof body === 'string' ? body : JSON.stringify(body)) : null;
+      const isBuffer = Buffer.isBuffer(body);
+      const dataStr = body !== undefined && body !== null ? (isBuffer ? body : (typeof body === 'string' ? body : JSON.stringify(body))) : null;
       const opts = {
         hostname: u.hostname,
         port: u.port || (u.protocol === 'https:' ? 443 : 80),
         path: u.pathname + u.search,
         method,
         headers: {
-          ...(dataStr ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(dataStr) } : {}),
+          ...(dataStr ? { 'Content-Length': Buffer.byteLength(dataStr) } : {}),
+          ...(dataStr && !isBuffer ? { 'Content-Type': 'application/json' } : {}),
           'User-Agent': 'TMS-Bridge/1.0',
           ...headers,
         },
@@ -1336,6 +1453,30 @@ export function httpPost(urlStr, body, headers = {}, timeoutMs) { return httpReq
 export function httpPut(urlStr, body, headers = {}, timeoutMs) { return httpRequest('PUT', urlStr, body, headers, timeoutMs); }
 export function httpPatch(urlStr, body, headers = {}, timeoutMs) { return httpRequest('PATCH', urlStr, body, headers, timeoutMs); }
 export function httpDelete(urlStr, headers = {}, timeoutMs) { return httpRequest('DELETE', urlStr, null, headers, timeoutMs); }
+
+// Multipart/form-data upload, built with Node built-ins only (no external deps). Used for the
+// attachment/evidence endpoints of TMS providers that require multipart uploads (TestRail,
+// Zephyr Scale) rather than a JSON-with-base64-stream body (Azure DevOps uses the latter, via
+// plain httpPost).
+export function httpPostMultipart(urlStr, filePath, fieldName = 'attachment', extraFields = {}, headers = {}, timeoutMs) {
+  let fileBuf;
+  try {
+    fileBuf = readFileSync(filePath);
+  } catch (e) {
+    return Promise.resolve({ status: 0, error: \`Cannot read file "\${filePath}": \${e.message}\` });
+  }
+  const boundary = \`----FormBoundary\${Date.now().toString(16)}\${Math.random().toString(16).slice(2)}\`;
+  const fileName = basename(filePath);
+  const parts = [];
+  for (const [key, value] of Object.entries(extraFields)) {
+    parts.push(Buffer.from(\`--\${boundary}\\r\\nContent-Disposition: form-data; name="\${key}"\\r\\n\\r\\n\${value}\\r\\n\`));
+  }
+  parts.push(Buffer.from(\`--\${boundary}\\r\\nContent-Disposition: form-data; name="\${fieldName}"; filename="\${fileName}"\\r\\nContent-Type: application/octet-stream\\r\\n\\r\\n\`));
+  parts.push(fileBuf);
+  parts.push(Buffer.from(\`\\r\\n--\${boundary}--\\r\\n\`));
+  const body = Buffer.concat(parts);
+  return httpRequest('POST', urlStr, body, { ...headers, 'Content-Type': \`multipart/form-data; boundary=\${boundary}\` }, timeoutMs);
+}
 `;
 
   return [
