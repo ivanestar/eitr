@@ -22,3 +22,10 @@ is for gaps significant enough to shape future architecture, not routine finding
 - **Requirements → test-case generation:** an agent that derives test cases from live application
   analysis or existing requirements documentation, rather than from an already-written TMS ticket,
   is a considered future extension (see the README's Introduction) but not yet built.
+- **No CI test sharding for Java or C#:** TS/JS (Playwright's native `--shard`) and Python
+  (`pytest-split`) shard 4-way across all 4 generated CI systems. Java (Maven Surefire/Gradle +
+  JUnit 5) and C# (NUnit) deliberately do not, and won't gain a hand-rolled EITR-authored splitter
+  either - neither ecosystem ships a free, official automatic-balanced-split mechanism (only manual
+  tag/category filtering with no auto-balancing; the one real automatic option, Gradle Develocity
+  Test Distribution, is a paid product, out of place in a free/OSS scaffolder). Re-open only if one
+  of these ecosystems ships a free official equivalent to `pytest-split`/`--shard`.

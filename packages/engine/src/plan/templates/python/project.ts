@@ -45,6 +45,7 @@ dependencies = [
     "pytest-playwright>=0.5.0",
     "pytest-html>=4.1.1",
     "pytest-rerunfailures>=14.0",
+    "pytest-split>=0.11.0",
 ]
 
 [project.optional-dependencies]
