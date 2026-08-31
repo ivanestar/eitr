@@ -97,6 +97,40 @@ future integration starts from current API shape, not stale assumptions. A break
 new capability in any of these is exactly as load-bearing for EITR as an AI-provider change - the
 generated output is only as current as this research is.
 
+### Also mandatory: the standing source list (check every session, regardless of what fresh search surfaces)
+
+The sources below were found valuable enough in past sessions (2026-08-30) that they are now a
+permanent, minimum check-list — re-visit each for anything new since the last session, on top of
+whatever new sources that session's own open-ended search turns up. Never treat this list as a
+substitute for fresh search; it's a floor, not a ceiling.
+
+- **AI-provider changelogs:** `releasebot.io/updates/anthropic` (Anthropic — mandatory per the
+  provider-changelog rule above), `developers.openai.com/api/docs/changelog` (OpenAI),
+  `www.verdent.ai/guides/grok-for-coding-2026` (xAI Grok Build),
+  `developers.googleblog.com` Gemini/Antigravity CLI posts (Google),
+  `blog.modelcontextprotocol.io` (MCP spec itself).
+- **Agentic QA / industry-architecture vendor content:**
+  `testquality.com/agentic-qa-architecture-autonomous-testing-2026`,
+  `katalon.com/resources-center/blog/what-is-agentic-qa-the-complete-guide-for-2026`.
+- **ISTQB standards:** `istqb.org/istqb-releases-certified-tester-ai-testing-ct-ai-syllabus-version-2-0`
+  and `istqb.org/certifications/gen-ai` (CT-GenAI syllabus updates specifically, not CT-AI).
+- **Context engineering:** `sourcegraph.com/blog/context-engineering`,
+  `www.reactify-solutions.com/articles/context-engineering-ai-agents-2026`.
+- **MCP ecosystem overview:** `www.getknit.dev/blog/the-guide-to-the-mcp-ecosystem`.
+- **Brownfield/migration practice:** `www.pcloudy.com/blogs/migrating-from-selenium-to-ai-agents`
+  (read for legacy-signal-extraction technique, not as an adoption-path model EITR wants — see
+  `decisions/0001`).
+- **RTM/traceability automation:** `www.testmax.ai/blog/requirements-traceability-matrix-automation`.
+- **Practitioner war-stories (Habr):** `habr.com/ru/articles/1074676` (agents fixing the test
+  instead of the defect, over-mocking pitfalls, RED/GREEN tool gating) and
+  `habr.com/ru/articles/1019656` (11-agent QA exoskeleton — JSON-scenario source of truth,
+  ISTQB-technique scenario generation, context-decomposition). Re-check the authors'
+  Habr profiles/blog indices for newer posts in the same vein, not just the two original URLs.
+- **Playwright ecosystem specifically:** `qaskills.sh/blog/whats-new-playwright-2026`.
+- **OSS agentic-browser pattern scan (ideas only, never code):**
+  `github.com/browserbase/stagehand` (MIT), `github.com/Skyvern-AI/skyvern` (AGPL-3.0),
+  `www.mindstudio.ai/blog/best-open-source-llms-agentic-coding-2026`.
+
 ## The SDET day-1 flow matrix
 
 Think through onboarding to a project as three largely-independent axes, not one linear path:
