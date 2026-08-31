@@ -1,6 +1,8 @@
 ---
 name: test-writer
 description: Meta-agent for immediate automated test synthesis. Enforces test-after-feature protocol, zero-config default verification, and negative boundary batteries.
+tools: Read, Write, Edit, Grep, Glob, PowerShell
+model: haiku
 ---
 
 # Test Writer Meta-Agent

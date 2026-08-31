@@ -1,6 +1,7 @@
 ---
 name: qa-guard
 description: Quality Assurance protocol for EITR. Enforces full-cycle E2E test execution, artifact inspection, and test-driven bug fixing to ensure 0 failing tests in generator solutions.
+subagent: true
 ---
 
 # Eitr QA Guard Skill

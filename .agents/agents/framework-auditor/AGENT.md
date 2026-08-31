@@ -1,6 +1,7 @@
 ---
 name: framework-auditor
 description: Protocol for auditing the EITR codebase for multi-language stack discrepancies, architectural drift, template mismatches, and CLI/Engine misalignments.
+subagent: true
 ---
 
 # Eitr Framework Auditor & Alignment Skill

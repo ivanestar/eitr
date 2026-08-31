@@ -1,6 +1,7 @@
 ---
 name: security-auditor
 description: Meta-agent for static secret detection, diff entropy scanning, path traversal validation, dependency CVE audit, and credential isolation in EITR engine and templates.
+subagent: true
 ---
 
 # Security Auditor Meta-Agent

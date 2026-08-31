@@ -1,6 +1,8 @@
 ---
 name: innovation-brainstormer
 description: Skill for generating ideas with >300% ROI for EITR, providing exact metrics, exactly 2 risks per idea, and exactly 1 mitigation strategy per risk.
+tools: Read, Grep, Glob
+model: sonnet
 ---
 
 # Eitr Innovation & High-ROI Brainstormer Skill

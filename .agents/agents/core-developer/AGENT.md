@@ -1,6 +1,7 @@
 ---
 name: core-developer
 description: Core development protocol for the EITR engine containing 4 explicit workflows and constraints for modifying AST/templates and CLI files.
+subagent: true
 ---
 
 # Eitr Core Developer Skill

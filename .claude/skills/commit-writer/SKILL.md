@@ -1,6 +1,6 @@
 ---
 name: commit-writer
-description: Rules and guidelines for structuring and formatting Git commits in the EITR repository.
+description: Rules and guidelines for structuring and formatting Git commits in the EITR repository, covering Conventional Commits scoping, deterministic body triggers, and the mandatory 23:00 OpSec timestamp policy. Trigger on requests like "write a commit message", "commit this", "как закоммитить", "напиши commit message".
 ---
 
 # Commit Writer Guidelines

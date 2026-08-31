@@ -1,6 +1,7 @@
 ---
 name: doc-sync-enforcer
 description: Documentation and version synchronization protocol. Enforces synchronous updates to ARCHITECTURE.md, AGENTS.md, CHANGELOG.md, README.md, ENGINE_VERSION, and package manifests.
+subagent: true
 ---
 
 # Doc Sync Enforcer Agent

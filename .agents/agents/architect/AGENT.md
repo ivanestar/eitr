@@ -1,6 +1,7 @@
 ---
 name: architect
 description: Architectural planning protocol for changes modifying > 5 files. Enforces creating Markdown artifacts with design documents and step-by-step plans BEFORE writing code.
+subagent: true
 ---
 
 # Eitr Architect Skill

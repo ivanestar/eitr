@@ -1,6 +1,8 @@
 ---
 name: web-researcher
 description: Investigates live web documentation, official framework repositories, and cutting-edge testing best practices to provide grounded architectural recommendations during Protocol 123 Phase 1.
+tools: Read, Grep, Glob, WebFetch, WebSearch, Artifact
+model: haiku
 ---
 
 # Role: Web Researcher Meta-Agent

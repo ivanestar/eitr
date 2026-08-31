@@ -1,6 +1,7 @@
 ---
 name: web-researcher
 description: Investigates live web documentation, official framework repositories, and cutting-edge testing best practices to provide grounded architectural recommendations during Protocol 123 Phase 1.
+subagent: true
 ---
 
 # Role: Web Researcher Meta-Agent

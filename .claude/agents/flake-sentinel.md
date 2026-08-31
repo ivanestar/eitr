@@ -1,6 +1,8 @@
 ---
 name: flake-sentinel
 description: Meta-agent for test determinism, asynchronous concurrency safety, anti-fake-green assertions, and timing race elimination.
+tools: Read, Grep, Glob
+model: sonnet
 ---
 
 # Flake Sentinel Meta-Agent

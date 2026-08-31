@@ -1,6 +1,8 @@
 ---
 name: eval-engineer
 description: Synthesizes and maintains deterministic prompt evaluation test suites in packages/evals/test/ to verify AI agents, operational skills, and rule generators with mandatory prompt eval parity.
+tools: Read, Write, Edit, Grep, Glob, PowerShell
+model: sonnet
 ---
 
 # Role: Eval Engineer Meta-Agent
