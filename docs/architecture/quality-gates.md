@@ -4,31 +4,77 @@ Part of [EITR Architecture](README.md).
 
 ## Static CPOM contract linter
 
-`scripts/lint-cpom.js` (`npm run lint:cpom`), emitted into every generated TS/JS project, is a
-zero-dependency static audit that runs in under a second, before any browser launches:
+Every generated project ships a zero-dependency static CPOM auditor - no pip/npm/NuGet/Maven
+package install, no network access, runs in under a second before any browser launches. The
+concrete implementation is per-language, each at a rigor tier matched to what a single-file,
+zero-dependency script can reasonably check in that language:
 
-1. **Zero arbitrary delays** - no `sleep()`, `setTimeout()`, `page.waitForTimeout()`.
-2. **Mandatory `Now()` suffix** on every point-in-time state reader in `components/`.
-3. **Zero assertions in components** - no `expect(...)` inside Component/Page-Object classes.
-4. **Unawaited-promise guard** - rejects `expect(locator.isVisible()).toBeTruthy()`-shaped
-   assertions in test specs.
-5. **Fixture dependency injection** - rejects raw `new PageObject(page)` in test specs.
+| Language                      | Script                                                                                | Mechanism                                 | Rules                       |
+| ----------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------- |
+| TypeScript/JavaScript/Cypress | `scripts/lint-cpom.js` (`npm run lint:cpom`)                                          | line-by-line regex scan                   | 1-5, all real               |
+| Python                        | `scripts/lint_cpom.py`                                                                | real AST (`ast.NodeVisitor`, stdlib only) | 1-3 real, 4 N/A, 5 deferred |
+| Java                          | `scripts/LintCpom.java` (JDK single-file source-launch, `java scripts/LintCpom.java`) | line-by-line scan                         | 1-5, all real               |
+| C#                            | `scripts/LintCpom.cs` (.NET file-based apps, `dotnet run --file scripts/LintCpom.cs`) | line-by-line scan                         | 1-5, all real               |
 
-`eslint.config.js` (`npm run lint:eslint`, `eslint-plugin-playwright`) is generated alongside it for
-TS/JS projects, catching general correctness issues (floating promises, deprecated Playwright APIs)
-`lint-cpom.js` was never designed to - it complements the CPOM-specific linter rather than
-replacing it.
+The five rules, in spirit, across every implementation:
+
+1. **Zero arbitrary delays** - no `sleep()`/`Thread.sleep()`, `setTimeout()`,
+   `page.waitForTimeout()`/`.waitForTimeout()`.
+2. **Mandatory point-in-time-read suffix** on every non-retrying state getter in `components/` -
+   `Now()` (TS/JS), `_now` (Python), `Now()`/camelCase `get*Now()` (Java), `NowAsync()` (C#, since
+   the Playwright C# API is async-only).
+3. **Zero assertions in components** - no `expect(...)`/`Assertions.*`/`Assert.*`/`Expect(...)`
+   inside Component/Page-Object classes.
+4. **Non-retrying/unawaited assertion guard** - rejects a raw, non-auto-retrying state check
+   wrapped directly in an assertion in test specs (e.g.
+   `expect(locator.isVisible()).toBeTruthy()` in TS, `assertTrue(locator.isVisible())` in Java,
+   `Assert.That(await locator.IsVisibleAsync())` in C#) instead of the language's auto-retrying
+   web-first assertion. **N/A for Python**: the generated Python templates use
+   `playwright.sync_api` exclusively (fully synchronous, no `await`/Promise concept exists to
+   guard against this bug class) - this is a deliberate no-op documented in the script's own
+   header, not an oversight. The C# implementation is best-effort/single-line, the same lower
+   rigor tier the TS implementation of this rule already carries.
+5. **Fixture dependency injection** - rejects raw `new PageObject(...)`/`new Component(...)`
+   construction in test specs outside setup/fixture files. **Deferred for Python**: `conftest.py`
+   currently exposes only a `browser_context_args` fixture - there is no Page-Object-returning
+   fixture convention yet for this rule to check test specs against. The script's header documents
+   this as a deliberate deferral; once such a fixture convention exists, this rule slots in the
+   same way it already does for TS/Java/C#.
+
+The Java and C# scripts run as native single-file programs in their own language rather than
+through Node.js: none of the generated CI templates for Python/C#/Java install Node.js anywhere, so
+a Node-executed linter would be a new recurring CI dependency for those three languages, not a
+one-time cost. Java's single-file source-launch (JDK 11+) and .NET's file-based apps (.NET 10 SDK+)
+both let a `.java`/`.cs` file run directly with no project file and no separate compile step, using
+only the toolchain each generated project already needs anyway - **with one exception**: file-based
+apps require the .NET 10 SDK specifically, one major ahead of the .NET 8 SDK the generated C#
+project itself targets and the one its CI templates otherwise install. The C# CI templates install
+the .NET 10 SDK strictly alongside the existing .NET 8 toolchain (GitHub Actions: a second
+`dotnet-version` entry in the same `setup-dotnet` step; GitLab CI: an isolated job on a
+`dotnet/sdk:10.0` image; Jenkins: an isolated stage-level `agent` on the same image) so the
+project's own net8.0 build/test path is untouched.
+
+`eslint.config.js` (`npm run lint:eslint`, `eslint-plugin-playwright`) is generated alongside
+`scripts/lint-cpom.js` for TS/JS projects, catching general correctness issues (floating promises,
+deprecated Playwright APIs) that script was never designed to - it complements the CPOM-specific
+linter rather than replacing it. No language currently has an equivalent secondary general-purpose
+linter wired in by EITR itself.
 
 ## Multi-tier CI/CD gate
 
-- **Tier 1 (static contract gate):** `npm run lint:cpom` (and `lint:eslint` where generated) -
-  sub-second, before browsers launch.
-- **Tier 2 (scenario regression gate):** `npm test` - full parallel E2E execution with trace
-  artifact uploads on failure.
+- **Tier 1 (static contract gate):** `npm run lint:cpom` (and `lint:eslint` where generated) for
+  TS/JS/Cypress, or the equivalent per-language CPOM script above for Python/Java/C# - sub-second,
+  before browsers launch.
+- **Tier 2 (scenario regression gate):** `npm test`/`pytest`/`mvn test`/`gradle test`/`dotnet test` -
+  full parallel E2E execution with trace artifact uploads on failure.
 
-Generated CI templates (GitHub Actions, GitLab CI, Jenkins, TeamCity) also include a
-dependency-vulnerability audit step (`npm audit`/`pip-audit`/`dotnet list package --vulnerable`,
-per language) ahead of the test run.
+Generated CI templates (GitHub Actions, GitLab CI, Jenkins) wire the Tier 1 CPOM gate as its own
+step/job/stage ahead of the Tier 2 test run, for every language. TeamCity remains Markdown setup
+instructions rather than pipeline-as-code for every language, so nothing there is wired
+programmatically. Generated CI templates also include a dependency-vulnerability
+audit step (`npm audit`/`pip-audit`/`dotnet list package --vulnerable`, per language) ahead of the
+test run; Java's Maven/Gradle CI templates do not yet have an equivalent step (tracked separately,
+not part of the CPOM gate).
 
 ## API testing support
 

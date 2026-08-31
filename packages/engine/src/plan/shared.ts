@@ -21,6 +21,9 @@ import {
   renderCopilotInstructions,
 } from './templates/ai-rules.js';
 import { renderCpomLinter } from './templates/cpom-linter.js';
+import { renderCpomLinterPython } from './templates/cpom-linter-python.js';
+import { renderCpomLinterJava } from './templates/cpom-linter-java.js';
+import { renderCpomLinterCsharp } from './templates/cpom-linter-csharp.js';
 import { renderEslintConfig } from './templates/eslint-config.js';
 import { renderDockerfile, renderDockerignore } from './templates/docker.js';
 import { renderAppGraphHtml } from './templates/app-graph-html.js';
@@ -122,6 +125,36 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderEslintConfig() },
+          },
+        ] as FileDescriptor[])
+      : []),
+    ...(opts.language === 'python'
+      ? ([
+          {
+            path: 'scripts/lint_cpom.py',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderCpomLinterPython() },
+          },
+        ] as FileDescriptor[])
+      : []),
+    ...(opts.language === 'java'
+      ? ([
+          {
+            path: 'scripts/LintCpom.java',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderCpomLinterJava() },
+          },
+        ] as FileDescriptor[])
+      : []),
+    ...(opts.language === 'csharp'
+      ? ([
+          {
+            path: 'scripts/LintCpom.cs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderCpomLinterCsharp() },
           },
         ] as FileDescriptor[])
       : []),
