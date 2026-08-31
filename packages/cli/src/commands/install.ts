@@ -154,6 +154,22 @@ export async function runInstall(
           : `gradle testClasses exited with code ${buildRes.code}`;
         return { installedDeps: false, installedBrowsers: false, message };
       }
+      if (opts.skipBrowsers) {
+        return { installedDeps: true, installedBrowsers: false };
+      }
+      // The generated build.gradle registers a `playwrightInstall` JavaExec task (see
+      // java/project.ts) - neither Maven nor Gradle downloads Playwright's browser binaries on
+      // its own, unlike npm's postinstall hook, so this is a required, not optional, step.
+      const browserRes = await run(gradleCmd, ['playwrightInstall'], {
+        cwd: projectDir,
+        env: { ...process.env },
+      });
+      if (browserRes.error || browserRes.code !== 0) {
+        const message = browserRes.error
+          ? browserRes.error.message
+          : `gradle playwrightInstall exited with code ${browserRes.code}`;
+        return { installedDeps: true, installedBrowsers: false, message };
+      }
       return { installedDeps: true, installedBrowsers: true };
     } else {
       const mvnCmd = await findMaven(run, projectDir);
@@ -173,6 +189,36 @@ export async function runInstall(
           ? buildRes.error.message
           : `mvn test-compile exited with code ${buildRes.code}`;
         return { installedDeps: false, installedBrowsers: false, message };
+      }
+      if (opts.skipBrowsers) {
+        return { installedDeps: true, installedBrowsers: false };
+      }
+      // mvn resolves the `exec` prefix to org.codehaus.mojo:exec-maven-plugin via Maven's
+      // built-in plugin-prefix registry - no pom.xml plugin declaration needed. Verified live:
+      // running this against a freshly generated project actually downloads the plugin and
+      // installs Playwright's browser binaries.
+      //
+      // The -Dexec.args value MUST stay double-quoted even as a single array element: on Windows
+      // mvnCmd is 'mvn.cmd', which defaultRun's needsShell routes through cmd.exe (shell: true) -
+      // an unquoted space inside one array element gets re-split by cmd.exe's own tokenizer, so
+      // an unquoted 'install chromium' arrives at Maven as two separate arguments and "chromium"
+      // gets misread as a bogus lifecycle phase. Caught live: this exact bug shipped and failed
+      // eitr new --language java --automation-tool playwright-maven before this fix.
+      const browserRes = await run(
+        mvnCmd,
+        [
+          'exec:java',
+          '-e',
+          '-Dexec.mainClass=com.microsoft.playwright.CLI',
+          '-Dexec.args="install chromium"',
+        ],
+        { cwd: projectDir, env: { ...process.env } },
+      );
+      if (browserRes.error || browserRes.code !== 0) {
+        const message = browserRes.error
+          ? browserRes.error.message
+          : `mvn exec:java (playwright install) exited with code ${browserRes.code}`;
+        return { installedDeps: true, installedBrowsers: false, message };
       }
       return { installedDeps: true, installedBrowsers: true };
     }
@@ -443,7 +489,7 @@ export function getPlannedInstallSteps(
         },
         {
           description: 'Download Playwright Chromium browser binary',
-          command: 'gradle run -Dexec.args="install chromium"',
+          command: 'gradle playwrightInstall',
         },
       ];
     }

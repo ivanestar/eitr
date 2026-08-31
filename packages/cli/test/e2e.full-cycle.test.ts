@@ -86,7 +86,7 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
 
   // 2. TypeScript + Playwright
   it(
-    '2/5: E2E Full Cycle — TypeScript + Playwright (questionnaire -> generate -> structure check -> cleanup)',
+    '2/5: E2E Full Cycle — TypeScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
     async () => {
       const cwd = makeTempCwd();
 
@@ -117,13 +117,23 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       expect(existsSync(join(cwd, 'tests', 'smoke.spec.ts'))).toBe(true);
 
       execSync('npx tsc --noEmit', { cwd, stdio: 'inherit' });
+
+      // runNew() (no --no-install passed) already ran `npm install` + `playwright install
+      // chromium` as a side effect - this actually launches a real browser and runs the
+      // generated `tests/smoke.spec.ts`'s network-free 'harness boots' test (page.setContent +
+      // a real assertion), not just a compile/typecheck check.
+      const output = execSync('npx playwright test --project=chromium', {
+        cwd,
+        encoding: 'utf8',
+      });
+      expect(output).toMatch(/1 passed/);
     },
-    { timeout: 60000 },
+    { timeout: 90000 },
   );
 
   // 3. JavaScript + Playwright
   it(
-    '3/5: E2E Full Cycle — JavaScript + Playwright (questionnaire -> generate -> structure check -> cleanup)',
+    '3/5: E2E Full Cycle — JavaScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
     async () => {
       const cwd = makeTempCwd();
 
@@ -152,8 +162,16 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       expect(existsSync(join(cwd, 'package.json'))).toBe(true);
       expect(existsSync(join(cwd, 'components', 'base', 'base-page.js'))).toBe(true);
       expect(existsSync(join(cwd, 'tests', 'smoke.spec.js'))).toBe(true);
+
+      // runNew() already installed node_modules + chromium (no --no-install passed) - run the
+      // generated suite for real rather than only checking the files exist.
+      const output = execSync('npx playwright test --project=chromium', {
+        cwd,
+        encoding: 'utf8',
+      });
+      expect(output).toMatch(/1 passed/);
     },
-    { timeout: 60000 },
+    { timeout: 90000 },
   );
 
   // 4. TypeScript + Cypress - withheld from release (see SUPPORTED comment in generate.ts);
@@ -226,7 +244,7 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
 
   // 6. C# + Playwright
   it(
-    '6/6: E2E Full Cycle — C# + Playwright (questionnaire -> generate -> .csproj/C# structure check -> cleanup)',
+    '6/6: E2E Full Cycle — C# + Playwright (questionnaire -> generate -> real dotnet test run -> cleanup)',
     async () => {
       const cwd = makeTempCwd();
 
@@ -263,13 +281,24 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       expect(existsSync(join(cwd, 'shared', 'utils', 'ApiClient.cs'))).toBe(true);
 
       execSync('dotnet build', { cwd, stdio: 'ignore' });
+
+      // runNew() (no --no-install passed) already ran `dotnet build` + a real Playwright
+      // browser install as a side effect - run the generated NUnit suite for real. SmokeTest.cs's
+      // LocalPageTest is network-free (Page.SetContentAsync), so this is deterministic.
+      //
+      // `dotnet test` exits non-zero on any test failure - execSync throws in that case, and that
+      // throw alone is the real pass/fail signal. Deliberately not string-matching the summary
+      // line: `dotnet test`'s console output is localized to the OS UI language (verified live -
+      // this machine prints "Пройдено: 1", not "Passed: 1"), so any English-only regex here would
+      // be a false negative on a real, passing run, not a real check.
+      execSync('dotnet test', { cwd, stdio: 'inherit' });
     },
-    { timeout: 60000 },
+    { timeout: 120000 },
   );
 
   // 7. Java + Playwright (Maven)
   it(
-    '7/8: E2E Full Cycle — Java + Playwright Maven (questionnaire -> generate -> pom.xml/Java structure check -> cleanup)',
+    '7/8: E2E Full Cycle — Java + Playwright Maven (questionnaire -> generate -> real mvn test run -> cleanup)',
     async () => {
       const cwd = makeTempCwd();
 
@@ -309,14 +338,25 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
         existsSync(join(cwd, 'src', 'main', 'java', 'shared', 'utils', 'ApiClient.java')),
       ).toBe(true);
 
-      execSync('mvn compile', { cwd, stdio: 'ignore' });
+      // runNew() (no --no-install passed) already ran `mvn test-compile` + a real Playwright
+      // CLI browser install as a side effect (see install.ts) - run the generated JUnit 5 suite
+      // for real. SmokeTest.java navigates to the real https://example.com (a stable IANA
+      // domain chosen for exactly this purpose) - DO_NOT_TRACK suppresses an unrelated telemetry
+      // ping some sandboxes' egress rules block, which otherwise prints scary-looking but
+      // harmless ETIMEDOUT noise around the real (passing) assertion.
+      const output = execSync('mvn test', {
+        cwd,
+        encoding: 'utf8',
+        env: { ...process.env, DO_NOT_TRACK: '1' },
+      });
+      expect(output).toMatch(/Tests run: 1, Failures: 0, Errors: 0/);
     },
-    { timeout: 60000 },
+    { timeout: 180000 },
   );
 
   // 8. Java + Playwright (Gradle)
   it(
-    '8/8: E2E Full Cycle — Java + Playwright Gradle (questionnaire -> generate -> build.gradle/Java structure check -> cleanup)',
+    '8/8: E2E Full Cycle — Java + Playwright Gradle (questionnaire -> generate -> real gradle test run -> cleanup)',
     async () => {
       const cwd = makeTempCwd();
 
@@ -356,8 +396,18 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
         existsSync(join(cwd, 'src', 'main', 'java', 'shared', 'utils', 'ApiClient.java')),
       ).toBe(true);
 
-      execSync('gradle classes', { cwd, stdio: 'ignore' });
+      // runNew() (no --no-install passed) already ran `gradle testClasses` + the generated
+      // playwrightInstall task as a side effect (see install.ts) - run the generated JUnit 5
+      // suite for real.
+      // A failing test makes `gradle test` exit non-zero, which execSync throws on - that
+      // failure alone is the real signal. BUILD SUCCESSFUL is a redundant positive check.
+      const output = execSync('gradle test --console=plain', {
+        cwd,
+        encoding: 'utf8',
+        env: { ...process.env, DO_NOT_TRACK: '1' },
+      });
+      expect(output).toMatch(/BUILD SUCCESSFUL/);
     },
-    { timeout: 60000 },
+    { timeout: 180000 },
   );
 });
