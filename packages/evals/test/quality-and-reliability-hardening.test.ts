@@ -22,9 +22,9 @@ describe('AC-1 to AC-5: EITR Quality, Reliability & CPOM Primitives Hardening', 
     expect(BASE_ASSET_FILES['components/primitives/heading.ts']).toBe(
       'components/primitives/heading.ts',
     );
-    expect(BASE_ASSET_FILES['components/primitives/slider.ts']).toBe(
-      'components/primitives/slider.ts',
-    );
+    // Slider is a situational primitive (2026-08-31) - pom-engineer synthesizes it on demand
+    // instead of it being unconditionally scaffolded; it must NOT be in the base asset manifest.
+    expect(BASE_ASSET_FILES['components/primitives/slider.ts']).toBeUndefined();
   });
 
   it('AC-1: physical files exist in packages/engine/assets/runtime/', async () => {
@@ -41,17 +41,11 @@ describe('AC-1 to AC-5: EITR Quality, Reliability & CPOM Primitives Hardening', 
       path.join(runtimeBase, 'components/primitives/heading.ts'),
       'utf8',
     );
-    const slider = await fs.readFile(
-      path.join(runtimeBase, 'components/primitives/slider.ts'),
-      'utf8',
-    );
 
     expect(frameContainer).toContain('export class FrameContainer extends Component');
     expect(frameContainer).toContain('childInFrame');
     expect(element).toContain('export class Element extends Component');
     expect(heading).toContain('export class Heading extends Component');
-    expect(slider).toContain('export class Slider extends Component');
-    expect(slider).toContain('async setValue');
   });
 
   it('AC-2: scope.ts contains slider in AriaRole', async () => {
@@ -93,6 +87,8 @@ describe('AC-1 to AC-5: EITR Quality, Reliability & CPOM Primitives Hardening', 
     );
     expect(primitivesIndex).toContain("export * from './element';");
     expect(primitivesIndex).toContain("export * from './heading';");
-    expect(primitivesIndex).toContain("export * from './slider';");
+    // Slider is a situational, on-demand-synthesized primitive (2026-08-31) - must NOT be
+    // unconditionally exported from the default barrel.
+    expect(primitivesIndex).not.toContain("export * from './slider';");
   });
 });

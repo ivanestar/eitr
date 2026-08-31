@@ -29,14 +29,14 @@ export class Collection {
    * How many items currently match — a one-shot, non-retrying snapshot. To assert cardinality use
    * the retrying `await expect(collection.locator).toHaveCount(n)`.
    */
-  count() {
+  countNow() {
     return this.locator.count();
   }
   /**
    * All matching item locators, right now — a one-shot, non-retrying snapshot. To assert cardinality
    * use the retrying `await expect(collection.locator).toHaveCount(n)`.
    */
-  all() {
+  allNow() {
     return this.locator.all();
   }
   // ComponentClass models only the constructor (clean inference); every component class also carries

@@ -10,7 +10,7 @@ scan) - no pip installs, no third-party packages.
 
 Rules enforced (parity with scripts/lint-cpom.js for TypeScript/JavaScript/Cypress):
   1. Zero Arbitrary Delays - no time.sleep() / page.wait_for_timeout().
-  2. Mandatory "_now" suffix for non-retrying boolean/string state getters (is_*/has_*) in
+  2. Mandatory "_now" suffix for non-retrying boolean/string state getters (is_*/has_*/get_*) in
      components/.
   3. Zero assertions inside Component & Page Object classes (components/) - no "assert"
      statements and no pytest.fail(...) calls.
@@ -49,6 +49,21 @@ TARGET_DIRS = ("components", "tests", "shared")
 
 DELAY_CALL_NAMES = {"sleep", "wait_for_timeout"}
 
+# Playwright's own get_*-shaped API calls - never themselves a point-in-time state read needing a
+# _now suffix (mirrors the same exemption set in cpom-linter.ts/cpom-linter-java.ts, kept in sync
+# by hand).
+STRUCTURAL_GETTER_EXEMPTIONS = {
+    "get_attribute",
+    "get_by_role",
+    "get_by_test_id",
+    "get_by_label",
+    "get_by_text",
+    "get_by_alt_text",
+    "get_by_placeholder",
+    "get_by_title",
+    "get_by_display_value",
+}
+
 
 class CpomVisitor(ast.NodeVisitor):
     """Walks one file's AST, collecting CPOM contract violations."""
@@ -66,9 +81,12 @@ class CpomVisitor(ast.NodeVisitor):
     def _check_snapshot_suffix(self, name: str, lineno: int) -> None:
         if not self.is_component or self.class_depth == 0:
             return
-        if name == "is_attached":
+        if name == "is_attached" or name in STRUCTURAL_GETTER_EXEMPTIONS:
             return
-        if (name.startswith("is_") or name.startswith("has_")) and not name.endswith("_now"):
+        if (
+            (name.startswith("is_") or name.startswith("has_") or name.startswith("get_"))
+            and not name.endswith("_now")
+        ):
             self.violations.append((
                 lineno,
                 "Rule 2: Mandatory _now Suffix",

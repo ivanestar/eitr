@@ -7,6 +7,11 @@ export class RadioButton extends Component {
   async check(): Promise<void> {
     await this.locator.check();
   }
+
+  /** Point-in-time snapshot read of the current checked state. */
+  async isCheckedNow(): Promise<boolean> {
+    return this.locator.isChecked();
+  }
 }
 
 /** A group of radio buttons. */

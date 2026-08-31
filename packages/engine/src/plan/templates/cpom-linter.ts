@@ -31,6 +31,31 @@ const IGNORED_DIRS = new Set([
   'playwright-report',
 ]);
 
+// Known Playwright/DOM built-ins matching the (is|has|get)[A-Z]... shape that are never
+// themselves a point-in-time state read needing a Now() suffix - calling one of these from
+// inside a properly-suffixed method (e.g. link.ts's getHrefNow() wrapping getAttribute('href'))
+// must not trip Rule 2 a second time on the same line.
+const STRUCTURAL_GETTER_EXEMPTIONS = new Set([
+  'getAttribute',
+  'getByRole',
+  'getByTestId',
+  'getByLabel',
+  'getByText',
+  'getByAltText',
+  'getByPlaceholder',
+  'getByTitle',
+  'getByDisplayValue',
+  'getAnimations',
+  'getOwnPropertyDescriptor',
+  'getPrototypeOf',
+  'isChecked',
+  'isVisible',
+  'isHidden',
+  'isEnabled',
+  'isEditable',
+  'isDisabled',
+]);
+
 const violations = [];
 
 function walkDir(dir, fileList = []) {
@@ -84,13 +109,14 @@ function auditFile(filePath) {
 
     // Rule 2: Mandatory Now() Suffix for snapshot state getters in components
     if (isComponent) {
-      const stateGetterMatch = line.match(/(?:async\\s+)?\\b(is|has)[A-Z][a-zA-Z0-9_]*\\s*\\([^)]*\\)/);
+      const stateGetterMatch = line.match(/(?:async\\s+)?\\b(is|has|get)[A-Z][a-zA-Z0-9_]*\\s*\\([^)]*\\)/);
       if (stateGetterMatch && !line.includes('Now(') && !line.includes('constructor') && !line.includes('_child')) {
         const methodName = stateGetterMatch[0].split('(')[0].replace(/^(?:async\\s+)/, '').trim();
         if (
-          (methodName.startsWith('is') || methodName.startsWith('has')) &&
+          (methodName.startsWith('is') || methodName.startsWith('has') || methodName.startsWith('get')) &&
           !methodName.endsWith('Now') &&
-          !methodName.startsWith('isAttached')
+          !methodName.startsWith('isAttached') &&
+          !STRUCTURAL_GETTER_EXEMPTIONS.has(methodName)
         ) {
           violations.push({
             file: relPath,

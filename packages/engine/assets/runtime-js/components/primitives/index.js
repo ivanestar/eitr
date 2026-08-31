@@ -8,6 +8,3 @@ export * from './file-input.js';
 export * from './radio.js';
 export * from './element.js';
 export * from './heading.js';
-export * from './slider.js';
-export * from './drag-and-drop.js';
-export * from './canvas.js';

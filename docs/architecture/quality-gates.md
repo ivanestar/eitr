@@ -20,9 +20,11 @@ The five rules, in spirit, across every implementation:
 
 1. **Zero arbitrary delays** - no `sleep()`/`Thread.sleep()`, `setTimeout()`,
    `page.waitForTimeout()`/`.waitForTimeout()`.
-2. **Mandatory point-in-time-read suffix** on every non-retrying state getter in `components/` -
-   `Now()` (TS/JS), `_now` (Python), `Now()`/camelCase `get*Now()` (Java), `NowAsync()` (C#, since
-   the Playwright C# API is async-only).
+2. **Mandatory point-in-time-read suffix** on every non-retrying state getter (`is*`/`has*`/`get*`
+   prefix, exempt by known structural return type - e.g. `Locator`/`Page` - not by a fixed method
+   name list) in `components/` - `Now()` (TS/JS), `_now` (Python), `Now()` (Java), `NowAsync()`
+   (C#, since the Playwright C# API is async-only). All four implementations now check the same
+   `is/has/get` prefix set consistently.
 3. **Zero assertions in components** - no `expect(...)`/`Assertions.*`/`Assert.*`/`Expect(...)`
    inside Component/Page-Object classes.
 4. **Non-retrying/unawaited assertion guard** - rejects a raw, non-auto-retrying state check
