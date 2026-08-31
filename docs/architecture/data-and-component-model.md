@@ -64,8 +64,9 @@ abstract class Component {
   is not a runtime instance field.
 - **`Container extends Component`** - typed factories pass `this.locator` as scope; an optional
   container passes `page`. **`BasePage`** holds `page`, a `path`, `goto()`, lazy getters.
-  **`Collection`** wraps a locator: `.nth`/`.first`/`.last`, `.filter`, `.count()`, `.all()`;
-  asserted via `expect().toHaveCount()`.
+  **`Collection`** wraps a locator: `.nth`/`.first`/`.last`, `.filter`, `.countNow()`, `.allNow()`
+  (both `Now`-suffixed per the Method Safety Contract below - one-shot snapshots, not retrying
+  assertions); cardinality is asserted via `expect().toHaveCount()`.
 
 ## Overlays & portals
 

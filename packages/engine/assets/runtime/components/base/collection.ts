@@ -43,7 +43,7 @@ export class Collection<T extends Component> {
    * How many items currently match — a one-shot, non-retrying snapshot. To assert cardinality use
    * the retrying `await expect(collection.locator).toHaveCount(n)`.
    */
-  count(): Promise<number> {
+  countNow(): Promise<number> {
     return this.locator.count();
   }
 
@@ -51,7 +51,7 @@ export class Collection<T extends Component> {
    * All matching item locators, right now — a one-shot, non-retrying snapshot. To assert cardinality
    * use the retrying `await expect(collection.locator).toHaveCount(n)`.
    */
-  all(): Promise<Locator[]> {
+  allNow(): Promise<Locator[]> {
     return this.locator.all();
   }
 

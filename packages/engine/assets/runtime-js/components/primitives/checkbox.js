@@ -13,4 +13,8 @@ export class Checkbox extends Component {
   async setChecked(checked) {
     await this.locator.setChecked(checked);
   }
+  /** Point-in-time snapshot read of the current checked state. */
+  async isCheckedNow() {
+    return this.locator.isChecked();
+  }
 }
