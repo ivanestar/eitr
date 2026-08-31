@@ -17,6 +17,11 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-python@v7
@@ -30,17 +35,20 @@ jobs:
       run: playwright install --with-deps
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
       run: python scripts/lint_cpom.py
-    - name: Run Pytest
-      run: pytest --junitxml=test-results/junit-results.xml
+    - name: Run Pytest (shard \${{ matrix.shardIndex }}/\${{ matrix.shardTotal }})
+      run: pytest --splits \${{ matrix.shardTotal }} --group \${{ matrix.shardIndex }} --junitxml=test-results/junit-results.xml
     - uses: actions/upload-artifact@v7
       if: always()
       with:
-        name: test-results
+        name: test-results-\${{ matrix.shardIndex }}
         path: test-results/junit-results.xml
         retention-days: 30
 `;
   }
 
+  // No CI sharding for C#: no free, official automatic-balanced-split mechanism exists for
+  // NUnit/dotnet test either - only [Category("...")] + `dotnet test --filter TestCategory=...`
+  // (manual tagging, no auto-balancing), same shape and same gap as Java above. See TODO.md.
   if (language === 'csharp') {
     return `name: E2E Tests (.NET + Playwright)
 on:
@@ -89,6 +97,13 @@ jobs:
 `;
   }
 
+  // No CI sharding for Java: unlike TS/JS (native --shard) and Python (pytest-split), neither
+  // Maven Surefire nor Gradle ships a free, official automatic-balanced-split mechanism -
+  // JUnit 5 only supports tag/group *filtering* (maven-surefire-plugin's <groups>/<excludedGroups>
+  // or Gradle's useJUnitPlatform { includeTags(...) }), which requires hand-tagging every test and
+  // never auto-balances. The one automatic option, Gradle Develocity Test Distribution, is a paid
+  // product - inappropriate to wire into a free/OSS scaffolder. Deliberately not implemented; see
+  // TODO.md for the researched rationale.
   if (language === 'java') {
     if (automationTool?.includes('gradle')) {
       return `name: E2E Tests (Java + Playwright + Gradle)
@@ -289,6 +304,7 @@ workflow:
 pytest-playwright-tests:
   stage: test
   image: mcr.microsoft.com/playwright/python:v1.51.0-jammy
+  parallel: 4
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -296,7 +312,7 @@ pytest-playwright-tests:
     - pip install -e .[api]
     - pip install pip-audit && pip-audit
     - python scripts/lint_cpom.py
-    - pytest --junitxml=test-results/junit-results.xml
+    - pytest --splits $CI_NODE_TOTAL --group $CI_NODE_INDEX --junitxml=test-results/junit-results.xml
   artifacts:
     when: always
     reports:
@@ -471,40 +487,54 @@ merge-playwright-reports:
 export function renderJenkinsfile(language?: string, automationTool?: string): string {
   if (language === 'python') {
     return `pipeline {
-    agent {
-        docker { image 'mcr.microsoft.com/playwright/python:v1.51.0-jammy' }
-    }
+    agent none
     stages {
-        stage('Install') {
-            steps {
-                sh 'pip install -e .[api]'
+        stage('Sharded Tests') {
+            matrix {
+                axes {
+                    axis {
+                        name 'SHARD'
+                        values '1', '2', '3', '4'
+                    }
+                }
+                agent {
+                    docker { image 'mcr.microsoft.com/playwright/python:v1.51.0-jammy' }
+                }
+                stages {
+                    stage('Install') {
+                        steps {
+                            sh 'pip install -e .[api]'
+                        }
+                    }
+                    stage('Dependency Vulnerability Audit') {
+                        steps {
+                            sh 'pip install pip-audit && pip-audit'
+                        }
+                    }
+                    stage('Audit CPOM Contract & Anti-Fake-Green Rules') {
+                        steps {
+                            sh 'python scripts/lint_cpom.py'
+                        }
+                    }
+                    stage('Test') {
+                        steps {
+                            sh 'pytest --splits 4 --group $SHARD --junitxml=test-results/junit-results-$SHARD.xml'
+                        }
+                    }
+                }
+                post {
+                    always {
+                        junit "test-results/junit-results-\${SHARD}.xml"
+                    }
+                }
             }
-        }
-        stage('Dependency Vulnerability Audit') {
-            steps {
-                sh 'pip install pip-audit && pip-audit'
-            }
-        }
-        stage('Audit CPOM Contract & Anti-Fake-Green Rules') {
-            steps {
-                sh 'python scripts/lint_cpom.py'
-            }
-        }
-        stage('Test') {
-            steps {
-                sh 'pytest --junitxml=test-results/junit-results.xml'
-            }
-        }
-    }
-    post {
-        always {
-            junit 'test-results/junit-results.xml'
         }
     }
 }
 `;
   }
 
+  // No CI sharding for C# — see the same-worded comment in renderGithubActions above.
   if (language === 'csharp') {
     return `pipeline {
     agent {
@@ -553,6 +583,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
 `;
   }
 
+  // No CI sharding for Java — see the same-worded comment in renderGithubActions above.
   if (language === 'java') {
     const isGradle = automationTool?.includes('gradle');
     const installCmd = isGradle
@@ -624,30 +655,74 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
   }
 
   return `pipeline {
-    agent {
-        docker { image 'mcr.microsoft.com/playwright:v1.51.1-jammy' }
-    }
+    agent none
     stages {
-        stage('Install') {
+        stage('Sharded Tests') {
+            matrix {
+                axes {
+                    axis {
+                        name 'SHARD'
+                        values '1', '2', '3', '4'
+                    }
+                }
+                agent {
+                    docker { image 'mcr.microsoft.com/playwright:v1.51.1-jammy' }
+                }
+                stages {
+                    stage('Install') {
+                        steps {
+                            sh 'npm ci'
+                        }
+                    }
+                    stage('Dependency Vulnerability Audit') {
+                        steps {
+                            sh 'npm audit --audit-level=high'
+                        }
+                    }
+                    stage('Install Playwright Browsers') {
+                        steps {
+                            sh 'npx playwright install --with-deps'
+                        }
+                    }
+                    stage('Audit CPOM Contract & Anti-Fake-Green Rules') {
+                        steps {
+                            sh 'npm run lint:cpom'
+                        }
+                    }
+                    stage('Test') {
+                        steps {
+                            sh 'npx playwright test --project=chromium --shard=$SHARD/4 --reporter=blob'
+                            sh 'mv blob-report "blob-report-$SHARD"'
+                        }
+                    }
+                }
+                post {
+                    always {
+                        stash(name: "blob-report-\${SHARD}", includes: "blob-report-\${SHARD}/**")
+                    }
+                }
+            }
+        }
+        stage('Merge Reports') {
+            agent {
+                docker { image 'mcr.microsoft.com/playwright:v1.51.1-jammy' }
+            }
             steps {
                 sh 'npm ci'
+                unstash 'blob-report-1'
+                unstash 'blob-report-2'
+                unstash 'blob-report-3'
+                unstash 'blob-report-4'
+                sh 'mkdir -p all-blob-reports'
+                sh 'cp blob-report-*/*.zip all-blob-reports/'
+                sh 'npx playwright merge-reports --reporter=html,junit ./all-blob-reports'
             }
-        }
-        stage('Dependency Vulnerability Audit') {
-            steps {
-                sh 'npm audit --audit-level=high'
+            post {
+                always {
+                    junit 'playwright-report/junit-results.xml'
+                    archiveArtifacts artifacts: 'playwright-report/**/*', fingerprint: true
+                }
             }
-        }
-        stage('Test') {
-            steps {
-                sh 'npm test'
-            }
-        }
-    }
-    post {
-        always {
-            junit 'playwright-report/junit-results.xml'
-            archiveArtifacts artifacts: 'playwright-report/**/*', fingerprint: true
         }
     }
 }
@@ -677,10 +752,20 @@ Add the following Build Steps to your configuration:
 - **Run**: Custom script
 - **Custom script**:
   \`\`\`bash
-  pytest --junitxml=test-results/junit-results.xml
+  pytest --splits 4 --group %SHARD% --junitxml=test-results/junit-results.xml
   \`\`\`
+  (\`%SHARD%\` only resolves if you add the Matrix Build feature below — for a single-agent run
+  without sharding, drop \`--splits 4 --group %SHARD%\` entirely.)
 
-## 2. Import XML Test Reports (JUnit)
+## 2. Shard across parallel agents (optional, recommended for larger suites)
+
+The generated \`.teamcity/settings.kts\` (Kotlin DSL, generated alongside this guide) already wires
+up a 4-way \`Matrix Build\` feature for you. To do it manually here instead: go to **Build Features**,
+add **Matrix Build**, and add a parameter named \`SHARD\` with values \`1\`, \`2\`, \`3\`, \`4\` — TeamCity
+then runs 4 parallel build cells, each with its own \`%SHARD%\` value substituted into the script
+above.
+
+## 3. Import XML Test Reports (JUnit)
 
 To show detailed test results and build trends directly on the TeamCity dashboard:
 - Go to **Build Features** of your Build Configuration.
@@ -823,10 +908,22 @@ Add the following Build Steps to your configuration:
 - **Run**: Custom script
 - **Custom script**:
   \`\`\`bash
-  npm test
+  npx playwright test --project=chromium --shard=%SHARD%/4 --reporter=blob
   \`\`\`
+  (\`%SHARD%\` only resolves if you add the Matrix Build feature below — for a single-agent run
+  without sharding, use \`npm test\` instead.)
 
-## 2. Artifacts Configuration
+## 2. Shard across parallel agents (optional, recommended for larger suites)
+
+The generated \`.teamcity/settings.kts\` (Kotlin DSL, generated alongside this guide) already wires
+up a 4-way \`Matrix Build\` feature plus a downstream \`Merge Playwright Reports\` configuration that
+combines all 4 shards via \`playwright merge-reports\` into one HTML + JUnit report. To do the split
+manually here instead: go to **Build Features**, add **Matrix Build**, and add a parameter named
+\`SHARD\` with values \`1\`, \`2\`, \`3\`, \`4\`. You will still need to build the merge step yourself
+(JetBrains' own Matrix Build docs don't publish a ready-made merge-configuration recipe) — the
+Kotlin DSL file is the easier path for this reason.
+
+## 3. Artifacts Configuration
 
 To publish the Playwright HTML report so it can be viewed in TeamCity:
 - Go to **General Settings** of your Build Configuration.
@@ -835,7 +932,7 @@ To publish the Playwright HTML report so it can be viewed in TeamCity:
   playwright-report => report.zip
   \`\`\`
 
-## 3. Import XML Test Reports (JUnit)
+## 4. Import XML Test Reports (JUnit)
 
 To show detailed test results and build trends directly on the TeamCity dashboard:
 - Go to **Build Features** of your Build Configuration.
@@ -963,15 +1060,62 @@ ${stepsBlock}
 `;
   }
 
+  // Sharded matrix build (jetbrains.com/help/teamcity/matrix-build.html) - each of 4 generated
+  // cells runs one shard and reports its own JUnit results independently; no merge configuration
+  // needed since pytest-split doesn't produce a mergeable report the way Playwright's blob
+  // reporter does.
   if (language === 'python') {
-    return buildType(
-      'E2E Tests (pytest + Playwright)',
-      [
-        'Install dependencies\npip install -e .[api]',
-        'Run Pytest\npytest --junitxml=test-results/junit-results.xml',
-      ],
-      'test-results/junit-results.xml',
-    );
+    return `import jetbrains.buildServer.configs.kotlin.*
+import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
+import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
+import jetbrains.buildServer.configs.kotlin.buildFeatures.matrix
+import jetbrains.buildServer.configs.kotlin.buildSteps.script
+import jetbrains.buildServer.configs.kotlin.triggers.vcs
+
+version = "2024.03"
+
+project {
+    buildType(E2ETests)
+}
+
+object E2ETests : BuildType({
+    name = "E2E Tests (pytest + Playwright, sharded)"
+
+    vcs {
+        root(DslContext.settingsRoot)
+    }
+
+    steps {
+        script {
+            name = "Install dependencies"
+            scriptContent = """
+pip install -e .[api]
+            """.trimIndent()
+        }
+        script {
+            name = "Run Pytest (shard %SHARD%/4)"
+            scriptContent = """
+pytest --splits 4 --group %SHARD% --junitxml=test-results/junit-results.xml
+            """.trimIndent()
+        }
+    }
+
+    triggers {
+        vcs {
+        }
+    }
+
+    features {
+        matrix {
+            param("SHARD", listOf(value("1"), value("2"), value("3"), value("4")))
+        }
+        xmlReport {
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "test-results/junit-results.xml"
+        }
+    }
+})
+`;
   }
 
   if (language === 'csharp') {
@@ -1007,9 +1151,105 @@ ${stepsBlock}
     );
   }
 
-  return buildType(
-    'E2E Tests (Playwright)',
-    ['Install dependencies\nnpm ci', 'Run Playwright tests\nnpm test'],
-    'playwright-report/junit-results.xml',
-  );
+  // Sharded matrix build, same mechanism as Python above. Unlike Python, Playwright's blob
+  // reporter DOES produce a mergeable report, so a downstream MergeReports build type combines all
+  // 4 shards via `playwright merge-reports` - the snapshot + artifact dependency pattern below is
+  // TeamCity's documented general "run after, consume artifacts" mechanism, but JetBrains' own
+  // Matrix Build docs stop short of spelling out this exact downstream-merge wiring; verify against
+  // a live TeamCity instance before relying on it in production.
+  return `import jetbrains.buildServer.configs.kotlin.*
+import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
+import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
+import jetbrains.buildServer.configs.kotlin.buildFeatures.matrix
+import jetbrains.buildServer.configs.kotlin.buildSteps.script
+import jetbrains.buildServer.configs.kotlin.triggers.vcs
+
+version = "2024.03"
+
+project {
+    buildType(E2ETests)
+    buildType(MergeReports)
+}
+
+object E2ETests : BuildType({
+    name = "E2E Tests (Playwright, sharded)"
+
+    vcs {
+        root(DslContext.settingsRoot)
+    }
+
+    steps {
+        script {
+            name = "Install dependencies"
+            scriptContent = """
+npm ci
+            """.trimIndent()
+        }
+        script {
+            name = "Install Playwright Browsers"
+            scriptContent = """
+npx playwright install --with-deps
+            """.trimIndent()
+        }
+        script {
+            name = "Audit CPOM Contract & Anti-Fake-Green Rules"
+            scriptContent = """
+npm run lint:cpom
+            """.trimIndent()
+        }
+        script {
+            name = "Run Playwright tests (shard %SHARD%/4)"
+            scriptContent = """
+npx playwright test --project=chromium --shard=%SHARD%/4 --reporter=blob
+            """.trimIndent()
+        }
+    }
+
+    triggers {
+        vcs {
+        }
+    }
+
+    features {
+        matrix {
+            param("SHARD", listOf(value("1"), value("2"), value("3"), value("4")))
+        }
+    }
+
+    artifactRules = "blob-report => blob-report-%SHARD%.zip"
+})
+
+object MergeReports : BuildType({
+    name = "Merge Playwright Reports"
+
+    vcs {
+        root(DslContext.settingsRoot)
+    }
+
+    dependencies {
+        snapshot(E2ETests) {
+        }
+        artifacts(E2ETests) {
+            artifactRules = "blob-report-*.zip => all-blob-reports"
+        }
+    }
+
+    steps {
+        script {
+            name = "Merge shards into a single HTML report"
+            scriptContent = """
+npm ci
+npx playwright merge-reports --reporter=html,junit ./all-blob-reports
+            """.trimIndent()
+        }
+    }
+
+    features {
+        xmlReport {
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "playwright-report/junit-results.xml"
+        }
+    }
+})
+`;
 }
