@@ -787,6 +787,68 @@ To show detailed test results and build trends directly on the TeamCity dashboar
 `;
 }
 
+// Companion Maven module for the Kotlin DSL below — required for settings.kts to compile on
+// either the TeamCity server or in an IDE. It resolves the configs-dsl-kotlin-{version} JARs from
+// JetBrains' own Maven repository; a bare .kts file with no pom.xml does not compile.
+export function renderTeamcityDslPom(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>teamcity-configs</groupId>
+    <artifactId>teamcity-configs</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <kotlin.version>1.9.24</kotlin.version>
+        <teamcity-configs.version>2024.03</teamcity-configs.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>jetbrains-all</id>
+            <url>https://download.jetbrains.com/teamcity-repository</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.jetbrains.teamcity</groupId>
+            <artifactId>configs-dsl-kotlin-latest</artifactId>
+            <version>\${teamcity-configs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.teamcity</groupId>
+            <artifactId>configs-dsl-kotlin-plugins-latest</artifactId>
+            <version>\${teamcity-configs.version}</version>
+            <type>pom</type>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <sourceDirectory>.</sourceDirectory>
+        <plugins>
+            <plugin>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-maven-plugin</artifactId>
+                <version>\${kotlin.version}</version>
+                <executions>
+                    <execution>
+                        <id>compile</id>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+`;
+}
+
 // Kotlin DSL Configuration-as-Code, generated alongside the markdown guide above (not replacing
 // it — teams doing manual UI setup still need the guide). Matches JetBrains' own default
 // onboarding path for TeamCity projects with Versioned Settings enabled since 2019, formalized

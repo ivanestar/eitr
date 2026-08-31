@@ -9,6 +9,7 @@ import {
   renderJenkinsfile,
   renderTeamcityInstructions,
   renderTeamcityKotlinDsl,
+  renderTeamcityDslPom,
 } from './templates/cicd.js';
 import { planMcpServer } from './templates/mcp-server.js';
 import { planMcpConfigs } from './templates/mcp-configs.js';
@@ -277,6 +278,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
         kind: 'inline',
         text: renderTeamcityKotlinDsl(opts.language, opts.automationTool),
       },
+    });
+    files.push({
+      path: '.teamcity/pom.xml',
+      writePolicy: 'create-if-absent',
+      provenance: { origin: 'project' },
+      source: { kind: 'inline', text: renderTeamcityDslPom() },
     });
   }
 
