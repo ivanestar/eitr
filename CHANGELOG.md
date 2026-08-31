@@ -48,6 +48,38 @@ real bug) - not just what changed.
   `Select`/`Element`/`Heading` also shipped for Cypress TS/JS; `FrameContainer` is TS/JS Playwright
   - Python/Java/C# only - Cypress has no `FrameLocator` equivalent (cross-origin iframes are out of
     its default model), a deliberate scope exclusion rather than a gap.
+- Attachment/evidence upload for all 4 TMS providers' `mcp__tms__post_test_result` (was silently
+  unsupported): Azure DevOps (JSON body with a base64 `stream` field), TestRail and Zephyr Scale
+  (multipart uploads via a new shared `httpPostMultipart()` helper), and Xray Cloud
+  (`addEvidenceToTestRun` GraphQL mutation). Per-file upload success/failure is reported back in the
+  tool response; a failed result-post still short-circuits before any attachment is attempted.
+- MCP protocol spec-compliance additions for the 2026-07-28 revision: `resultType: 'complete'` on
+  every `tools/list` and `tools/call` result envelope (previously only on `server/discover`), and
+  `CacheableResult` fields (`ttlMs`, `cacheScope`) on `tools/list`, since the tool list is fixed
+  per-process. Per-request `_meta.clientCapabilities`/`_meta.clientInfo` are now read and logged
+  (debug-only) rather than silently ignored; no formal negotiation is performed against them yet.
+- Real system-level test of the generated MCP bridge (`packages/engine/test/mcp-protocol-system.test.ts`):
+  spawns the actual generated `index.js` as a child process and talks JSON-RPC over stdio, covering
+  the legacy `initialize` handshake, `server/discover`, and the `resultType`/`CacheableResult`
+  additions above - the protocol layer had no test exercising a real running process before this.
+- `.github/dependabot.yml` for Java projects (Maven or Gradle ecosystem, weekly) generated when the
+  selected CI/CD provider is GitHub Actions - the zero-config way to get PR-based dependency
+  freshness/security signal for an ecosystem with no `npm audit`/`pip-audit`/`dotnet list
+--vulnerable` equivalent. Scoped narrowly on purpose: only `language: 'java'` and only GitHub
+  Actions (GitLab CI/Jenkins/TeamCity have no equivalent auto-consumed manifest format) - this is a
+  different, narrower re-introduction than the blanket `github-actions`-ecosystem Dependabot config
+  removed entirely earlier in this same release (see Removed); it does not affect this repository's
+  own Dependabot posture, only what Java projects receive from the generator.
+- Content-assertion test coverage for the CI/CD generator (`packages/engine/test/cicd-content.test.ts`):
+  per-branch string assertions for GitHub Actions/GitLab CI/Jenkinsfile across Python/C#/Java-Maven/
+  Java-Gradle/default(TS-JS), YAML syntactic-validity parsing for every GitHub Actions and GitLab CI
+  branch (previously zero tests parsed the generated YAML), and a TeamCity Kotlin DSL brace-balance
+  check across all branches.
+- Integration-level regression coverage for all 4 TMS adapters
+  (`packages/engine/test/tms-adapters.test.ts`): spawns the real generated MCP bridge against a local
+  mock HTTP server and exercises `getAdapter()`'s actual request/response logic for Azure DevOps,
+  TestRail, Zephyr Scale, and Xray Cloud - the only prior test asserted template text, not adapter
+  behavior.
 
 ### Changed
 
@@ -119,6 +151,22 @@ real bug) - not just what changed.
     type's snapshot + artifact dependency on the matrix-generated `E2ETests` cells materializes
     exactly as coded once the import is fixed - closing the previously-open "unverified" MAJOR item
     in TODO.md.
+- **TestRail `get_cases` silent truncation**: TestRail hard-caps `get_cases` at 250 records per page
+  (documented API limit); the generated MCP bridge called it once with no `offset` and returned
+  whatever the first page contained, silently dropping every case beyond the 250th for any suite
+  larger than that. `mcp__tms__get_suite_context` now paginates the full result set.
+- **Cursor slash-command primitive** (confirmed functional bug, not cosmetic): both AI-agent and
+  AI-operational-skill scaffolding wrote every Cursor file to `.cursor/rules/*.mdc`, which Cursor
+  treats as auto-injected context, not an invocable command or skill - a generated
+  `/scan-and-generate-pom`-equivalent could never actually appear as a Cursor command. Rewritten to
+  the real primitives: `.cursor/skills/${name}/SKILL.md` for both, with operational skills (not
+  agents) additionally getting `disable-model-invocation: true` so only agents remain
+  auto-invocable, matching Cursor's own agent-vs-skill distinction.
+- **Antigravity skills path**: generated `.agents/skills/${name}/SKILL.md` (a folder-per-skill
+  layout) corrected to `.agents/skills/${name}.md` (flat file per skill), matching Antigravity's
+  actual native skill format; `.agents/agents/${name}/agent.md` (folder-per-agent) was already
+  correct and is unchanged. Antigravity-generated agents also now declare `subagent: true` in their
+  frontmatter.
 
 ### Removed
 
@@ -131,7 +179,10 @@ real bug) - not just what changed.
   which already did the real work.
 - Dependabot entirely, from both this repo and the generated-project template -
   `renderDependabotConfig()` and its wiring are gone; no generated project gets a `dependabot.yml`
-  anymore. GitHub's native vulnerability-alerts and automated-security-fixes are enabled directly on
+  anymore (later in this same release, `renderDependabotConfig()` was reintroduced from scratch with
+  a much narrower scope - Java + GitHub Actions only, filling a real audit-tooling gap rather than
+  the blanket every-ecosystem config removed here; see Added). GitHub's native vulnerability-alerts
+  and automated-security-fixes are enabled directly on
   this repo instead, which needs no config file; end users can enable the same toggle on their own
   repo once pushed to GitHub.
 - The Contributor License Agreement process (`.github/workflows/cla.yml`, the signatures branch,
