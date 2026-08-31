@@ -67,9 +67,9 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     expect(paths).toContain('.agents/agents/tms-validator/agent.md');
     expect(paths).toContain('.agents/agents/assertion-auditor/agent.md');
     expect(paths).toContain('.agents/agents/trace-debugger/agent.md');
-    expect(paths).toContain('.agents/skills/heal-test/SKILL.md');
-    expect(paths).toContain('.agents/skills/automate-ticket/SKILL.md');
-    expect(paths).toContain('.agents/skills/bulk-rescan/SKILL.md');
+    expect(paths).toContain('.agents/skills/heal-test.md');
+    expect(paths).toContain('.agents/skills/automate-ticket.md');
+    expect(paths).toContain('.agents/skills/bulk-rescan.md');
 
     // Scripts & Infrastructure
     expect(paths).toContain('scripts/lint-cpom.js');

@@ -339,7 +339,7 @@ export function planAiOperationalSkills(
     if (assistant === 'gemini' || assistant === 'antigravity') {
       for (const skill of skills) {
         descriptors.push({
-          path: `.agents/skills/${skill.name}/SKILL.md`,
+          path: `.agents/skills/${skill.name}.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {
@@ -373,15 +373,15 @@ ${skill.content}`,
     } else if (assistant === 'cursor') {
       for (const skill of skills) {
         descriptors.push({
-          path: `.cursor/rules/${skill.name}.mdc`,
+          path: `.cursor/skills/${skill.name}/SKILL.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {
             kind: 'inline',
             text: `---
+name: ${skill.name}
 description: ${skill.description}
-globs: **/*
-alwaysApply: false
+disable-model-invocation: true
 ---
 
 ${skill.content}`,
