@@ -67,6 +67,24 @@ abstract class Component {
   **`Collection`** wraps a locator: `.nth`/`.first`/`.last`, `.filter`, `.countNow()`, `.allNow()`
   (both `Now`-suffixed per the Method Safety Contract below - one-shot snapshots, not retrying
   assertions); cardinality is asserted via `expect().toHaveCount()`.
+- **The `Page | Locator | FrameLocator` `Scope` union above is TypeScript/JS Playwright-specific.**
+  Python, Java, and C# components are constructed from an already-resolved locator, not a
+  `(scope, spec)` pair, so none of them has (or needs) a polymorphic `Scope` type. Each language's
+  `FrameContainer` is instead a self-contained class that resolves the language's own
+  frame-locator primitive directly from whatever locator/page it is given and exposes its own
+  frame-scoped child/collection factory methods:
+  - **Python** - `FrameContainer.__init__(self, scope: Page | Locator, selector: str)` calls
+    `scope.frame_locator(selector)` (`playwright.sync_api`'s frame-locator primitive) and exposes
+    `_child_in_frame(cls, selector)` / `_list_in_frame(cls, selector)` (leading underscore, matching
+    the `_scope` naming convention on the base `Scope` class).
+  - **Java** - `FrameContainer(Locator scope, String selector)` calls `scope.frameLocator(selector)`
+    and exposes `childInFrame(Function<Locator, T>, String)` / `listInFrame(...)`, mirroring the
+    `Function<Locator, T>` factory idiom `Collection<T>` already uses.
+  - **C#** - `FrameContainer(ILocator scope, string selector)` calls `scope.FrameLocator(selector)`
+    and exposes generic `ChildInFrame<T>` / `ListInFrame<T>` factory methods.
+  - **Cypress** has no `FrameLocator` analogue (cross-origin iframes are out of Cypress's default
+    model), so it does not get a `FrameContainer` at all - this is a deliberate scope exclusion, not
+    a gap.
 
 ## Overlays & portals
 

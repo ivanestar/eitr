@@ -38,6 +38,12 @@ real bug) - not just what changed.
 - `architecture-doc-writer` skill (mirrored to `.claude/skills/` and `.agents/skills/`), recording
   the structure/format standard for future architecture-doc changes - including the rule that dated
   narration belongs in `CHANGELOG.md`, never in `docs/architecture/`.
+- `Select` (portal/descriptor combobox), `Element`, and `Heading` CPOM primitives, and
+  `FrameContainer` (iframe scoping), ported to Python, Java, and C# - closing the last CPOM
+  cross-language parity gap left open by TODO.md's deterministic-generation-line audit.
+  `Select`/`Element`/`Heading` also shipped for Cypress TS/JS; `FrameContainer` is TS/JS Playwright
+  - Python/Java/C# only - Cypress has no `FrameLocator` equivalent (cross-origin iframes are out of
+    its default model), a deliberate scope exclusion rather than a gap.
 
 ### Changed
 
@@ -89,6 +95,15 @@ real bug) - not just what changed.
   pipelines; fixed a one-directional cross-reference so both files now remind each other to stay in
   sync; corrected a stale eval-test count (now 90 tests / 17 files) and its "CI doesn't run these"
   caveat (`npm run eval` already runs in CI).
+- **Python `Select` semantics** (breaking behavior change for previously-generated projects):
+  `renderPythonSelect()` was a duplicate of `NativeSelect` (native `<select>` wrapper) mislabeled as
+  the descriptor/listbox-overlay combobox that TypeScript's `Select` actually is. Regenerating a
+  Python project now emits the correct portal/descriptor semantics - trigger + listbox + option
+  locators, a `reveal` recipe, listbox resolved from the page root via `.last`. `NativeSelect`
+  remains unchanged for the native `<select>` case Python's `Select` wrongly served before. If a
+  previously-generated project's Page Objects call `Select.select_option(...)`, regenerating this
+  file will change its behavior - use `NativeSelect` there instead, or keep the old file if it was
+  hand-edited.
 
 ### Removed
 

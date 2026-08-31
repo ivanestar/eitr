@@ -11,6 +11,10 @@ import {
   renderJavaTextInput,
   renderJavaCheckbox,
   renderJavaNativeSelect,
+  renderJavaSelect,
+  renderJavaElement,
+  renderJavaHeading,
+  renderJavaFrameContainer,
   renderJavaLink,
   renderJavaFileInput,
   renderJavaRadioButton,
@@ -59,6 +63,12 @@ export class JavaAdapter implements LanguageAdapter {
         source: { kind: 'inline', text: renderJavaBasePage() },
       },
       {
+        path: 'src/main/java/components/FrameContainer.java',
+        writePolicy: 'regenerate',
+        provenance: { origin: 'base' },
+        source: { kind: 'inline', text: renderJavaFrameContainer() },
+      },
+      {
         path: 'src/main/java/components/primitives/Button.java',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
@@ -81,6 +91,24 @@ export class JavaAdapter implements LanguageAdapter {
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
         source: { kind: 'inline', text: renderJavaNativeSelect() },
+      },
+      {
+        path: 'src/main/java/components/primitives/Select.java',
+        writePolicy: 'regenerate',
+        provenance: { origin: 'primitive' },
+        source: { kind: 'inline', text: renderJavaSelect() },
+      },
+      {
+        path: 'src/main/java/components/primitives/Element.java',
+        writePolicy: 'regenerate',
+        provenance: { origin: 'primitive' },
+        source: { kind: 'inline', text: renderJavaElement() },
+      },
+      {
+        path: 'src/main/java/components/primitives/Heading.java',
+        writePolicy: 'regenerate',
+        provenance: { origin: 'primitive' },
+        source: { kind: 'inline', text: renderJavaHeading() },
       },
       {
         path: 'src/main/java/components/primitives/Link.java',

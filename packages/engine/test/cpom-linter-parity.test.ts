@@ -9,6 +9,7 @@ import { renderCpomLinterPython } from '../src/plan/templates/cpom-linter-python
 import { renderCpomLinterJava } from '../src/plan/templates/cpom-linter-java.js';
 import { renderCpomLinterCsharp } from '../src/plan/templates/cpom-linter-csharp.js';
 import { renderJavaLink } from '../src/plan/templates/java/project.js';
+import { renderPythonSelect } from '../src/plan/templates/python/components.js';
 import type { StackProfile } from '../src/types/stack-profile.js';
 
 function commandAvailable(cmd: string, args: string[]): boolean {
@@ -190,6 +191,28 @@ describe('Per-language CPOM contract linter parity', () => {
         // and getPlaceholderNow() (already compliant) must not add a second/third violation.
         expect(rule2Violations).toBe(1);
         expect(result.stderr).toContain('State reader "getPlaceholder" in component');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(pythonCmd === null)(
+    'Python linter passes the real select.py (descriptor-based Select) with zero Rule 2/Rule 3 violations',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-py-select-'));
+      try {
+        writeFileSync(join(dir, 'lint_cpom.py'), renderCpomLinterPython(), 'utf8');
+        const componentsDir = join(dir, 'components', 'primitives');
+        mkdirSync(componentsDir, { recursive: true });
+        writeFileSync(join(componentsDir, 'select.py'), renderPythonSelect(), 'utf8');
+        const result = spawnSync(pythonCmd as string, ['lint_cpom.py'], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+        expect(result.stderr).toBe('');
+        expect(result.status).toBe(0);
+        expect(result.stdout).toContain('[PASS]');
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

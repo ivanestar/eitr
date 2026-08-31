@@ -74,6 +74,27 @@ describe('Target Generators Parity Audit', () => {
         expect(hasFileInput).toBe(true);
       });
 
+      it('emits Select, Element, Heading', () => {
+        const fileNames = files.map((f) => f.path.split('/').pop()?.toLowerCase() ?? '');
+        const hasSelect = fileNames.some((n) => /^select\.(ts|js|py|java|cs)$/.test(n));
+        const hasElement = fileNames.some((n) => /^element\.(ts|js|py|java|cs)$/.test(n));
+        const hasHeading = fileNames.some((n) => /^heading\.(ts|js|py|java|cs)$/.test(n));
+
+        expect(hasSelect).toBe(true);
+        expect(hasElement).toBe(true);
+        expect(hasHeading).toBe(true);
+      });
+
+      if (!generator.automationTool.includes('cypress')) {
+        it('emits FrameContainer', () => {
+          const fileNames = files.map((f) => f.path.split('/').pop()?.toLowerCase() ?? '');
+          const hasFrameContainer = fileNames.some((n) =>
+            /^frame[-_]?container\.(ts|js|py|java|cs)$/.test(n),
+          );
+          expect(hasFrameContainer).toBe(true);
+        });
+      }
+
       it('emits standard widgets (Dialog, Table)', () => {
         const hasDialog = paths.some((p) => p.includes('dialog'));
         const hasTable = paths.some((p) => p.includes('table'));

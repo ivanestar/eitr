@@ -392,6 +392,126 @@ public class NativeSelect extends Component {
 `;
 }
 
+export function renderJavaSelect(): string {
+  return `package components.primitives;
+
+import components.Component;
+import com.microsoft.playwright.Locator;
+
+/**
+ * A custom select / combobox whose options render in an overlay (portal) at the
+ * page root rather than inside the trigger's DOM subtree — so the listbox is
+ * resolved from the page, not from the trigger.
+ *
+ * For a native &lt;select&gt; element, use NativeSelect instead.
+ */
+public class Select extends Component {
+    private final String listboxSelector;
+    private final String optionSelector;
+    private final String reveal;
+
+    public Select(Locator trigger, String listboxSelector, String optionSelector, String reveal) {
+        super(trigger);
+        this.listboxSelector = listboxSelector;
+        this.optionSelector = optionSelector;
+        this.reveal = reveal;
+    }
+
+    public void open() {
+        if ("none".equals(reveal)) {
+            return;
+        }
+        if ("hover".equals(reveal)) {
+            getLocator().hover();
+        } else {
+            getLocator().click();
+        }
+    }
+
+    public Locator listbox() {
+        return getLocator().page().locator(listboxSelector).last();
+    }
+
+    public Locator options() {
+        return listbox().locator(optionSelector);
+    }
+
+    public void choose(String name) {
+        open();
+        options().filter(new Locator.FilterOptions().setHasText(name)).first().click();
+    }
+}
+`;
+}
+
+export function renderJavaElement(): string {
+  return `package components.primitives;
+
+import components.Component;
+import com.microsoft.playwright.Locator;
+
+/**
+ * A generic UI element (e.g. heading, block, container, image, or paragraph).
+ */
+public class Element extends Component {
+    public Element(Locator locator) {
+        super(locator);
+    }
+}
+`;
+}
+
+export function renderJavaHeading(): string {
+  return `package components.primitives;
+
+import components.Component;
+import com.microsoft.playwright.Locator;
+
+/**
+ * A semantic heading element (&lt;h1&gt;-&lt;h6&gt; or role="heading").
+ */
+public class Heading extends Component {
+    public Heading(Locator locator) {
+        super(locator);
+    }
+}
+`;
+}
+
+export function renderJavaFrameContainer(): string {
+  return `package components;
+
+import com.microsoft.playwright.FrameLocator;
+import com.microsoft.playwright.Locator;
+import java.util.function.Function;
+
+/**
+ * A container representing an embedded iframe.
+ * Encapsulates the FrameLocator and provides child/list scoping within that frame.
+ */
+public class FrameContainer extends Component {
+    private final FrameLocator frame;
+
+    public FrameContainer(Locator scope, String selector) {
+        super(scope.locator(selector));
+        this.frame = scope.frameLocator(selector);
+    }
+
+    public FrameLocator getFrame() {
+        return frame;
+    }
+
+    public <T extends Scope> T childInFrame(Function<Locator, T> factory, String selector) {
+        return factory.apply(frame.locator(selector));
+    }
+
+    public <T extends Scope> Collection<T> listInFrame(Function<Locator, T> factory, String selector) {
+        return new Collection<>(frame.locator(selector), factory);
+    }
+}
+`;
+}
+
 export function renderJavaLink(): string {
   return `package components.primitives;
 
