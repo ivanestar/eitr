@@ -1,4 +1,4 @@
-﻿// CI/CD templates for E2E workflows. create-if-absent.
+// CI/CD templates for E2E workflows. create-if-absent.
 
 export function renderGithubActions(language?: string, automationTool?: string): string {
   if (language === 'python') {
@@ -289,23 +289,6 @@ jobs:
         name: playwright-report
         path: playwright-report/
         retention-days: 30
-`;
-}
-
-// Dependabot config for Java projects on GitHub Actions only: Maven/Gradle have no CI-native
-// vulnerability-audit command (unlike npm audit/pip-audit/dotnet list package --vulnerable, all
-// already wired above), so Dependabot's own version-update ecosystem is the zero-config way to at
-// least get PR-based dependency freshness/security alerts for java on GitHub. Gated to
-// language: 'java' + GitHub Actions only - no other provider (GitLab/Jenkins/TeamCity) has an
-// equivalent auto-consumed config file, and non-Java languages already have a real audit command.
-export function renderDependabotConfig(_language?: string, automationTool?: string): string {
-  const ecosystem = automationTool?.includes('gradle') ? 'gradle' : 'maven';
-  return `version: 2
-updates:
-  - package-ecosystem: "${ecosystem}"
-    directory: "/"
-    schedule:
-      interval: "weekly"
 `;
 }
 
