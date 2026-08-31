@@ -67,7 +67,8 @@ artifact exists, or the user names a valid trigger, proceed to step 1.
      verbatim in "Действие," naming both sources.
 
 2. **One consolidated Core/Extended table.** Columns, in this exact order:
-   `Категория | Core/Ext | Что говорит ресёрч | Статус в EITR | Действие`.
+   `Категория | Core/Ext | Что говорит ресёрч | Реализовано | Протестировано вживую |
+Регрессионные тесты | Действие`.
    - **Core** if, and only if, its absence would break CPOM contract checks, break CI, or produce
      incorrect generated code in at least 1 of the languages/systems this axis covers — a
      correctness/contract test, not a subjective feel.
@@ -77,9 +78,32 @@ artifact exists, or the user names a valid trigger, proceed to step 1.
      given project may never need just to raise a score.
    - "Что говорит ресёрч" must carry a citation meeting step 1's source criteria for every row, not
      just a claim.
-   - "Статус в EITR" must be grounded in an actual `file:line` read of the current source — never
-     assumed from a prior audit or from the template's own docstring/description. Verify a check's
-     real scope empirically (read the code) rather than trusting what its name implies.
+   - **"Реализовано"** (Да/Нет/Частично + `file:line`): grounded in an actual read of the current
+     source — never assumed from a prior audit or from the template's own docstring/description.
+     Verify a check's real scope empirically (read the code) rather than trusting what its name
+     implies. This column answers only "does the code exist," nothing about whether it works.
+   - **"Протестировано вживую"** (Да/Нет + what was actually run): answers "was this row's exact
+     behavior executed for real at least once," not "does a unit test exist for it." Да requires at
+     minimum **System**-level execution per the four levels below; a passing unit/integration test
+     alone is Нет here, even if it's green. Be honest when the answer is Нет because the real
+     external target isn't available to this session (e.g. no live CI-provider server to push to) —
+     record that as the reason, don't leave the cell ambiguous or skip it.
+   - **"Регрессионные тесты"** (which of the four levels below exist, or "нет"): what automated,
+     repeatable coverage protects this row going forward, independent of whether it happened to get
+     live-tested this pass. Name the actual test file(s), not just the level.
+     - **Unit** — a test asserting one render/generator function's output content in isolation
+       (string/AST assertion against its return value), no filesystem or process execution.
+     - **Integration** — a test asserting multiple generators' combined output together in-memory
+       (e.g. `plan()`'s full file list/content for a given profile), still no real toolchain run.
+     - **System** — a test that writes a real generated project to disk and executes the real
+       target toolchain against it end-to-end (e.g. actually running `mvn test`/`gradle
+test`/`pytest`/`npm test` against freshly generated output) — proves the generated artifact
+       actually works standalone, not just that the generator produced plausible-looking text.
+     - **Acceptance** — the generated artifact exercised against the real external system it's
+       built for, outside EITR's own test harness (an actual GitHub Actions run on a real repo, a
+       real GitLab CI pipeline, a real TeamCity server build). Often infeasible inside a single
+       session with no access to that external system — mark it honestly absent rather than
+       claiming it.
    - A row you could not resolve to Core or Extended with real evidence gets `—` in that column and
      an explicit note in "Действие" that it needs a follow-up lookup — never force a guess into
      Core or Extended just to fill the cell.
@@ -89,14 +113,22 @@ artifact exists, or the user names a valid trigger, proceed to step 1.
 
    **Worked example row** (format reference, not literal content to reuse):
    `Auth bootstrap | Core | Playwright docs recommend storageState reuse across the whole suite
-(playwright.dev/docs/auth) | Implemented, packages/engine/src/plan/templates/auth-setup.ts:12 |
-none — closed`
+(playwright.dev/docs/auth) | Да, packages/engine/src/plan/templates/auth-setup.ts:12 | Да — real
+generated project, real Playwright test run against a live app | System
+(packages/cli/test/e2e.full-cycle.test.ts), Integration (plan.matrix.test.ts); no Acceptance (never
+run in a real CI provider) | none — closed`
 
 3. **An explicit, checkable Definition of Done.** State the exact condition under which the axis
-   counts as closed — normally: every Core row is present-and-correct, every Extended row has a
+   counts as closed — normally: every Core row has "Реализовано" = Да, has at least System-level
+   coverage in "Регрессионные тесты" (Unit/Integration alone is not enough for a Core row — a test
+   that never actually runs the generated output is not proof it works), every Extended row has a
    recorded rationale for staying Extended, and zero rows are in an unresolved "missing/buggy"
-   state. If any Core row is still open, the axis is **not** closed — say so plainly (open axis,
-   punch list of what's left) rather than rounding up to "basically done."
+   state. A Core row with "Протестировано вживую" = Нет does **not** by itself block closure — being
+   honest about it does — as long as System-level regression coverage exists and the reason live/
+   Acceptance-level testing wasn't possible this pass is stated (e.g. no access to a real CI-provider
+   server). If any Core row is still open on implementation or lacks System-level regression
+   coverage, the axis is **not** closed — say so plainly (open axis, punch list of what's left)
+   rather than rounding up to "basically done."
 
 4. **Explicit re-open triggers.** Name the specific future external events that would legitimately
    justify revisiting this axis later (a new major version of a tool the axis depends on, a real
@@ -116,10 +148,12 @@ regardless of axis or date — only the content changes, not the shape:
 - A stat-row summarizing counts: confirmed bugs, Core gaps, Extended/OK-as-is, already-correct
   rows, and unresolved-by-research rows — so the reader gets the shape of the matrix before the
   table itself.
-- The Core/Extended table itself, using the 5-column schema from step 2, with `<span class="badge
-core">`/`<span class="badge ext">` tags and `<span class="status ok/warn/bad/na">` for the status
-  column (green/amber/red/grey — reuse the color tokens already established in this repo's prior
-  axis artifacts: `--good`, `--warn`, `--bad`, `--ink-soft`).
+- The Core/Extended table itself, using the 7-column schema from step 2, with `<span class="badge
+core">`/`<span class="badge ext">` tags for Core/Ext, and `<span class="status ok/warn/bad/na">` for
+  both "Реализовано" and "Протестировано вживую" (green Да / red Нет / grey — for a row where the
+  answer is context-dependent, e.g. "Частично") — reuse the color tokens already established in
+  this repo's prior axis artifacts: `--good`, `--warn`, `--bad`, `--ink-soft`. "Регрессионные тесты"
+  is plain text naming the levels and files, not a badge.
 - A "Definition of Done" callout — green/`done` styling only if every Core row is actually closed,
   otherwise amber/`open` styling with the explicit punch list of what remains.
 - A "Триггеры на переоткрытие" callout listing the legitimate re-open triggers from step 4,
