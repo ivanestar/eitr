@@ -27,6 +27,7 @@ jobs:
     - uses: actions/setup-python@v7
       with:
         python-version: '3.11'
+        cache: 'pip'
     - name: Install dependencies
       run: pip install -e .[api]
     - name: Dependency Vulnerability Audit
@@ -127,6 +128,7 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
+        cache: 'gradle'
     - name: Install Playwright Browsers
       run: gradle playwrightInstall
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
@@ -162,6 +164,7 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
+        cache: 'maven'
     - name: Install Playwright Browsers
       run: mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
     - name: Audit CPOM Contract & Anti-Fake-Green Rules

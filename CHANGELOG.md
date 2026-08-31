@@ -12,6 +12,10 @@ real bug) - not just what changed.
 
 ### Added
 
+- `cache: 'pip'` / `cache: 'maven'` / `cache: 'gradle'` on the generated GitHub Actions
+  `setup-python`/`setup-java` steps for Python and Java (Maven + Gradle) - both actions support this
+  built-in dependency-cache parameter officially; TS/JS already had `cache: 'npm'`, this closes the
+  gap for the other two languages.
 - Real `postTestResult` for all 4 TMS providers (was a no-op stub): Azure DevOps (`Results - Add`),
   TestRail (`add_result_for_case`), Zephyr Scale (`testexecutions`), and Xray Cloud (a real 4-step
   GraphQL chain - resolve Test issueId -> Test Execution issueId -> testRunId -> `updateTestRunStatus`).
