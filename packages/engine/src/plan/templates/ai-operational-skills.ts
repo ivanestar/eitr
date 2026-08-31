@@ -294,11 +294,13 @@ Crawls the application page graph with authenticated session, builds the complet
 2. **Concurrent Route Exploration & Pagination Normalization (Worker Pool):**
    - Execute parallel crawling with worker pool (\`concurrency = 4..6\`) and canonical URL normalization.
    - Automatically strip volatile pagination and cursor query parameters (\`page\`, \`offset\`, \`cursor\`, \`limit\`, \`per_page\`) to collapse dynamic feeds into single canonical routes and eliminate crawler loop traps.
+   - Canonicalize dynamic path segments the same way: a numeric ID, UUID, or per-record slug collapses into a path template (\`/users/42\` and \`/users/43\` both become \`/users/{id}\`) instead of producing one route per record.
    - Discover internal application links within base domain origin.
    - Extract page routes, titles, and major structural DOM regions (\`header\`, \`nav\`, \`aside\`, \`main\`, \`footer\`, \`table\`, \`dialog\`).
    - Bound traversal with maximum depth and page count to prevent infinite loops. Limit live exploration scrolls to maximum 2 viewports.
 3. **Deterministic Site Topology Synthesis:**
-   - Generate or update \`docs/site-map.json\` with deterministically sorted route inventory and metadata.
+   - Generate or update \`docs/site-map.json\` conforming exactly to \`docs/site-map.schema.json\`: an object with \`schemaVersion\`, \`generatedAt\`, \`baseUrl\`, and a \`routes\` object keyed by canonical path template (never an array) — each entry carrying a \`routeId\` stable across URL restructuring, \`sampleUrls\`, \`title\`, \`regions\`, \`components\`, and \`discoveredAt\`. Serialize \`routes\` keys in sorted order so re-runs produce a clean diff.
+   - If an existing \`docs/site-map.json\` is missing \`schemaVersion\` or does not parse under this schema, treat it as absent and regenerate fresh rather than attempting to migrate it in place.
    - Generate human-readable \`docs/APP_GRAPH.md\` with Mermaid route graph and summary.
 4. **Shared Widget Mining (Deduplication Engine):**
    - Identify recurring component structures appearing across >= 2 routes.
