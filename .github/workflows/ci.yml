@@ -23,6 +23,47 @@ jobs:
           node-version: 20.x
           cache: 'npm'
 
+      # packages/cli/test/e2e.full-cycle.test.ts generates real Python/Java/C# projects and
+      # actually builds/tests them (not just typechecks) - these caches are the build TOOLS'
+      # own dependency caches (Maven Central artifacts, Gradle distribution/modules, NuGet
+      # packages, pip wheels), not Playwright browser binaries. Deliberately NOT caching
+      # ~/.cache/ms-playwright: Playwright's own docs explicitly advise against it (restore time
+      # is comparable to a fresh download), so this would add cache-maintenance cost for no real
+      # speedup.
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install Dependencies
         run: npm ci
 
