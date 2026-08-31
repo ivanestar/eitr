@@ -198,20 +198,24 @@ export async function runInstall(
       // running this against a freshly generated project actually downloads the plugin and
       // installs Playwright's browser binaries.
       //
-      // The -Dexec.args value MUST stay double-quoted even as a single array element: on Windows
-      // mvnCmd is 'mvn.cmd', which defaultRun's needsShell routes through cmd.exe (shell: true) -
-      // an unquoted space inside one array element gets re-split by cmd.exe's own tokenizer, so
-      // an unquoted 'install chromium' arrives at Maven as two separate arguments and "chromium"
-      // gets misread as a bogus lifecycle phase. Caught live: this exact bug shipped and failed
-      // eitr new --language java --automation-tool playwright-maven before this fix.
+      // The -Dexec.args value needs OS-conditional quoting, not a fixed string - the two
+      // platforms disagree on who tokenizes it:
+      //  - Windows: mvnCmd is 'mvn.cmd', which defaultRun's needsShell routes through cmd.exe
+      //    (shell: true). An UNQUOTED space inside one array element gets re-split by cmd.exe's
+      //    own tokenizer, so 'install chromium' arrives at Maven as two separate arguments and
+      //    "chromium" gets misread as a bogus lifecycle phase. Needs quotes.
+      //  - Linux/macOS: mvnCmd is plain 'mvn', spawned with shell:false - array elements reach
+      //    the process verbatim with no re-tokenization, so quotes would instead become LITERAL
+      //    characters inside the property value. Must stay unquoted.
+      // Both failure modes were caught live: the unquoted form broke local Windows dev, and the
+      // fixed-quoted form then broke GitHub Actions' Ubuntu runner in CI on this exact line.
+      const isWindowsMvn = mvnCmd.endsWith('.cmd');
+      const execArgsValue = isWindowsMvn
+        ? '-Dexec.args="install chromium"'
+        : '-Dexec.args=install chromium';
       const browserRes = await run(
         mvnCmd,
-        [
-          'exec:java',
-          '-e',
-          '-Dexec.mainClass=com.microsoft.playwright.CLI',
-          '-Dexec.args="install chromium"',
-        ],
+        ['exec:java', '-e', '-Dexec.mainClass=com.microsoft.playwright.CLI', execArgsValue],
         { cwd: projectDir, env: { ...process.env } },
       );
       if (browserRes.error || browserRes.code !== 0) {

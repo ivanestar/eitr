@@ -188,11 +188,20 @@ describe('runInstall (spawn injected) - Java / Maven', () => {
 
     expect(calls[1].args).toEqual(['test-compile']);
 
+    // The -Dexec.args value is quoted only on Windows (mvn.cmd goes through cmd.exe, which
+    // re-splits an unquoted space) and unquoted everywhere else (plain 'mvn' has no shell to
+    // re-split it, and quotes would instead become literal characters) - both forms were caught
+    // breaking live (Windows unquoted, Linux quoted), so this test pins the platform-correct one
+    // rather than a single hardcoded string that would only ever validate one OS.
+    const expectedExecArgs =
+      process.platform === 'win32'
+        ? '-Dexec.args="install chromium"'
+        : '-Dexec.args=install chromium';
     expect(calls[2].args).toEqual([
       'exec:java',
       '-e',
       '-Dexec.mainClass=com.microsoft.playwright.CLI',
-      '-Dexec.args="install chromium"',
+      expectedExecArgs,
     ]);
   });
 
