@@ -71,12 +71,17 @@ linter wired in by EITR itself.
   full parallel E2E execution with trace artifact uploads on failure.
 
 Generated CI templates (GitHub Actions, GitLab CI, Jenkins) wire the Tier 1 CPOM gate as its own
-step/job/stage ahead of the Tier 2 test run, for every language. TeamCity remains Markdown setup
-instructions rather than pipeline-as-code for every language, so nothing there is wired
-programmatically. Generated CI templates also include a dependency-vulnerability
-audit step (`npm audit`/`pip-audit`/`dotnet list package --vulnerable`, per language) ahead of the
-test run; Java's Maven/Gradle CI templates do not yet have an equivalent step (tracked separately,
-not part of the CPOM gate).
+step/job/stage ahead of the Tier 2 test run, for every language; Java's variant also installs
+Playwright's browser binaries first (`mvn exec:java` CLI install, or a generated `playwrightInstall`
+Gradle task) since neither ecosystem downloads them automatically. TeamCity generates both the
+original Markdown setup guide and a `.teamcity/settings.kts` Kotlin DSL Configuration-as-Code file
+covering the same steps, per JetBrains' own default onboarding path since 2019. Generated CI
+templates also include a dependency-vulnerability audit step (`npm audit`/`pip-audit`/`dotnet list
+package --vulnerable`, per language) ahead of the test run; Java's Maven/Gradle CI templates do not
+yet have an equivalent step (tracked separately, not part of the CPOM gate). GitHub Actions
+workflows declare a least-privilege `permissions:` block and a `concurrency`/cancel-in-progress
+group; GitLab CI configs declare a top-level `workflow: rules` guard against duplicate
+push/merge-request pipelines.
 
 ## API testing support
 

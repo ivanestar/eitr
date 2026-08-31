@@ -40,7 +40,7 @@ name = "${projectName}"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "playwright>=1.45.0",
+    "playwright==1.51.0",
     "pytest>=8.0.0",
     "pytest-playwright>=0.5.0",
     "pytest-html>=4.1.1",

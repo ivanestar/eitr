@@ -6,7 +6,7 @@ export function renderDockerfile(tool?: string, language?: string): string {
 
   if (lang === 'python') {
     return `# Hermetic container configuration for Python Playwright test automation.
-FROM mcr.microsoft.com/playwright/python:v1.50.0-noble
+FROM mcr.microsoft.com/playwright/python:v1.51.0-jammy
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ CMD ["pytest"]
 
   if (lang === 'csharp') {
     return `# Hermetic container configuration for C# .NET Playwright test automation.
-FROM mcr.microsoft.com/playwright/dotnet:v1.50.0-noble
+FROM mcr.microsoft.com/playwright/dotnet:v1.51.0-jammy
 
 WORKDIR /app
 
@@ -48,7 +48,7 @@ CMD ["dotnet", "test", "--no-build", "-c", "Release"]
 
   if (lang === 'java') {
     return `# Hermetic container configuration for Java Playwright test automation.
-FROM mcr.microsoft.com/playwright/java:v1.50.0-noble
+FROM mcr.microsoft.com/playwright/java:v1.51.0-jammy
 
 WORKDIR /app
 
@@ -87,7 +87,7 @@ CMD ["npx", "cypress", "run"]
 
   // Default: Playwright TypeScript / JavaScript
   return `# Hermetic container configuration for Playwright test automation.
-FROM mcr.microsoft.com/playwright:v1.50.0-noble
+FROM mcr.microsoft.com/playwright:v1.51.1-jammy
 
 WORKDIR /app
 
