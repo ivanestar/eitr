@@ -91,11 +91,13 @@ describe('plan() framework & CI/CD matrix integration', () => {
             expect(filePaths).toContain('Jenkinsfile');
           } else if (ciCd === 'teamcity') {
             expect(filePaths).toContain('teamcity-instructions.md');
+            expect(filePaths).toContain('.teamcity/settings.kts');
           } else {
             expect(filePaths.some((p) => p.startsWith('.github/workflows/'))).toBe(false);
             expect(filePaths).not.toContain('.gitlab-ci.yml');
             expect(filePaths).not.toContain('Jenkinsfile');
             expect(filePaths).not.toContain('teamcity-instructions.md');
+            expect(filePaths).not.toContain('.teamcity/settings.kts');
           }
         });
       }

@@ -8,6 +8,7 @@ import {
   renderGitlabCi,
   renderJenkinsfile,
   renderTeamcityInstructions,
+  renderTeamcityKotlinDsl,
 } from './templates/cicd.js';
 import { planMcpServer } from './templates/mcp-server.js';
 import { planMcpConfigs } from './templates/mcp-configs.js';
@@ -266,6 +267,15 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       source: {
         kind: 'inline',
         text: renderTeamcityInstructions(opts.language, opts.automationTool),
+      },
+    });
+    files.push({
+      path: '.teamcity/settings.kts',
+      writePolicy: 'create-if-absent',
+      provenance: { origin: 'project' },
+      source: {
+        kind: 'inline',
+        text: renderTeamcityKotlinDsl(opts.language, opts.automationTool),
       },
     });
   }

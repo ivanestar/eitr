@@ -1,4 +1,4 @@
-// CI/CD templates for E2E workflows. create-if-absent.
+﻿// CI/CD templates for E2E workflows. create-if-absent.
 
 export function renderGithubActions(language?: string, automationTool?: string): string {
   if (language === 'python') {
@@ -8,12 +8,17 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+permissions:
+  contents: read
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
@@ -27,7 +32,7 @@ jobs:
       run: python scripts/lint_cpom.py
     - name: Run Pytest
       run: pytest --junitxml=test-results/junit-results.xml
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: always()
       with:
         name: test-results
@@ -43,13 +48,18 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+permissions:
+  contents: read
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   cpom-lint:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-dotnet@v4
+    - uses: actions/checkout@v7
+    - uses: actions/setup-dotnet@v6
       with:
         dotnet-version: '10.0.x'
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
@@ -58,8 +68,8 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-dotnet@v4
+    - uses: actions/checkout@v7
+    - uses: actions/setup-dotnet@v6
       with:
         dotnet-version: '8.0.x'
     - name: Build
@@ -70,7 +80,7 @@ jobs:
       run: pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps
     - name: Run tests
       run: dotnet test --logger "junit;LogFilePath=test-results/junit-results.xml"
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: always()
       with:
         name: test-results
@@ -87,21 +97,28 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+permissions:
+  contents: read
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
+    - name: Install Playwright Browsers
+      run: gradle playwrightInstall
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
       run: java scripts/LintCpom.java
     - name: Run tests
       run: gradle test
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: always()
       with:
         name: test-results
@@ -115,21 +132,28 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+permissions:
+  contents: read
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
+    - name: Install Playwright Browsers
+      run: mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
       run: java scripts/LintCpom.java
     - name: Run tests
       run: mvn test
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: always()
       with:
         name: test-results
@@ -145,12 +169,17 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+permissions:
+  contents: read
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: actions/setup-node@v6
       with:
         node-version: 18
@@ -161,7 +190,7 @@ jobs:
       run: npm audit --audit-level=high
     - name: Run Cypress tests
       run: npx cypress run
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: always()
       with:
         name: cypress-results
@@ -178,12 +207,17 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+permissions:
+  contents: read
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: actions/setup-node@v6
       with:
         node-version: 18
@@ -198,7 +232,7 @@ jobs:
       run: npm run lint:cpom
     - name: Run Playwright tests
       run: npm test
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: always()
       with:
         name: playwright-report
@@ -212,9 +246,16 @@ export function renderGitlabCi(language?: string, automationTool?: string): stri
     return `stages:
   - test
 
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
 pytest-playwright-tests:
   stage: test
-  image: mcr.microsoft.com/playwright/python:v1.45.0-jammy
+  image: mcr.microsoft.com/playwright/python:v1.51.0-jammy
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -234,6 +275,13 @@ pytest-playwright-tests:
   if (language === 'csharp') {
     return `stages:
   - test
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 dotnet-playwright-tests:
   stage: test
@@ -267,12 +315,21 @@ csharp-cpom-lint:
   }
 
   if (language === 'java') {
-    const cmd = automationTool?.includes('gradle') ? 'gradle test' : 'mvn test';
-    const reportPath = automationTool?.includes('gradle')
-      ? 'build/reports/tests/'
-      : 'target/surefire-reports/';
+    const isGradle = automationTool?.includes('gradle');
+    const installCmd = isGradle
+      ? 'gradle playwrightInstall'
+      : 'mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"';
+    const cmd = isGradle ? 'gradle test' : 'mvn test';
+    const reportPath = isGradle ? 'build/reports/tests/' : 'target/surefire-reports/';
     return `stages:
   - test
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 java-playwright-tests:
   stage: test
@@ -281,6 +338,7 @@ java-playwright-tests:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
+    - ${installCmd}
     - java scripts/LintCpom.java
     - ${cmd}
   artifacts:
@@ -294,6 +352,13 @@ java-playwright-tests:
   if (automationTool === 'cypress') {
     return `stages:
   - test
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 cypress-tests:
   stage: test
@@ -316,6 +381,13 @@ cypress-tests:
 
   return `stages:
   - test
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 playwright-tests:
   stage: test
@@ -342,7 +414,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
   if (language === 'python') {
     return `pipeline {
     agent {
-        docker { image 'mcr.microsoft.com/playwright/python:v1.45.0-jammy' }
+        docker { image 'mcr.microsoft.com/playwright/python:v1.51.0-jammy' }
     }
     stages {
         stage('Install') {
@@ -424,8 +496,12 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
   }
 
   if (language === 'java') {
-    const cmd = automationTool?.includes('gradle') ? 'gradle test' : 'mvn test';
-    const reportPattern = automationTool?.includes('gradle')
+    const isGradle = automationTool?.includes('gradle');
+    const installCmd = isGradle
+      ? 'gradle playwrightInstall'
+      : 'mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"';
+    const cmd = isGradle ? 'gradle test' : 'mvn test';
+    const reportPattern = isGradle
       ? 'build/test-results/**/*.xml'
       : 'target/surefire-reports/*.xml';
     return `pipeline {
@@ -433,6 +509,11 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
         docker { image 'eclipse-temurin:17-jdk-jammy' }
     }
     stages {
+        stage('Install Playwright Browsers') {
+            steps {
+                sh '${installCmd}'
+            }
+        }
         stage('Audit CPOM Contract & Anti-Fake-Green Rules') {
             steps {
                 sh 'java scripts/LintCpom.java'
@@ -588,6 +669,9 @@ Add the following Build Steps to your configuration:
 
   if (language === 'java') {
     const isGradle = automationTool?.includes('gradle');
+    const installCmd = isGradle
+      ? 'gradle playwrightInstall'
+      : 'mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"';
     const cmd = isGradle ? 'gradle test' : 'mvn test';
     const reportPath = isGradle ? 'build/test-results/**/*.xml' : 'target/surefire-reports/*.xml';
     return `# TeamCity Setup Guide for Java + Playwright Tests
@@ -598,7 +682,15 @@ To run your Java + Playwright tests in TeamCity, follow these steps to create a 
 
 Add the following Build Steps to your configuration:
 
-### Step 1: Run Tests (${isGradle ? 'Gradle' : 'Maven'})
+### Step 1: Install Playwright Browsers (Command Line)
+- **Step Name**: Install Playwright Browsers
+- **Run**: Custom script
+- **Custom script**:
+  \`\`\`bash
+  ${installCmd}
+  \`\`\`
+
+### Step 2: Run Tests (${isGradle ? 'Gradle' : 'Maven'})
 - **Step Name**: Run Tests
 - **Run**: Custom script
 - **Custom script**:
@@ -693,4 +785,111 @@ To show detailed test results and build trends directly on the TeamCity dashboar
 - Set **Report type** to: \`Ant JUnit\`
 - Set **Monitoring paths** to: \`playwright-report/junit-results.xml\`
 `;
+}
+
+// Kotlin DSL Configuration-as-Code, generated alongside the markdown guide above (not replacing
+// it — teams doing manual UI setup still need the guide). Matches JetBrains' own default
+// onboarding path for TeamCity projects with Versioned Settings enabled since 2019, formalized
+// further in 2026.1 (auto-conversion of UI-configured projects into this same DSL).
+export function renderTeamcityKotlinDsl(language?: string, automationTool?: string): string {
+  const header = `import jetbrains.buildServer.configs.kotlin.*
+import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
+import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
+import jetbrains.buildServer.configs.kotlin.buildSteps.script
+import jetbrains.buildServer.configs.kotlin.triggers.vcs
+
+version = "2024.03"
+
+project {
+    buildType(E2ETests)
+}
+`;
+
+  function buildType(name: string, steps: string[], reportRules: string): string {
+    const stepsBlock = steps
+      .map(
+        (s) => `        script {
+            name = "${s.split('\n')[0]}"
+            scriptContent = """
+${s}
+            """.trimIndent()
+        }`,
+      )
+      .join('\n');
+    return `${header}
+object E2ETests : BuildType({
+    name = "${name}"
+
+    vcs {
+        root(DslContext.settingsRoot)
+    }
+
+    steps {
+${stepsBlock}
+    }
+
+    triggers {
+        vcs {
+        }
+    }
+
+    features {
+        xmlReport {
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "${reportRules}"
+        }
+    }
+})
+`;
+  }
+
+  if (language === 'python') {
+    return buildType(
+      'E2E Tests (pytest + Playwright)',
+      [
+        'Install dependencies\npip install -e .[api]',
+        'Run Pytest\npytest --junitxml=test-results/junit-results.xml',
+      ],
+      'test-results/junit-results.xml',
+    );
+  }
+
+  if (language === 'csharp') {
+    return buildType(
+      'E2E Tests (.NET + Playwright)',
+      [
+        'Build and Install Browsers\ndotnet build\npwsh bin/Debug/net8.0/playwright.ps1 install --with-deps',
+        'Run .NET Tests\ndotnet test --logger "junit;LogFilePath=test-results/junit-results.xml"',
+      ],
+      'test-results/junit-results.xml',
+    );
+  }
+
+  if (language === 'java') {
+    const isGradle = automationTool?.includes('gradle');
+    const installCmd = isGradle
+      ? 'gradle playwrightInstall'
+      : 'mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"';
+    const cmd = isGradle ? 'gradle test' : 'mvn test';
+    const reportPath = isGradle ? 'build/test-results/**/*.xml' : 'target/surefire-reports/*.xml';
+    return buildType(
+      `E2E Tests (Java + Playwright + ${isGradle ? 'Gradle' : 'Maven'})`,
+      [`Install Playwright Browsers\n${installCmd}`, `Run Tests\n${cmd}`],
+      reportPath,
+    );
+  }
+
+  if (automationTool === 'cypress') {
+    return buildType(
+      'E2E Tests (Cypress)',
+      ['Install dependencies\nnpm ci', 'Run Cypress Tests\nnpx cypress run'],
+      'cypress/results/*.xml',
+    );
+  }
+
+  return buildType(
+    'E2E Tests (Playwright)',
+    ['Install dependencies\nnpm ci', 'Run Playwright tests\nnpm test'],
+    'playwright-report/junit-results.xml',
+  );
 }

@@ -16,7 +16,7 @@ export function renderCsharpCsproj(_opts: CsharpProjectOpts): string {
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
-    <PackageReference Include="Microsoft.Playwright.NUnit" Version="1.42.0" />
+    <PackageReference Include="Microsoft.Playwright.NUnit" Version="1.51.0" />
     <PackageReference Include="NUnit" Version="4.1.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
     <PackageReference Include="NUnit.Analyzers" Version="4.0.1" />
