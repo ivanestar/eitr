@@ -407,10 +407,6 @@ public class Link extends Component {
     public String getHrefNow() {
         return getLocator().getAttribute("href");
     }
-
-    public String hrefNow() {
-        return getHrefNow();
-    }
 }
 `;
 }
