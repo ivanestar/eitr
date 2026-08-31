@@ -8,6 +8,3 @@ export * from './file-input';
 export * from './radio';
 export * from './element';
 export * from './heading';
-export * from './slider';
-export * from './drag-and-drop';
-export * from './canvas';

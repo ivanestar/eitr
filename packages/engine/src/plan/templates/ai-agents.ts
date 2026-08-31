@@ -201,6 +201,71 @@ You are responsible for generating, updating, and validating Page Objects and co
 - When inspecting complex UI widgets (e.g. Radix dialogs, shadow DOM, virtualized tables, custom select dropdowns), launch Web Search subagents to inspect official documentation and current testing best practices.
 - Synthesize actionable engineering recommendations for the SDET Architect and Test Automator based on research findings.
 
+## Extended Primitives - Synthesize On Demand, Never Pre-Generated
+The scaffolded \`components/primitives/\` only ships the primitives virtually every application
+needs (Button, TextInput, Checkbox, Select, Link, ...). A range slider, drag-and-drop, or canvas
+drawing surface is situational - most target applications never touch one, so it is never
+scaffolded unconditionally. When the live DOM you're inspecting actually contains one, synthesize
+the matching file yourself into \`components/primitives/\` using the compliant pattern below -
+do not skip the interaction or leave it unhandled just because no starter file exists for it.
+
+**Slider** (\`<input type="range">\` or role="slider") - \`components/primitives/slider.ts\`:
+\`\`\`typescript
+export class Slider extends Component {
+  async setValue(value: string | number): Promise<void> {
+    await this.locator.evaluate((el: HTMLInputElement, v: string) => {
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+      setter?.call(el, v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, String(value));
+  }
+  async stepUp(): Promise<void> { await this.locator.press('ArrowRight'); }
+  async stepDown(): Promise<void> { await this.locator.press('ArrowLeft'); }
+  async valueNow(): Promise<string> { return this.locator.inputValue(); }
+}
+\`\`\`
+Native value-setter dispatch (not \`fill()\`) is required - a range input's value isn't "typed"
+character-by-character, and a plain \`.value =\` assignment is silently overridden by
+framework-controlled inputs (e.g. React).
+
+**DragAndDrop** - \`components/primitives/drag-and-drop.ts\`:
+\`\`\`typescript
+export class DragAndDrop extends Component {
+  async dragToTarget(target: Locator | Component): Promise<void> {
+    const targetLocator = target instanceof Component ? target.locator : target;
+    await this.locator.dragTo(targetLocator);
+  }
+  async dragByOffset(dx: number, dy: number): Promise<void> {
+    const box = await this.locator.boundingBox();
+    if (!box) throw new Error('Cannot drag element: bounding box not found in DOM.');
+    const page = this.page();
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + dx, startY + dy, { steps: 5 });
+    await page.mouse.up();
+  }
+}
+\`\`\`
+
+**Canvas** - \`components/primitives/canvas.ts\`:
+\`\`\`typescript
+export class Canvas extends Component {
+  async clickAtRelative(relX: number, relY: number): Promise<void> {
+    const box = await this.locator.boundingBox();
+    if (!box) throw new Error('Cannot interact with canvas: bounding box not found.');
+    const x = box.x + box.width * Math.max(0, Math.min(1, relX));
+    const y = box.y + box.height * Math.max(0, Math.min(1, relY));
+    await this.page().mouse.click(x, y);
+  }
+}
+\`\`\`
+All three follow the same Method Safety Contract as every other primitive (no assertions inside
+the class, snapshot reads suffixed \`Now()\`) - they are ordinary compliant components, just not
+scaffolded by default. Export the new file from \`components/primitives/index.ts\` once added.
+
 ## Live-DOM Liveness Verification & Mandatory Execution Loop
 - 1:1 Strict Parity: For EVERY Page Object created or updated in \`components/pages/<name>.page.ts\`, you MUST verify all of its locators directly against the live application before reporting it complete (0 unverified Page Objects). This verification is a live check, not a persistent generated test file.
 - Apply the 3-Tier Component Liveness Check:

@@ -5,6 +5,7 @@ import { renderAppGraphHtml } from '../../engine/src/plan/templates/app-graph-ht
 import { planSharedScaffold } from '../../engine/src/plan/shared.js';
 import { checkAiTooling } from '../../cli/src/commands/doctor.js';
 import { planAiOperationalSkills } from '../../engine/src/plan/templates/ai-operational-skills.js';
+import { planAiAgents } from '../../engine/src/plan/templates/ai-agents.js';
 import { renderAuthSetupTs } from '../../engine/src/plan/templates/auth-setup.js';
 import { renderGitHooks } from '../../engine/src/plan/templates/git-hooks.js';
 
@@ -73,7 +74,10 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
     expect(rescanContent).toContain('Fan-Out / Fan-In');
   });
 
-  it('AC-7: Specialized CPOM Primitives (DragAndDrop, Canvas) in runtime assets', () => {
+  it('AC-7: Specialized CPOM Primitives (DragAndDrop, Canvas) are taught patterns, not pre-generated files', () => {
+    // Situational primitives (Slider, DragAndDrop, Canvas) are deliberately NOT unconditionally
+    // scaffolded (docs/architecture/known-gaps.md-adjacent decision, 2026-08-31) - most target
+    // apps never touch one. pom-engineer synthesizes the compliant file on demand instead.
     const dndPath = path.resolve(
       process.cwd(),
       'packages/engine/assets/runtime/components/primitives/drag-and-drop.ts',
@@ -82,17 +86,19 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
       process.cwd(),
       'packages/engine/assets/runtime/components/primitives/canvas.ts',
     );
+    expect(fs.existsSync(dndPath)).toBe(false);
+    expect(fs.existsSync(canvasPath)).toBe(false);
 
-    expect(fs.existsSync(dndPath)).toBe(true);
-    expect(fs.existsSync(canvasPath)).toBe(true);
+    const files = planSharedScaffold({ language: 'typescript', automationTool: 'playwright' });
+    expect(files.map((f) => f.path)).not.toContain('components/primitives/drag-and-drop.ts');
+    expect(files.map((f) => f.path)).not.toContain('components/primitives/canvas.ts');
 
-    const dndContent = fs.readFileSync(dndPath, 'utf8');
-    expect(dndContent).toContain('DragAndDrop');
-    expect(dndContent).toContain('dragByOffset');
-
-    const canvasContent = fs.readFileSync(canvasPath, 'utf8');
-    expect(canvasContent).toContain('Canvas');
-    expect(canvasContent).toContain('clickAtRelative');
+    const architectPrompt = planAiAgents(assistants, 'playwright', 'typescript')
+      .map((f) => (f.source as { text: string }).text)
+      .join('\n');
+    expect(architectPrompt).toContain('DragAndDrop');
+    expect(architectPrompt).toContain('dragByOffset');
+    expect(architectPrompt).toContain('clickAtRelative');
   });
 
   it('AC-8: Git Pre-Commit Hook template generation', () => {
