@@ -23,6 +23,8 @@ jobs:
       run: pip install pip-audit && pip-audit
     - name: Install Playwright Browsers
       run: playwright install --with-deps
+    - name: Audit CPOM Contract & Anti-Fake-Green Rules
+      run: python scripts/lint_cpom.py
     - name: Run Pytest
       run: pytest --junitxml=test-results/junit-results.xml
     - uses: actions/upload-artifact@v4
@@ -42,6 +44,16 @@ on:
   pull_request:
     branches: [ main, master ]
 jobs:
+  cpom-lint:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+    - name: Audit CPOM Contract & Anti-Fake-Green Rules
+      run: dotnet run --file scripts/LintCpom.cs
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -85,6 +97,8 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
+    - name: Audit CPOM Contract & Anti-Fake-Green Rules
+      run: java scripts/LintCpom.java
     - name: Run tests
       run: gradle test
     - uses: actions/upload-artifact@v4
@@ -111,6 +125,8 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
+    - name: Audit CPOM Contract & Anti-Fake-Green Rules
+      run: java scripts/LintCpom.java
     - name: Run tests
       run: mvn test
     - uses: actions/upload-artifact@v4
@@ -205,6 +221,7 @@ pytest-playwright-tests:
   script:
     - pip install -e .[api]
     - pip install pip-audit && pip-audit
+    - python scripts/lint_cpom.py
     - pytest --junitxml=test-results/junit-results.xml
   artifacts:
     when: always
@@ -234,6 +251,18 @@ dotnet-playwright-tests:
     reports:
       junit: test-results/junit-results.xml
     expire_in: 30 days
+
+# Separate job/image: file-based apps (dotnet run --file) require the .NET 10 SDK, one major
+# ahead of the .NET 8 image used above to build/test this net8.0 project. Isolating the lint in
+# its own job keeps the existing net8.0 build/test path completely untouched.
+csharp-cpom-lint:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - dotnet run --file scripts/LintCpom.cs
 `;
   }
 
@@ -252,6 +281,7 @@ java-playwright-tests:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
+    - java scripts/LintCpom.java
     - ${cmd}
   artifacts:
     when: always
@@ -325,6 +355,11 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
                 sh 'pip install pip-audit && pip-audit'
             }
         }
+        stage('Audit CPOM Contract & Anti-Fake-Green Rules') {
+            steps {
+                sh 'python scripts/lint_cpom.py'
+            }
+        }
         stage('Test') {
             steps {
                 sh 'pytest --junitxml=test-results/junit-results.xml'
@@ -361,6 +396,18 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
                 sh 'pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps'
             }
         }
+        // Own agent/image: file-based apps (dotnet run --file) require the .NET 10 SDK, one
+        // major ahead of the .NET 8 image used by the rest of this pipeline to build/test this
+        // net8.0 project. Isolating the lint in its own stage-level agent keeps the existing
+        // net8.0 build/test path completely untouched.
+        stage('Audit CPOM Contract & Anti-Fake-Green Rules') {
+            agent {
+                docker { image 'mcr.microsoft.com/dotnet/sdk:10.0' }
+            }
+            steps {
+                sh 'dotnet run --file scripts/LintCpom.cs'
+            }
+        }
         stage('Test') {
             steps {
                 sh 'dotnet test --logger "junit;LogFilePath=test-results/junit-results.xml"'
@@ -386,6 +433,11 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
         docker { image 'eclipse-temurin:17-jdk-jammy' }
     }
     stages {
+        stage('Audit CPOM Contract & Anti-Fake-Green Rules') {
+            steps {
+                sh 'java scripts/LintCpom.java'
+            }
+        }
         stage('Test') {
             steps {
                 sh '${cmd}'
