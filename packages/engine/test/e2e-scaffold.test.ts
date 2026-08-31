@@ -44,7 +44,7 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     expect(workflow).toContain('npm run lint:cpom');
     expect(workflow).not.toContain('test:sanity');
     expect(workflow).toContain('Run Playwright tests');
-    expect(workflow).toContain('npm test');
+    expect(workflow).toContain('npx playwright test --project=chromium --shard=');
   });
 
   it('executes full end-to-end plan generation with zero lock-in and zero emoji', () => {
