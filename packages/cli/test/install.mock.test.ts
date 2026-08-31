@@ -49,6 +49,17 @@ function makeCsharpProject(): string {
   return dir;
 }
 
+function makeJavaProject(withGradle: boolean): string {
+  const dir = mkdtempSync(join(tmpdir(), 'eitr-install-java-'));
+  tmpDirs.push(dir);
+  if (withGradle) {
+    writeFileSync(join(dir, 'build.gradle'), "plugins { id 'java' }\n", 'utf8');
+  } else {
+    writeFileSync(join(dir, 'pom.xml'), '<project></project>\n', 'utf8');
+  }
+  return dir;
+}
+
 interface Call {
   file: string;
   args: string[];
@@ -159,6 +170,105 @@ describe('runInstall (spawn injected) - C# / Playwright', () => {
     expect(outcome.installedDeps).toBe(false);
     expect(outcome.installedBrowsers).toBe(false);
     expect(outcome.message).toContain('dotnet build exited with code 1');
+  });
+});
+
+describe('runInstall (spawn injected) - Java / Maven', () => {
+  it('runs mvn test-compile then the Playwright CLI browser install', async () => {
+    const proj = makeJavaProject(false);
+    const { run, calls } = recorder([
+      { code: 0 }, // mvn --version -> ok
+      { code: 0 }, // mvn test-compile -> ok
+      { code: 0 }, // mvn exec:java (playwright CLI install) -> ok
+    ]);
+    const outcome = await runInstall(proj, { run });
+
+    expect(outcome).toEqual({ installedDeps: true, installedBrowsers: true });
+    expect(calls).toHaveLength(3);
+
+    expect(calls[1].args).toEqual(['test-compile']);
+
+    // The -Dexec.args value is quoted only on Windows (mvn.cmd goes through cmd.exe, which
+    // re-splits an unquoted space) and unquoted everywhere else (plain 'mvn' has no shell to
+    // re-split it, and quotes would instead become literal characters) - both forms were caught
+    // breaking live (Windows unquoted, Linux quoted), so this test pins the platform-correct one
+    // rather than a single hardcoded string that would only ever validate one OS.
+    const expectedExecArgs =
+      process.platform === 'win32'
+        ? '-Dexec.args="install chromium"'
+        : '-Dexec.args=install chromium';
+    expect(calls[2].args).toEqual([
+      'exec:java',
+      '-e',
+      '-Dexec.mainClass=com.microsoft.playwright.CLI',
+      expectedExecArgs,
+    ]);
+  });
+
+  it('reports a browser-install failure as installedBrowsers:false (deps still ok)', async () => {
+    const proj = makeJavaProject(false);
+    const { run } = recorder([
+      { code: 0 }, // mvn --version
+      { code: 0 }, // mvn test-compile
+      { code: 1 }, // mvn exec:java fails
+    ]);
+    const outcome = await runInstall(proj, { run });
+    expect(outcome.installedDeps).toBe(true);
+    expect(outcome.installedBrowsers).toBe(false);
+    expect(outcome.message).toContain('mvn exec:java');
+  });
+
+  it('does not attempt the browser step if mvn test-compile fails', async () => {
+    const proj = makeJavaProject(false);
+    const { run, calls } = recorder([
+      { code: 0 }, // mvn --version
+      { code: 1 }, // mvn test-compile fails
+    ]);
+    const outcome = await runInstall(proj, { run });
+    expect(outcome.installedDeps).toBe(false);
+    expect(outcome.installedBrowsers).toBe(false);
+    expect(calls).toHaveLength(2); // never reached the browser step
+  });
+
+  it('skipBrowsers compiles only, does not install browsers', async () => {
+    const proj = makeJavaProject(false);
+    const { run, calls } = recorder([
+      { code: 0 }, // mvn --version
+      { code: 0 }, // mvn test-compile
+    ]);
+    const outcome = await runInstall(proj, { run, skipBrowsers: true });
+    expect(outcome).toEqual({ installedDeps: true, installedBrowsers: false });
+    expect(calls).toHaveLength(2);
+  });
+});
+
+describe('runInstall (spawn injected) - Java / Gradle', () => {
+  it('runs gradle testClasses then the playwrightInstall task', async () => {
+    const proj = makeJavaProject(true);
+    const { run, calls } = recorder([
+      { code: 0 }, // gradle --version -> ok
+      { code: 0 }, // gradle testClasses -> ok
+      { code: 0 }, // gradle playwrightInstall -> ok
+    ]);
+    const outcome = await runInstall(proj, { run });
+
+    expect(outcome).toEqual({ installedDeps: true, installedBrowsers: true });
+    expect(calls).toHaveLength(3);
+    expect(calls[1].args).toEqual(['testClasses']);
+    expect(calls[2].args).toEqual(['playwrightInstall']);
+  });
+
+  it('reports a browser-install failure as installedBrowsers:false (deps still ok)', async () => {
+    const proj = makeJavaProject(true);
+    const { run } = recorder([
+      { code: 0 }, // gradle --version
+      { code: 0 }, // gradle testClasses
+      { code: 1 }, // gradle playwrightInstall fails
+    ]);
+    const outcome = await runInstall(proj, { run });
+    expect(outcome.installedDeps).toBe(true);
+    expect(outcome.installedBrowsers).toBe(false);
+    expect(outcome.message).toContain('playwrightInstall');
   });
 });
 
@@ -347,7 +457,7 @@ describe('getPlannedInstallSteps', () => {
       },
       {
         description: 'Download Playwright Chromium browser binary',
-        command: 'gradle run -Dexec.args="install chromium"',
+        command: 'gradle playwrightInstall',
       },
     ]);
   });
