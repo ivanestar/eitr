@@ -81,7 +81,13 @@ package --vulnerable`, per language) ahead of the test run; Java's Maven/Gradle 
 yet have an equivalent step (tracked separately, not part of the CPOM gate). GitHub Actions
 workflows declare a least-privilege `permissions:` block and a `concurrency`/cancel-in-progress
 group; GitLab CI configs declare a top-level `workflow: rules` guard against duplicate
-push/merge-request pipelines.
+push/merge-request pipelines. The default TS/JS branch on GitHub Actions and GitLab CI (the two
+most-used providers) shards the Tier 2 run 4-way (`--shard=X/Y` / `$CI_NODE_INDEX`/`$CI_NODE_TOTAL`),
+each shard producing a Playwright blob report that a separate merge job/stage combines into one
+HTML + JUnit report via `playwright merge-reports`; Jenkins, TeamCity, and the 4 non-TS/JS
+languages do not shard yet - Playwright's `--shard` flag is Node-runner-specific and the other
+ecosystems need their own verified mechanism (`pytest-xdist` for Python is intra-machine
+parallelism only, not true cross-machine sharding) rather than a guessed one.
 
 ## API testing support
 
