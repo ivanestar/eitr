@@ -1063,12 +1063,13 @@ ${stepsBlock}
   // Sharded matrix build (jetbrains.com/help/teamcity/matrix-build.html) - each of 4 generated
   // cells runs one shard and reports its own JUnit results independently; no merge configuration
   // needed since pytest-split doesn't produce a mergeable report the way Playwright's blob
-  // reporter does.
+  // reporter does. `matrix` import verified live against a real TeamCity 2025.03 server on
+  // 2026-08-31 - see the fuller note on the TS/JS branch below.
   if (language === 'python') {
     return `import jetbrains.buildServer.configs.kotlin.*
 import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
-import jetbrains.buildServer.configs.kotlin.buildFeatures.matrix
+import jetbrains.buildServer.configs.kotlin.matrix
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
 import jetbrains.buildServer.configs.kotlin.triggers.vcs
 
@@ -1154,13 +1155,17 @@ pytest --splits 4 --group %SHARD% --junitxml=test-results/junit-results.xml
   // Sharded matrix build, same mechanism as Python above. Unlike Python, Playwright's blob
   // reporter DOES produce a mergeable report, so a downstream MergeReports build type combines all
   // 4 shards via `playwright merge-reports` - the snapshot + artifact dependency pattern below is
-  // TeamCity's documented general "run after, consume artifacts" mechanism, but JetBrains' own
-  // Matrix Build docs stop short of spelling out this exact downstream-merge wiring; verify against
-  // a live TeamCity instance before relying on it in production.
+  // TeamCity's documented general "run after, consume artifacts" mechanism. Verified live against a
+  // real TeamCity 2025.03 server (Docker) on 2026-08-31: the `matrix` build feature and the
+  // MergeReports snapshot+artifact dependency both materialize exactly as coded here. That same
+  // verification pass caught and fixed a real bug - `jetbrains.buildServer.configs.kotlin.matrix` is
+  // the correct import (the extension function lives in the versioned DSL root package, not under
+  // `.buildFeatures.`); the previous `buildFeatures.matrix` import failed to compile on a live
+  // server with "Unresolved reference: matrix". See CHANGELOG.md for the fix.
   return `import jetbrains.buildServer.configs.kotlin.*
 import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
-import jetbrains.buildServer.configs.kotlin.buildFeatures.matrix
+import jetbrains.buildServer.configs.kotlin.matrix
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
 import jetbrains.buildServer.configs.kotlin.triggers.vcs
 
