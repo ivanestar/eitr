@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v7
       with:
         python-version: '3.11'
     - name: Install dependencies
@@ -32,7 +32,7 @@ jobs:
       run: python scripts/lint_cpom.py
     - name: Run Pytest
       run: pytest --junitxml=test-results/junit-results.xml
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-results
@@ -80,7 +80,7 @@ jobs:
       run: pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps
     - name: Run tests
       run: dotnet test --logger "junit;LogFilePath=test-results/junit-results.xml"
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-results
@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v6
       with:
         distribution: 'temurin'
         java-version: '17'
@@ -118,7 +118,7 @@ jobs:
       run: java scripts/LintCpom.java
     - name: Run tests
       run: gradle test
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-results
@@ -143,7 +143,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v6
       with:
         distribution: 'temurin'
         java-version: '17'
@@ -153,7 +153,7 @@ jobs:
       run: java scripts/LintCpom.java
     - name: Run tests
       run: mvn test
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-results
@@ -180,7 +180,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-    - uses: actions/setup-node@v6
+    - uses: actions/setup-node@v7
       with:
         node-version: 18
         cache: 'npm'
@@ -190,7 +190,7 @@ jobs:
       run: npm audit --audit-level=high
     - name: Run Cypress tests
       run: npx cypress run
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: cypress-results
@@ -216,9 +216,14 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     steps:
     - uses: actions/checkout@v7
-    - uses: actions/setup-node@v6
+    - uses: actions/setup-node@v7
       with:
         node-version: 18
         cache: 'npm'
@@ -230,9 +235,37 @@ jobs:
       run: npx playwright install --with-deps
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
       run: npm run lint:cpom
-    - name: Run Playwright tests
-      run: npm test
-    - uses: actions/upload-artifact@v5
+    - name: Run Playwright tests (shard \${{ matrix.shardIndex }}/\${{ matrix.shardTotal }})
+      run: npx playwright test --project=chromium --shard=\${{ matrix.shardIndex }}/\${{ matrix.shardTotal }} --reporter=blob
+    - uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: blob-report-\${{ matrix.shardIndex }}
+        path: blob-report
+        retention-days: 1
+
+  merge-reports:
+    if: always()
+    needs: [test]
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 18
+        cache: 'npm'
+    - name: Install dependencies
+      run: npm ci
+    - name: Download blob reports from every shard
+      uses: actions/download-artifact@v8
+      with:
+        path: all-blob-reports
+        pattern: blob-report-*
+        merge-multiple: true
+    - name: Merge shards into a single HTML report
+      run: npx playwright merge-reports --reporter html ./all-blob-reports
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: playwright-report
@@ -381,6 +414,7 @@ cypress-tests:
 
   return `stages:
   - test
+  - report
 
 workflow:
   rules:
@@ -392,6 +426,7 @@ workflow:
 playwright-tests:
   stage: test
   image: mcr.microsoft.com/playwright:v1.51.1-jammy
+  parallel: 4
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -399,7 +434,30 @@ playwright-tests:
     - npm ci
     - npm audit --audit-level=high
     - npm run lint:cpom
-    - npm test
+    - npx playwright test --project=chromium --shard=$CI_NODE_INDEX/$CI_NODE_TOTAL --reporter=blob
+    - mv blob-report "blob-report-$CI_NODE_INDEX"
+  artifacts:
+    when: always
+    paths:
+      - blob-report-*/
+    expire_in: 1 day
+
+merge-playwright-reports:
+  stage: report
+  image: mcr.microsoft.com/playwright:v1.51.1-jammy
+  needs:
+    - job: playwright-tests
+      artifacts: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    PLAYWRIGHT_JUNIT_OUTPUT_NAME: playwright-report/junit-results.xml
+  script:
+    - npm ci
+    - mkdir -p all-blob-reports
+    - cp blob-report-*/*.zip all-blob-reports/
+    - npx playwright merge-reports --reporter=html,junit ./all-blob-reports
   artifacts:
     when: always
     paths:
