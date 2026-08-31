@@ -104,6 +104,17 @@ real bug) - not just what changed.
   previously-generated project's Page Objects call `Select.select_option(...)`, regenerating this
   file will change its behavior - use `NativeSelect` there instead, or keep the old file if it was
   hand-edited.
+- **TeamCity Kotlin DSL `matrix` import** (generated `.teamcity/settings.kts`, both the TS/JS shard
+  - merge branch and the Python shard-only branch of `renderTeamcityKotlinDsl`): the previous
+    `import jetbrains.buildServer.configs.kotlin.buildFeatures.matrix` failed to compile on a real
+    TeamCity 2025.03 server ("Unresolved reference: matrix") - verified live via a Docker-hosted
+    TeamCity instance, which also confirmed the correct import,
+    `jetbrains.buildServer.configs.kotlin.matrix` (the extension function lives in the versioned DSL
+    root package, not under `.buildFeatures.`), against both the server's own bundled DSL jar and
+    JetBrains' official Matrix Build docs. The same live pass confirmed the `MergeReports` build
+    type's snapshot + artifact dependency on the matrix-generated `E2ETests` cells materializes
+    exactly as coded once the import is fixed - closing the previously-open "unverified" MAJOR item
+    in TODO.md.
 
 ### Removed
 
