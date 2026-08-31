@@ -1,0 +1,22 @@
+# EITR
+
+> CLI tool that generates a complete, standalone Playwright test automation framework from a target URL. Supports TypeScript, JavaScript, Python, C#, and Java.
+
+EITR is an interactive CLI wizard invoked via `npx @onlytests/eitr new`. It inspects a target URL, asks for stack preferences (language, CI provider, TMS), and generates a ready-to-run test project with page objects, CI pipeline, and optional TMS integration.
+
+For headless or CI usage, pass all options as flags: `npx @onlytests/eitr new --url <URL> --lang <ts|js|python|csharp|java> --ci <github|gitlab|jenkins|teamcity> --yes`.
+
+Other commands: `npx @onlytests/eitr auth` captures an authenticated browser session (handles SSO/MFA) into `.auth/user.json` for test reuse. `npx @onlytests/eitr doctor --ai` checks environment and AI tooling setup.
+
+The generated project follows the Component Page Object Model (CPOM) pattern: base classes, UI primitives (Button, TextInput, Table, Dialog), page compositions, and test scenarios. Assertions live in tests only. State readers use a `Now()` suffix and do not auto-retry. The generated framework has zero runtime dependency on EITR.
+
+## Documentation
+
+- [README](https://raw.githubusercontent.com/ivanestar/eitr/main/README.md): Quick start, feature overview, CLI command reference
+- [Architecture](https://raw.githubusercontent.com/ivanestar/eitr/main/docs/architecture/README.md): System architecture, design decisions, ADRs
+- [Contributing](https://raw.githubusercontent.com/ivanestar/eitr/main/CONTRIBUTING.md): Contribution guidelines and code style
+
+## Source
+
+- [CLI package](https://github.com/ivanestar/eitr/tree/main/packages/cli): Interactive wizard and command handlers
+- [Engine package](https://github.com/ivanestar/eitr/tree/main/packages/engine): Code generation engine, AST templates, CPOM primitives

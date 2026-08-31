@@ -1,11 +1,12 @@
 {
   "name": "@onlytests/eitr",
-  "description": "Universal zero-lock-in UI test framework scaffolder (Playwright)",
+  "description": "Generates a complete, standalone Playwright test framework from your app URL across TypeScript, JavaScript, Python, C#, and Java.",
   "bin": {
     "eitr": "./dist/bin/eitr.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "llms.txt"
   ],
   "version": "0.6.0",
   "type": "module",
@@ -28,13 +29,21 @@
     "url": "https://github.com/ivanestar/eitr.git"
   },
   "keywords": [
-    "testing",
     "playwright",
-    "cypress",
-    "scaffolder",
-    "e2e",
-    "automation",
-    "framework"
+    "test-automation",
+    "e2e-testing",
+    "page-objects",
+    "cpom",
+    "scaffold",
+    "cli",
+    "typescript",
+    "javascript",
+    "python",
+    "csharp",
+    "java",
+    "ci-cd",
+    "testrail",
+    "xray"
   ],
   "workspaces": [
     "packages/*"

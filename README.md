@@ -12,6 +12,14 @@ Playwright across TypeScript, JavaScript, Python, C#, and Java.
 
 ---
 
+## Why EITR
+
+- **From URL to running suite in minutes.** Point it at your app, answer a few questions, and the wizard generates everything — project structure, page objects, CI configs, TMS wiring — and installs dependencies in one pass.
+- **No dependency on EITR.** The generated code is yours: plain Playwright, plain CI configs, no special runtime needed. Delete EITR after scaffolding and nothing breaks.
+- **Handles the annoying parts.** Login/MFA session reuse, CI sharding, test data factories, TMS sync — the boilerplate that normally takes a week to set up right.
+
+---
+
 ## Quick Start
 
 ```bash
@@ -44,11 +52,11 @@ The wizard inspects your target URL, asks for your language/CI/TMS choices, and 
 
 ## CLI Commands
 
-| Command                | Description                                             |
-| ---------------------- | ------------------------------------------------------- |
-| `npx eitr new`         | Scaffold a new framework                                |
-| `npx eitr auth`        | Capture an authenticated session into `.auth/user.json` |
-| `npx eitr doctor --ai` | Check environment and AI-tooling setup                  |
+| Command                           | Description                                             |
+| --------------------------------- | ------------------------------------------------------- |
+| `npx @onlytests/eitr new`         | Scaffold a new framework                                |
+| `npx @onlytests/eitr auth`        | Capture an authenticated session into `.auth/user.json` |
+| `npx @onlytests/eitr doctor --ai` | Check environment and AI-tooling setup                  |
 
 ---
 
