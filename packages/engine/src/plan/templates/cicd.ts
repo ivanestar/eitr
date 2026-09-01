@@ -444,7 +444,7 @@ workflow:
 
 playwright-tests:
   stage: test
-  image: mcr.microsoft.com/playwright:v1.51.1-jammy
+  image: mcr.microsoft.com/playwright:v1.62.1-jammy
   parallel: 4
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
@@ -463,7 +463,7 @@ playwright-tests:
 
 merge-playwright-reports:
   stage: report
-  image: mcr.microsoft.com/playwright:v1.51.1-jammy
+  image: mcr.microsoft.com/playwright:v1.62.1-jammy
   needs:
     - job: playwright-tests
       artifacts: true
@@ -669,7 +669,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
                     }
                 }
                 agent {
-                    docker { image 'mcr.microsoft.com/playwright:v1.51.1-jammy' }
+                    docker { image 'mcr.microsoft.com/playwright:v1.62.1-jammy' }
                 }
                 stages {
                     stage('Install') {
@@ -708,7 +708,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
         }
         stage('Merge Reports') {
             agent {
-                docker { image 'mcr.microsoft.com/playwright:v1.51.1-jammy' }
+                docker { image 'mcr.microsoft.com/playwright:v1.62.1-jammy' }
             }
             steps {
                 sh 'npm ci'

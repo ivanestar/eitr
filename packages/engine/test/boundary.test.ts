@@ -78,7 +78,7 @@ describe('version + pins', () => {
 
   it('engine pins @playwright/test exactly as a devDependency only (no runtime dep after the verify purge)', async () => {
     const engine = await readJson('packages/engine/package.json');
-    expect(engine.devDependencies?.['@playwright/test']).toBe('1.51.1');
+    expect(engine.devDependencies?.['@playwright/test']).toBe('1.62.1');
     expect(engine.optionalDependencies).toBeUndefined();
   });
 });

@@ -117,7 +117,7 @@ CMD ["npx", "cypress", "run"]
 
   // Default: Playwright TypeScript / JavaScript
   return `# Hermetic container configuration for Playwright test automation.
-FROM mcr.microsoft.com/playwright:v1.51.1-jammy
+FROM mcr.microsoft.com/playwright:v1.62.1-jammy
 
 # Non-root user, matching Microsoft's own documented convention for Playwright Docker images
 # (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser

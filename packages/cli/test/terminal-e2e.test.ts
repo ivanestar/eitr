@@ -83,6 +83,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
   // ── Scenario 1: TypeScript Playwright Full Lifecycle ─────────────────────────
   it(
     '1. Real CLI Scaffolding — TypeScript Playwright + CPOM Linter & Typecheck',
+    { timeout: 60000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -152,56 +153,51 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       const tscRes = await runProcess(npxCmd, ['tsc', '--noEmit'], cwd);
       expect(tscRes.code).toBe(0);
     },
-    { timeout: 60000 },
   );
 
   // ── Scenario 2: Modular Pipeline Execution ──────────────────────────────────
-  it(
-    '2. Modular Pipeline — init -> generate -> doctor',
-    async () => {
-      const cwd = makeTempCwd();
+  it('2. Modular Pipeline — init -> generate -> doctor', { timeout: 60000 }, async () => {
+    const cwd = makeTempCwd();
 
-      // Step A: eitr init
-      const initRes = await runProcess(
-        'node',
-        [
-          cliPath,
-          'init',
-          '--yes',
-          '--cwd',
-          cwd,
-          '--output-dir',
-          '.',
-          '--start-url',
-          'https://app.example.com/',
-          '--language',
-          'javascript',
-          '--automation-tool',
-          'playwright',
-        ],
+    // Step A: eitr init
+    const initRes = await runProcess(
+      'node',
+      [
+        cliPath,
+        'init',
+        '--yes',
+        '--cwd',
         cwd,
-      );
-      expect(initRes.code).toBe(0);
-      expect(existsSync(path.join(cwd, '.eitr', 'init.json'))).toBe(true);
+        '--output-dir',
+        '.',
+        '--start-url',
+        'https://app.example.com/',
+        '--language',
+        'javascript',
+        '--automation-tool',
+        'playwright',
+      ],
+      cwd,
+    );
+    expect(initRes.code).toBe(0);
+    expect(existsSync(path.join(cwd, '.eitr', 'init.json'))).toBe(true);
 
-      // Step B: eitr generate
-      const genRes = await runProcess(
-        'node',
-        [cliPath, 'generate', '--cwd', cwd, '--no-install'],
-        cwd,
-      );
-      expect(genRes.code).toBe(0);
-      expect(existsSync(path.join(cwd, 'package.json'))).toBe(true);
-      expect(existsSync(path.join(cwd, 'playwright.config.js'))).toBe(true);
-      expect(existsSync(path.join(cwd, 'scripts', 'lint-cpom.js'))).toBe(true);
+    // Step B: eitr generate
+    const genRes = await runProcess(
+      'node',
+      [cliPath, 'generate', '--cwd', cwd, '--no-install'],
+      cwd,
+    );
+    expect(genRes.code).toBe(0);
+    expect(existsSync(path.join(cwd, 'package.json'))).toBe(true);
+    expect(existsSync(path.join(cwd, 'playwright.config.js'))).toBe(true);
+    expect(existsSync(path.join(cwd, 'scripts', 'lint-cpom.js'))).toBe(true);
 
-      // Step C: eitr doctor
-      const doctorRes = await runProcess('node', [cliPath, 'doctor', '--cwd', cwd], cwd);
-      expect(doctorRes.code).toBe(0);
-      expect(doctorRes.stdout).toContain('Node.js');
-    },
-    { timeout: 60000 },
-  );
+    // Step C: eitr doctor
+    const doctorRes = await runProcess('node', [cliPath, 'doctor', '--cwd', cwd], cwd);
+    expect(doctorRes.code).toBe(0);
+    expect(doctorRes.stdout).toContain('Node.js');
+  });
 
   // ── Scenario 3: Negative CPOM Contract Linter Tests ─────────────────────────
   it('3. CPOM Contract Linter Negative Tests — catches violations with exit code 1', async () => {
@@ -277,6 +273,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
   // ── Scenario 4: Polyglot Matrix Verification (Python, C#, Java) ─────────────
   it(
     '4. Polyglot Matrix — Python, C#, and Java scaffolds verify successfully',
+    { timeout: 60000 },
     async () => {
       // Python Playwright
       const pyCwd = makeTempCwd();
@@ -351,6 +348,5 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       expect(javaRes.code).toBe(0);
       expect(existsSync(path.join(javaCwd, 'pom.xml'))).toBe(true);
     },
-    { timeout: 60000 },
   );
 });

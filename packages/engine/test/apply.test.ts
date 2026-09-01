@@ -78,7 +78,7 @@ describe('apply() (runnable project)', () => {
     const cwd = makeTempCwd();
     await apply(plan(muiProfile(), planOptions()), cwd);
     const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'));
-    expect(pkg.devDependencies['@playwright/test']).toBe('1.51.1');
+    expect(pkg.devDependencies['@playwright/test']).toBe('1.62.1');
     expect(pkg.scripts.test).toBe('playwright test --project=chromium');
     expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
     expect(pkg.type).toBe('module');
@@ -164,20 +164,24 @@ describe('apply() (runnable project)', () => {
     }
   });
 
-  it('applies a complete runnable Python + Playwright project and checks python syntax', async () => {
-    const cwd = makeTempCwd();
-    const pyPlan = plan(muiProfile(), {
-      ...planOptions(),
-      language: 'python',
-      automationTool: 'playwright',
-    });
-    const result = await apply(pyPlan, cwd);
+  it(
+    'applies a complete runnable Python + Playwright project and checks python syntax',
+    { timeout: 90000 },
+    async () => {
+      const cwd = makeTempCwd();
+      const pyPlan = plan(muiProfile(), {
+        ...planOptions(),
+        language: 'python',
+        automationTool: 'playwright',
+      });
+      const result = await apply(pyPlan, cwd);
 
-    expect(existsSync(join(cwd, 'pyproject.toml'))).toBe(true);
-    expect(existsSync(join(cwd, 'conftest.py'))).toBe(true);
-    expect(existsSync(join(cwd, 'components/base/base_page.py'))).toBe(true);
-    expect(result.clobberedOwnedFiles).toEqual([]);
+      expect(existsSync(join(cwd, 'pyproject.toml'))).toBe(true);
+      expect(existsSync(join(cwd, 'conftest.py'))).toBe(true);
+      expect(existsSync(join(cwd, 'components/base/base_page.py'))).toBe(true);
+      expect(result.clobberedOwnedFiles).toEqual([]);
 
-    execSync('python -m compileall -q .', { cwd, stdio: 'ignore' });
-  });
+      execSync('python -m compileall -q .', { cwd, stdio: 'ignore' });
+    },
+  );
 });

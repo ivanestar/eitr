@@ -1,6 +1,6 @@
 {
   "name": "@eitr/evals",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Evaluation and benchmark suite for EITR",
   "license": "Apache-2.0",
   "private": true,
@@ -15,6 +15,6 @@
   "devDependencies": {
     "@types/node": "^20.14.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.1.11"
   }
 }

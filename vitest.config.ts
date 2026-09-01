@@ -6,7 +6,7 @@ import path from 'node:path';
 export default defineConfig({
   resolve: {
     alias: {
-      '@eitr/engine': path.resolve(__dirname, './packages/engine/src/index.ts'),
+      '@eitr/engine': path.resolve(import.meta.dirname, './packages/engine/src/index.ts'),
     },
   },
   test: {

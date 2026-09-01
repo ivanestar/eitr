@@ -8,6 +8,59 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.7.1] - 2026-09-01
+
+### Security
+
+- **`playwright`/`@playwright/test` SSL certificate verification bypass during browser download**
+  (high, [GHSA-7mvr-c777-76hp](https://github.com/advisories/GHSA-7mvr-c777-76hp)): bumped
+  `@playwright/test` from `1.51.1` to `1.62.1` in the engine's own devDependency, and in the
+  version pinned into every TS+Playwright and JS+Playwright generated project's `package.json`
+  (the same npm package, same vulnerability class - the two Playwright-based Docker image tags for
+  that same default language pair, `docker.ts` and `cicd.ts`, were bumped alongside it, confirmed
+  live against the upstream `microsoft/playwright` repo that a `v1.62.1-jammy` image build exists).
+  Python/C#/Java's separate Playwright SDKs and Docker image pins were deliberately left untouched
+  in this fix - they are different per-language implementations of the same vulnerability class,
+  each needing its own independent version verification (Maven Central's search index would not
+  confirm a version past `1.52.0` for `com.microsoft.playwright:playwright` in this session,
+  so guessing a Java pin was not safe) - tracked as a separate follow-up, not guessed at here.
+- `nanoid` <3.3.18 (high, [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8)):
+  custom generators could loop indefinitely when size is zero. Patch-level transitive bump via
+  `npm audit fix`, no direct dependency change.
+- `postcss` <=8.5.22 (moderate, [GHSA-fxqj-rqcc-2cmp](https://github.com/advisories/GHSA-fxqj-rqcc-2cmp)):
+  incomplete fix of an earlier advisory - attacker-controlled `sourceMappingURL` could read
+  arbitrary `.map` files when `from` is unset. Patch-level transitive bump via `npm audit fix`.
+- `esbuild`/`vite`/`@vitest/mocker`/`vite-node` chain (moderate-to-critical per npm's own severity
+  aggregation, rooted in [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99)):
+  esbuild's dev server would forward any website's request to itself and return the response. Fixed
+  by the `vitest` 2.x -> 4.1.11 upgrade below, the only path npm offered - `npm audit` classified
+  this a `critical`/major-semver fix and `npm audit fix --force` was deliberately not run blind;
+  the actual migration below was done by hand with the breaking-change surface checked first.
+
+### Changed
+
+- **`vitest` 2.x -> 4.1.11** (major, skips 3.x entirely) - required to close the `esbuild`/`vite`
+  chain above; this project's actual usage of vitest turned out to hit very little of the 2->4
+  breaking-change surface (no `workspace`/`poolOptions`/coverage config, no `vi.mock` factories
+  returning a bare non-object value, no constructor spying) after checking the real migration guide
+  against this codebase - the one real hit was the `test(name, fn, options)` three-argument call
+  signature, deprecated in Vitest 3 and removed in 4 (`options` must now be the second argument);
+  fixed in the 12 call sites that used it across `packages/cli/test/e2e.full-cycle.test.ts`,
+  `packages/cli/test/terminal-e2e.test.ts`, and `packages/evals/test/e2e/cli.test.ts`. Also fixed
+  `vitest.config.ts`'s own new-in-4.0 deprecation warning (`__dirname` -> `import.meta.dirname`,
+  since the config loader is moving to Vite's native ESM loader by default). One previously-marginal
+  test (`packages/engine/test/apply.test.ts`'s Python `apply()` + `compileall` case, ~48s and
+  always right at the old 30s default with no explicit override) needed an explicit
+  `{ timeout: 90000 }` to stop flaking under the new runner - not a functional regression, a
+  pre-existing timing margin finally made visible.
+
+Verified via a full `npx vitest run packages/engine/test packages/cli/test` (the same real,
+network/subprocess-heavy suite CI runs - real `npm`/`pip`/`mvn`/`gradle`/`dotnet` installs across
+all 8 generated-project combinations, not a sample): 43/43 files, 550 passed, 1 skipped, 0 failed.
+Also `npm run eval` (183/183), `npm run build` (clean), `npx tsc --noEmit -p
+packages/engine/tsconfig.json` (clean), `npx prettier --check .` (clean), and `npm audit` (0
+vulnerabilities, down from 9 at the start of this pass).
+
 ## [0.7.0] - 2026-09-01
 
 ### Added
