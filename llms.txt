@@ -1,12 +1,14 @@
 # EITR
 
-> CLI tool that generates a complete, standalone Playwright test automation framework from a target URL. Supports TypeScript, JavaScript, Python, C#, and Java.
+> CLI tool that generates a complete, standalone Playwright test automation framework from a target URL. Supports TypeScript, Python, C#, and Java.
 
 EITR is an interactive CLI wizard invoked via `npx @onlytests/eitr new`. It inspects a target URL, asks for stack preferences (language, CI provider, TMS), and generates a ready-to-run test project with page objects, CI pipeline, and optional TMS integration.
 
-For headless or CI usage, pass all options as flags: `npx @onlytests/eitr new --url <URL> --lang <ts|js|python|csharp|java> --ci <github|gitlab|jenkins|teamcity> --yes`.
+For headless or CI usage, pass all options as flags: `npx @onlytests/eitr new --start-url <URL> --language <typescript|python|java|csharp> --ci-cd <github|gitlab|jenkins|teamcity> --yes`. Run `npx @onlytests/eitr new --help` for the full flag list.
 
 Other commands: `npx @onlytests/eitr auth` captures an authenticated browser session (handles SSO/MFA) into `.auth/user.json` for test reuse. `npx @onlytests/eitr doctor --ai` checks environment and AI tooling setup.
+
+Good fit: E2E/browser test automation for an existing web app, Page Object scaffolding, CI + TMS wiring. Not a fit: unit testing, API-only testing, load/performance testing, security scanning. See the README's "When to use EITR" section for the full list.
 
 The generated project follows the Component Page Object Model (CPOM) pattern: base classes, UI primitives (Button, TextInput, Table, Dialog), page compositions, and test scenarios. Assertions live in tests only. State readers use a `Now()` suffix and do not auto-retry. The generated framework has zero runtime dependency on EITR.
 
