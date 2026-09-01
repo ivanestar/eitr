@@ -62,14 +62,6 @@ real bug) - not just what changed.
   spawns the actual generated `index.js` as a child process and talks JSON-RPC over stdio, covering
   the legacy `initialize` handshake, `server/discover`, and the `resultType`/`CacheableResult`
   additions above - the protocol layer had no test exercising a real running process before this.
-- `.github/dependabot.yml` for Java projects (Maven or Gradle ecosystem, weekly) generated when the
-  selected CI/CD provider is GitHub Actions - the zero-config way to get PR-based dependency
-  freshness/security signal for an ecosystem with no `npm audit`/`pip-audit`/`dotnet list
---vulnerable` equivalent. Scoped narrowly on purpose: only `language: 'java'` and only GitHub
-  Actions (GitLab CI/Jenkins/TeamCity have no equivalent auto-consumed manifest format) - this is a
-  different, narrower re-introduction than the blanket `github-actions`-ecosystem Dependabot config
-  removed entirely earlier in this same release (see Removed); it does not affect this repository's
-  own Dependabot posture, only what Java projects receive from the generator.
 - Content-assertion test coverage for the CI/CD generator (`packages/engine/test/cicd-content.test.ts`):
   per-branch string assertions for GitHub Actions/GitLab CI/Jenkinsfile across Python/C#/Java-Maven/
   Java-Gradle/default(TS-JS), YAML syntactic-validity parsing for every GitHub Actions and GitLab CI
@@ -104,10 +96,6 @@ real bug) - not just what changed.
   shared `stack-heuristics.ts` module; `recon()`'s own heuristics were also strengthened (dropped
   false-positive-prone signals like a bare `id="root"`, added Next.js/Nuxt/SvelteKit build-artifact
   signatures).
-- Dependabot scoped down to `github-actions` only (dropped the routine npm/pip/nuget/maven/gradle
-  version-bump entry, since a routine "there's a newer version" PR costs more integration-debugging
-  effort than the bump itself usually warrants) - then removed entirely later in this same release,
-  see Removed.
 
 ### Fixed
 
@@ -177,13 +165,10 @@ real bug) - not just what changed.
   touched. Both had been documented as doing real work for several releases. Site mapping and
   locator rescanning now happen only through the `/map-site` and `/bulk-rescan` AI-assistant skills,
   which already did the real work.
-- Dependabot entirely, from both this repo and the generated-project template -
-  `renderDependabotConfig()` and its wiring are gone; no generated project gets a `dependabot.yml`
-  anymore (later in this same release, `renderDependabotConfig()` was reintroduced from scratch with
-  a much narrower scope - Java + GitHub Actions only, filling a real audit-tooling gap rather than
-  the blanket every-ecosystem config removed here; see Added). GitHub's native vulnerability-alerts
-  and automated-security-fixes are enabled directly on
-  this repo instead, which needs no config file; end users can enable the same toggle on their own
+- Dependabot entirely, from both this repo and the generated-project template - `renderDependabotConfig()`
+  and its wiring are gone; no generated project gets a `dependabot.yml`, for any language or
+  ecosystem. GitHub's native vulnerability-alerts and automated-security-fixes are enabled directly
+  on this repo instead, which needs no config file; end users can enable the same toggle on their own
   repo once pushed to GitHub.
 - The Contributor License Agreement process (`.github/workflows/cla.yml`, the signatures branch,
   `CLA.md`) - its only function beyond the Apache-2.0 license itself was preserving a future
