@@ -7,6 +7,7 @@ export function renderPackageJson(projectName: string): string {
     private: true,
     type: 'module',
     scripts: {
+      pretest: 'npm run lint:cpom',
       test: 'playwright test --project=chromium',
       'test:all': 'playwright test',
       'test:ui': 'playwright test --ui',

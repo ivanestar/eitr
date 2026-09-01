@@ -84,11 +84,11 @@ export function planMcpConfigs(
 
   for (const rawAssistant of assistants) {
     const assistant = rawAssistant.toLowerCase();
-    if (assistant === 'antigravity' || assistant === 'gemini') {
+    if (assistant === 'antigravity') {
       targetPaths.add('.mcp.json');
     } else if (assistant === 'cursor') {
       targetPaths.add('.cursor/mcp.json');
-    } else if (assistant === 'claude' || assistant === 'claude-code') {
+    } else if (assistant === 'claude') {
       targetPaths.add('.claude/mcp.json');
     } else if (assistant === 'copilot' || assistant === 'vscode') {
       targetPaths.add('.vscode/mcp.json');

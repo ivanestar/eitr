@@ -13,6 +13,7 @@ try {
     format: 'esm',
     target: 'node18',
     minify: true,
+    sourcemap: true,
     define: {
       // Tells the bundled CLI where assets live relative to dist/bin/eitr.js.
       // In compiled dev mode the identifier is absent; apply.ts falls back to '../../assets'.

@@ -438,7 +438,7 @@ export function planAiAgents(
   for (const rawAssistant of assistants) {
     const assistant = rawAssistant.toLowerCase();
 
-    if (assistant === 'gemini' || assistant === 'antigravity') {
+    if (assistant === 'antigravity') {
       for (const agent of agents) {
         descriptors.push({
           path: `.agents/agents/${agent.name}/agent.md`,
@@ -457,7 +457,7 @@ ${agent.systemPrompt}`,
           },
         });
       }
-    } else if (assistant === 'claude' || assistant === 'claude-code') {
+    } else if (assistant === 'claude') {
       for (const agent of agents) {
         descriptors.push({
           path: `.claude/agents/${agent.name}.md`,
