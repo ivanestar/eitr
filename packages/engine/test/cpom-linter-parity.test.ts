@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { planSharedScaffold } from '../src/plan/shared.js';
 import { plan } from '../src/plan/plan.js';
+import { apply } from '../src/apply/apply.js';
 import { renderCpomLinterPython } from '../src/plan/templates/cpom-linter-python.js';
 import { renderCpomLinterJava } from '../src/plan/templates/cpom-linter-java.js';
 import { renderCpomLinterCsharp } from '../src/plan/templates/cpom-linter-csharp.js';
@@ -27,6 +28,21 @@ const pythonCmd = commandAvailable('python', ['--version'])
     ? 'python3'
     : null;
 const javaAvailable = commandAvailable('java', ['-version']);
+
+// scripts/LintCpom.cs runs via .NET's file-based apps feature, which requires the .NET 10 SDK
+// specifically - a plain `dotnet --version`/commandAvailable('dotnet', ...) check is not enough,
+// since this machine (and most developers') primary SDK is 8.x, the version this project's own
+// .csproj targets.
+function isDotnet10Available(): boolean {
+  try {
+    const result = spawnSync('dotnet', ['--list-sdks'], { encoding: 'utf8' });
+    if (result.error || result.status !== 0) return false;
+    return /^10\./m.test(result.stdout);
+  } catch {
+    return false;
+  }
+}
+const dotnet10Available = isDotnet10Available();
 
 describe('Per-language CPOM contract linter parity', () => {
   const dummyProfile: StackProfile = {
@@ -228,4 +244,51 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(text).toContain('void Walk(');
     expect(text).toContain('void AuditFile(');
   });
+
+  // Real Disk Rule (CLAUDE.md Section 8): the two tests below run the linter against plan()'s
+  // actual generated component tree (including FrameContainer), not a hand-written synthetic
+  // fixture - a hand-written fixture is exactly what let the FrameLocator/IFrameLocator false
+  // positive (Track 7 Step 0) go undetected for as long as it did.
+  it.skipIf(!javaAvailable)(
+    'Java linter passes with 0 violations against the real generated component tree, including FrameContainer',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-java-realdisk-'));
+      try {
+        const javaPlan = plan(dummyProfile, {
+          language: 'java',
+          automationTool: 'playwright-maven',
+          ciCd: 'github',
+        });
+        await apply(javaPlan, dir);
+        const result = spawnSync('java', ['scripts/LintCpom.java'], { cwd: dir, encoding: 'utf8' });
+        expect(result.stderr).toBe('');
+        expect(result.status).toBe(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(!dotnet10Available)(
+    'C# linter passes with 0 violations against the real generated component tree, including FrameContainer',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-csharp-realdisk-'));
+      try {
+        const csharpPlan = plan(dummyProfile, {
+          language: 'csharp',
+          automationTool: 'playwright',
+          ciCd: 'github',
+        });
+        await apply(csharpPlan, dir);
+        const result = spawnSync('dotnet', ['run', '--file', 'scripts/LintCpom.cs'], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+        expect(result.stderr).toBe('');
+        expect(result.status).toBe(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });

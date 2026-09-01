@@ -20,7 +20,20 @@ export function renderCsharpCsproj(_opts: CsharpProjectOpts): string {
     <PackageReference Include="NUnit" Version="4.1.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
     <PackageReference Include="NUnit.Analyzers" Version="4.0.1" />
+    <PackageReference Include="JunitXml.TestLogger" Version="8.0.0" />
   </ItemGroup>
+
+  <!-- Optional, explicit-invoke-only CPOM contract check: \`dotnet build -t:LintCpom\`. Deliberately
+       NOT wired into BeforeBuild/Build - scripts/LintCpom.cs runs via .NET's file-based apps
+       feature, which requires the .NET 10 SDK installed alongside this project's own net8.0
+       target (see scripts/LintCpom.cs's own header comment). Hooking that into the default build
+       chain would break \`dotnet build\` for any developer who only has the .NET 8 SDK this project
+       actually targets - CI already enforces this contract in a separate job that provisions .NET
+       10 for exactly this reason, so this target exists for developers who want the same check
+       locally before pushing, opted in, not on by default. -->
+  <Target Name="LintCpom">
+    <Exec Command="dotnet run --file scripts/LintCpom.cs" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
 
 </Project>
 `;
@@ -58,6 +71,8 @@ dotnet test                          # run all tests with NUnit
 - **\`dotnet test\`** — runs all NUnit tests in headless mode.
 - **\`dotnet test --filter "FullyQualifiedName~ExampleTest"\`** — runs a specific test class.
 - **\`dotnet build\`** — compiles the C# solution.
+- **\`dotnet build -t:LintCpom\`** — runs the CPOM contract linter locally (requires the .NET 10 SDK
+  installed alongside .NET 8; CI runs this automatically in a separate job either way).
 
 ## Structure
 

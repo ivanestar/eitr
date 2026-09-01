@@ -61,7 +61,7 @@ var stateReadCalls = new[] {
 // state read (they hand back a live handle, not a snapshot value) - exempt by return type rather
 // than by a fixed name list, so a future GetLocator()-shaped accessor is still exempt and a future
 // GetValueNowAsync()-shaped state reader is still correctly caught.
-var structuralReturnTypes = new HashSet<string> { "ILocator", "IPage", "IBrowserContext", "IFrame", "IElementHandle" };
+var structuralReturnTypes = new HashSet<string> { "ILocator", "IPage", "IBrowserContext", "IFrame", "IFrameLocator", "IElementHandle" };
 
 var violations = new List<(string File, int Line, string Rule, string Message, string Snippet)>();
 var files = new List<string>();

@@ -70,6 +70,16 @@ linter wired in by EITR itself.
 - **Tier 2 (scenario regression gate):** `npm test`/`pytest`/`mvn test`/`gradle test`/`dotnet test` -
   full parallel E2E execution with trace artifact uploads on failure.
 
+Java's Tier 1 gate is also enforced at build time, not only in CI: `pom.xml`/`build.gradle` wire
+`scripts/LintCpom.java` into Maven's `validate` phase and Gradle's `test`/`check` tasks respectively,
+so a local `mvn test`/`gradle test` fails on a CPOM violation before CI ever runs - no separate SDK
+requirement, since Java's single-file source-launch uses the same JDK the rest of the project needs
+anyway. C# gets the equivalent as an explicit opt-in only (`dotnet build -t:LintCpom`, documented in
+the generated README), not wired into the default build chain, because `scripts/LintCpom.cs` needs
+the .NET 10 SDK specifically (see above) while the project itself targets net8.0 - hooking it into
+every `dotnet build` would break local builds for any developer who only has the .NET 8 SDK the
+project actually requires. CI's own C# CPOM gate (a separate job provisioning .NET 10 alongside .NET 8) is unaffected and remains the primary enforcement point for C#.
+
 Generated CI templates (GitHub Actions, GitLab CI, Jenkins) wire the Tier 1 CPOM gate as its own
 step/job/stage ahead of the Tier 2 test run, for every language; Java's variant also installs
 Playwright's browser binaries first (`mvn exec:java` CLI install, or a generated `playwrightInstall`
