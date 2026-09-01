@@ -5,6 +5,7 @@ import {
   renderGitlabCi,
   renderJenkinsfile,
   renderTeamcityKotlinDsl,
+  renderTeamcityInstructions,
 } from '../src/plan/templates/cicd.js';
 import { planSharedScaffold } from '../src/plan/shared.js';
 
@@ -169,5 +170,30 @@ describe('cicd.ts content assertions', () => {
     const text = renderTeamcityKotlinDsl(undefined);
     expect(text).toContain('import jetbrains.buildServer.configs.kotlin.matrix');
     expect(text).not.toContain('buildFeatures.matrix');
+  });
+
+  // ── TeamCity CPOM linter parity with GitHub Actions/GitLab/Jenkins ──────
+  // TeamCity used to be the only one of the 4 CI providers where the Kotlin DSL never called the
+  // CPOM linter for python/csharp/java, and the markdown setup guide never called it for any
+  // language at all - both would have failed this assertion before that fix.
+  const LINT_COMMAND_BY_LANGUAGE: Record<string, string> = {
+    python: 'python scripts/lint_cpom.py',
+    csharp: 'dotnet run --file scripts/LintCpom.cs',
+    java: 'java scripts/LintCpom.java',
+  };
+
+  describe('TeamCity wires the CPOM contract linter for every language', () => {
+    for (const [language, automationTool] of LANG_TOOL_BRANCHES) {
+      const expectedCommand = language ? LINT_COMMAND_BY_LANGUAGE[language] : 'npm run lint:cpom';
+      const label = `language=${language ?? 'default(ts)'} tool=${automationTool ?? 'n/a'}`;
+
+      it(`Kotlin DSL: ${label}`, () => {
+        expect(renderTeamcityKotlinDsl(language, automationTool)).toContain(expectedCommand);
+      });
+
+      it(`Setup guide: ${label}`, () => {
+        expect(renderTeamcityInstructions(language, automationTool)).toContain(expectedCommand);
+      });
+    }
   });
 });
