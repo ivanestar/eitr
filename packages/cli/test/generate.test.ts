@@ -12,8 +12,12 @@ function makeTempCwd(): string {
   return dir;
 }
 function writeInit(cwd: string, answers: object): void {
-  mkdirSync(join(cwd, '.eitr'), { recursive: true });
-  writeFileSync(join(cwd, '.eitr', 'init.json'), `${JSON.stringify(answers, null, 2)}\n`, 'utf8');
+  mkdirSync(join(cwd, '.scaffold'), { recursive: true });
+  writeFileSync(
+    join(cwd, '.scaffold', 'init.json'),
+    `${JSON.stringify(answers, null, 2)}\n`,
+    'utf8',
+  );
 }
 const fakeInstall =
   (outcome: InstallOutcome, calls?: string[]) =>
@@ -48,12 +52,12 @@ describe('eitr generate — emission (--no-install)', () => {
     const pw = readFileSync(join(cwd, 'playwright.config.ts'), 'utf8');
     expect(pw).toContain('https://app.example.com/');
 
-    const manifest = JSON.parse(readFileSync(join(cwd, '.eitr/manifest.json'), 'utf8'));
+    const manifest = JSON.parse(readFileSync(join(cwd, '.scaffold/manifest.json'), 'utf8'));
     expect(manifest.pendingRecon).toBeUndefined();
     expect(manifest.profile.framework.value).toBe('vue');
     expect(manifest.profile.framework.confidence).toBe('high');
 
-    const initAfter = JSON.parse(readFileSync(join(cwd, '.eitr/init.json'), 'utf8'));
+    const initAfter = JSON.parse(readFileSync(join(cwd, '.scaffold/init.json'), 'utf8'));
     expect(initAfter.stackHints).toEqual({ framework: 'vue', uiLibrary: 'antd' });
   });
 
@@ -62,9 +66,9 @@ describe('eitr generate — emission (--no-install)', () => {
     writeInit(cwd, { schemaVersion: 1, startUrl: 'https://x.io/', outputDir: 'e2e' });
     expect(await runGenerate(['--cwd', cwd, '--no-install'])).toBe(0);
     expect(existsSync(join(cwd, 'e2e/package.json'))).toBe(true);
-    expect(existsSync(join(cwd, 'e2e/.eitr/manifest.json'))).toBe(true);
+    expect(existsSync(join(cwd, 'e2e/.scaffold/manifest.json'))).toBe(true);
     expect(existsSync(join(cwd, 'e2e/PlaywrightTests'))).toBe(false);
-    expect(existsSync(join(cwd, '.eitr/init.json'))).toBe(true); // init.json stays at project root
+    expect(existsSync(join(cwd, '.scaffold/init.json'))).toBe(true); // init.json stays at project root
   });
 
   it('errors clearly when init.json is missing / bad schema / bad url', async () => {

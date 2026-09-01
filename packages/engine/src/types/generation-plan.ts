@@ -3,7 +3,7 @@ import type { Confidence, StackProfile } from './stack-profile.js';
 // P4 (ARCHITECTURE §4). CORE-only: the plan emits the framework base (base classes + primitives),
 // the Playwright config fragment, and the overrides seed. No concrete pages / locators / verify
 // targets — those belong to the later recon + generation steps.
-export type WritePolicy = 'regenerate' | 'create-if-absent' | 'merge-fragment';
+export type WritePolicy = 'create-if-absent' | 'merge-fragment';
 
 // 'seed' = create-if-absent user-overrides seed (overrides/README.md). CORE-only emits only
 // base/primitive/config/seed today; 'adapter' + adapterId/confidence are reserved for the

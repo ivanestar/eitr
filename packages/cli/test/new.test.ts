@@ -34,7 +34,7 @@ describe('eitr new (one command: questionnaire -> generate -> install)', () => {
     expect(code).toBe(0);
 
     // init.json at project root
-    const init = JSON.parse(readFileSync(join(cwd, '.eitr/init.json'), 'utf8'));
+    const init = JSON.parse(readFileSync(join(cwd, '.scaffold/init.json'), 'utf8'));
     expect(init.startUrl).toBe('https://app.example.com/');
     expect(init.outputDir).toBe('PlaywrightTests');
     expect(init.stackHints).toEqual({
@@ -68,6 +68,6 @@ describe('eitr new (one command: questionnaire -> generate -> install)', () => {
     const cwd = makeTempCwd();
     const code = await runNew(['--yes', '--cwd', cwd]);
     expect(code).toBe(1);
-    expect(existsSync(join(cwd, '.eitr/init.json'))).toBe(false);
+    expect(existsSync(join(cwd, '.scaffold/init.json'))).toBe(false);
   });
 });

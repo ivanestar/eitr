@@ -26,8 +26,8 @@ Usage: eitr <command> [options]
 
 Commands:
   new        Questionnaire + generate + install the framework project, in one command
-  init       Run only the questionnaire and write .eitr/init.json
-  generate   Read .eitr/init.json and write + install the framework project
+  init       Run only the questionnaire and write .scaffold/init.json
+  generate   Read .scaffold/init.json and write + install the framework project
   install    (Re)install an already-generated project (npm install + browsers)
   auth       Capture browser session credentials and save to auth.json
   doctor     Check system environment (Node.js, npm, Python, Git, Playwright)

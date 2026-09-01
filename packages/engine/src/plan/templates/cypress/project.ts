@@ -8,8 +8,8 @@ export interface CypressProjectOpts {
   projectName: string;
 }
 
-/** eitr.config.ts for Cypress */
-export function renderCypressEitrConfig(profile: StackProfile, _ciCd?: string): string {
+/** cypress.config.ts — generated once (create-if-absent) and never touched again by the engine. */
+export function renderCypressConfig(baseUrl: string, profile: StackProfile): string {
   const framework = profile.framework.value;
   let serverCmd = 'npm run start';
   let serverPort = 3000;
@@ -21,12 +21,13 @@ export function renderCypressEitrConfig(profile: StackProfile, _ciCd?: string): 
     serverPort = 4200;
   }
 
-  const exportStmt = 'export const eitrConfig =';
+  return `import { defineConfig } from 'cypress';
 
-  return `${exportStmt} {
+export default defineConfig({
   e2e: {
     specPattern: 'cypress/e2e/**/*.cy.ts',
     supportFile: false as const,
+    baseUrl: '${baseUrl.replace(/'/g, "\\'")}',
   },
   retries: {
     runMode: 2,
@@ -36,21 +37,6 @@ export function renderCypressEitrConfig(profile: StackProfile, _ciCd?: string): 
   //   command: '${serverCmd}',
   //   url: 'http://localhost:${serverPort}',
   // },
-};
-`;
-}
-
-/** cypress.config.ts */
-export function renderCypressConfig(baseUrl: string): string {
-  return `import { defineConfig } from 'cypress';
-import { eitrConfig } from './eitr.config';
-
-export default defineConfig({
-  ...eitrConfig,
-  e2e: {
-    ...eitrConfig.e2e,
-    baseUrl: '${baseUrl.replace(/'/g, "\\'")}',
-  },
 });
 `;
 }
@@ -87,7 +73,7 @@ export function renderCypressTsConfig(): string {
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["cypress/**/*.ts", "components/**/*.ts", "shared/**/*.ts", "eitr.config.ts", "cypress.config.ts"]
+  "include": ["cypress/**/*.ts", "components/**/*.ts", "shared/**/*.ts", "cypress.config.ts"]
 }
 `;
 }
@@ -528,7 +514,7 @@ npm test                         # run tests in headless mode
 
 ## Configure
 
-- **\`cypress.config.ts\`** — Cypress configuration file.
-- **\`eitr.config.ts\`** — Framework configuration (spec patterns, webServer settings).
+- **\`cypress.config.ts\`** — your config; spec patterns, \`baseUrl\`, retries. This file is
+  generated once and never overwritten.
 `;
 }

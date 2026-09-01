@@ -38,13 +38,13 @@ export class PythonAdapter implements LanguageAdapter {
   planFiles(profile: StackProfile, _opts: PlanOptions): FileDescriptor[] {
     const regen = (path: string, text: string): FileDescriptor => ({
       path,
-      writePolicy: 'regenerate',
+      writePolicy: 'create-if-absent',
       provenance: { origin: 'base' },
       source: { kind: 'inline', text },
     });
     const prim = (path: string, text: string): FileDescriptor => ({
       path,
-      writePolicy: 'regenerate',
+      writePolicy: 'create-if-absent',
       provenance: { origin: 'primitive' },
       source: { kind: 'inline', text },
     });

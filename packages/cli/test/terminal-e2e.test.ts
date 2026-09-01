@@ -124,7 +124,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       // 2. Physical directory tree verification on disk
       expect(existsSync(path.join(cwd, 'package.json'))).toBe(true);
       expect(existsSync(path.join(cwd, 'playwright.config.ts'))).toBe(true);
-      expect(existsSync(path.join(cwd, 'eitr.config.ts'))).toBe(true);
+      expect(existsSync(path.join(cwd, 'eitr.config.ts'))).toBe(false);
       expect(existsSync(path.join(cwd, 'tsconfig.json'))).toBe(true);
       expect(existsSync(path.join(cwd, 'scripts', 'lint-cpom.js'))).toBe(true);
       expect(existsSync(path.join(cwd, 'tests', 'fixtures.ts'))).toBe(true);
@@ -180,7 +180,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       cwd,
     );
     expect(initRes.code).toBe(0);
-    expect(existsSync(path.join(cwd, '.eitr', 'init.json'))).toBe(true);
+    expect(existsSync(path.join(cwd, '.scaffold', 'init.json'))).toBe(true);
 
     // Step B: eitr generate
     const genRes = await runProcess(

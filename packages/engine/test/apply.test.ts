@@ -40,38 +40,53 @@ describe('apply() (runnable project)', () => {
     for (const rel of [
       'package.json',
       'playwright.config.ts',
-      'eitr.config.ts',
       'tsconfig.json',
       '.gitignore',
       'README.md',
       'tests/smoke.spec.ts',
       'components/widgets/table.ts',
       'components/primitives/link.ts',
-      '.eitr/manifest.json',
+      '.scaffold/manifest.json',
     ]) {
       expect(existsSync(join(cwd, rel)), rel).toBe(true);
     }
-    // no legacy roots and no leftover staging dir
+    // no legacy roots, no leftover staging dir, no separate machine-owned config file
     expect(existsSync(join(cwd, 'generated'))).toBe(false);
-    expect(existsSync(join(cwd, '.eitr-tmp'))).toBe(false);
-    expect(result.clobberedOwnedFiles).toEqual([]);
+    expect(existsSync(join(cwd, '.scaffold-tmp'))).toBe(false);
+    expect(existsSync(join(cwd, 'eitr.config.ts'))).toBe(false);
 
     execSync('npx tsc --noEmit', { cwd, stdio: 'ignore' });
   });
 
-  it('emits a runnable playwright.config.ts (baseURL + spreads eitrConfig) and machine-default eitr.config.ts', async () => {
+  it('emits a self-contained playwright.config.ts with baseURL and machine defaults inlined', async () => {
     const cwd = makeTempCwd();
     await apply(plan(muiProfile(), planOptions()), cwd);
 
     const pw = readFileSync(join(cwd, 'playwright.config.ts'), 'utf8');
     expect(pw).toContain('http://localhost:4173');
-    expect(pw).toContain("from './eitr.config'");
     expect(pw).toContain('defineConfig');
+    expect(pw).toContain("testIdAttribute: 'data-testid'");
+    expect(pw).toContain("name: 'chromium'");
+    expect(existsSync(join(cwd, 'eitr.config.ts'))).toBe(false);
+  });
 
-    const eitrConf = readFileSync(join(cwd, 'eitr.config.ts'), 'utf8');
-    expect(eitrConf).toContain("testIdAttribute: 'data-testid'");
-    expect(eitrConf).toContain("name: 'chromium'");
-    expect(eitrConf).not.toContain('baseURL'); // baseURL lives only in playwright.config.ts
+  it('leaves every file byte-for-byte untouched on a second apply() into the same directory', async () => {
+    const cwd = makeTempCwd();
+    const genPlan = plan(muiProfile(), planOptions());
+    await apply(genPlan, cwd);
+
+    const before = readFileSync(join(cwd, 'components/primitives/link.ts'), 'utf8');
+    const second = await apply(plan(muiProfile(), planOptions()), cwd);
+    const after = readFileSync(join(cwd, 'components/primitives/link.ts'), 'utf8');
+
+    // Every FileDescriptor is create-if-absent now (Track 1) - a second apply() is fully inert
+    // for every generated file: everything is reported as skipped and no on-disk byte changes,
+    // even for what used to be a 'regenerate'-policy CPOM primitive. The manifest itself is
+    // always (re)written unconditionally on every apply() call - that isn't a FileDescriptor and
+    // isn't subject to any writePolicy, so it's the one expected entry in `written`.
+    expect(second.written).toEqual(['.scaffold/manifest.json']);
+    expect(second.skipped.length).toBe(genPlan.files.length);
+    expect(after).toBe(before);
   });
 
   it('emits package.json with the pinned Playwright dep and a typecheck script', async () => {
@@ -94,12 +109,16 @@ describe('apply() (runnable project)', () => {
   it('records pendingRecon in the manifest only when requested', async () => {
     const cwdDefault = makeTempCwd();
     await apply(plan(muiProfile(), planOptions()), cwdDefault);
-    const m1 = decodeJson<Manifest>(readFileSync(join(cwdDefault, '.eitr/manifest.json'), 'utf8'));
+    const m1 = decodeJson<Manifest>(
+      readFileSync(join(cwdDefault, '.scaffold/manifest.json'), 'utf8'),
+    );
     expect(m1.pendingRecon).toBeUndefined();
 
     const cwdPending = makeTempCwd();
     await apply(plan(muiProfile(), planOptions()), cwdPending, { pendingRecon: true });
-    const m2 = decodeJson<Manifest>(readFileSync(join(cwdPending, '.eitr/manifest.json'), 'utf8'));
+    const m2 = decodeJson<Manifest>(
+      readFileSync(join(cwdPending, '.scaffold/manifest.json'), 'utf8'),
+    );
     expect(m2.pendingRecon).toBe(true);
   });
 
@@ -125,9 +144,9 @@ describe('apply() (runnable project)', () => {
     const result = await apply(cyPlan, cwd);
 
     expect(existsSync(join(cwd, 'cypress.config.ts'))).toBe(true);
-    expect(existsSync(join(cwd, 'eitr.config.ts'))).toBe(true);
+    expect(existsSync(join(cwd, 'eitr.config.ts'))).toBe(false);
     expect(existsSync(join(cwd, 'cypress/e2e/smoke.cy.ts'))).toBe(true);
-    expect(result.clobberedOwnedFiles).toEqual([]);
+    expect(result.written.length).toBeGreaterThan(0);
 
     if (existsSync(join(rootNodeModules, 'cypress'))) {
       execSync('npx tsc --noEmit', { cwd, stdio: 'ignore' });
@@ -149,7 +168,7 @@ describe('apply() (runnable project)', () => {
       expect(existsSync(join(cwd, 'pyproject.toml'))).toBe(true);
       expect(existsSync(join(cwd, 'conftest.py'))).toBe(true);
       expect(existsSync(join(cwd, 'components/base/base_page.py'))).toBe(true);
-      expect(result.clobberedOwnedFiles).toEqual([]);
+      expect(result.written.length).toBeGreaterThan(0);
 
       execSync('python -m compileall -q .', { cwd, stdio: 'ignore' });
     },
