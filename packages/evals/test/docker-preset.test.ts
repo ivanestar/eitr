@@ -4,7 +4,7 @@ import { planSharedScaffold } from '../../engine/src/plan/shared.js';
 
 describe('Task 3: Deterministic Dockerfile & Container Preset', () => {
   it('AC-1: renderDockerfile generates language & tool specific Dockerfiles', () => {
-    // Playwright TypeScript/JavaScript
+    // Playwright TypeScript
     const pwTs = renderDockerfile('playwright', 'typescript');
     expect(pwTs).toContain('FROM mcr.microsoft.com/playwright');
     expect(pwTs).toContain('WORKDIR /app');

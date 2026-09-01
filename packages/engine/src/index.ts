@@ -12,7 +12,8 @@ export { encodeJson, decodeJson } from './persist/json-codec.js';
 
 export type { DetectOptions } from './detect/detect.js';
 export type { ReconResult, ReconOptions } from './detect/recon.js';
-export type { PlanOptions } from './plan/plan.js';
+export type { PlanOptions, SupportedLanguage } from './plan/plan.js';
+export { UnsupportedLanguageError } from './plan/types.js';
 export type { ApplyResult, ApplyOptions } from './apply/apply.js';
 export type {
   StackProfile,

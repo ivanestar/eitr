@@ -280,8 +280,7 @@ export function createPromptSession(input: InputStream, output: OutputStream): P
             c.label.toLowerCase() === trimmed ||
             c.value.toLowerCase().startsWith(trimmed) ||
             c.label.toLowerCase().startsWith(trimmed) ||
-            (trimmed === 'ts' && c.value === 'typescript') ||
-            (trimmed === 'js' && c.value === 'javascript'),
+            (trimmed === 'ts' && c.value === 'typescript'),
         );
 
         if (matches.length === 1) {

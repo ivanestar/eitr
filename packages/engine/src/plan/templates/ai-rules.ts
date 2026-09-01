@@ -5,7 +5,7 @@ export function renderAiHarmonizeText(
   language: string = 'typescript',
 ): string {
   const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
-  const ext = language === 'python' ? 'py' : language === 'javascript' ? 'js' : 'ts';
+  const ext = language === 'python' ? 'py' : 'ts';
   const configFile =
     tool === 'cypress'
       ? `cypress.config.${ext}`
@@ -55,13 +55,13 @@ export function renderAiGenerateText(
   language: string = 'typescript',
 ): string {
   const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
-  const ext = language === 'python' ? 'py' : language === 'javascript' ? 'js' : 'ts';
+  const ext = language === 'python' ? 'py' : 'ts';
   const specExt = tool === 'cypress' ? `cy.${ext}` : language === 'python' ? 'py' : `spec.${ext}`;
 
   let componentSyntax = '';
   if (tool === 'cypress') {
     componentSyntax = `- Element properties MUST be declared using \`this.child(ComponentClass, selector)\` where selector is a string (e.g. \`this.child(TextInput, 'input[name="user"]')\`).`;
-  } else if (language === 'typescript' || language === 'javascript') {
+  } else if (language === 'typescript') {
     componentSyntax = `- Element properties MUST be declared as child components via \`this.child(ComponentClass, spec)\` (or \`this.list(ComponentClass, spec)\` for lists), where \`spec\` is a \`LocatorSpec\` object (e.g. \`{ kind: 'css', css: 'input[name="username"]' }\` or \`{ kind: 'role', role: 'button', name: 'Submit' }\`).`;
   } else if (language === 'python') {
     componentSyntax = `- Element properties MUST be exposed via \`@property\` decorators, returning components initialized with \`self._scope(ComponentClass, spec)\`.`;
@@ -230,7 +230,7 @@ export function renderAiUpdateText(
   language: string = 'typescript',
 ): string {
   const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
-  const ext = language === 'python' ? 'py' : language === 'javascript' ? 'js' : 'ts';
+  const ext = language === 'python' ? 'py' : 'ts';
   return `# ${toolName} CPOM Framework - Page Object Incremental Updates
 
 You are updating a Page Object to reflect new elements on a page.
@@ -451,13 +451,13 @@ export function renderConventionsMd(
   tool: string = 'playwright',
   language: string = 'typescript',
 ): string {
-  const ext = language === 'python' ? 'py' : language === 'javascript' ? 'js' : 'ts';
+  const ext = language === 'python' ? 'py' : 'ts';
   const specExt = tool === 'cypress' ? `cy.${ext}` : language === 'python' ? 'py' : `spec.${ext}`;
 
   let componentSyntax = '';
   if (tool === 'cypress') {
     componentSyntax = `- Element properties MUST be declared using \`this.child(ComponentClass, selector)\` where selector is a string (e.g. \`this.child(TextInput, 'input[name="user"]')\`).`;
-  } else if (language === 'typescript' || language === 'javascript') {
+  } else if (language === 'typescript') {
     componentSyntax = `- Element properties MUST be declared as child components via \`this.child(ComponentClass, spec)\` (or \`this.list(ComponentClass, spec)\` for lists), where \`spec\` is a \`LocatorSpec\` object (e.g. \`{ kind: 'css', css: 'input[name="username"]' }\` or \`{ kind: 'role', role: 'button', name: 'Submit' }\`).`;
   } else if (language === 'python') {
     componentSyntax = `- Element properties MUST be exposed via \`@property\` decorators, returning components initialized with \`self._scope(ComponentClass, spec)\`.`;
@@ -640,7 +640,7 @@ ${renderAiApiRulesText(tool)}
 
 export function renderCursorrulesHarmonize(tool?: string, language?: string): string {
   const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
-  const ext = language === 'python' ? 'py' : language === 'javascript' ? 'js' : 'ts';
+  const ext = language === 'python' ? 'py' : 'ts';
   const configFile =
     tool === 'cypress'
       ? `cypress.config.${ext}`

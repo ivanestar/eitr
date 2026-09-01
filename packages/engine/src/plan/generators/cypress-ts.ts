@@ -10,7 +10,7 @@ export class CypressTsGenerator implements TargetGenerator {
   readonly automationTool = 'cypress';
 
   private readonly langAdapter: LanguageAdapter = new TypeScriptAdapter();
-  private readonly toolAdapter: ToolAdapter = new CypressAdapter(true);
+  private readonly toolAdapter: ToolAdapter = new CypressAdapter();
 
   plan(profile: StackProfile, opts: PlanOptions): FileDescriptor[] {
     return [

@@ -1,13 +1,26 @@
 import type { StackProfile } from '../types/stack-profile.js';
 import type { FileDescriptor } from '../types/generation-plan.js';
 
+export type SupportedLanguage = 'typescript' | 'python' | 'csharp' | 'java';
+
+export class UnsupportedLanguageError extends Error {
+  readonly language: string;
+  constructor(language: string) {
+    super(
+      `Unsupported language: "${language}". Supported languages are: typescript, python, csharp, java.`,
+    );
+    this.name = 'UnsupportedLanguageError';
+    this.language = language;
+  }
+}
+
 export interface PlanOptions {
   // baseURL baked into the emitted playwright.config.ts; recon will supply it later.
   baseUrl?: string;
   // package.json "name" for the generated project.
   projectName?: string;
   // Selected language (defaults to typescript).
-  language?: string;
+  language?: SupportedLanguage | (string & {});
   // Selected E2E automation tool (defaults to playwright).
   automationTool?: string;
   // CI/CD tool choice

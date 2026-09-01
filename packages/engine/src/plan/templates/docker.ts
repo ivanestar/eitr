@@ -115,7 +115,7 @@ CMD ["npx", "cypress", "run"]
 `;
   }
 
-  // Default: Playwright TypeScript / JavaScript
+  // Default: Playwright TypeScript
   return `# Hermetic container configuration for Playwright test automation.
 FROM mcr.microsoft.com/playwright:v1.62.1-jammy
 

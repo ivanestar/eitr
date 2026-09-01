@@ -8,7 +8,7 @@ Zero-dependency static rule auditor for Page Objects, Components, and Test Specs
 Parses every file with the standard-library "ast" module (a real syntax tree, not a text/regex
 scan) - no pip installs, no third-party packages.
 
-Rules enforced (parity with scripts/lint-cpom.js for TypeScript/JavaScript/Cypress):
+Rules enforced (parity with scripts/lint-cpom.js for TypeScript/Cypress):
   1. Zero Arbitrary Delays - no time.sleep() / page.wait_for_timeout().
   2. Mandatory "_now" suffix for non-retrying boolean/string state getters (is_*/has_*/get_*) in
      components/.

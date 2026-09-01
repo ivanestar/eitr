@@ -101,16 +101,22 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
   const language = answers.stackHints?.language ?? 'typescript';
   const tool = answers.stackHints?.automationTool ?? 'playwright';
 
+  if (language === 'javascript') {
+    process.stderr.write(
+      "eitr generate: JavaScript support has been removed. Please migrate your project to TypeScript by changing 'language' to 'typescript' in .eitr/init.json.\n",
+    );
+    return 1;
+  }
+
   // Extensible supported-combo list. Add a new entry here when a new
   // TargetGenerator is registered in packages/engine/src/plan/plan.ts.
-  // Cypress (typescript/javascript) is temporarily withheld from release pending a
+  // Cypress (typescript) is temporarily withheld from release pending a
   // CPOM primitive redesign native to Cypress's own retry/command-chain model rather
   // than the Playwright-shaped one it currently reuses - the generator code itself is
-  // untouched and still works, it is just not offered to users yet. Re-add both entries
+  // untouched and still works, it is just not offered to users yet. Re-add the entry
   // here (and the questionnaire/schema.ts choices) when that redesign lands.
   const SUPPORTED: Array<{ language: string; automationTool: string }> = [
     { language: 'typescript', automationTool: 'playwright' },
-    { language: 'javascript', automationTool: 'playwright' },
     { language: 'python', automationTool: 'playwright' },
     { language: 'python', automationTool: 'pytest' },
     { language: 'csharp', automationTool: 'playwright' },

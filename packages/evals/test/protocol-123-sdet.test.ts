@@ -66,7 +66,7 @@ describe('AC-1 to AC-6: Protocol 123 SDET Engine, Review Arbiter & Polyglot Fram
     expect(agentsMd).toContain('review-arbiter');
     expect(agentsMd).toContain('Web-First');
 
-    const claudeMd = renderClaudeMd('cypress', 'javascript');
+    const claudeMd = renderClaudeMd('cypress', 'typescript');
     expect(claudeMd).toContain('Protocol 123');
     expect(claudeMd).toContain('review-arbiter');
     expect(claudeMd).toContain('Cypress');

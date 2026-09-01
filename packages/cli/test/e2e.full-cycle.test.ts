@@ -27,7 +27,7 @@ afterEach(() => {
 describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generators)', () => {
   // 1. Python + Playwright
   it(
-    '1/5: E2E Full Cycle — Python + Playwright (questionnaire -> generate -> pytest run -> cleanup)',
+    '1/7: E2E Full Cycle — Python + Playwright (questionnaire -> generate -> pytest run -> cleanup)',
     { timeout: 180000 },
     async () => {
       const cwd = makeTempCwd();
@@ -86,7 +86,7 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
 
   // 2. TypeScript + Playwright
   it(
-    '2/5: E2E Full Cycle — TypeScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
+    '2/7: E2E Full Cycle — TypeScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
     { timeout: 90000 },
     async () => {
       const cwd = makeTempCwd();
@@ -131,10 +131,11 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
     },
   );
 
-  // 3. JavaScript + Playwright
+  // 3. javascript is a removed language target (Track 11) - --language javascript must be
+  // rejected up front by the questionnaire's own choice validation, not silently misgenerate.
   it(
-    '3/5: E2E Full Cycle — JavaScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
-    { timeout: 90000 },
+    '3/7: E2E Full Cycle — javascript is rejected as an unsupported --language (Track 11)',
+    { timeout: 60000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -158,26 +159,15 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
         'github',
       ]);
 
-      expect(exitCode).toBe(0);
-      expect(existsSync(join(cwd, 'playwright.config.js'))).toBe(true);
-      expect(existsSync(join(cwd, 'package.json'))).toBe(true);
-      expect(existsSync(join(cwd, 'components', 'base', 'base-page.js'))).toBe(true);
-      expect(existsSync(join(cwd, 'tests', 'smoke.spec.js'))).toBe(true);
-
-      // runNew() already installed node_modules + chromium (no --no-install passed) - run the
-      // generated suite for real rather than only checking the files exist.
-      const output = execSync('npx playwright test --project=chromium', {
-        cwd,
-        encoding: 'utf8',
-      });
-      expect(output).toMatch(/1 passed/);
+      expect(exitCode).toBe(1);
+      expect(existsSync(join(cwd, 'package.json'))).toBe(false);
     },
   );
 
   // 4. TypeScript + Cypress - withheld from release (see SUPPORTED comment in generate.ts);
   // verifies the withhold-gate actually blocks generation rather than that Cypress still works.
   it(
-    '4/5: E2E Full Cycle — TypeScript + Cypress (withheld: gate rejects, generates nothing)',
+    '4/7: E2E Full Cycle — TypeScript + Cypress (withheld: gate rejects, generates nothing)',
     { timeout: 60000 },
     async () => {
       const cwd = makeTempCwd();
@@ -208,43 +198,9 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
     },
   );
 
-  // 5. JavaScript + Cypress - withheld from release (see SUPPORTED comment in generate.ts);
-  // verifies the withhold-gate actually blocks generation rather than that Cypress still works.
+  // 5. C# + Playwright
   it(
-    '5/5: E2E Full Cycle — JavaScript + Cypress (withheld: gate rejects, generates nothing)',
-    { timeout: 60000 },
-    async () => {
-      const cwd = makeTempCwd();
-
-      const exitCode = await runNew([
-        '--yes',
-        '--cwd',
-        cwd,
-        '--output-dir',
-        '.',
-        '--start-url',
-        'https://app.example.com/',
-        '--language',
-        'javascript',
-        '--automation-tool',
-        'cypress',
-        '--framework',
-        'vue',
-        '--ui-library',
-        'unknown',
-        '--ci-cd',
-        'gitlab',
-      ]);
-
-      expect(exitCode).toBe(1);
-      expect(existsSync(join(cwd, 'cypress.config.js'))).toBe(false);
-      expect(existsSync(join(cwd, 'package.json'))).toBe(false);
-    },
-  );
-
-  // 6. C# + Playwright
-  it(
-    '6/6: E2E Full Cycle — C# + Playwright (questionnaire -> generate -> real dotnet test run -> cleanup)',
+    '5/7: E2E Full Cycle — C# + Playwright (questionnaire -> generate -> real dotnet test run -> cleanup)',
     { timeout: 120000 },
     async () => {
       const cwd = makeTempCwd();
@@ -296,9 +252,9 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
     },
   );
 
-  // 7. Java + Playwright (Maven)
+  // 6. Java + Playwright (Maven)
   it(
-    '7/8: E2E Full Cycle — Java + Playwright Maven (questionnaire -> generate -> real mvn test run -> cleanup)',
+    '6/7: E2E Full Cycle — Java + Playwright Maven (questionnaire -> generate -> real mvn test run -> cleanup)',
     { timeout: 180000 },
     async () => {
       const cwd = makeTempCwd();
@@ -354,9 +310,9 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
     },
   );
 
-  // 8. Java + Playwright (Gradle)
+  // 7. Java + Playwright (Gradle)
   it(
-    '8/8: E2E Full Cycle — Java + Playwright Gradle (questionnaire -> generate -> real gradle test run -> cleanup)',
+    '7/7: E2E Full Cycle — Java + Playwright Gradle (questionnaire -> generate -> real gradle test run -> cleanup)',
     { timeout: 180000 },
     async () => {
       const cwd = makeTempCwd();

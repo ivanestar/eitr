@@ -397,7 +397,7 @@ describe('manualInstallHint', () => {
 });
 
 describe('getPlannedInstallSteps', () => {
-  it('returns human-readable steps for TypeScript/JavaScript Playwright', () => {
+  it('returns human-readable steps for TypeScript Playwright', () => {
     const steps = getPlannedInstallSteps('typescript', 'playwright');
     expect(steps).toEqual([
       {

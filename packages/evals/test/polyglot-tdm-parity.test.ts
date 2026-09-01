@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { renderJsApiClient } from '../../engine/src/plan/templates/javascript/project.js';
 import { renderCypressApiClient } from '../../engine/src/plan/templates/cypress/project.js';
 import { renderPythonApiClient } from '../../engine/src/plan/templates/python/project.js';
 import { renderPythonComponent } from '../../engine/src/plan/templates/python/components.js';
@@ -13,23 +12,14 @@ import {
 } from '../../engine/src/plan/templates/java/project.js';
 
 describe('Polyglot Parity: 100% Cross-Language TDM and Animation Sync', () => {
-  it('JavaScript & Cypress ApiClient contain full TDM suite', () => {
-    const jsClient = renderJsApiClient();
-    expect(jsClient).toContain('createTestPhone');
-    expect(jsClient).toContain('createTestPassword');
-    expect(jsClient).toContain('createTestUuid');
-    expect(jsClient).toContain('createTestName');
-    expect(jsClient).toContain('createTestAmount');
-    expect(jsClient).toContain('createTestDate');
-
-    const cyClientTs = renderCypressApiClient(true);
-    expect(cyClientTs).toContain('createTestPhone');
-    expect(cyClientTs).toContain('createTestPassword');
-    expect(cyClientTs).toContain('createTestUuid');
-
-    const cyClientJs = renderCypressApiClient(false);
-    expect(cyClientJs).toContain('createTestPhone');
-    expect(cyClientJs).toContain('createTestPassword');
+  it('Cypress ApiClient contains full TDM suite', () => {
+    const cyClient = renderCypressApiClient();
+    expect(cyClient).toContain('createTestPhone');
+    expect(cyClient).toContain('createTestPassword');
+    expect(cyClient).toContain('createTestUuid');
+    expect(cyClient).toContain('createTestName');
+    expect(cyClient).toContain('createTestAmount');
+    expect(cyClient).toContain('createTestDate');
   });
 
   it('Python ApiClient and Component contain full TDM and animation sync', () => {

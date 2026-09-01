@@ -12,9 +12,6 @@ import { fileURLToPath } from 'node:url';
 // case for arbitrary user code, this file set is closed and known, so a naming check is reliable
 // here) - it caught real gaps (Checkbox/RadioButton missing isCheckedNow()) that doc+review missed.
 const componentsRoot = fileURLToPath(new URL('../assets/runtime/components/', import.meta.url));
-const jsComponentsRoot = fileURLToPath(
-  new URL('../assets/runtime-js/components/', import.meta.url),
-);
 
 const FORBIDDEN: { label: string; re: RegExp }[] = [
   {
@@ -86,7 +83,7 @@ function isInsideNowSuffixedMethod(lines: string[], index: number): boolean {
 describe('component-method safety contract', () => {
   it('no shipped component reimplements waiting or reads a non-retrying boolean snapshot', () => {
     const offenders: string[] = [];
-    const allFiles = [...sourceFiles(componentsRoot), ...sourceFiles(jsComponentsRoot)];
+    const allFiles = sourceFiles(componentsRoot);
     for (const file of allFiles) {
       const lines = readFileSync(file, 'utf8').split('\n');
       lines.forEach((line, i) => {
@@ -105,11 +102,9 @@ describe('component-method safety contract', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('every is*/has*/get* state reader in a shipped TS/JS component ends in Now()', () => {
+  it('every is*/has*/get* state reader in a shipped TS component ends in Now()', () => {
     const offenders: string[] = [];
-    const allFiles = [...sourceFiles(componentsRoot), ...sourceFiles(jsComponentsRoot)].filter(
-      (f) => f.endsWith('.ts') || f.endsWith('.js'),
-    );
+    const allFiles = sourceFiles(componentsRoot).filter((f) => f.endsWith('.ts'));
     for (const file of allFiles) {
       const lines = readFileSync(file, 'utf8').split('\n');
       lines.forEach((line, i) => {

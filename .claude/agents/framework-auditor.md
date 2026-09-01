@@ -21,7 +21,7 @@ Use this skill when:
 
 ### Pillar 1: Base Layer & Primitives Parity
 
-- **Target files**: `packages/engine/src/plan/templates/components.ts`, `packages/engine/assets/runtime-js/`, `packages/engine/src/plan/templates/python/components.ts`
+- **Target files**: `packages/engine/src/plan/templates/components.ts`, `packages/engine/assets/runtime/`, `packages/engine/src/plan/templates/python/components.ts`
 - **Rule**: If `Button`, `TextInput`, `Checkbox`, `Select`, `NativeSelect`, `Link`, or `FileInput` exists in 1 target language, it MUST exist in all target languages.
 - **Rule**: If a component is an action, it MUST return exactly `void` or `None`.
 - **Rule**: If a component exposes a locator, it MUST use the exact property name `.locator`.

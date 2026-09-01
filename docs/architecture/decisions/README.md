@@ -36,3 +36,4 @@ sequentially, zero-padded to 4 digits, kebab-case slug after the number.
 | 0008 | [Deterministic-over-AI preference for this project's own process](0008-deterministic-over-ai-preference.md)  | Accepted |
 | 0009 | [Shared stack-detection heuristics between CLI and engine](0009-shared-detection-heuristics.md)              | Accepted |
 | 0010 | [AI-agent-driven operations ship as assistant skills, never CLI](0010-agent-operations-as-skills-not-cli.md) | Accepted |
+| 0011 | [Removal of the untyped JavaScript target](0011-removal-of-untyped-javascript-target.md)                     | Accepted |

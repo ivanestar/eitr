@@ -113,7 +113,6 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       : []),
     ...(opts.language === undefined ||
     opts.language === 'typescript' ||
-    opts.language === 'javascript' ||
     opts.automationTool === 'cypress'
       ? ([
           {
