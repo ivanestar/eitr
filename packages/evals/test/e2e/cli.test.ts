@@ -113,6 +113,7 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
   for (const combo of TEST_COMBINATIONS) {
     it(
       `E2E Combination [${combo.id}]: ${combo.language} + ${combo.automationTool} (${combo.framework} / ${combo.uiLibrary} / ${combo.ciCd})`,
+      { timeout: 60000 },
       async () => {
         const hash = Math.random().toString(36).substring(2, 8);
         const sandboxDir = resolve(__dirname, 'sandbox', `run-${hash}-${combo.id}`);
@@ -236,7 +237,6 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
           expect(existsSync(join(sandboxDir, configFile))).toBe(true);
         }
       },
-      { timeout: 60000 },
     );
   }
 });

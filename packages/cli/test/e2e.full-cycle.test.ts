@@ -28,6 +28,7 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
   // 1. Python + Playwright
   it(
     '1/5: E2E Full Cycle — Python + Playwright (questionnaire -> generate -> pytest run -> cleanup)',
+    { timeout: 180000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -81,12 +82,12 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       }
       expect(output).toContain('passed');
     },
-    { timeout: 180000 },
   );
 
   // 2. TypeScript + Playwright
   it(
     '2/5: E2E Full Cycle — TypeScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
+    { timeout: 90000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -128,12 +129,12 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       });
       expect(output).toMatch(/1 passed/);
     },
-    { timeout: 90000 },
   );
 
   // 3. JavaScript + Playwright
   it(
     '3/5: E2E Full Cycle — JavaScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
+    { timeout: 90000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -171,13 +172,13 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       });
       expect(output).toMatch(/1 passed/);
     },
-    { timeout: 90000 },
   );
 
   // 4. TypeScript + Cypress - withheld from release (see SUPPORTED comment in generate.ts);
   // verifies the withhold-gate actually blocks generation rather than that Cypress still works.
   it(
     '4/5: E2E Full Cycle — TypeScript + Cypress (withheld: gate rejects, generates nothing)',
+    { timeout: 60000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -205,13 +206,13 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       expect(existsSync(join(cwd, 'cypress.config.ts'))).toBe(false);
       expect(existsSync(join(cwd, 'package.json'))).toBe(false);
     },
-    { timeout: 60000 },
   );
 
   // 5. JavaScript + Cypress - withheld from release (see SUPPORTED comment in generate.ts);
   // verifies the withhold-gate actually blocks generation rather than that Cypress still works.
   it(
     '5/5: E2E Full Cycle — JavaScript + Cypress (withheld: gate rejects, generates nothing)',
+    { timeout: 60000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -239,12 +240,12 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       expect(existsSync(join(cwd, 'cypress.config.js'))).toBe(false);
       expect(existsSync(join(cwd, 'package.json'))).toBe(false);
     },
-    { timeout: 60000 },
   );
 
   // 6. C# + Playwright
   it(
     '6/6: E2E Full Cycle — C# + Playwright (questionnaire -> generate -> real dotnet test run -> cleanup)',
+    { timeout: 120000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -293,12 +294,12 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       // be a false negative on a real, passing run, not a real check.
       execSync('dotnet test', { cwd, stdio: 'inherit' });
     },
-    { timeout: 120000 },
   );
 
   // 7. Java + Playwright (Maven)
   it(
     '7/8: E2E Full Cycle — Java + Playwright Maven (questionnaire -> generate -> real mvn test run -> cleanup)',
+    { timeout: 180000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -351,12 +352,12 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       });
       expect(output).toMatch(/Tests run: 1, Failures: 0, Errors: 0/);
     },
-    { timeout: 180000 },
   );
 
   // 8. Java + Playwright (Gradle)
   it(
     '8/8: E2E Full Cycle — Java + Playwright Gradle (questionnaire -> generate -> real gradle test run -> cleanup)',
+    { timeout: 180000 },
     async () => {
       const cwd = makeTempCwd();
 
@@ -408,6 +409,5 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       });
       expect(output).toMatch(/BUILD SUCCESSFUL/);
     },
-    { timeout: 180000 },
   );
 });

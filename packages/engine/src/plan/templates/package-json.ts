@@ -20,7 +20,7 @@ export function renderPackageJson(projectName: string): string {
     },
     engines: { node: '>=18.18.0' },
     devDependencies: {
-      '@playwright/test': '1.51.1',
+      '@playwright/test': '1.62.1',
       '@types/node': '^20.14.0',
       dotenv: '^16.4.5',
       eslint: '^9.9.0',

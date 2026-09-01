@@ -115,7 +115,7 @@ export function renderJsPackageJson(projectName: string): string {
     "report": "playwright show-report"
   },
   "devDependencies": {
-    "@playwright/test": "1.51.1",
+    "@playwright/test": "1.62.1",
     "dotenv": "^16.4.5",
     "eslint": "^9.9.0",
     "eslint-plugin-playwright": "^1.6.2"
