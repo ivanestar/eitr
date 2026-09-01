@@ -8,7 +8,7 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
-## [0.6.0] - 2026-08-29
+## [0.7.0] - 2026-09-01
 
 ### Added
 
