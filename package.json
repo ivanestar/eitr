@@ -1,6 +1,6 @@
 {
   "name": "@onlytests/eitr",
-  "description": "Generates a complete, standalone Playwright test framework from your app URL across TypeScript, JavaScript, Python, C#, and Java.",
+  "description": "Generates a complete, standalone Playwright test framework from your app URL across TypeScript, Python, C#, and Java.",
   "bin": {
     "eitr": "./dist/bin/eitr.js"
   },
@@ -32,18 +32,23 @@
     "playwright",
     "test-automation",
     "e2e-testing",
+    "browser-testing",
     "page-objects",
+    "page-object-model",
     "cpom",
     "scaffold",
     "cli",
     "typescript",
-    "javascript",
     "python",
     "csharp",
     "java",
     "ci-cd",
+    "authentication-testing",
+    "test-data",
     "testrail",
-    "xray"
+    "xray",
+    "azure-devops",
+    "zephyr"
   ],
   "workspaces": [
     "packages/*"

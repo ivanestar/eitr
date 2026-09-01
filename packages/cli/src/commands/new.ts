@@ -8,15 +8,22 @@ runnable test project (in the chosen language and framework, equivalent to "eitr
 Never asks for login or credentials.
 
 Options:
-  --cwd <dir>          Project root (default: cwd)
-  --start-url <url>    Start-page URL (required in non-interactive mode)
-  --output-dir <dir>   Project folder (default: 'PlaywrightTests')
-  --framework <id>     Framework hint: react|vue|angular|svelte|other
-  --ui-library <id>    UI library hint: mui|antd|radix|chakra|tailwind|none|other
-  --no-install         Emit files only; skip npm install + browsers
-  --storage-state <f>  Playwright storageState JSON file (auth.json) to bypass SSO during recon
-  --yes                Non-interactive: take flags as-is, ask nothing
-  -h, --help           Show this help
+  --cwd <dir>            Project root (default: cwd)
+  --start-url <url>      Start-page URL (required in non-interactive mode)
+  --output-dir <dir>     Project folder (default: 'PlaywrightTests')
+  --language <id>        Programming language: javascript|typescript|python|java|csharp
+  --automation-tool <id> E2E automation tool
+  --framework <id>       Framework hint: react|vue|angular|svelte|other
+  --ui-library <id>      UI library hint: mui|antd|radix|chakra|tailwind|none|other
+  --ci-cd <id>           CI/CD pipeline template: github|gitlab|jenkins|teamcity|none
+  --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,windsurf,codex,copilot
+  --task-tracker <id>    Task/issue tracker: jira|azure-devops|none
+  --tms-providers <ids>  Test Management System(s) (comma-separated): azure-devops,testrail,xray,zephyr
+                          (xray/zephyr require --task-tracker jira)
+  --no-install           Emit files only; skip npm install + browsers
+  --storage-state <f>    Playwright storageState JSON file (auth.json) to bypass SSO during recon
+  --yes                  Non-interactive: take flags as-is, ask nothing
+  -h, --help             Show this help
 `;
 
 export async function runNew(argv: string[], deps: GenerateDeps = {}): Promise<number> {

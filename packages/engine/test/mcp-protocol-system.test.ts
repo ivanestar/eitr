@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { planMcpServer } from '../src/plan/templates/mcp-server.js';
@@ -231,6 +231,82 @@ describe('MCP bridge protocol layer (real spawned process, real stdio JSON-RPC)'
         _meta: { 'io.modelcontextprotocol/protocolVersion': '1999-01-01' },
       });
       expect(resp.error.code).toBe(-32022);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('unrecognized JSON-RPC method returns a -32601 error instead of a silent empty result', async () => {
+    const dir = materializeBridge();
+    const client = startMcpClient(dir);
+    try {
+      const resp = await client.call('totally/unknown/method', {});
+      expect(resp.error).toBeDefined();
+      expect(resp.error.code).toBe(-32601);
+      expect(resp.error.message).toContain('totally/unknown/method');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('mcp__run_test rejects a specPath carrying shell metacharacters instead of executing them (command-injection guard)', async () => {
+    const dir = materializeBridge();
+    const client = startMcpClient(dir);
+    try {
+      const resp = await client.call('tools/call', {
+        name: 'mcp__run_test',
+        arguments: {
+          specPath: `x.spec.ts; node -e "require('fs').writeFileSync('injected.txt','x')"`,
+        },
+      });
+      const parsed = JSON.parse(resp.result.content[0].text);
+      expect(parsed.status).toBe('failed');
+      expect(parsed.stderr).toContain('SecurityError');
+      expect(existsSync(join(dir, 'injected.txt'))).toBe(false);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('mcp__run_test rejects a project name carrying shell metacharacters the same way', async () => {
+    const dir = materializeBridge();
+    const client = startMcpClient(dir);
+    try {
+      const resp = await client.call('tools/call', {
+        name: 'mcp__run_test',
+        arguments: { specPath: 'tests/smoke.spec.ts', project: '$(node -e "1")' },
+      });
+      const parsed = JSON.parse(resp.result.content[0].text);
+      expect(parsed.status).toBe('failed');
+      expect(parsed.stderr).toContain('SecurityError');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('mcp__run_test rejects a specPath/project that looks like a runner CLI flag (leading "-"), even though every character in it is individually whitelisted (CWE-88 argument injection guard)', async () => {
+    const dir = materializeBridge();
+    const client = startMcpClient(dir);
+    try {
+      // '--updateSnapshot' and '-h' pass the plain character-class whitelist (letters/digits/./_/-)
+      // but must still be rejected: as a bare positional argv token they'd be interpreted by the
+      // downstream runner as a flag, not a file path, letting a request silently alter runner
+      // behavior (e.g. skip tests) while the tool still reports a definite status.
+      const respSpec = await client.call('tools/call', {
+        name: 'mcp__run_test',
+        arguments: { specPath: '--updateSnapshot' },
+      });
+      const parsedSpec = JSON.parse(respSpec.result.content[0].text);
+      expect(parsedSpec.status).toBe('failed');
+      expect(parsedSpec.stderr).toContain('SecurityError');
+
+      const respProject = await client.call('tools/call', {
+        name: 'mcp__run_test',
+        arguments: { specPath: 'tests/smoke.spec.ts', project: '-h' },
+      });
+      const parsedProject = JSON.parse(respProject.result.content[0].text);
+      expect(parsedProject.status).toBe('failed');
+      expect(parsedProject.stderr).toContain('SecurityError');
     } finally {
       await client.close();
     }

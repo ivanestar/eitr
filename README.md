@@ -8,7 +8,7 @@
 
 EITR builds a test-automation ecosystem inside your project. Point it at a URL, pick your stack, and it generates a complete, working framework - so you can stand up automation and start showing results on day one instead of weeks into setup.
 
-Playwright across TypeScript, JavaScript, Python, C#, and Java.
+Playwright across TypeScript, Python, C#, and Java.
 
 ---
 
@@ -17,6 +17,25 @@ Playwright across TypeScript, JavaScript, Python, C#, and Java.
 - **From URL to running suite in minutes.** Point it at your app, answer a few questions, and the wizard generates everything — project structure, page objects, CI configs, TMS wiring — and installs dependencies in one pass.
 - **No dependency on EITR.** The generated code is yours: plain Playwright, plain CI configs, no special runtime needed. Delete EITR after scaffolding and nothing breaks.
 - **Handles the annoying parts.** Login/MFA session reuse, CI sharding, test data factories, TMS sync — the boilerplate that normally takes a week to set up right.
+
+---
+
+## When to use EITR
+
+A good fit when you have an existing web application and need to:
+
+- stand up Playwright-based E2E/browser test automation from scratch;
+- generate a Page Object layer instead of hand-rolling one;
+- wire up login/SSO/MFA session reuse and test data generation;
+- get CI (GitHub Actions, GitLab CI, Jenkins, TeamCity) and optional TMS sync (Jira Xray, Azure DevOps, TestRail, Zephyr) generated alongside the tests.
+
+Not the right tool for:
+
+- unit or component-level testing (use your stack's native unit-test runner);
+- API-only testing with no browser involved;
+- load/performance testing;
+- security scanning;
+- a project that already has a mature E2E framework and isn't migrating.
 
 ---
 
