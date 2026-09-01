@@ -54,15 +54,15 @@ explicit step - `eitr auth` - never part of `eitr new`'s questionnaire).
 ```
                  test repo
    ┌─────────────────────────────────────────────┐
-   │  overrides/         (user-owned)             │  extends ↓, NEVER touched by regen
+   │  overrides/         (user-owned)             │  extends ↓, yours to customize
    ├─────────────────────────────────────────────┤
-   │  components/        (tool-owned, path-authority: regen overwrites)
+   │  components/        (tool-owned scaffold, create-if-absent: generated once, never rewritten)
    │    base/            BasePage, Component, Container, Collection
    │    primitives/      Button, TextInput, Checkbox, Select, Link, ... (role/test-id driven)
    │    widgets/         Dialog, Table, ... (shared, composed via this.child())
    │  tests/              example test + user tests
-   │  eitr.config.ts     config the user spreads into their own defineConfig
-   │  .eitr/              stack-profile.json, manifest.json
+   │  playwright.config.ts  machine defaults and your own customization, in one file
+   │  .scaffold/          stack-profile.json, manifest.json
    │  .mcp/tms-bridge/    embedded MCP server for AI-assistant TMS/test-runner access
    └─────────────────────────────────────────────┘
 ```

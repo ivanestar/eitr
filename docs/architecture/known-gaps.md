@@ -11,7 +11,7 @@ is for gaps significant enough to shape future architecture, not routine finding
 - **Locator extensibility:** `LocatorSpec` is a closed discriminated union with a hardcoded switch
   for resolution (role, text, testId, custom). A polymorphic registry strategy would let a project
   register first-class custom locator strategies (e.g. framework-specific node selectors) via
-  `eitr.config.ts` instead.
+  `playwright.config.ts` instead.
 - **Advanced state/wait management:** relies entirely on Playwright's native auto-waiting. An
   extensible `WaitStrategy` interface for app-level synchronization (GraphQL hydration, network
   idle) beyond what auto-waiting covers is not yet built.

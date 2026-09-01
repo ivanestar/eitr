@@ -3,8 +3,8 @@ import * as path from 'node:path';
 
 // PER-FILE staging into cwd/.scaffold-tmp (same volume) + fs.rename onto the final path
 // (rename-over-existing-FILE works on Windows via MoveFileEx REPLACE_EXISTING) — each file is
-// all-or-nothing. This per-file atomic rename + path-authority regenerate IS the no-wedge
-// crash-safety guarantee (ARCHITECTURE §8); no two-phase journal is needed in Slice 1.
+// all-or-nothing. This per-file atomic rename IS the no-wedge crash-safety guarantee
+// (ARCHITECTURE §8); no two-phase journal is needed in Slice 1.
 export async function stageAndRename(
   cwd: string,
   relPath: string,

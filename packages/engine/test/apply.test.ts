@@ -58,16 +58,39 @@ describe('apply() (runnable project)', () => {
     execSync('npx tsc --noEmit', { cwd, stdio: 'ignore' });
   });
 
-  it('emits a self-contained playwright.config.ts with baseURL and machine defaults inlined', async () => {
+  it('emits a self-contained playwright.config.ts with every former eitr.config.ts field inlined', async () => {
     const cwd = makeTempCwd();
     await apply(plan(muiProfile(), planOptions()), cwd);
 
     const pw = readFileSync(join(cwd, 'playwright.config.ts'), 'utf8');
+    // baseURL + generator-owned machine defaults, all in the one file the user owns.
     expect(pw).toContain('http://localhost:4173');
     expect(pw).toContain('defineConfig');
     expect(pw).toContain("testIdAttribute: 'data-testid'");
     expect(pw).toContain("name: 'chromium'");
+    expect(pw).toContain("testDir: './tests'");
+    expect(pw).toContain('testIgnore: [/\\.probe\\./]');
+    expect(pw).toContain('fullyParallel: true');
+    expect(pw).toContain('retries: process.env.CI ? 2 : 0');
+    expect(pw).toContain("trace: 'on-first-retry'");
+    expect(pw).toContain("screenshot: 'only-on-failure'");
+    expect(pw).toContain("video: 'retain-on-failure'");
+    expect(pw).toContain("reporter: [['list'], ['html'");
+    expect(pw).toContain('firefox'); // commented cross-browser example still present
+    expect(pw).toContain('webServer'); // commented dev-server example still present
     expect(existsSync(join(cwd, 'eitr.config.ts'))).toBe(false);
+  });
+
+  it('adds a junit reporter to playwright.config.ts only when a CI/CD provider is selected', async () => {
+    const withoutCi = makeTempCwd();
+    await apply(plan(muiProfile(), planOptions()), withoutCi);
+    const pwNoCi = readFileSync(join(withoutCi, 'playwright.config.ts'), 'utf8');
+    expect(pwNoCi).not.toContain('junit');
+
+    const withCi = makeTempCwd();
+    await apply(plan(muiProfile(), { ...planOptions(), ciCd: 'github' }), withCi);
+    const pwCi = readFileSync(join(withCi, 'playwright.config.ts'), 'utf8');
+    expect(pwCi).toContain("['junit', { outputFile: 'playwright-report/junit-results.xml' }]");
   });
 
   it('leaves every file byte-for-byte untouched on a second apply() into the same directory', async () => {
