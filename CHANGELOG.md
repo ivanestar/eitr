@@ -190,6 +190,21 @@ real bug) - not just what changed.
   relicensing right, not needed with no external contributors expected. Re-add if the project
   starts accepting outside contributions.
 
+### Security
+
+- **Command injection in the generated MCP bridge's `mcp__run_test` tool**: `specPath`/`project`
+  arguments from an MCP `tools/call` request were concatenated into a shell command string and run
+  via `spawnSync(shell, [flag, cmdLine])` with no sanitization - an attacker-controlled value
+  reaching this tool (e.g. via indirect prompt injection from a scraped ticket or web page) could
+  execute arbitrary commands with the developer's own environment/secrets access. Replaced with
+  direct argv execution (`spawnSync(bin, argv, { shell: false })`), a whitelist regex on both
+  arguments that also rejects a leading `-`/`--` (closing a CLI-flag/argument-injection gap an
+  independent review caught - e.g. a `specPath` of `--updateSnapshot` would otherwise pass the
+  character-class check and be handed to the runner as a real flag, letting a request silently
+  alter runner behavior while still reporting `status: passed`), and Windows `.cmd` resolution
+  scoped to real batch-file wrappers (`npx`/`npm`/`mvn`) only. An unrecognized JSON-RPC method now
+  returns a proper `-32601` error instead of a silent empty result.
+
 ## [0.5.2] - 2026-08-29
 
 ### Fixed

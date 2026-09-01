@@ -21,15 +21,15 @@ export function planMcpServer(
   const isDotnet = language === 'csharp';
   const isJava = language === 'java';
 
-  const runnerCmd = isCypress
-    ? 'npx cypress run --spec'
+  const [runnerBin, runnerArgs] = isCypress
+    ? ['npx', ['cypress', 'run', '--spec']]
     : isPython
-      ? 'pytest'
+      ? ['pytest', []]
       : isDotnet
-        ? 'dotnet test'
+        ? ['dotnet', ['test']]
         : isJava
-          ? 'mvn test'
-          : 'npx playwright test';
+          ? ['mvn', ['test']]
+          : ['npx', ['playwright', 'test']];
 
   const indexCode = `#!/usr/bin/env node
 // Zero-lock-in embedded MCP Stdio Server for Test Automation & TMS Bridge
@@ -124,23 +124,58 @@ function invalidateCachedCase(provider, caseId) {
   }
 }
 
+function resolveExecutable(bin) {
+  if (process.platform !== 'win32') return bin;
+  // Strictly map only batch-file/shim wrappers - dotnet and a venv's pytest are real .exe on
+  // Windows, not .cmd; appending .cmd to those would break execution (ENOENT).
+  const winCmds = ['npx', 'npm', 'mvn'];
+  return winCmds.includes(bin) ? \`\${bin}.cmd\` : bin;
+}
+
+const RUNNER_BIN = ${JSON.stringify(runnerBin)};
+const RUNNER_BASE_ARGS = ${JSON.stringify(runnerArgs)};
+// Whitelist-validated (including a rejection of any leading "-", closing CLI-flag/argument
+// injection - e.g. a specPath of "--updateSnapshot" or "-h" would otherwise pass the character-
+// class check and be handed to the runner as a bare positional argv token) before spawnSync ever
+// runs. On POSIX, shell: false means no shell is involved at all. On Windows, npx/npm/mvn resolve
+// to .cmd wrappers (see resolveExecutable) which Node still routes through cmd.exe internally
+// regardless of shell: false (the CVE-2024-27980 class) - on that platform this whitelist, not
+// shell: false, is what actually blocks metacharacter injection, since every cmd.exe metacharacter
+// falls outside the allowed character classes below.
+const SAFE_SPEC_PATH = /^[a-zA-Z0-9_./\\\\-]+$/;
+const SAFE_PROJECT_NAME = /^[a-zA-Z0-9_-]+$/;
+
+function isSafeArg(value, pattern) {
+  return pattern.test(value) && !value.startsWith('-');
+}
+
 function executeTestRun(args) {
-  const specPath = args.specPath;
-  const project = args.project ? \`--project=\${args.project}\` : '';
-  const headed = args.headed ? '--headed' : '';
+  const specPath = (args.specPath || '').trim();
+  const project = (args.project || '').trim();
+  const headed = !!args.headed;
   const timeout = args.timeoutMs || 60000;
 
-  const cmdLine = \`${runnerCmd} \${specPath} \${project} \${headed}\`.trim();
-  logDebug(\`Executing test command: \${cmdLine}\`);
+  if (specPath && !isSafeArg(specPath, SAFE_SPEC_PATH)) {
+    return { status: 'failed', exitCode: 1, durationMs: 0, tracePath: null, stdout: '', stderr: 'SecurityError: Invalid characters in specPath' };
+  }
+  if (project && !isSafeArg(project, SAFE_PROJECT_NAME)) {
+    return { status: 'failed', exitCode: 1, durationMs: 0, tracePath: null, stdout: '', stderr: 'SecurityError: Invalid characters in project' };
+  }
+
+  const argv = [...RUNNER_BASE_ARGS];
+  if (specPath) argv.push(specPath);
+  if (project) argv.push(\`--project=\${project}\`);
+  if (headed) argv.push('--headed');
+
+  const bin = resolveExecutable(RUNNER_BIN);
+  logDebug(\`Executing test run: \${bin} \${argv.join(' ')}\`);
 
   const startTime = Date.now();
-  const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
-  const flag = process.platform === 'win32' ? '/c' : '-c';
-
-  const res = spawnSync(shell, [flag, cmdLine], {
+  const res = spawnSync(bin, argv, {
     encoding: 'utf8',
     timeout,
     maxBuffer: 10 * 1024 * 1024,
+    shell: false,
   });
 
   const durationMs = Date.now() - startTime;
@@ -495,7 +530,11 @@ process.stdin.on('data', async (chunk) => {
         const result = await handleToolCall(req.params.name, req.params.arguments || {});
         sendResponse({ jsonrpc: '2.0', id: req.id, result: { ...result, resultType: 'complete' } });
       } else if (req.id) {
-        sendResponse({ jsonrpc: '2.0', id: req.id, result: {} });
+        sendResponse({
+          jsonrpc: '2.0',
+          id: req.id,
+          error: { code: -32601, message: \`Method not found: \${req.method}\` }
+        });
       }
     } catch (e) {
       logDebug(\`Parse error: \${e.message}\`);
