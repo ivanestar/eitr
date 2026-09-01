@@ -337,4 +337,3 @@ const SUPPORTED: Array<{ language: string; automationTool: string }> = [
 | Python     | snake_case | `pytest.ini`           | `conftest.py`       | `test_*.py`      |
 | Java       | camelCase  | `pom.xml`              | JUnit `@BeforeEach` | `*Test.java`     |
 | C#         | PascalCase | `*.csproj`             | NUnit `[SetUp]`     | `*Tests.cs`      |
-| JavaScript | camelCase  | `playwright.config.js` | `fixtures.js`       | `*.spec.js`      |

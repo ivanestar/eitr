@@ -493,7 +493,7 @@ export class ApiClient {
 `;
 }
 
-/** cypress/e2e/example.cy.ts or .js */
+/** cypress/e2e/example.cy.ts */
 export function renderCypressExampleTest(): string {
   return `describe('Harness Boots', () => {
   it('harness boots', () => {

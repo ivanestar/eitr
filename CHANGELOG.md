@@ -8,6 +8,44 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.8.0] - 2026-09-01
+
+### Removed
+
+- **JavaScript decommissioned as a supported EITR language target** (`master_sdd_remediation_spec.md`
+  Track 11, [ADR 0011](docs/architecture/decisions/0011-removal-of-untyped-javascript-target.md)):
+  `JavaScriptAdapter`, `PlaywrightJsGenerator`, `CypressJsGenerator`, the compiled `runtime-js/`
+  asset tree, and `compile-js-assets.js` are deleted. EITR now scaffolds 4 production languages
+  (TypeScript, Python, C#, Java) instead of 5 - Playwright transpiles TypeScript natively with zero
+  extra build step, so plain JavaScript added maintenance cost (~15-20% of the template footprint)
+  without a corresponding CPOM type-safety or AI-assistant-diagnostics benefit TypeScript doesn't
+  already give for free.
+
+### Changed
+
+- `plan()` now throws a typed `UnsupportedLanguageError` (exported from the engine's public API,
+  alongside the new `SupportedLanguage` union) for any language outside `typescript`/`python`/
+  `csharp`/`java`, instead of only failing once no generator matches a language+tool combo.
+- `eitr generate` rejects a legacy `.eitr/init.json` with `language: javascript` with an explicit
+  migration message, rather than an opaque "not implemented yet" error.
+- Cypress (still withheld from the questionnaire pending its own native CPOM redesign) is
+  TypeScript-only going forward - `CypressAdapter`'s `isTs` parameter and every JavaScript branch in
+  its templates are removed.
+- Fixed a latent bug in the CLI questionnaire: changing the selected language used to always reset
+  the E2E automation tool to `playwright`, which is wrong for `csharp`/`java` (whose valid tools are
+  `playwright`/`playwright-maven`/`playwright-gradle`); it now picks the first tool actually valid
+  for the newly selected language.
+- Updated the Polyglot Parity Standard in `AGENTS.md`/`CLAUDE.md` (Section 1) from 5 to 4 languages.
+
+Verified via: `npm run build`, `npm run typecheck`, `npx vitest run packages/engine/test/` (375
+passed, 1 skipped), `npx vitest run packages/cli/test/` (130 passed), `npm run eval` (183 passed),
+`npx vitest run packages/evals/test/e2e/cli.test.ts` (17 passed), the plan's own
+`UnsupportedLanguageError` verification script, and `grep -rn` for `runtime-js`/`PlaywrightJs`/
+`CypressJs`/`isTs` across `packages/` (zero hits). Independently reviewed by the `framework-auditor`
+agent (no CRITICAL findings; 3 MAJOR doc/governance gaps found and closed in this same release -
+this CHANGELOG/version entry, a stale `TODO.md` backlog item, and a stale `JavaScript` row in the
+`stack-scaler` skill's language-convention table - plus 3 MINOR stale-comment/help-text fixes).
+
 ## [0.7.1] - 2026-09-01
 
 ### Security
