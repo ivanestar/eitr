@@ -14,7 +14,7 @@ export interface PythonProjectOpts {
 export function renderPythonConftest(_opts: Pick<PythonProjectOpts, 'baseUrl'>): string {
   return `"""Root conftest — shared Playwright fixtures for the whole test suite."""
 import pytest
-from playwright.sync_api import BrowserContext
+from playwright.sync_api import BrowserContext, Page
 
 
 @pytest.fixture(scope="session")
@@ -25,6 +25,18 @@ def browser_context_args(browser_context_args: dict) -> dict:
         "viewport": {"width": 1280, "height": 720},
         # "storage_state": ".auth/user.json",  # Uncomment after running authentication setup
     }
+
+
+# ── Page Object Fixtures (Dependency Injection) ────────────────────────────
+# Add your own Page Object fixtures here once you have concrete Page Objects — tests should
+# receive them as parameters (dependency injection), never construct them directly. Example:
+#
+# from components.login_page import LoginPage
+#
+# @pytest.fixture
+# def login_page(page: Page) -> LoginPage:
+#     """Fixture providing an initialized LoginPage instance."""
+#     return LoginPage(page)
 `;
 }
 
@@ -114,6 +126,14 @@ def test_page_has_non_empty_title(page: Page) -> None:
         assert page.title() != "", "Expected page title to be non-empty"
     except Exception as err:
         pytest.skip(f"Base URL is unreachable: {err}")
+
+
+# Example: fixture injection (uncomment once you have Page Objects and the matching fixture in
+# conftest.py — tests receive Page Objects as parameters, never construct them directly):
+#
+# def test_login_flow(login_page: LoginPage) -> None:
+#     login_page.navigate()
+#     login_page.login("user@example.com", "SecretPass123!")
 `;
 }
 

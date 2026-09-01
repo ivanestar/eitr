@@ -750,7 +750,15 @@ Add the following Build Steps to your configuration:
   pip install -e .[api]
   \`\`\`
 
-### Step 2: Run Tests (Command Line)
+### Step 2: Audit CPOM Contract & Anti-Fake-Green Rules (Command Line)
+- **Step Name**: Audit CPOM Contract & Anti-Fake-Green Rules
+- **Run**: Custom script
+- **Custom script**:
+  \`\`\`bash
+  python scripts/lint_cpom.py
+  \`\`\`
+
+### Step 3: Run Tests (Command Line)
 - **Step Name**: Run Pytest
 - **Run**: Custom script
 - **Custom script**:
@@ -796,7 +804,15 @@ Add the following Build Steps to your configuration:
   pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps
   \`\`\`
 
-### Step 2: Run Tests (Command Line)
+### Step 2: Audit CPOM Contract & Anti-Fake-Green Rules (Command Line)
+- **Step Name**: Audit CPOM Contract & Anti-Fake-Green Rules
+- **Run**: Custom script
+- **Custom script**:
+  \`\`\`bash
+  dotnet run --file scripts/LintCpom.cs
+  \`\`\`
+
+### Step 3: Run Tests (Command Line)
 - **Step Name**: Run .NET Tests
 - **Run**: Custom script
 - **Custom script**:
@@ -836,7 +852,15 @@ Add the following Build Steps to your configuration:
   ${installCmd}
   \`\`\`
 
-### Step 2: Run Tests (${isGradle ? 'Gradle' : 'Maven'})
+### Step 2: Audit CPOM Contract & Anti-Fake-Green Rules (Command Line)
+- **Step Name**: Audit CPOM Contract & Anti-Fake-Green Rules
+- **Run**: Custom script
+- **Custom script**:
+  \`\`\`bash
+  java scripts/LintCpom.java
+  \`\`\`
+
+### Step 3: Run Tests (${isGradle ? 'Gradle' : 'Maven'})
 - **Step Name**: Run Tests
 - **Run**: Custom script
 - **Custom script**:
@@ -906,7 +930,15 @@ Add the following Build Steps to your configuration:
   npm ci
   \`\`\`
 
-### Step 2: Run Tests (Command Line)
+### Step 2: Audit CPOM Contract & Anti-Fake-Green Rules (Command Line)
+- **Step Name**: Audit CPOM Contract & Anti-Fake-Green Rules
+- **Run**: Custom script
+- **Custom script**:
+  \`\`\`bash
+  npm run lint:cpom
+  \`\`\`
+
+### Step 3: Run Tests (Command Line)
 - **Step Name**: Run Playwright tests
 - **Run**: Custom script
 - **Custom script**:
@@ -1097,6 +1129,12 @@ pip install -e .[api]
             """.trimIndent()
         }
         script {
+            name = "Audit CPOM Contract & Anti-Fake-Green Rules"
+            scriptContent = """
+python scripts/lint_cpom.py
+            """.trimIndent()
+        }
+        script {
             name = "Run Pytest (shard %SHARD%/4)"
             scriptContent = """
 pytest --splits 4 --group %SHARD% --junitxml=test-results/junit-results.xml
@@ -1127,6 +1165,7 @@ pytest --splits 4 --group %SHARD% --junitxml=test-results/junit-results.xml
       'E2E Tests (.NET + Playwright)',
       [
         'Build and Install Browsers\ndotnet build\npwsh bin/Debug/net8.0/playwright.ps1 install --with-deps',
+        'Audit CPOM Contract & Anti-Fake-Green Rules\ndotnet run --file scripts/LintCpom.cs',
         'Run .NET Tests\ndotnet test --logger "junit;LogFilePath=test-results/junit-results.xml"',
       ],
       'test-results/junit-results.xml',
@@ -1142,7 +1181,11 @@ pytest --splits 4 --group %SHARD% --junitxml=test-results/junit-results.xml
     const reportPath = isGradle ? 'build/test-results/**/*.xml' : 'target/surefire-reports/*.xml';
     return buildType(
       `E2E Tests (Java + Playwright + ${isGradle ? 'Gradle' : 'Maven'})`,
-      [`Install Playwright Browsers\n${installCmd}`, `Run Tests\n${cmd}`],
+      [
+        `Install Playwright Browsers\n${installCmd}`,
+        'Audit CPOM Contract & Anti-Fake-Green Rules\njava scripts/LintCpom.java',
+        `Run Tests\n${cmd}`,
+      ],
       reportPath,
     );
   }

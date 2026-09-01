@@ -77,13 +77,14 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(javaFiles.map((f) => f.path)).not.toContain('scripts/LintCpom.cs');
   });
 
-  it('Python linter documents Rules 1-3 real, Rule 4 N/A, Rule 5 deferred', () => {
+  it('Python linter documents Rules 1-3 and 5 real, Rule 4 N/A', () => {
     const text = renderCpomLinterPython();
     expect(text).toContain('Rule 1: Zero Arbitrary Delays');
     expect(text).toContain('Rule 2: Mandatory _now Suffix');
     expect(text).toContain('Rule 3: Zero Assertions in Components');
     expect(text).toContain('N/A for Python');
-    expect(text).toContain('Deferred');
+    expect(text).toContain('Rule 5: Fixture Dependency Injection');
+    expect(text).not.toContain('Deferred');
     expect(text).not.toContain('EITR');
     expect(text).not.toContain('Eitr');
   });
@@ -157,6 +158,62 @@ describe('Per-language CPOM contract linter parity', () => {
         });
         expect(result.stderr).toBe('');
         expect(result.status).toBe(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(pythonCmd === null)(
+    'Python Rule 5 catches raw Page Object construction in a test file, but exempts conftest.py and fixture files',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-py-rule5-'));
+      try {
+        writeFileSync(join(dir, 'lint_cpom.py'), renderCpomLinterPython(), 'utf8');
+        const testsDir = join(dir, 'tests');
+        mkdirSync(testsDir, { recursive: true });
+        writeFileSync(
+          join(testsDir, 'test_login.py'),
+          [
+            'from components.login_page import LoginPage',
+            '',
+            'def test_login(page):',
+            '    login_page = LoginPage(page)',
+            "    login_page.login('user@example.com', 'pw')",
+          ].join('\n'),
+          'utf8',
+        );
+        // A nested tests/conftest.py (a real, common pytest pattern for test-scoped fixtures) -
+        // placed inside tests/ specifically so is_test is also True for it, forcing the
+        // exemption to come from the is_fixture check itself rather than from the file simply
+        // never being walked (the root conftest.py EITR generates today lives outside
+        // components/tests/shared and would never be visited either way, which would make this
+        // assertion pass for the wrong reason).
+        writeFileSync(
+          join(testsDir, 'conftest.py'),
+          [
+            'import pytest',
+            'from components.login_page import LoginPage',
+            '',
+            '@pytest.fixture',
+            'def login_page(page):',
+            '    return LoginPage(page)',
+          ].join('\n'),
+          'utf8',
+        );
+        const result = spawnSync(pythonCmd as string, ['lint_cpom.py'], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+        // Exactly one real violation: the raw LoginPage(page) in tests/test_login.py. The
+        // identical construction in tests/conftest.py must not be flagged - that is where
+        // fixtures are meant to build Page Objects.
+        expect(result.status).toBe(1);
+        const rule5Violations = (result.stderr.match(/Rule 5: Fixture Dependency Injection/g) ?? [])
+          .length;
+        expect(rule5Violations).toBe(1);
+        expect(result.stderr).toContain('tests/test_login.py');
+        expect(result.stderr).not.toContain('tests/conftest.py');
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

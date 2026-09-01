@@ -18,11 +18,9 @@ Rules enforced (parity with scripts/lint-cpom.js for TypeScript/Cypress):
      synchronous API) - there is no await/Promise concept for a state read to be "unawaited"
      against, so the JS/TS "Unawaited Promise Guard" rule has no Python analog. This is a
      deliberate no-op, not an oversight.
-  5. Deferred. conftest.py currently exposes only a "browser_context_args" fixture - there is no
-     Page-Object-returning fixture convention yet for a "no raw SomePage(page) in tests" rule to
-     check against. Building that fixture convention is out of scope for this linter; once it
-     exists, Rule 5 (guard against direct Page Object construction in test bodies, mirroring the
-     TS/Java/C# Fixture Dependency Injection rule) can be added here.
+  5. Fixture Dependency Injection - rejects raw PageObject(page)/Component(page) construction in
+     test files (tests/), mirroring the TS/Java/C# rule. conftest.py and any file with "fixture"
+     in its name are exempt (that is where such construction is meant to happen).
 """
 import ast
 import os
@@ -65,11 +63,16 @@ STRUCTURAL_GETTER_EXEMPTIONS = {
 }
 
 
+CPOM_BASE_CLASS_NAMES = {"BasePage", "Component"}
+
+
 class CpomVisitor(ast.NodeVisitor):
     """Walks one file's AST, collecting CPOM contract violations."""
 
-    def __init__(self, is_component: bool) -> None:
+    def __init__(self, is_component: bool, is_test: bool, is_fixture: bool) -> None:
         self.is_component = is_component
+        self.is_test = is_test
+        self.is_fixture = is_fixture
         self.class_depth = 0
         self.violations: list[tuple[int, str, str]] = []
 
@@ -136,6 +139,20 @@ class CpomVisitor(ast.NodeVisitor):
                 "test files only.",
             ))
 
+        if (
+            self.is_test
+            and not self.is_fixture
+            and attr_name
+            and (attr_name.endswith("Page") or attr_name.endswith("Component"))
+            and attr_name not in CPOM_BASE_CLASS_NAMES
+        ):
+            self.violations.append((
+                node.lineno,
+                "Rule 5: Fixture Dependency Injection",
+                'Direct instantiation of "' + attr_name + '" in a test file is prohibited. '
+                "Inject it as a pytest fixture parameter instead (see conftest.py).",
+            ))
+
         self.generic_visit(node)
 
 
@@ -156,6 +173,8 @@ def walk_files(cwd: str) -> list[str]:
 def audit_file(cwd: str, path: str, violations_out: list[tuple[str, int, str, str]]) -> None:
     rel_path = os.path.relpath(path, cwd).replace(os.sep, "/")
     is_component = rel_path.startswith("components/")
+    is_test = rel_path.startswith("tests/")
+    is_fixture = "conftest" in rel_path or "fixture" in rel_path.lower()
 
     try:
         with open(path, "r", encoding="utf-8") as handle:
@@ -165,7 +184,7 @@ def audit_file(cwd: str, path: str, violations_out: list[tuple[str, int, str, st
         violations_out.append((rel_path, 0, "Rule 0: Parse Error", str(err)))
         return
 
-    visitor = CpomVisitor(is_component)
+    visitor = CpomVisitor(is_component, is_test, is_fixture)
     visitor.visit(tree)
     for lineno, rule, message in visitor.violations:
         violations_out.append((rel_path, lineno, rule, message))
