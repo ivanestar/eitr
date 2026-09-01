@@ -8,6 +8,44 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.9.0] - 2026-09-01
+
+### Removed
+
+- **The separate `eitr.config.ts` machine-owned config file** (`master_sdd_remediation_spec.md`
+  Track 1): its content is now inlined directly into `playwright.config.ts` (and the Cypress
+  equivalent), both `create-if-absent`. This reverses the two-tier `regenerate`/`create-if-absent`
+  config model in favor of matching how EITR is actually used - a project is generated once and
+  never touched by EITR again, so there is no scenario left where safely re-applying machine-owned
+  config in place matters.
+- **The `'regenerate'` write policy, engine-wide**: every CPOM base/primitive/widget file across all
+  4 languages plus Cypress that used to be silently overwritten on a second `apply()` call is now
+  `'create-if-absent'` (61 occurrences flipped across 6 language/tool adapters). The now-fully-dead
+  clobber-detection machinery is deleted, not left unused: `WritePolicy` no longer has a
+  `'regenerate'` member, `ApplyResult` no longer has `clobberedOwnedFiles`, and the CLI's
+  `[WARN] Overwrote hand-edited...` output is gone. `'merge-fragment'` is untouched (separate,
+  already-unused, reserved for a different future capability).
+
+### Changed
+
+- Renamed the engine's metadata directory `.eitr/` -> `.scaffold/` (and `.eitr-tmp/` ->
+  `.scaffold-tmp/`) across engine core, CLI commands, and every `.gitignore` template branch -
+  closing the last brand leak from ADR 0006's Zero Lock-in invariant. Added `.tms-cache/` to every
+  `.gitignore` branch (SEC-003 - the TMS credential/ticket cache wasn't gitignored anywhere before).
+- No `eitr migrate` command was built for existing projects: already-generated projects are
+  explicitly out of scope for any future EITR-driven update, a deliberate product decision, not an
+  oversight.
+
+Verified via: `npm run build`, `npm run typecheck`, `npm run format:check`, `npx vitest run
+packages/engine/test/ packages/cli/test/` (42 files, 503 passed, 1 skipped), `npm run eval` (183
+passed), `npx vitest run packages/evals/test/e2e/cli.test.ts` (17 passed, real installs), a manual
+`plan()`+`apply()`x2 sanity script confirming a second `apply()` call only ever (re)writes the
+manifest and leaves every other file byte-for-byte unchanged, and `grep -rn` across `packages/` for
+`writePolicy: 'regenerate'` / `eitrConfig`/`eitr\.config` (zero real hits). Independently reviewed by
+the `framework-auditor` agent (no CRITICAL findings; 4 MAJOR + 3 MINOR found, all fixed in this same
+release except one MINOR routed to `TODO.md` as plausibly pre-existing and outside this track's own
+scope - Cypress's config template not honoring `E2E_BASE_URL` the way Playwright's does).
+
 ## [0.8.0] - 2026-09-01
 
 ### Removed
