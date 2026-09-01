@@ -283,4 +283,32 @@ describe('MCP bridge protocol layer (real spawned process, real stdio JSON-RPC)'
       await client.close();
     }
   });
+
+  it('mcp__run_test rejects a specPath/project that looks like a runner CLI flag (leading "-"), even though every character in it is individually whitelisted (CWE-88 argument injection guard)', async () => {
+    const dir = materializeBridge();
+    const client = startMcpClient(dir);
+    try {
+      // '--updateSnapshot' and '-h' pass the plain character-class whitelist (letters/digits/./_/-)
+      // but must still be rejected: as a bare positional argv token they'd be interpreted by the
+      // downstream runner as a flag, not a file path, letting a request silently alter runner
+      // behavior (e.g. skip tests) while the tool still reports a definite status.
+      const respSpec = await client.call('tools/call', {
+        name: 'mcp__run_test',
+        arguments: { specPath: '--updateSnapshot' },
+      });
+      const parsedSpec = JSON.parse(respSpec.result.content[0].text);
+      expect(parsedSpec.status).toBe('failed');
+      expect(parsedSpec.stderr).toContain('SecurityError');
+
+      const respProject = await client.call('tools/call', {
+        name: 'mcp__run_test',
+        arguments: { specPath: 'tests/smoke.spec.ts', project: '-h' },
+      });
+      const parsedProject = JSON.parse(respProject.result.content[0].text);
+      expect(parsedProject.status).toBe('failed');
+      expect(parsedProject.stderr).toContain('SecurityError');
+    } finally {
+      await client.close();
+    }
+  });
 });

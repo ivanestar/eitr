@@ -134,11 +134,20 @@ function resolveExecutable(bin) {
 
 const RUNNER_BIN = ${JSON.stringify(runnerBin)};
 const RUNNER_BASE_ARGS = ${JSON.stringify(runnerArgs)};
-// Whitelist-validated before ever reaching spawnSync, which itself runs with shell: false (direct
-// argv exec, no shell interpretation) - together these close the command-injection vector this
-// function used to have when specPath/project were concatenated into a shell command string.
+// Whitelist-validated (including a rejection of any leading "-", closing CLI-flag/argument
+// injection - e.g. a specPath of "--updateSnapshot" or "-h" would otherwise pass the character-
+// class check and be handed to the runner as a bare positional argv token) before spawnSync ever
+// runs. On POSIX, shell: false means no shell is involved at all. On Windows, npx/npm/mvn resolve
+// to .cmd wrappers (see resolveExecutable) which Node still routes through cmd.exe internally
+// regardless of shell: false (the CVE-2024-27980 class) - on that platform this whitelist, not
+// shell: false, is what actually blocks metacharacter injection, since every cmd.exe metacharacter
+// falls outside the allowed character classes below.
 const SAFE_SPEC_PATH = /^[a-zA-Z0-9_./\\\\-]+$/;
 const SAFE_PROJECT_NAME = /^[a-zA-Z0-9_-]+$/;
+
+function isSafeArg(value, pattern) {
+  return pattern.test(value) && !value.startsWith('-');
+}
 
 function executeTestRun(args) {
   const specPath = (args.specPath || '').trim();
@@ -146,10 +155,10 @@ function executeTestRun(args) {
   const headed = !!args.headed;
   const timeout = args.timeoutMs || 60000;
 
-  if (specPath && !SAFE_SPEC_PATH.test(specPath)) {
+  if (specPath && !isSafeArg(specPath, SAFE_SPEC_PATH)) {
     return { status: 'failed', exitCode: 1, durationMs: 0, tracePath: null, stdout: '', stderr: 'SecurityError: Invalid characters in specPath' };
   }
-  if (project && !SAFE_PROJECT_NAME.test(project)) {
+  if (project && !isSafeArg(project, SAFE_PROJECT_NAME)) {
     return { status: 'failed', exitCode: 1, durationMs: 0, tracePath: null, stdout: '', stderr: 'SecurityError: Invalid characters in project' };
   }
 
