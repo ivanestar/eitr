@@ -62,6 +62,30 @@ export function renderJavaPom(opts: { projectName: string }): string {
                     <rerunFailingTestsCount>2</rerunFailingTestsCount>
                 </configuration>
             </plugin>
+            <!-- CPOM contract linter, build-time enforced: fails "mvn validate" (and therefore
+                 every later phase, including "mvn test") if scripts/LintCpom.java finds a
+                 violation. Runs with \${java.home}/bin/java so it always uses the same JDK Maven
+                 itself is running under, not whatever "java" happens to resolve to on PATH. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.1</version>
+                <executions>
+                    <execution>
+                        <id>lint-cpom</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>\${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>scripts/LintCpom.java</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>
@@ -94,6 +118,18 @@ test {
         maxRetries = 2
         maxFailures = 20
     }
+}
+
+// CPOM contract linter, build-time enforced: fails "gradle test" and "gradle check" if
+// scripts/LintCpom.java finds a violation.
+tasks.register('lintCpom', Exec) {
+    commandLine 'java', 'scripts/LintCpom.java'
+}
+tasks.named('test') {
+    dependsOn 'lintCpom'
+}
+tasks.named('check') {
+    dependsOn 'lintCpom'
 }
 
 tasks.register('playwrightInstall', JavaExec) {

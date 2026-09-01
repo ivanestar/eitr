@@ -12,6 +12,18 @@ real bug) - not just what changed.
 
 ### Added
 
+- **Build-time CPOM contract enforcement for Java and C#** (previously CI-only): Java's
+  `pom.xml`/`build.gradle` now wire `scripts/LintCpom.java` into Maven's `validate` phase and
+  Gradle's `test`/`check` tasks, so a local `mvn test`/`gradle test` fails on a CPOM violation
+  before CI ever runs. C# gets the equivalent as an explicit opt-in MSBuild target
+  (`dotnet build -t:LintCpom`), not wired into the default build chain, because
+  `scripts/LintCpom.cs` requires the .NET 10 SDK specifically while the project itself targets
+  net8.0 - hooking it into every `dotnet build` would break local builds for developers who only
+  have the .NET 8 SDK the project actually needs; CI's separate .NET-10-provisioned job remains the
+  primary enforcement point for C#. New Real-Disk-Rule regression tests in
+  `packages/engine/test/cpom-linter-parity.test.ts` run both linters against `plan()`'s actual
+  generated component tree (not a hand-written fixture) to prevent this exact class of false
+  positive from silently reappearing.
 - `cache: 'pip'` / `cache: 'maven'` / `cache: 'gradle'` on the generated GitHub Actions
   `setup-python`/`setup-java` steps for Python and Java (Maven + Gradle) - both actions support this
   built-in dependency-cache parameter officially; TS/JS already had `cache: 'npm'`, this closes the
@@ -99,6 +111,18 @@ real bug) - not just what changed.
 
 ### Fixed
 
+- **CPOM linter false positive on `FrameLocator`/`IFrameLocator`-returning members**: the Java and
+  C# `STRUCTURAL_RETURN_TYPES` exemption lists omitted `FrameLocator`/`IFrameLocator`, so the
+  framework's own generated `FrameContainer.java`'s `getFrame()` was flagged as a Rule 2 violation
+  requiring a `Now()` suffix - reproduced live by running `java scripts/LintCpom.java` against a
+  freshly generated Java+Playwright+Maven project. Since CI already runs this linter as a gating
+  step (see Added below), every freshly generated Java project's CI was failing on this false
+  positive before a single real test ran. The C# list had the same gap but didn't reproduce, since
+  the generated `FrameContainer.cs` exposes `Frame` as a property, not a method the linter's
+  paren-based method-signature matcher can see - fixed defensively for the next `Get`-prefixed
+  method that does return `IFrameLocator`.
+- C#'s generated `.csproj` referenced no JUnit-format test logger package despite the generated CI
+  workflows requesting one (`dotnet test --logger "junit;..."`) - added `JunitXml.TestLogger`.
 - `terminal-e2e.test.ts` restored to the CI gate - its one failing assertion could not be reproduced
   across 5 separate re-runs, very likely fixed as a side effect of an earlier, unrelated change.
 - `packages/evals/test/e2e/cli.test.ts` (16 pairwise CLI combinations with real

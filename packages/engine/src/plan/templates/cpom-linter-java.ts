@@ -59,7 +59,7 @@ public class LintCpom {
     // than by a fixed method-name list, so a future getLocator()-shaped method is still exempt and
     // a future getValueNow()-shaped method is still correctly caught.
     private static final List<String> STRUCTURAL_RETURN_TYPES = Arrays.asList(
-        "Locator", "Page", "BrowserContext", "Frame", "ElementHandle"
+        "Locator", "Page", "BrowserContext", "Frame", "FrameLocator", "ElementHandle"
     );
 
     private static final class Violation {
