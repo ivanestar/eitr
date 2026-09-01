@@ -1,20 +1,15 @@
 /**
- * Cypress template render functions for TypeScript & JavaScript target generators.
+ * Cypress template render functions for the TypeScript target generator.
  */
 import type { StackProfile } from '../../../types/stack-profile.js';
 
 export interface CypressProjectOpts {
   baseUrl: string;
   projectName: string;
-  isTs: boolean;
 }
 
-/** eitr.config.ts / eitr.config.js for Cypress */
-export function renderCypressEitrConfig(
-  profile: StackProfile,
-  isTs: boolean,
-  _ciCd?: string,
-): string {
+/** eitr.config.ts for Cypress */
+export function renderCypressEitrConfig(profile: StackProfile, _ciCd?: string): string {
   const framework = profile.framework.value;
   let serverCmd = 'npm run start';
   let serverPort = 3000;
@@ -30,8 +25,8 @@ export function renderCypressEitrConfig(
 
   return `${exportStmt} {
   e2e: {
-    specPattern: 'cypress/e2e/**/*.cy.${isTs ? 'ts' : 'js'}',
-    supportFile: false${isTs ? ' as const' : ''},
+    specPattern: 'cypress/e2e/**/*.cy.ts',
+    supportFile: false as const,
   },
   retries: {
     runMode: 2,
@@ -45,11 +40,10 @@ export function renderCypressEitrConfig(
 `;
 }
 
-/** cypress.config.ts / cypress.config.js */
-export function renderCypressConfig(baseUrl: string, isTs = true): string {
-  const importExt = isTs ? '' : '.js';
+/** cypress.config.ts */
+export function renderCypressConfig(baseUrl: string): string {
   return `import { defineConfig } from 'cypress';
-import { eitrConfig } from './eitr.config${importExt}';
+import { eitrConfig } from './eitr.config';
 
 export default defineConfig({
   ...eitrConfig,
@@ -62,12 +56,7 @@ export default defineConfig({
 }
 
 /** package.json for Cypress */
-export function renderCypressPackageJson(projectName: string, isTs: boolean): string {
-  const devDeps = isTs
-    ? `    "cypress": "^13.13.0",
-    "typescript": "^5.4.0"`
-    : `    "cypress": "^13.13.0"`;
-
+export function renderCypressPackageJson(projectName: string): string {
   return `{
   "name": "${projectName}",
   "version": "0.1.0",
@@ -75,10 +64,12 @@ export function renderCypressPackageJson(projectName: string, isTs: boolean): st
   "type": "module",
   "scripts": {
     "test": "cypress run",
-    "test:open": "cypress open"${isTs ? ',\n    "typecheck": "tsc --noEmit"' : ''}
+    "test:open": "cypress open",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-${devDeps}
+    "cypress": "^13.13.0",
+    "typescript": "^5.4.0"
   }
 }
 `;
@@ -101,10 +92,9 @@ export function renderCypressTsConfig(): string {
 `;
 }
 
-/** components/base/component.ts or .js for Cypress */
-export function renderCypressComponentBase(isTs: boolean): string {
-  if (isTs) {
-    return `export class Component {
+/** components/base/component.ts for Cypress */
+export function renderCypressComponentBase(): string {
+  return `export class Component {
   constructor(
     public readonly selector: string,
     public readonly parent?: Component
@@ -130,41 +120,11 @@ export function renderCypressComponentBase(isTs: boolean): string {
   }
 }
 `;
-  }
-
-  return `export class Component {
-  constructor(selector, parent) {
-    this.selector = selector;
-    this.parent = parent;
-  }
-
-  locator() {
-    if (this.parent) {
-      return this.parent.locator().find(this.selector);
-    }
-    return cy.get(this.selector);
-  }
-
-  click() {
-    return this.locator().click();
-  }
-
-  isVisibleNow() {
-    return this.locator().then(($el) => $el.is(':visible'));
-  }
-
-  isEnabledNow() {
-    return this.locator().then(($el) => $el.is(':enabled'));
-  }
-}
-`;
 }
 
-/** components/base/base-page.ts or .js for Cypress */
-export function renderCypressBasePage(isTs: boolean): string {
-  const compImport = isTs ? './component' : './component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/base/base-page.ts for Cypress */
+export function renderCypressBasePage(): string {
+  return `import { Component } from './component';
 
 export abstract class BasePage {
   abstract readonly path: string;
@@ -181,29 +141,11 @@ export abstract class BasePage {
   }
 }
 `;
-  }
-
-  return `export class BasePage {
-  constructor(path = '/') {
-    this.path = path;
-  }
-
-  navigate() {
-    cy.visit(this.path);
-  }
-
-  _child(ComponentClass, selector) {
-    return new ComponentClass(selector);
-  }
-}
-`;
 }
 
-/** components/primitives/button.ts or .js */
-export function renderCypressButton(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/primitives/button.ts */
+export function renderCypressButton(): string {
+  return `import { Component } from '../base/component';
 
 export class Button extends Component {
   textNow(): Cypress.Chainable<string> {
@@ -215,26 +157,11 @@ export class Button extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class Button extends Component {
-  textNow() {
-    return this.locator().invoke('text');
-  }
-
-  getText() {
-    return this.textNow();
-  }
-}
-`;
 }
 
-/** components/primitives/text-input.ts or .js */
-export function renderCypressTextInput(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/primitives/text-input.ts */
+export function renderCypressTextInput(): string {
+  return `import { Component } from '../base/component';
 
 export class TextInput extends Component {
   fill(value: string): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -250,30 +177,11 @@ export class TextInput extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class TextInput extends Component {
-  fill(value) {
-    return this.locator().clear().type(value);
-  }
-
-  clear() {
-    return this.locator().clear();
-  }
-
-  valueNow() {
-    return this.locator().invoke('val');
-  }
-}
-`;
 }
 
-/** components/primitives/checkbox.ts or .js */
-export function renderCypressCheckbox(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/primitives/checkbox.ts */
+export function renderCypressCheckbox(): string {
+  return `import { Component } from '../base/component';
 
 export class Checkbox extends Component {
   check(): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -289,30 +197,11 @@ export class Checkbox extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class Checkbox extends Component {
-  check() {
-    return this.locator().check();
-  }
-
-  uncheck() {
-    return this.locator().uncheck();
-  }
-
-  isCheckedNow() {
-    return this.locator().invoke('is', ':checked');
-  }
-}
-`;
 }
 
-/** components/primitives/native-select.ts or .js */
-export function renderCypressNativeSelect(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/primitives/native-select.ts */
+export function renderCypressNativeSelect(): string {
+  return `import { Component } from '../base/component';
 
 export class NativeSelect extends Component {
   selectOption(value: string): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -328,30 +217,11 @@ export class NativeSelect extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class NativeSelect extends Component {
-  selectOption(value) {
-    return this.locator().select(value);
-  }
-
-  valueNow() {
-    return this.locator().invoke('val');
-  }
-
-  getSelectedValue() {
-    return this.valueNow();
-  }
-}
-`;
 }
 
-/** components/primitives/select.ts or .js */
-export function renderCypressSelect(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/primitives/select.ts */
+export function renderCypressSelect(): string {
+  return `import { Component } from '../base/component';
 
 /**
  * A custom select / combobox whose options render in an overlay (portal) at the
@@ -395,63 +265,11 @@ export class Select extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-/**
- * A custom select / combobox whose options render in an overlay (portal) at the
- * page root rather than inside the trigger's DOM subtree — so the listbox is
- * resolved from the document root, not from the trigger.
- *
- * For a native <select> element, use NativeSelect instead.
- */
-export class Select extends Component {
-  constructor(selector, listboxSelector, optionSelector, reveal = 'click', parent) {
-    super(selector, parent);
-    this.listboxSelector = listboxSelector;
-    this.optionSelector = optionSelector;
-    this.reveal = reveal;
-  }
-
-  open() {
-    if (this.reveal === 'none') {
-      return this.locator();
-    }
-    if (this.reveal === 'hover') {
-      return this.locator().trigger('mouseover');
-    }
-    return this.locator().click();
-  }
-
-  listbox() {
-    return cy.get(this.listboxSelector).last();
-  }
-
-  options() {
-    return this.listbox().find(this.optionSelector);
-  }
-
-  choose(name) {
-    this.open();
-    return this.options().contains(name).click();
-  }
-}
-`;
 }
 
-/** components/primitives/element.ts or .js */
-export function renderCypressElement(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
-
-/**
- * A generic UI element (e.g. heading, block, container, image, or paragraph).
- */
-export class Element extends Component {}
-`;
-  }
-  return `import { Component } from '${compImport}';
+/** components/primitives/element.ts */
+export function renderCypressElement(): string {
+  return `import { Component } from '../base/component';
 
 /**
  * A generic UI element (e.g. heading, block, container, image, or paragraph).
@@ -460,19 +278,9 @@ export class Element extends Component {}
 `;
 }
 
-/** components/primitives/heading.ts or .js */
-export function renderCypressHeading(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
-
-/**
- * A semantic heading element (\`<h1>\`-\`<h6>\` or role="heading").
- */
-export class Heading extends Component {}
-`;
-  }
-  return `import { Component } from '${compImport}';
+/** components/primitives/heading.ts */
+export function renderCypressHeading(): string {
+  return `import { Component } from '../base/component';
 
 /**
  * A semantic heading element (\`<h1>\`-\`<h6>\` or role="heading").
@@ -481,11 +289,9 @@ export class Heading extends Component {}
 `;
 }
 
-/** components/primitives/link.ts or .js */
-export function renderCypressLink(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/primitives/link.ts */
+export function renderCypressLink(): string {
+  return `import { Component } from '../base/component';
 
 export class Link extends Component {
   hrefNow(): Cypress.Chainable<string> {
@@ -497,26 +303,11 @@ export class Link extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class Link extends Component {
-  hrefNow() {
-    return this.locator().invoke('attr', 'href');
-  }
-
-  getHref() {
-    return this.hrefNow();
-  }
-}
-`;
 }
 
-/** components/primitives/file-input.ts or .js */
-export function renderCypressFileInput(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/primitives/file-input.ts */
+export function renderCypressFileInput(): string {
+  return `import { Component } from '../base/component';
 
 export class FileInput extends Component {
   selectFile(filePath: string): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -524,37 +315,25 @@ export class FileInput extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class FileInput extends Component {
-  selectFile(filePath) {
-    return this.locator().selectFile(filePath);
-  }
 }
+
+/** components/primitives/index.ts */
+export function renderCypressPrimitivesIndex(): string {
+  return `export * from './button';
+export * from './text-input';
+export * from './checkbox';
+export * from './radio';
+export * from './native-select';
+export * from './select';
+export * from './element';
+export * from './heading';
+export * from './link';
+export * from './file-input';
 `;
 }
 
-/** components/primitives/index.ts or .js */
-export function renderCypressPrimitivesIndex(isTs = true): string {
-  const ext = isTs ? '' : '.js';
-  return `export * from './button${ext}';
-export * from './text-input${ext}';
-export * from './checkbox${ext}';
-export * from './radio${ext}';
-export * from './native-select${ext}';
-export * from './select${ext}';
-export * from './element${ext}';
-export * from './heading${ext}';
-export * from './link${ext}';
-export * from './file-input${ext}';
-`;
-}
-
-export function renderCypressRadio(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+export function renderCypressRadio(): string {
+  return `import { Component } from '../base/component';
 
 export class RadioButton extends Component {
   check(): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -572,32 +351,11 @@ export class RadioGroup extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class RadioButton extends Component {
-  check() {
-    return this.locator().check();
-  }
 }
 
-export class RadioGroup extends Component {
-  radio(name) {
-    return this.locator().find(\`input[type="radio"][value="\${name}"]\`);
-  }
-
-  select(name) {
-    return this.radio(name).check();
-  }
-}
-`;
-}
-
-/** components/widgets/dialog.ts or .js */
-export function renderCypressDialog(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/widgets/dialog.ts */
+export function renderCypressDialog(): string {
+  return `import { Component } from '../base/component';
 
 export class Dialog extends Component {
   title(): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -609,26 +367,11 @@ export class Dialog extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class Dialog extends Component {
-  title() {
-    return this.locator().find('h1, h2, h3, [role="heading"]');
-  }
-
-  close() {
-    return this.locator().find('button[aria-label="Close"], button:contains("Close"), .close').click();
-  }
-}
-`;
 }
 
-/** components/widgets/table.ts or .js */
-export function renderCypressTable(isTs: boolean): string {
-  const compImport = isTs ? '../base/component' : '../base/component.js';
-  if (isTs) {
-    return `import { Component } from '${compImport}';
+/** components/widgets/table.ts */
+export function renderCypressTable(): string {
+  return `import { Component } from '../base/component';
 
 export class Table extends Component {
   rows(): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -652,45 +395,18 @@ export class Table extends Component {
   }
 }
 `;
-  }
-  return `import { Component } from '${compImport}';
-
-export class Table extends Component {
-  rows() {
-    return this.locator().find('tbody tr');
-  }
-
-  cell(rowIdx, colIdx) {
-    return this.rows().eq(rowIdx).find('td').eq(colIdx);
-  }
-
-  rowByColumn(colIdx, text) {
-    return this.rows().filter((_idx, el) => Cypress.$(el).find('td').eq(colIdx).text().includes(text)).first();
-  }
-
-  rowCountNow() {
-    return this.rows().its('length');
-  }
-
-  rowCount() {
-    return this.rowCountNow();
-  }
 }
+
+/** components/widgets/index.ts */
+export function renderCypressWidgetsIndex(): string {
+  return `export * from './dialog';
+export * from './table';
 `;
 }
 
-/** components/widgets/index.ts or .js */
-export function renderCypressWidgetsIndex(isTs = true): string {
-  const ext = isTs ? '' : '.js';
-  return `export * from './dialog${ext}';
-export * from './table${ext}';
-`;
-}
-
-/** shared/utils/api-client.ts or .js */
-export function renderCypressApiClient(isTs: boolean): string {
-  if (isTs) {
-    return `export interface ApiRequestOptions {
+/** shared/utils/api-client.ts */
+export function renderCypressApiClient(): string {
+  return `export interface ApiRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   url: string;
   body?: any;
@@ -775,89 +491,9 @@ export class ApiClient {
   }
 }
 `;
-  }
-
-  return `export class ApiClient {
-  createUniqueId(prefix = 'id') {
-    return prefix + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-  }
-
-  createTestEmail(prefix = 'user') {
-    return 'test-' + prefix + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6) + '@example.com';
-  }
-
-  createTestPhone() {
-    const randomDigits = Math.floor(100000000 + Math.random() * 900000000).toString();
-    return '+1' + randomDigits;
-  }
-
-  createTestPassword(length = 14) {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-    let pwd = 'Aa1!';
-    for (let i = 4; i < length; i++) {
-      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return pwd;
-  }
-
-  createTestUuid() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
-
-  createTestName(prefix = 'User') {
-    const names = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Sam', 'Chris'];
-    const selected = names[Math.floor(Math.random() * names.length)];
-    return prefix + ' ' + selected + ' ' + Math.random().toString(36).slice(2, 5).toUpperCase();
-  }
-
-  createTestAmount(min = 10, max = 1000) {
-    const val = Math.random() * (max - min) + min;
-    return Number(val.toFixed(2));
-  }
-
-  createTestDate(offsetDays = 0) {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    return d.toISOString();
-  }
-
-  request(options) {
-    return cy.request({
-      method: options.method || 'GET',
-      url: options.url,
-      body: options.body,
-      headers: options.headers,
-    });
-  }
-
-  get(url, headers) {
-    return this.request({ method: 'GET', url, headers });
-  }
-
-  post(url, body, headers) {
-    return this.request({ method: 'POST', url, body, headers });
-  }
-
-  put(url, body, headers) {
-    return this.request({ method: 'PUT', url, body, headers });
-  }
-
-  delete(url, headers) {
-    return this.request({ method: 'DELETE', url, headers });
-  }
-
-  graphql(url, query, variables, headers) {
-    return this.request({ method: 'POST', url, body: { query, variables }, headers });
-  }
-}
-`;
 }
 
-/** cypress/e2e/example.cy.ts or .js */
+/** cypress/e2e/example.cy.ts */
 export function renderCypressExampleTest(): string {
   return `describe('Harness Boots', () => {
   it('harness boots', () => {
@@ -871,14 +507,10 @@ export function renderCypressExampleTest(): string {
 }
 
 /** README.md for Cypress projects */
-export function renderCypressProjectReadme(opts: {
-  projectName: string;
-  baseUrl: string;
-  isTs: boolean;
-}): string {
+export function renderCypressProjectReadme(opts: { projectName: string; baseUrl: string }): string {
   return `# ${opts.projectName}
 
-A Cypress + ${opts.isTs ? 'TypeScript' : 'JavaScript'} UI-test framework core. It contains a component
+A Cypress + TypeScript UI-test framework core. It contains a component
 library (\`components/\`) you build Page Objects on top of, a Cypress config, and example tests.
 
 ## Run
@@ -892,10 +524,11 @@ npm test                         # run tests in headless mode
 
 - **\`npm test\`** — runs all Cypress tests in headless mode.
 - **\`npm run test:open\`** — opens the interactive Cypress Test Runner.
-${opts.isTs ? '- **`npm run typecheck`** — runs strict TypeScript compiler checks.\n' : ''}
+- **\`npm run typecheck\`** — runs strict TypeScript compiler checks.
+
 ## Configure
 
-- **\`cypress.config.${opts.isTs ? 'ts' : 'js'}\`** — Cypress configuration file.
-- **\`eitr.config.${opts.isTs ? 'ts' : 'js'}\`** — Framework configuration (spec patterns, webServer settings).
+- **\`cypress.config.ts\`** — Cypress configuration file.
+- **\`eitr.config.ts\`** — Framework configuration (spec patterns, webServer settings).
 `;
 }

@@ -9,12 +9,12 @@ package install, no network access, runs in under a second before any browser la
 concrete implementation is per-language, each at a rigor tier matched to what a single-file,
 zero-dependency script can reasonably check in that language:
 
-| Language                      | Script                                                                                | Mechanism                                 | Rules                       |
-| ----------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------- |
-| TypeScript/JavaScript/Cypress | `scripts/lint-cpom.js` (`npm run lint:cpom`)                                          | line-by-line regex scan                   | 1-5, all real               |
-| Python                        | `scripts/lint_cpom.py`                                                                | real AST (`ast.NodeVisitor`, stdlib only) | 1-3 real, 4 N/A, 5 deferred |
-| Java                          | `scripts/LintCpom.java` (JDK single-file source-launch, `java scripts/LintCpom.java`) | line-by-line scan                         | 1-5, all real               |
-| C#                            | `scripts/LintCpom.cs` (.NET file-based apps, `dotnet run --file scripts/LintCpom.cs`) | line-by-line scan                         | 1-5, all real               |
+| Language           | Script                                                                                | Mechanism                                 | Rules                       |
+| ------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------- |
+| TypeScript/Cypress | `scripts/lint-cpom.js` (`npm run lint:cpom`)                                          | line-by-line regex scan                   | 1-5, all real               |
+| Python             | `scripts/lint_cpom.py`                                                                | real AST (`ast.NodeVisitor`, stdlib only) | 1-3 real, 4 N/A, 5 deferred |
+| Java               | `scripts/LintCpom.java` (JDK single-file source-launch, `java scripts/LintCpom.java`) | line-by-line scan                         | 1-5, all real               |
+| C#                 | `scripts/LintCpom.cs` (.NET file-based apps, `dotnet run --file scripts/LintCpom.cs`) | line-by-line scan                         | 1-5, all real               |
 
 The five rules, in spirit, across every implementation:
 
@@ -22,7 +22,7 @@ The five rules, in spirit, across every implementation:
    `page.waitForTimeout()`/`.waitForTimeout()`.
 2. **Mandatory point-in-time-read suffix** on every non-retrying state getter (`is*`/`has*`/`get*`
    prefix, exempt by known structural return type - e.g. `Locator`/`Page` - not by a fixed method
-   name list) in `components/` - `Now()` (TS/JS), `_now` (Python), `Now()` (Java), `NowAsync()`
+   name list) in `components/` - `Now()` (TS), `_now` (Python), `Now()` (Java), `NowAsync()`
    (C#, since the Playwright C# API is async-only). All four implementations now check the same
    `is/has/get` prefix set consistently.
 3. **Zero assertions in components** - no `expect(...)`/`Assertions.*`/`Assert.*`/`Expect(...)`
@@ -57,7 +57,7 @@ the .NET 10 SDK strictly alongside the existing .NET 8 toolchain (GitHub Actions
 project's own net8.0 build/test path is untouched.
 
 `eslint.config.js` (`npm run lint:eslint`, `eslint-plugin-playwright`) is generated alongside
-`scripts/lint-cpom.js` for TS/JS projects, catching general correctness issues (floating promises,
+`scripts/lint-cpom.js` for TS projects, catching general correctness issues (floating promises,
 deprecated Playwright APIs) that script was never designed to - it complements the CPOM-specific
 linter rather than replacing it. No language currently has an equivalent secondary general-purpose
 linter wired in by EITR itself.
@@ -65,7 +65,7 @@ linter wired in by EITR itself.
 ## Multi-tier CI/CD gate
 
 - **Tier 1 (static contract gate):** `npm run lint:cpom` (and `lint:eslint` where generated) for
-  TS/JS/Cypress, or the equivalent per-language CPOM script above for Python/Java/C# - sub-second,
+  TS/Cypress, or the equivalent per-language CPOM script above for Python/Java/C# - sub-second,
   before browsers launch.
 - **Tier 2 (scenario regression gate):** `npm test`/`pytest`/`mvn test`/`gradle test`/`dotnet test` -
   full parallel E2E execution with trace artifact uploads on failure.
@@ -92,12 +92,12 @@ yet have an equivalent zero-config audit step (tracked separately, not part of t
 provider. GitHub Actions
 workflows declare a least-privilege `permissions:` block and a `concurrency`/cancel-in-progress
 group; GitLab CI configs declare a top-level `workflow: rules` guard against duplicate
-push/merge-request pipelines. TS/JS and Python shard the Tier 2 run 4-way on all 4 generated CI
-systems: TS/JS via Playwright's native `--shard=X/Y`, each shard producing a blob report that a
+push/merge-request pipelines. TS and Python shard the Tier 2 run 4-way on all 4 generated CI
+systems: TS via Playwright's native `--shard=X/Y`, each shard producing a blob report that a
 merge job/stage/build-type combines into one HTML + JUnit report via `playwright merge-reports`;
 Python via the third-party `pytest-split` plugin (`--splits`/`--group`), which reports per shard
 independently (no merge step, since pytest has no equivalent mergeable report format). TeamCity's
-merge wiring for TS/JS follows TeamCity's documented general dependency pattern but isn't verified
+merge wiring for TS follows TeamCity's documented general dependency pattern but isn't verified
 against a live server (tracked in TODO.md). Java and C# do not shard, by design, not oversight -
 see `known-gaps.md` ("No CI test sharding for Java or C#").
 

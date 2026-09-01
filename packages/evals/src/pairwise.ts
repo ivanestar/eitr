@@ -19,8 +19,8 @@ export const TEST_COMBINATIONS: TestCombination[] = [
     aiAssistants: ['antigravity', 'cursor'],
   },
   {
-    id: 'combo-02-js-cy-vue-antd-gitlab',
-    language: 'javascript',
+    id: 'combo-02-ts-cy-vue-antd-gitlab',
+    language: 'typescript',
     automationTool: 'cypress',
     framework: 'vue',
     uiLibrary: 'antd',
@@ -71,8 +71,8 @@ export const TEST_COMBINATIONS: TestCombination[] = [
     ciCd: 'jenkins',
   },
   {
-    id: 'combo-08-js-pw-angular-antd-teamcity',
-    language: 'javascript',
+    id: 'combo-08-py-pw-angular-antd-teamcity',
+    language: 'python',
     automationTool: 'playwright',
     framework: 'angular',
     uiLibrary: 'antd',
@@ -103,8 +103,8 @@ export const TEST_COMBINATIONS: TestCombination[] = [
     ciCd: 'github',
   },
   {
-    id: 'combo-12-js-cy-react-tailwind-none',
-    language: 'javascript',
+    id: 'combo-12-ts-cy-react-tailwind-none',
+    language: 'typescript',
     automationTool: 'cypress',
     framework: 'react',
     uiLibrary: 'tailwind',
@@ -147,7 +147,7 @@ export const TEST_COMBINATIONS: TestCombination[] = [
 export function verifyFullCoverage(): { ok: boolean; missing: string[] } {
   const missing: string[] = [];
 
-  const languages = ['javascript', 'typescript', 'python', 'csharp', 'java'];
+  const languages = ['typescript', 'python', 'csharp', 'java'];
   const tools = ['playwright', 'playwright-maven', 'playwright-gradle', 'cypress'];
   const frameworks = ['react', 'vue', 'angular', 'svelte', 'unknown'];
   const uiLibs = ['mui', 'antd', 'radix', 'chakra', 'tailwind', 'unknown'];

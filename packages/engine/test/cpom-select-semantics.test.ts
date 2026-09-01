@@ -16,8 +16,7 @@ describe('Cross-language Select semantics parity', () => {
     { name: 'Python', text: renderPythonSelect() },
     { name: 'Java', text: renderJavaSelect() },
     { name: 'C#', text: renderCsharpSelect() },
-    { name: 'Cypress TS', text: renderCypressSelect(true) },
-    { name: 'Cypress JS', text: renderCypressSelect(false) },
+    { name: 'Cypress TS', text: renderCypressSelect() },
   ];
 
   for (const { name, text } of cases) {

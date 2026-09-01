@@ -76,10 +76,15 @@ describe('validateAnswer choice validation', () => {
     }
   });
 
-  it('allows supported tools for TypeScript, JavaScript, and Python', () => {
+  it('allows supported tools for TypeScript and Python', () => {
     expect(validateAnswer(toolQuestion, 'playwright', { language: 'typescript' }).ok).toBe(true);
-    expect(validateAnswer(toolQuestion, 'playwright', { language: 'javascript' }).ok).toBe(true);
     expect(validateAnswer(toolQuestion, 'playwright', { language: 'python' }).ok).toBe(true);
     expect(validateAnswer(toolQuestion, 'pytest', { language: 'python' }).ok).toBe(true);
+  });
+
+  it('rejects javascript as a language choice (removed in Track 11)', () => {
+    const langQuestion = QUESTIONS.find((q) => q.id === 'language')!;
+    const res = validateAnswer(langQuestion, 'javascript');
+    expect(res.ok).toBe(false);
   });
 });

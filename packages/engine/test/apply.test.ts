@@ -115,36 +115,6 @@ describe('apply() (runnable project)', () => {
     await expect(apply(genPlan, cwd)).rejects.toThrow('merge-fragment not implemented');
   });
 
-  it('applies a complete runnable JavaScript + Playwright project with .js assets', async () => {
-    const cwd = makeTempCwd();
-    const jsPlan = plan(muiProfile(), {
-      ...planOptions(),
-      language: 'javascript',
-      automationTool: 'playwright',
-    });
-    const result = await apply(jsPlan, cwd);
-
-    expect(existsSync(join(cwd, 'playwright.config.js'))).toBe(true);
-    expect(existsSync(join(cwd, 'eitr.config.js'))).toBe(true);
-    expect(existsSync(join(cwd, 'components/base/base-page.js'))).toBe(true);
-    expect(existsSync(join(cwd, 'components/primitives/button.js'))).toBe(true);
-    expect(existsSync(join(cwd, 'tests/smoke.spec.js'))).toBe(true);
-
-    const exampleSpec = readFileSync(join(cwd, 'tests/smoke.spec.js'), 'utf8');
-    expect(exampleSpec).not.toContain('unknown.js');
-    expect(exampleSpec).toContain('harness boots');
-
-    const basePageSrc = readFileSync(join(cwd, 'components/base/base-page.js'), 'utf8');
-    expect(basePageSrc).toContain("from './collection.js'");
-    expect(basePageSrc).toContain("from './scope.js'");
-
-    expect(result.clobberedOwnedFiles).toEqual([]);
-
-    if (existsSync(join(cwd, 'tsconfig.json'))) {
-      execSync('npx tsc --noEmit', { cwd, stdio: 'ignore' });
-    }
-  });
-
   it('applies a complete runnable TypeScript + Cypress project', async () => {
     const cwd = makeTempCwd();
     const cyPlan = plan(muiProfile(), {

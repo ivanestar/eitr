@@ -30,7 +30,7 @@ export function renderCpomLinterCsharp(): string {
 // already contains a .csproj runs that project instead and silently passes the filename as a
 // program argument, which would neither run this linter nor fail the build.
 //
-// Rules enforced (parity with scripts/lint-cpom.js for TypeScript/JavaScript/Cypress):
+// Rules enforced (parity with scripts/lint-cpom.js for TypeScript/Cypress):
 //   1. Zero Arbitrary Delays - no Thread.Sleep() / Task.Delay() / WaitForTimeoutAsync().
 //   2. Mandatory NowAsync() suffix for non-retrying state getters in components (Is*/Has*/Get*).
 //   3. Zero assertions inside Component & Page Object classes (Assert.*, Expect(...)).

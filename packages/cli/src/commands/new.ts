@@ -11,7 +11,7 @@ Options:
   --cwd <dir>            Project root (default: cwd)
   --start-url <url>      Start-page URL (required in non-interactive mode)
   --output-dir <dir>     Project folder (default: 'PlaywrightTests')
-  --language <id>        Programming language: javascript|typescript|python|java|csharp
+  --language <id>        Programming language: typescript|python|java|csharp
   --automation-tool <id> E2E automation tool
   --framework <id>       Framework hint: react|vue|angular|svelte|other
   --ui-library <id>      UI library hint: mui|antd|radix|chakra|tailwind|none|other

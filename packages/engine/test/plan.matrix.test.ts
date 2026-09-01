@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { plan } from '../src/plan/plan.js';
+import { UnsupportedLanguageError } from '../src/plan/types.js';
 import { muiProfile } from './helpers.js';
 
 describe('plan() framework & CI/CD matrix integration', () => {
-  const languages = ['typescript', 'javascript', 'python', 'csharp', 'java'] as const;
+  const languages = ['typescript', 'python', 'csharp', 'java'] as const;
   const frameworks = ['react', 'vue', 'svelte', 'angular', 'unknown'] as const;
   const ciCds = ['github', 'gitlab', 'jenkins', 'teamcity', 'none'] as const;
 
@@ -26,15 +27,13 @@ describe('plan() framework & CI/CD matrix integration', () => {
         return 'java';
       case 'csharp':
         return 'cs';
-      case 'javascript':
-        return 'js';
       default:
         return 'ts';
     }
   }
 
-  // Framework helpers (react.ts, vue.ts, etc.) are emitted only by TS, JS, and Python adapters.
-  const LANGS_WITH_FRAMEWORK_HELPERS = ['typescript', 'javascript', 'python'];
+  // Framework helpers (react.ts, vue.ts, etc.) are emitted only by the TS and Python adapters.
+  const LANGS_WITH_FRAMEWORK_HELPERS = ['typescript', 'python'];
 
   for (const language of languages) {
     for (const framework of frameworks) {
@@ -105,4 +104,13 @@ describe('plan() framework & CI/CD matrix integration', () => {
       }
     }
   }
+
+  it('throws UnsupportedLanguageError for a removed language target (javascript)', () => {
+    expect(() =>
+      plan(muiProfile(), {
+        language: 'javascript',
+        automationTool: 'playwright',
+      }),
+    ).toThrow(UnsupportedLanguageError);
+  });
 });

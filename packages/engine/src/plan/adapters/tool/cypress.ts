@@ -31,157 +31,147 @@ import { renderEnvExample } from '../../templates/env-example.js';
 
 export class CypressAdapter implements ToolAdapter {
   readonly id = 'cypress';
-  readonly isTs: boolean;
-
-  constructor(isTs: boolean = true) {
-    this.isTs = isTs;
-  }
 
   planFiles(profile: StackProfile, opts: PlanOptions): FileDescriptor[] {
     const baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
     const projectName = opts.projectName ?? 'cypress-tests';
     const ciCd = opts.ciCd ?? 'none';
-    const isTs = this.isTs;
-    const ext = isTs ? 'ts' : 'js';
 
     const files: FileDescriptor[] = [
       {
-        path: `eitr.config.${ext}`,
+        path: 'eitr.config.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'config' },
-        source: { kind: 'inline', text: renderCypressEitrConfig(profile, isTs, ciCd) },
+        source: { kind: 'inline', text: renderCypressEitrConfig(profile, ciCd) },
       },
       {
-        path: `cypress.config.${ext}`,
+        path: 'cypress.config.ts',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'config' },
-        source: { kind: 'inline', text: renderCypressConfig(baseUrl, isTs) },
+        source: { kind: 'inline', text: renderCypressConfig(baseUrl) },
       },
       {
         path: 'package.json',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'project' },
-        source: { kind: 'inline', text: renderCypressPackageJson(projectName, isTs) },
+        source: { kind: 'inline', text: renderCypressPackageJson(projectName) },
       },
-    ];
-
-    if (isTs) {
-      files.push({
+      {
         path: 'tsconfig.json',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'project' },
         source: { kind: 'inline', text: renderCypressTsConfig() },
-      });
-    }
+      },
+    ];
 
     files.push(
       // CPOM base classes
       {
-        path: `components/base/component.${ext}`,
+        path: 'components/base/component.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'base' },
-        source: { kind: 'inline', text: renderCypressComponentBase(isTs) },
+        source: { kind: 'inline', text: renderCypressComponentBase() },
       },
       {
-        path: `components/base/base-page.${ext}`,
+        path: 'components/base/base-page.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'base' },
-        source: { kind: 'inline', text: renderCypressBasePage(isTs) },
+        source: { kind: 'inline', text: renderCypressBasePage() },
       },
       // Primitives
       {
-        path: `components/primitives/button.${ext}`,
+        path: 'components/primitives/button.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressButton(isTs) },
+        source: { kind: 'inline', text: renderCypressButton() },
       },
       {
-        path: `components/primitives/text-input.${ext}`,
+        path: 'components/primitives/text-input.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressTextInput(isTs) },
+        source: { kind: 'inline', text: renderCypressTextInput() },
       },
       {
-        path: `components/primitives/checkbox.${ext}`,
+        path: 'components/primitives/checkbox.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressCheckbox(isTs) },
+        source: { kind: 'inline', text: renderCypressCheckbox() },
       },
       {
-        path: `components/primitives/native-select.${ext}`,
+        path: 'components/primitives/native-select.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressNativeSelect(isTs) },
+        source: { kind: 'inline', text: renderCypressNativeSelect() },
       },
       {
-        path: `components/primitives/select.${ext}`,
+        path: 'components/primitives/select.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressSelect(isTs) },
+        source: { kind: 'inline', text: renderCypressSelect() },
       },
       {
-        path: `components/primitives/element.${ext}`,
+        path: 'components/primitives/element.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressElement(isTs) },
+        source: { kind: 'inline', text: renderCypressElement() },
       },
       {
-        path: `components/primitives/heading.${ext}`,
+        path: 'components/primitives/heading.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressHeading(isTs) },
+        source: { kind: 'inline', text: renderCypressHeading() },
       },
       {
-        path: `components/primitives/link.${ext}`,
+        path: 'components/primitives/link.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressLink(isTs) },
+        source: { kind: 'inline', text: renderCypressLink() },
       },
       {
-        path: `components/primitives/file-input.${ext}`,
+        path: 'components/primitives/file-input.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressFileInput(isTs) },
+        source: { kind: 'inline', text: renderCypressFileInput() },
       },
       {
-        path: `components/primitives/radio.${ext}`,
+        path: 'components/primitives/radio.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressRadio(isTs) },
+        source: { kind: 'inline', text: renderCypressRadio() },
       },
       {
-        path: `components/primitives/index.${ext}`,
+        path: 'components/primitives/index.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'adapter' },
         source: { kind: 'inline', text: renderCypressPrimitivesIndex() },
       },
       // Widgets
       {
-        path: `components/widgets/dialog.${ext}`,
+        path: 'components/widgets/dialog.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressDialog(isTs) },
+        source: { kind: 'inline', text: renderCypressDialog() },
       },
       {
-        path: `components/widgets/table.${ext}`,
+        path: 'components/widgets/table.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'primitive' },
-        source: { kind: 'inline', text: renderCypressTable(isTs) },
+        source: { kind: 'inline', text: renderCypressTable() },
       },
       {
-        path: `components/widgets/index.${ext}`,
+        path: 'components/widgets/index.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'adapter' },
         source: { kind: 'inline', text: renderCypressWidgetsIndex() },
       },
       {
-        path: `shared/utils/api-client.${ext}`,
+        path: 'shared/utils/api-client.ts',
         writePolicy: 'regenerate',
         provenance: { origin: 'project' },
-        source: { kind: 'inline', text: renderCypressApiClient(isTs) },
+        source: { kind: 'inline', text: renderCypressApiClient() },
       },
       {
-        path: `cypress/e2e/smoke.cy.${ext}`,
+        path: 'cypress/e2e/smoke.cy.ts',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'seed' },
         source: { kind: 'inline', text: renderCypressExampleTest() },
@@ -201,7 +191,7 @@ export class CypressAdapter implements ToolAdapter {
         provenance: { origin: 'project' },
         source: {
           kind: 'inline',
-          text: renderCypressProjectReadme({ projectName, baseUrl, isTs }),
+          text: renderCypressProjectReadme({ projectName, baseUrl }),
         },
       },
     );

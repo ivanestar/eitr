@@ -173,7 +173,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
         '--start-url',
         'https://app.example.com/',
         '--language',
-        'javascript',
+        'typescript',
         '--automation-tool',
         'playwright',
       ],
@@ -190,7 +190,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
     );
     expect(genRes.code).toBe(0);
     expect(existsSync(path.join(cwd, 'package.json'))).toBe(true);
-    expect(existsSync(path.join(cwd, 'playwright.config.js'))).toBe(true);
+    expect(existsSync(path.join(cwd, 'playwright.config.ts'))).toBe(true);
     expect(existsSync(path.join(cwd, 'scripts', 'lint-cpom.js'))).toBe(true);
 
     // Step C: eitr doctor

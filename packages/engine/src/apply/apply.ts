@@ -32,10 +32,9 @@ async function readIfExists(filePath: string): Promise<string | undefined> {
 declare const EITR_ASSETS_RELPATH: string | undefined;
 
 async function resolveAssetSource(assetId: string): Promise<string> {
-  const baseDir = assetId.endsWith('.js') ? 'runtime-js' : 'runtime';
   const assetsBase =
     typeof EITR_ASSETS_RELPATH !== 'undefined' ? EITR_ASSETS_RELPATH : '../../assets';
-  const url = new URL(`${assetsBase}/${baseDir}/${assetId}`, import.meta.url);
+  const url = new URL(`${assetsBase}/runtime/${assetId}`, import.meta.url);
   return fs.readFile(url, 'utf8');
 }
 

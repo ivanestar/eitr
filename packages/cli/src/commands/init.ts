@@ -19,7 +19,7 @@ Options:
   --framework <id>     Framework hint: react|vue|angular|svelte|other
   --ui-library <id>    UI library hint: mui|antd|radix|chakra|tailwind|none|other
   --yes                Non-interactive: take flags as-is, ask nothing
-  --language <id>      Programming language: javascript|typescript|python|java|csharp
+  --language <id>      Programming language: typescript|python|java|csharp
   --automation-tool <id> E2E automation tool
   --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,windsurf,codex,copilot
   --task-tracker <id>    Task/issue tracker: jira|azure-devops|none

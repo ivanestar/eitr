@@ -21,7 +21,7 @@ import java.util.List;
  *   java scripts/LintCpom.java
  * No separate compile step, no external dependencies - only the JDK standard library.
  *
- * Rules enforced (parity with scripts/lint-cpom.js for TypeScript/JavaScript/Cypress):
+ * Rules enforced (parity with scripts/lint-cpom.js for TypeScript/Cypress):
  *   1. Zero Arbitrary Delays - no Thread.sleep() / page.waitForTimeout().
  *   2. Mandatory Now() suffix for non-retrying state getters in components (is-, has-, get-prefixed).
  *   3. Zero assertions inside Component & Page Object classes (org.junit.jupiter.api.Assertions.*).

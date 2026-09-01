@@ -5,6 +5,7 @@ import {
   defaultOutputDirForAutomationTool,
   getChoicesForLanguage,
   isToolSupportedByLanguage,
+  AUTOMATION_TOOL_CHOICES,
 } from './schema.js';
 import { validateAnswer } from './validators.js';
 import { answersToInitAnswers } from './reducer.js';
@@ -398,8 +399,9 @@ export async function runQuestionnaire(io: IoPort, opts: RunOptions): Promise<Qu
 
     if (q.id === 'language' && answers.automationTool && answers.language) {
       if (!isToolSupportedByLanguage(answers.automationTool, answers.language)) {
-        answers.automationTool = 'playwright';
-        io.note('Language changed; resetting E2E automation tool to Playwright.');
+        const validChoices = getChoicesForLanguage(AUTOMATION_TOOL_CHOICES, answers.language);
+        answers.automationTool = validChoices[0]?.value ?? 'playwright';
+        io.note(`Language changed; resetting E2E automation tool to ${answers.automationTool}.`);
       }
     }
 

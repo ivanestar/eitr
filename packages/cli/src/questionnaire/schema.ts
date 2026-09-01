@@ -112,7 +112,6 @@ const UI_LIBRARY_CHOICES: readonly Choice[] = [
 ];
 
 const LANGUAGE_CHOICES: readonly Choice[] = [
-  { label: 'JavaScript', value: 'javascript' },
   { label: 'TypeScript', value: 'typescript' },
   { label: 'Python', value: 'python' },
   { label: 'C# (.NET 8)', value: 'csharp' },
@@ -122,7 +121,7 @@ const LANGUAGE_CHOICES: readonly Choice[] = [
 // Cypress is temporarily withheld from the questionnaire pending a CPOM primitive redesign
 // native to its own retry/command-chain model - see the SUPPORTED-combo comment in
 // packages/cli/src/commands/generate.ts. Not deleted, just not offered.
-const AUTOMATION_TOOL_CHOICES: readonly Choice[] = [
+export const AUTOMATION_TOOL_CHOICES: readonly Choice[] = [
   { label: 'Playwright', value: 'playwright' },
   { label: 'Playwright (Maven)', value: 'playwright-maven' },
   { label: 'Playwright (Gradle)', value: 'playwright-gradle' },
@@ -149,7 +148,6 @@ const AI_ASSISTANT_CHOICES: readonly Choice[] = [
 
 export function isToolSupportedByLanguage(tool: string, language: string): boolean {
   switch (language) {
-    case 'javascript':
     case 'typescript':
       return tool === 'playwright';
     case 'python':

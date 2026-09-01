@@ -113,7 +113,10 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
   for (const combo of TEST_COMBINATIONS) {
     it(
       `E2E Combination [${combo.id}]: ${combo.language} + ${combo.automationTool} (${combo.framework} / ${combo.uiLibrary} / ${combo.ciCd})`,
-      { timeout: 60000 },
+      // Python combos create a real venv and pip-install pytest-playwright over the network,
+      // which routinely exceeds vitest's 5s/60s defaults on this environment (matches the same
+      // real-install latency e2e.full-cycle.test.ts's Python case already budgets 180000ms for).
+      { timeout: 180000 },
       async () => {
         const hash = Math.random().toString(36).substring(2, 8);
         const sandboxDir = resolve(__dirname, 'sandbox', `run-${hash}-${combo.id}`);
@@ -224,17 +227,10 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
           execSync('npx tsc --noEmit', { cwd: sandboxDir, stdio: 'ignore' });
         }
 
-        if (
-          combo.automationTool === 'playwright' &&
-          (combo.language === 'typescript' || combo.language === 'javascript')
-        ) {
-          const configFile =
-            combo.language === 'typescript' ? 'playwright.config.ts' : 'playwright.config.js';
-          expect(existsSync(join(sandboxDir, configFile))).toBe(true);
+        if (combo.automationTool === 'playwright' && combo.language === 'typescript') {
+          expect(existsSync(join(sandboxDir, 'playwright.config.ts'))).toBe(true);
         } else if (combo.automationTool === 'cypress') {
-          const configFile =
-            combo.language === 'typescript' ? 'cypress.config.ts' : 'cypress.config.js';
-          expect(existsSync(join(sandboxDir, configFile))).toBe(true);
+          expect(existsSync(join(sandboxDir, 'cypress.config.ts'))).toBe(true);
         }
       },
     );

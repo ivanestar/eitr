@@ -161,7 +161,7 @@ describe('runQuestionnaire — interactive', () => {
     const fake = createFakeIo({
       text: { startUrl: ['https://a.com', 'https://b.com'] },
       select: {
-        language: ['typescript', 'javascript'],
+        language: ['typescript', 'python'],
         automationTool: ['playwright'],
         ciCd: ['none'],
         review: ['edit:startUrl', 'edit:language', 'submit'],
@@ -175,7 +175,7 @@ describe('runQuestionnaire — interactive', () => {
     expect(result.status).toBe('ok');
     if (result.status === 'ok') {
       expect(result.answers.startUrl).toBe('https://b.com/');
-      expect(result.answers.stackHints?.language).toBe('javascript');
+      expect(result.answers.stackHints?.language).toBe('python');
     }
   });
 
