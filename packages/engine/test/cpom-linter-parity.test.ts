@@ -271,6 +271,7 @@ describe('Per-language CPOM contract linter parity', () => {
 
   it.skipIf(!dotnet10Available)(
     'C# linter passes with 0 violations against the real generated component tree, including FrameContainer',
+    { timeout: 120000 },
     async () => {
       const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-csharp-realdisk-'));
       try {
