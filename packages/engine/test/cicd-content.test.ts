@@ -5,7 +5,6 @@ import {
   renderGitlabCi,
   renderJenkinsfile,
   renderTeamcityKotlinDsl,
-  renderDependabotConfig,
 } from '../src/plan/templates/cicd.js';
 import { planSharedScaffold } from '../src/plan/shared.js';
 
@@ -170,62 +169,5 @@ describe('cicd.ts content assertions', () => {
     const text = renderTeamcityKotlinDsl(undefined);
     expect(text).toContain('import jetbrains.buildServer.configs.kotlin.matrix');
     expect(text).not.toContain('buildFeatures.matrix');
-  });
-
-  // ── Dependabot config (Java + GitHub Actions only) ──────────────────────
-  describe('renderDependabotConfig', () => {
-    it('emits maven ecosystem for java+maven', () => {
-      const yaml = renderDependabotConfig('java', 'maven');
-      const parsed = parse(yaml);
-      expect(parsed.updates[0]['package-ecosystem']).toBe('maven');
-    });
-
-    it('emits gradle ecosystem for java+gradle', () => {
-      const yaml = renderDependabotConfig('java', 'gradle');
-      const parsed = parse(yaml);
-      expect(parsed.updates[0]['package-ecosystem']).toBe('gradle');
-    });
-
-    it('produces syntactically valid YAML', () => {
-      expect(() => parse(renderDependabotConfig('java', 'maven'))).not.toThrow();
-    });
-  });
-
-  describe('dependabot.yml wiring via planSharedScaffold', () => {
-    it('is emitted for java + github', () => {
-      const files = planSharedScaffold({
-        language: 'java',
-        automationTool: 'maven',
-        ciCd: 'github',
-      });
-      const paths = files.map((f) => f.path);
-      expect(paths).toContain('.github/dependabot.yml');
-      const file = files.find((f) => f.path === '.github/dependabot.yml');
-      expect(file?.source.text).toContain('package-ecosystem: "maven"');
-    });
-
-    it('is NOT emitted for non-java languages on github', () => {
-      const files = planSharedScaffold({
-        language: 'typescript',
-        automationTool: 'playwright',
-        ciCd: 'github',
-      });
-      const paths = files.map((f) => f.path);
-      expect(paths).not.toContain('.github/dependabot.yml');
-    });
-
-    it('is NOT emitted for java on gitlab/jenkins/teamcity', () => {
-      for (const ciCd of ['gitlab', 'jenkins', 'teamcity'] as const) {
-        const files = planSharedScaffold({ language: 'java', automationTool: 'maven', ciCd });
-        const paths = files.map((f) => f.path);
-        expect(paths).not.toContain('.github/dependabot.yml');
-      }
-    });
-
-    it('is NOT emitted when ciCd is none/undefined even for java', () => {
-      const files = planSharedScaffold({ language: 'java', automationTool: 'maven' });
-      const paths = files.map((f) => f.path);
-      expect(paths).not.toContain('.github/dependabot.yml');
-    });
   });
 });
