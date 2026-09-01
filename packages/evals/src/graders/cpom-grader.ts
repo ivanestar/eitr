@@ -40,7 +40,7 @@ export function gradeCpomCode(code: string, fileName = 'component.ts'): CpomGrad
   }
 
   // Check 2: Zero Mentions of EITR (Zero Lock-in)
-  if (/\beitr\b/i.test(code) && !code.includes('@eitr') && !code.includes('eitr.config')) {
+  if (/\beitr\b/i.test(code) && !code.includes('@eitr')) {
     const pointsLost = 1.0;
     score10 -= pointsLost;
     violations.push('Rule Violation: Zero Lock-in (detected mention of EITR/Eitr in code)');

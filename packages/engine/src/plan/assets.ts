@@ -1,6 +1,6 @@
 // assetId -> target path RELATIVE TO the framework root folder (e.g. PlaywrightTests/). plan()
 // prepends the framework dir; apply() resolves the shipped file via the assetId (the KEY), i.e.
-// `new URL('../../assets/runtime/' + assetId, import.meta.url)`. All regenerate; no Link primitive.
+// `new URL('../../assets/runtime/' + assetId, import.meta.url)`. All create-if-absent.
 export const BASE_ASSET_FILES: Record<string, string> = {
   'components/base/scope.ts': 'components/base/scope.ts',
   'components/base/descriptor.ts': 'components/base/descriptor.ts',

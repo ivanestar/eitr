@@ -44,9 +44,9 @@ export function validateStartUrl(raw: string): ValidationResult {
   return { ok: true, value: url.toString() };
 }
 
-// Must be a relative path that stays inside the project — the generated tree is written here with
-// an overwrite (regenerate) policy, so an absolute or `..`-escaping path could clobber files
-// outside the project.
+// Must be a relative path that stays inside the project — every file in the generated tree is
+// written under this directory, so an absolute or `..`-escaping path could write files outside
+// the project regardless of any individual file's own writePolicy.
 export function validateOutputDir(raw: string): ValidationResult {
   const trimmed = raw.trim();
   const value = trimmed === '' ? '.' : trimmed;

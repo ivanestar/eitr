@@ -9,11 +9,11 @@ import { checkPython, checkDotnet, checkJava, checkMaven, checkGradle } from './
 const INIT_USAGE = `Usage: eitr init [options]
 
 Runs the interactive questionnaire (start URL, output directory, optional stack hints) and
-writes .eitr/init.json — the input for generation. Never asks for login or credentials.
+writes .scaffold/init.json — the input for generation. Never asks for login or credentials.
 (Use "eitr new" to also generate the framework in one go.)
 
 Options:
-  --cwd <dir>          Project root to write .eitr/init.json into (default: cwd)
+  --cwd <dir>          Project root to write .scaffold/init.json into (default: cwd)
   --start-url <url>    Start-page URL (required in non-interactive mode)
   --output-dir <dir>   Output directory (default: '.')
   --framework <id>     Framework hint: react|vue|angular|svelte|other
@@ -86,7 +86,7 @@ export interface CollectResult {
   ok: boolean;
 }
 
-// Shared by `init` and `new`: parse flags, run the questionnaire, and write .eitr/init.json.
+// Shared by `init` and `new`: parse flags, run the questionnaire, and write .scaffold/init.json.
 // Assumes --help was already handled by the caller. Returns ok=true only when init.json was written.
 export async function collectInit(argv: string[]): Promise<CollectResult> {
   const { values } = parseArgs({ args: argv, options: INIT_ARG_OPTIONS });
@@ -131,7 +131,7 @@ export async function collectInit(argv: string[]): Promise<CollectResult> {
     return { code: 1, cwd, ok: false };
   }
 
-  const dir = path.join(cwd, '.eitr');
+  const dir = path.join(cwd, '.scaffold');
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, 'init.json');
   await fs.writeFile(file, `${JSON.stringify(result.answers, null, 2)}\n`, 'utf8');

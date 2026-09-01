@@ -31,7 +31,7 @@ Descriptor | null` (per-role; `null` ⇒ fall back to a universal primitive), so
 2. **Component-role taxonomy** - a closed enum both primitives and adapters implement.
    Additive-only within a major version (new roles only; rename/remove is a major bump).
 3. **`Descriptor` schema** - the adapter↔base emission contract, versioned like the interface.
-4. **Registry** - deterministic precedence; extensions register via `eitr.config.ts`
+4. **Registry** - deterministic precedence; extensions register via `playwright.config.ts`
    (`adapters: string[]`), never by editing engine source.
 5. **`StackProfile` schema** - the detect↔generate contract, versioned.
 

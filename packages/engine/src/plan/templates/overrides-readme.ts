@@ -7,6 +7,8 @@ export function renderOverridesReadme(): string {
 This directory is yours. The framework generator never overwrites files here (create-if-absent).
 
 Import from the generated component library (\`../components/...\`) to extend or override behavior
-instead of editing \`components/\` directly — that tree is 100% tool-owned and regenerated on every run.
+instead of editing \`components/\` directly — that tree is generated once (create-if-absent, same as
+this directory) and never touched again, but treating it as tool-owned keeps future manual updates
+and any AI-assisted regeneration conflict-free.
 `;
 }

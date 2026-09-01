@@ -1,4 +1,4 @@
-// .gitignore for the generated project. Ignores install/run outputs, temporary files, and .eitr/ metadata.
+// .gitignore for the generated project. Ignores install/run outputs, temporary files, and .scaffold/ metadata.
 export function renderGitignore(tool: string = 'playwright', language?: string): string {
   if (language === 'csharp') {
     return `bin/
@@ -11,8 +11,9 @@ test-results/
 !.vscode/launch.json
 !.vscode/mcp.json
 .auth/
-.eitr/
-.eitr-tmp/
+.scaffold/
+.scaffold-tmp/
+.tms-cache/
 .env
 .env.*
 !.env.example
@@ -33,8 +34,9 @@ test-results/
 !.vscode/mcp.json
 *.iml
 .auth/
-.eitr/
-.eitr-tmp/
+.scaffold/
+.scaffold-tmp/
+.tms-cache/
 .env
 .env.*
 !.env.example
@@ -55,8 +57,9 @@ test-results/
 !.vscode/launch.json
 !.vscode/mcp.json
 .auth/
-.eitr/
-.eitr-tmp/
+.scaffold/
+.scaffold-tmp/
+.tms-cache/
 .env
 .env.*
 !.env.example
@@ -77,8 +80,9 @@ test-results/
 !.vscode/launch.json
 !.vscode/mcp.json
 .auth/
-.eitr/
-.eitr-tmp/
+.scaffold/
+.scaffold-tmp/
+.tms-cache/
 .env
 .env.*
 !.env.example
@@ -98,8 +102,9 @@ blob-report/
 !.vscode/launch.json
 !.vscode/mcp.json
 .auth/
-.eitr/
-.eitr-tmp/
+.scaffold/
+.scaffold-tmp/
+.tms-cache/
 .env
 .env.*
 !.env.example

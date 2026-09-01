@@ -11,12 +11,15 @@ Part of [EITR Architecture](README.md).
   `confidence`, structured `evidence` (`{file, matchedPattern}`), and `source`
   (`package.json`|`lockfile`|`live`|`manual`).
 - **`GenerationPlan`** - an ordered list of `FileDescriptor { path, writePolicy, provenance,
-content|template+data, hash }`. Pure data, snapshot-testable, the unit AI polish would transform
-  if that path is ever built. The hash is computed over the final emitted bytes at emission time -
-  after any polish - so a re-run doesn't mistake polished content for a hand-edit.
-  `writePolicy ∈ { regenerate, create-if-absent (overrides seeds), merge-fragment (config) }`.
-- **`Manifest`** - every generated path + content hash + `writePolicy` + engine version + the
-  previous `StackProfile` content (for delta/prune) + the manifest's own schema version.
+content|template+data }`. Pure data, snapshot-testable. `writePolicy ∈ { create-if-absent,
+merge-fragment (config, not yet implemented) }` - EITR is a one-shot generator (a project is
+  generated once and never touched by EITR again), so every emitted file is `create-if-absent`:
+  written if missing, left alone forever once it exists. There is no engine-owned "regenerate on
+  a later run" tier and no content-hash-based clobber detection - an earlier design considered one
+  (to safely refresh a project in place) but that workflow is explicitly out of scope.
+- **`Manifest`** - every generated path + `writePolicy` + engine version + the `StackProfile` used
+  - the manifest's own schema version. Written once per generation, for provenance/debugging - not
+    read back by any later `apply()` call.
 
 ## Component model
 

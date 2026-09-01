@@ -43,8 +43,9 @@ export function renderCsharpGitignore(): string {
   return `bin/
 obj/
 .vs/
-.eitr/
-.eitr-tmp/
+.scaffold/
+.scaffold-tmp/
+.tms-cache/
 *.user
 *.suo
 *.userosscache

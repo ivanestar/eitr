@@ -1,7 +1,7 @@
-// RegExp-safe persistence for any .eitr file that stores a LocatorSpec (which may carry a
+// RegExp-safe persistence for any .scaffold file that stores a LocatorSpec (which may carry a
 // RegExp `name`). Rationale: JSON.stringify(/x/i) === '{}' silently destroys a RegExp, so a spec
 // like /dashboard/i would not survive a round-trip through disk. Currently used by apply() for
-// .eitr/manifest.json (and by the recon/generation steps when they persist specs). 'custom'
+// .scaffold/manifest.json (and by the recon/generation steps when they persist specs). 'custom'
 // LocatorSpec (carrying a function) is never persisted, so a generic deep transform is safe.
 
 interface EncodedRegExp {

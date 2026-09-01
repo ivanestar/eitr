@@ -2,7 +2,6 @@ import type { StackProfile } from '../../../types/stack-profile.js';
 import type { FileDescriptor } from '../../../types/generation-plan.js';
 import type { ToolAdapter, PlanOptions } from '../../types.js';
 import { DEFAULT_BASE_URL, DEFAULT_PROJECT_NAME } from '../../types.js';
-import { renderEitrConfig } from '../../templates/eitr-config.js';
 import { renderPlaywrightConfig } from '../../templates/playwright-config.js';
 import { renderPackageJson } from '../../templates/package-json.js';
 import { renderExampleTest } from '../../templates/example-test.js';
@@ -22,16 +21,10 @@ export class PlaywrightAdapter implements ToolAdapter {
 
     return [
       {
-        path: 'eitr.config.ts',
-        writePolicy: 'regenerate',
-        provenance: { origin: 'config' },
-        source: { kind: 'inline', text: renderEitrConfig(profile, ciCd) },
-      },
-      {
         path: 'playwright.config.ts',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'config' },
-        source: { kind: 'inline', text: renderPlaywrightConfig(baseUrl) },
+        source: { kind: 'inline', text: renderPlaywrightConfig(baseUrl, profile, ciCd) },
       },
       {
         path: 'package.json',

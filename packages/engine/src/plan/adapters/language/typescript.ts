@@ -20,7 +20,7 @@ export class TypeScriptAdapter implements LanguageAdapter {
         // ── Compiled TS runtime assets (base classes, primitives, widgets) ────
         ...Object.entries(BASE_ASSET_FILES).map(([assetId, relPath]): FileDescriptor => ({
           path: relPath,
-          writePolicy: 'regenerate',
+          writePolicy: 'create-if-absent',
           provenance: {
             origin: assetId.startsWith('components/primitives/') ? 'primitive' : 'base',
           },

@@ -149,8 +149,9 @@ build/
 .project
 .idea/
 *.iml
-.eitr/
-.eitr-tmp/
+.scaffold/
+.scaffold-tmp/
+.tms-cache/
 `;
 }
 

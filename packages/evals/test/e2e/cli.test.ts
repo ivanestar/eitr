@@ -29,7 +29,7 @@ function scanDirectoryForEitr(dir: string): string[] {
             'dist',
             'bin',
             'obj',
-            '.eitr',
+            '.scaffold',
             '.gradle',
             '.venv',
             'target',
@@ -61,13 +61,10 @@ function scanDirectoryForEitr(dir: string): string[] {
         }
         try {
           const rawContent = readFileSync(fullPath, 'utf8');
-          // Ignore internal framework config filenames (eitr.config.*) and internal folder references (.eitr / .eitr-tmp)
-          const content = rawContent
-            .replace(/\.?eitr[\./_-](config|json|tmp|manifest)?/gi, '')
-            .replace(/\.eitr\/?/gi, '');
-
-          // Check for word boundary "eitr" (case-insensitive)
-          if (/\beitr\b/i.test(content)) {
+          // Track 1 removed every legitimate "eitr"-shaped filename/folder (eitr.config.*, .eitr/,
+          // .eitr-tmp/) - there is nothing left to exempt, so this is now a plain, unconditional
+          // word-boundary check.
+          if (/\beitr\b/i.test(rawContent)) {
             foundIn.push(fullPath);
           }
         } catch {

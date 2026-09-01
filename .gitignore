@@ -2,8 +2,8 @@ node_modules/
 dist/
 fixtures/mui-app/generated/
 fixtures/mui-app/dist/
-.scaffolder/
-.scaffolder-tmp/
+.scaffold/
+.scaffold-tmp/
 .auth/
 playwright-report/
 blob-report/
@@ -21,10 +21,6 @@ PytestTests/
 JUnitTests/
 NUnitTests/
 AutomatedTests/
-
-# Local Eitr metadata
-.eitr/
-.eitr-tmp/
 
 # Environment variables and secrets
 .env

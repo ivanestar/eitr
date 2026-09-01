@@ -62,7 +62,7 @@ describe('eitr auth command', () => {
     );
   });
 
-  it('auto-resolves URL from .eitr/init.json when available', async () => {
+  it('auto-resolves URL from .scaffold/init.json when available', async () => {
     const { promises: fs } = await import('node:fs');
     vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
       if (String(filePath).includes('init.json')) {
@@ -75,7 +75,7 @@ describe('eitr auth command', () => {
     expect(code).toBe(0);
     const output = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(output).toContain(
-      'Auto-detected target URL from .eitr/init.json: https://init.example.com/login',
+      'Auto-detected target URL from .scaffold/init.json: https://init.example.com/login',
     );
   });
 

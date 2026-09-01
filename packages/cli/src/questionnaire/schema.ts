@@ -247,7 +247,7 @@ export interface StackHints {
   readonly automationTool?: string;
 }
 
-// The persisted contract written to .scaffolder/init.json and consumed later by recon/generate.
+// The persisted contract written to .scaffold/init.json and consumed later by recon/generate.
 export interface InitAnswers {
   readonly schemaVersion: 1;
   readonly startUrl: string;

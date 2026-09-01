@@ -36,29 +36,29 @@ export class PythonAdapter implements LanguageAdapter {
   readonly id = 'python';
 
   planFiles(profile: StackProfile, _opts: PlanOptions): FileDescriptor[] {
-    const regen = (path: string, text: string): FileDescriptor => ({
+    const base = (path: string, text: string): FileDescriptor => ({
       path,
-      writePolicy: 'regenerate',
+      writePolicy: 'create-if-absent',
       provenance: { origin: 'base' },
       source: { kind: 'inline', text },
     });
     const prim = (path: string, text: string): FileDescriptor => ({
       path,
-      writePolicy: 'regenerate',
+      writePolicy: 'create-if-absent',
       provenance: { origin: 'primitive' },
       source: { kind: 'inline', text },
     });
 
     const files = [
       // ── Base layer ──────────────────────────────────────────────────────
-      regen('components/__init__.py', renderPythonComponentsInit()),
-      regen('components/base/__init__.py', renderPythonBaseInit()),
-      regen('components/base/scope.py', renderPythonScope()),
-      regen('components/base/component.py', renderPythonComponent()),
-      regen('components/base/container.py', renderPythonContainer()),
-      regen('components/base/collection.py', renderPythonCollection()),
-      regen('components/base/base_page.py', renderPythonBasePage()),
-      regen('components/base/frame_container.py', renderPythonFrameContainer()),
+      base('components/__init__.py', renderPythonComponentsInit()),
+      base('components/base/__init__.py', renderPythonBaseInit()),
+      base('components/base/scope.py', renderPythonScope()),
+      base('components/base/component.py', renderPythonComponent()),
+      base('components/base/container.py', renderPythonContainer()),
+      base('components/base/collection.py', renderPythonCollection()),
+      base('components/base/base_page.py', renderPythonBasePage()),
+      base('components/base/frame_container.py', renderPythonFrameContainer()),
       // ── Primitives ──────────────────────────────────────────────────────
       prim('components/primitives/__init__.py', renderPythonPrimitivesInit()),
       prim('components/primitives/button.py', renderPythonButton()),
@@ -72,9 +72,9 @@ export class PythonAdapter implements LanguageAdapter {
       prim('components/primitives/file_input.py', renderPythonFileInput()),
       prim('components/primitives/radio.py', renderPythonRadio()),
       // ── Widgets ─────────────────────────────────────────────────────────
-      regen('components/widgets/__init__.py', renderPythonWidgetsInit()),
-      regen('components/widgets/dialog.py', renderPythonDialog()),
-      regen('components/widgets/table.py', renderPythonTable()),
+      base('components/widgets/__init__.py', renderPythonWidgetsInit()),
+      base('components/widgets/dialog.py', renderPythonDialog()),
+      base('components/widgets/table.py', renderPythonTable()),
     ];
 
     if (profile.framework.value === 'react') {

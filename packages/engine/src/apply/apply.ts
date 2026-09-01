@@ -3,14 +3,13 @@ import * as path from 'node:path';
 import type { GenerationPlan, FileDescriptor } from '../types/generation-plan.js';
 import type { Manifest } from '../types/manifest.js';
 import { encodeJson } from '../persist/json-codec.js';
-import { stageAndRename, writeFileAtomic, warnClobbered } from './fs-atomic.js';
+import { stageAndRename, writeFileAtomic } from './fs-atomic.js';
 
 // The public ApplyResult shape (re-exported by the engine index).
 export interface ApplyResult {
   cwd: string;
   written: string[];
   skipped: string[];
-  clobberedOwnedFiles: string[];
 }
 
 export interface ApplyOptions {
@@ -60,7 +59,6 @@ export async function apply(
 ): Promise<ApplyResult> {
   const written: string[] = [];
   const skipped: string[] = [];
-  const clobberedOwnedFiles: string[] = [];
 
   for (const file of genPlan.files) {
     const targetPath = path.join(cwd, file.path);
@@ -69,29 +67,16 @@ export async function apply(
       throw new Error('merge-fragment not implemented');
     }
 
-    if (file.writePolicy === 'create-if-absent') {
-      if (await fileExists(targetPath)) {
-        skipped.push(file.path);
-        continue;
-      }
-      const contents = await renderFileContents(file);
-      await stageAndRename(cwd, file.path, contents);
-      written.push(file.path);
-      continue;
+    if (file.writePolicy !== 'create-if-absent') {
+      const exhaustive: never = file.writePolicy;
+      throw new Error(`apply(): unhandled writePolicy: ${JSON.stringify(exhaustive)}`);
     }
 
-    // 'regenerate': overwrite + one-line clobber warning when on-disk bytes differ.
-    const existing = await readIfExists(targetPath);
-    const contents = await renderFileContents(file);
-    const normalizeEol = (s: string) => s.replace(/\r\n/g, '\n');
-    if (existing !== undefined) {
-      if (normalizeEol(existing) === normalizeEol(contents)) {
-        skipped.push(file.path);
-        continue;
-      }
-      warnClobbered(file.path);
-      clobberedOwnedFiles.push(file.path);
+    if (await fileExists(targetPath)) {
+      skipped.push(file.path);
+      continue;
     }
+    const contents = await renderFileContents(file);
     await stageAndRename(cwd, file.path, contents);
     written.push(file.path);
   }
@@ -105,13 +90,13 @@ export async function apply(
     ...(opts.pendingRecon ? { pendingRecon: true } : {}),
   };
 
-  await writeFileAtomic(cwd, '.eitr/manifest.json', encodeJson(manifest));
-  written.push('.eitr/manifest.json');
+  await writeFileAtomic(cwd, '.scaffold/manifest.json', encodeJson(manifest));
+  written.push('.scaffold/manifest.json');
 
   // Remove the now-empty staging dir so the generated project ships clean.
-  await fs.rm(path.join(cwd, '.eitr-tmp'), { recursive: true, force: true });
+  await fs.rm(path.join(cwd, '.scaffold-tmp'), { recursive: true, force: true });
 
-  return { cwd, written, skipped, clobberedOwnedFiles };
+  return { cwd, written, skipped };
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

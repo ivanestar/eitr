@@ -11,8 +11,8 @@ function makeTempCwd(): string {
   return dir;
 }
 function writeInit(cwd: string, answers: object): void {
-  mkdirSync(join(cwd, '.eitr'), { recursive: true });
-  writeFileSync(join(cwd, '.eitr/init.json'), JSON.stringify(answers));
+  mkdirSync(join(cwd, '.scaffold'), { recursive: true });
+  writeFileSync(join(cwd, '.scaffold/init.json'), JSON.stringify(answers));
 }
 
 afterEach(() => {

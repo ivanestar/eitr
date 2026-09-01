@@ -14,13 +14,13 @@ export interface GenerateDeps {
 
 const GENERATE_USAGE = `Usage: eitr generate [options]
 
-Reads .eitr/init.json (produced by "eitr init") and writes a complete, runnable
+Reads .scaffold/init.json (produced by "eitr init") and writes a complete, runnable
 project (in the chosen language and test framework) into the output directory, then installs it (npm install +
 browsers). No login. If the browser install is blocked (e.g. antivirus), the files are still valid
 and the exact commands to finish are printed.
 
 Options:
-  --cwd <dir>           Project root that holds .eitr/init.json (default: cwd)
+  --cwd <dir>           Project root that holds .scaffold/init.json (default: cwd)
   --no-install          Emit files only; skip npm install + browsers
   --storage-state <file> Playwright storageState JSON file (auth.json) to bypass SSO during recon
   -h, --help            Show this help
@@ -70,14 +70,14 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
   }
 
   const cwd = path.resolve(values.cwd ?? process.cwd());
-  const initPath = path.join(cwd, '.eitr', 'init.json');
+  const initPath = path.join(cwd, '.scaffold', 'init.json');
 
   let raw: string;
   try {
     raw = await fs.readFile(initPath, 'utf8');
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      process.stderr.write('eitr generate: no .eitr/init.json found. Run `eitr init` first.\n');
+      process.stderr.write('eitr generate: no .scaffold/init.json found. Run `eitr init` first.\n');
       return 1;
     }
     throw err;
@@ -92,7 +92,7 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
   }
   if (!isRecord(parsed) || parsed.schemaVersion !== 1) {
     process.stderr.write(
-      'eitr generate: unsupported .eitr/init.json schema. Re-run `eitr init`.\n',
+      'eitr generate: unsupported .scaffold/init.json schema. Re-run `eitr init`.\n',
     );
     return 1;
   }
@@ -103,7 +103,7 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
 
   if (language === 'javascript') {
     process.stderr.write(
-      "eitr generate: JavaScript support has been removed. Please migrate your project to TypeScript by changing 'language' to 'typescript' in .eitr/init.json.\n",
+      "eitr generate: JavaScript support has been removed. Please migrate your project to TypeScript by changing 'language' to 'typescript' in .scaffold/init.json.\n",
     );
     return 1;
   }
@@ -222,11 +222,6 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
     process.stdout.write('\nkept (create-if-absent, already present):\n');
     for (const p of result.skipped) process.stdout.write(`  = ${relOut}/${p}\n`);
   }
-  if (result.clobberedOwnedFiles.length > 0) {
-    process.stdout.write('\n[WARN] Overwrote hand-edited tool-owned files:\n');
-    for (const p of result.clobberedOwnedFiles) process.stdout.write(`  ! ${relOut}/${p}\n`);
-  }
-
   const skipInstall =
     Boolean(values['no-install']) ||
     Boolean(answers.skipInstall) ||

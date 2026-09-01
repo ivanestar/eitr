@@ -12,7 +12,6 @@ export function renderAiHarmonizeText(
       : tool === 'pytest'
         ? 'pyproject.toml'
         : `playwright.config.${ext}`;
-  const eitrConfig = tool === 'pytest' ? 'pytest.ini' : `eitr.config.${ext}`;
 
   return `# ${toolName} CPOM Framework - Harmonization Rules
 
@@ -21,7 +20,7 @@ You are modifying a ${toolName} CPOM framework setup.
 ## Constraints & Limits:
 - **NO NEW FILES**: You must NOT create >0 new test files, folders, or Page Objects.
 - **MODIFY ONLY**: You are permitted to modify exactly these files:
-  - \`${eitrConfig}\`, \`${configFile}\`, \`.env.example\`, \`.env\`, \`package.json\`.
+  - \`${configFile}\`, \`.env.example\`, \`.env\`, \`package.json\`.
   - Base components under \`components/primitives/*\`.
 
 ## Verification Steps:
@@ -39,7 +38,7 @@ You are modifying a ${toolName} CPOM framework setup.
 \`\`\`markdown
 1. Read \`${configFile}\` and found \`data-testid\`.
 2. Checked DOM and found \`data-qa\`.
-3. Updated \`${eitrConfig}\` test-id property to \`data-qa\`.
+3. Updated \`${configFile}\` test-id property to \`data-qa\`.
 \`\`\`
 
 ### Bad Example
@@ -647,10 +646,9 @@ export function renderCursorrulesHarmonize(tool?: string, language?: string): st
       : tool === 'pytest'
         ? 'pyproject.toml'
         : `playwright.config.${ext}`;
-  const eitrConfig = tool === 'pytest' ? 'pytest.ini' : `eitr.config.${ext}`;
   return `---
 description: Reconcile and align the ${toolName} CPOM framework configuration with the target app.
-globs: ${eitrConfig}, ${configFile}, .env*, package.json, components/primitives/**/*
+globs: ${configFile}, .env*, package.json, components/primitives/**/*
 ---
 ${renderAiHarmonizeText(tool, language)}
 `;

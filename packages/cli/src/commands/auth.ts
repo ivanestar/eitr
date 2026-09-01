@@ -61,9 +61,9 @@ export async function resolveTargetUrl(
     } catch {}
   }
 
-  // 1. Check .eitr/init.json
+  // 1. Check .scaffold/init.json
   try {
-    const initPath = path.join(cwd, '.eitr', 'init.json');
+    const initPath = path.join(cwd, '.scaffold', 'init.json');
     const content = await fs.readFile(initPath, 'utf8');
     const data = JSON.parse(content);
     if (data && typeof data === 'object') {
@@ -72,7 +72,7 @@ export async function resolveTargetUrl(
       if (candidate && typeof candidate === 'string') {
         const parsed = new URL(candidate.trim());
         if (['http:', 'https:'].includes(parsed.protocol)) {
-          return { url: parsed.href, source: '.eitr/init.json' };
+          return { url: parsed.href, source: '.scaffold/init.json' };
         }
       }
     }

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,28 +15,11 @@ function makeTempCwd(): string {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
   for (const dir of tmpDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 describe('apply() idempotency (runnable project)', () => {
-  it('overwrites a hand-edited tool-owned file (eitr.config.ts) and warns once', async () => {
-    const cwd = makeTempCwd();
-    const genPlan = plan(muiProfile(), planOptions());
-    await apply(genPlan, cwd);
-
-    const configPath = join(cwd, 'eitr.config.ts');
-    writeFileSync(configPath, '// hand-edited, should be clobbered\n', 'utf8');
-
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const secondResult = await apply(genPlan, cwd);
-
-    expect(secondResult.clobberedOwnedFiles).toContain('eitr.config.ts');
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(readFileSync(configPath, 'utf8')).not.toContain('hand-edited');
-  });
-
-  it('never clobbers create-if-absent user files (playwright.config.ts, package.json)', async () => {
+  it('never touches any create-if-absent file that still exists, hand-edited or not (playwright.config.ts, package.json)', async () => {
     const cwd = makeTempCwd();
     const genPlan = plan(muiProfile(), planOptions());
     await apply(genPlan, cwd);
@@ -51,12 +34,11 @@ describe('apply() idempotency (runnable project)', () => {
 
     for (const rel of Object.keys(edits)) {
       expect(secondResult.skipped, rel).toContain(rel);
-      expect(secondResult.clobberedOwnedFiles).not.toContain(rel);
       expect(readFileSync(join(cwd, rel), 'utf8')).toBe(edits[rel]);
     }
   });
 
-  it('converges to the full expected tree from a partial (interrupted) apply', async () => {
+  it('recreates a genuinely missing file but never touches one that still exists, even hand-edited (partial/interrupted apply)', async () => {
     const cwd = makeTempCwd();
     const genPlan = plan(muiProfile(), planOptions());
     await apply(genPlan, cwd);
@@ -64,13 +46,21 @@ describe('apply() idempotency (runnable project)', () => {
     unlinkSync(join(cwd, 'components/base/component.ts'));
     writeFileSync(join(cwd, 'components/primitives/button.ts'), '// stale/partial\n', 'utf8');
 
-    await apply(genPlan, cwd);
+    const second = await apply(genPlan, cwd);
 
+    // Every file the first apply() wrote is create-if-absent (Track 1: no 'regenerate' policy
+    // exists any more) - a genuinely missing file (e.g. from an interrupted first apply) is still
+    // recreated, since "missing" and "exists" are the only two states apply() distinguishes.
     for (const assetTarget of Object.values(BASE_ASSET_FILES)) {
       expect(existsSync(join(cwd, assetTarget)), assetTarget).toBe(true);
     }
+    expect(second.written).toContain('components/base/component.ts');
+
+    // A file that still exists on disk - even hand-edited/stale - is never touched. This is the
+    // deliberate behavior change from the old 'regenerate' policy, which used to clobber it back
+    // to the canonical content; EITR is a one-shot generator now, so it never does that.
     const button = readFileSync(join(cwd, 'components/primitives/button.ts'), 'utf8');
-    expect(button).not.toContain('stale/partial');
-    expect(button).toContain('export class Button');
+    expect(button).toContain('stale/partial');
+    expect(second.skipped).toContain('components/primitives/button.ts');
   });
 });
