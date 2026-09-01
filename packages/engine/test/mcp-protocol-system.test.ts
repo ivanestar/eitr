@@ -40,8 +40,8 @@ function materializeBridge(): string {
   const files = planMcpServer('none', [], ['claude'], 'playwright', 'typescript');
   const byBasename: Record<string, string> = {};
   for (const f of files) {
-    if (f.path.startsWith('scripts/mcp-server/')) {
-      byBasename[f.path.replace('scripts/mcp-server/', '')] = f.source.text as string;
+    if (f.path.startsWith('.mcp/tms-bridge/')) {
+      byBasename[f.path.replace('.mcp/tms-bridge/', '')] = f.source.text as string;
     }
   }
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf8');
@@ -123,7 +123,7 @@ function startMcpClient(cwd: string): McpClient {
 describe('MCP bridge protocol layer (real spawned process, real stdio JSON-RPC)', () => {
   it('newline-delimited JSON-RPC framing is confirmed by the generated index.js source (no Content-Length headers)', () => {
     const files = planMcpServer('none', [], ['claude'], 'playwright', 'typescript');
-    const indexFile = files.find((f) => f.path === 'scripts/mcp-server/index.js');
+    const indexFile = files.find((f) => f.path === '.mcp/tms-bridge/index.js');
     expect(indexFile).toBeDefined();
     const text = indexFile?.source.text as string;
     expect(text).toContain("buffer.split('\\n')");

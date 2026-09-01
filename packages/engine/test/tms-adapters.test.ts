@@ -56,8 +56,8 @@ function materializeBridge(): string {
   );
   const byBasename: Record<string, string> = {};
   for (const f of files) {
-    if (f.path.startsWith('scripts/mcp-server/')) {
-      byBasename[f.path.replace('scripts/mcp-server/', '')] = f.source.text as string;
+    if (f.path.startsWith('.mcp/tms-bridge/')) {
+      byBasename[f.path.replace('.mcp/tms-bridge/', '')] = f.source.text as string;
     }
   }
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf8');

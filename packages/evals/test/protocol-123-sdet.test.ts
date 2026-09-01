@@ -76,7 +76,7 @@ describe('AC-1 to AC-6: Protocol 123 SDET Engine, Review Arbiter & Polyglot Fram
   });
 
   it('AC-5: Deterministic reporting schemas are defined in operational skills', () => {
-    const skillFiles = planAiOperationalSkills(['gemini'], 'playwright', 'typescript');
+    const skillFiles = planAiOperationalSkills(['antigravity'], 'playwright', 'typescript');
     const p123 = skillFiles.find((f) => f.path.includes('protocol-123'));
     expect(p123).toBeDefined();
 

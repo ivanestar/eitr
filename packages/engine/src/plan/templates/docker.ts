@@ -8,6 +8,12 @@ export function renderDockerfile(tool?: string, language?: string): string {
     return `# Hermetic container configuration for Python Playwright test automation.
 FROM mcr.microsoft.com/playwright/python:v1.51.0-jammy
 
+# Non-root user, matching Microsoft's own documented convention for Playwright Docker images
+# (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser
+# isn't pre-created in that context; browsers baked into the base image are already readable by
+# a non-root user with no extra chown needed.
+RUN adduser --disabled-password --gecos "" pwuser
+
 WORKDIR /app
 
 # Install dependencies
@@ -15,10 +21,12 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt && playwright install --with-deps
 
 # Copy project files
-COPY . .
+COPY --chown=pwuser:pwuser . .
 
 # Set default CI environment variables
 ENV CI=true
+
+USER pwuser
 
 # Default test execution command
 CMD ["pytest"]
@@ -29,6 +37,12 @@ CMD ["pytest"]
     return `# Hermetic container configuration for C# .NET Playwright test automation.
 FROM mcr.microsoft.com/playwright/dotnet:v1.51.0-jammy
 
+# Non-root user, matching Microsoft's own documented convention for Playwright Docker images
+# (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser
+# isn't pre-created in that context; browsers baked into the base image are already readable by
+# a non-root user with no extra chown needed.
+RUN adduser --disabled-password --gecos "" pwuser
+
 WORKDIR /app
 
 # Restore dependencies
@@ -36,10 +50,12 @@ COPY *.csproj ./
 RUN dotnet restore
 
 # Copy and build project
-COPY . .
+COPY --chown=pwuser:pwuser . .
 RUN dotnet build -c Release
 
 ENV CI=true
+
+USER pwuser
 
 # Default test execution command
 CMD ["dotnet", "test", "--no-build", "-c", "Release"]
@@ -50,6 +66,12 @@ CMD ["dotnet", "test", "--no-build", "-c", "Release"]
     return `# Hermetic container configuration for Java Playwright test automation.
 FROM mcr.microsoft.com/playwright/java:v1.51.0-jammy
 
+# Non-root user, matching Microsoft's own documented convention for Playwright Docker images
+# (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser
+# isn't pre-created in that context; browsers baked into the base image are already readable by
+# a non-root user with no extra chown needed.
+RUN adduser --disabled-password --gecos "" pwuser
+
 WORKDIR /app
 
 # Cache dependencies
@@ -57,9 +79,11 @@ COPY pom.xml ./
 RUN mvn dependency:go-offline
 
 # Copy project and execute
-COPY . .
+COPY --chown=pwuser:pwuser . .
 
 ENV CI=true
+
+USER pwuser
 
 CMD ["mvn", "test"]
 `;
@@ -69,6 +93,10 @@ CMD ["mvn", "test"]
     return `# Hermetic container configuration for Cypress test automation.
 FROM cypress/included:14.0.0
 
+# Non-root user - the base image runs as root by default; browsers/deps baked into the image are
+# already readable by any user, so only files this Dockerfile itself adds need an explicit chown.
+RUN adduser --disabled-password --gecos "" pwuser
+
 WORKDIR /app
 
 # Install dependencies
@@ -76,9 +104,11 @@ COPY package*.json ./
 RUN npm ci
 
 # Copy test files
-COPY . .
+COPY --chown=pwuser:pwuser . .
 
 ENV CI=true
+
+USER pwuser
 
 # Default test execution command
 CMD ["npx", "cypress", "run"]
@@ -89,6 +119,12 @@ CMD ["npx", "cypress", "run"]
   return `# Hermetic container configuration for Playwright test automation.
 FROM mcr.microsoft.com/playwright:v1.51.1-jammy
 
+# Non-root user, matching Microsoft's own documented convention for Playwright Docker images
+# (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser
+# isn't pre-created in that context; browsers baked into the base image are already readable by
+# a non-root user with no extra chown needed.
+RUN adduser --disabled-password --gecos "" pwuser
+
 WORKDIR /app
 
 # Install dependencies with locked versions
@@ -96,10 +132,12 @@ COPY package*.json ./
 RUN npm ci
 
 # Copy test code, components, and configuration
-COPY . .
+COPY --chown=pwuser:pwuser . .
 
 # Set CI environment indicator
 ENV CI=true
+
+USER pwuser
 
 # Default test execution command
 CMD ["npx", "playwright", "test"]

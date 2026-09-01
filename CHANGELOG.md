@@ -8,10 +8,18 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
-## [0.6.0] - 2026-08-29
+## [0.7.0] - 2026-09-01
 
 ### Added
 
+- `pretest: npm run lint:cpom` on the generated TS+Playwright and JS+Playwright `package.json`
+  (npm's own `pretest` convention runs it automatically before `npm test`) - a local CPOM
+  violation is now caught before tests even start, matching the same build-time-enforcement
+  direction already shipped for Java/C#, at effectively zero cost (no SDK-version conflict, unlike
+  C#'s opt-in-only target).
+- `sourcemap: true` on the CLI's esbuild bundle (`esbuild.config.mjs`) - a real user's stack trace
+  from the published `dist/bin/eitr.js` can now be mapped back to TypeScript source instead of
+  pointing at minified, unreadable output.
 - **Build-time CPOM contract enforcement for Java and C#** (previously CI-only): Java's
   `pom.xml`/`build.gradle` now wire `scripts/LintCpom.java` into Maven's `validate` phase and
   Gradle's `test`/`check` tasks, so a local `mvn test`/`gradle test` fails on a CPOM violation
@@ -198,8 +206,25 @@ real bug) - not just what changed.
   `CLA.md`) - its only function beyond the Apache-2.0 license itself was preserving a future
   relicensing right, not needed with no external contributors expected. Re-add if the project
   starts accepting outside contributions.
+- Unreachable `assistant === 'gemini'` / `assistant === 'claude-code'` branches in `ai-agents.ts`,
+  `ai-operational-skills.ts`, and `mcp-configs.ts` - the real assistant list
+  (`AI_ASSISTANT_CHOICES` in `packages/cli/src/questionnaire/schema.ts`) never offered either
+  value, only `antigravity`/`claude`, which already covered the same output paths in the same
+  branches. Every engine-level test exercising these branches with the literal string `'gemini'`/
+  `'claude-code'` (there were several, all asserting real generated output, not just checking the
+  branch existed) was updated to use `'antigravity'`/`'claude'` instead.
+- Byte-identical duplicate MCP bridge: `scripts/mcp-server/{index,adapters,http}.js` emitted the
+  exact same generated code as `.mcp/tms-bridge/{index,adapters,http}.js`, but no MCP client config
+  ever pointed at the `scripts/mcp-server/` copy - pure dead weight (~1500 lines) in every generated
+  project with AI assistants and a TMS/task tracker configured. Removed the duplicate descriptor
+  block; `.mcp/tms-bridge/` remains the single source of truth.
 
 ### Security
+
+- Every generated Dockerfile (all 5 language/tool branches) now creates and switches to a
+  non-root `pwuser` before the default `CMD`, matching Microsoft's own documented convention for
+  the Playwright Docker images most of these are built from - previously every container ran as
+  root by default.
 
 - **Command injection in the generated MCP bridge's `mcp__run_test` tool**: `specPath`/`project`
   arguments from an MCP `tools/call` request were concatenated into a shell command string and run

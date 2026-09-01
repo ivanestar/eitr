@@ -13,7 +13,7 @@ describe('MCP Test Runner Bridge (mcp__run_test, mcp__inspect_dom)', () => {
     );
     expect(files.length).toBeGreaterThan(0);
 
-    const indexFile = files.find((f) => f.path === 'scripts/mcp-server/index.js');
+    const indexFile = files.find((f) => f.path === '.mcp/tms-bridge/index.js');
     expect(indexFile).toBeDefined();
 
     const code = (indexFile?.source as { text: string }).text;
@@ -33,7 +33,7 @@ describe('MCP Test Runner Bridge (mcp__run_test, mcp__inspect_dom)', () => {
       language: 'typescript',
     });
 
-    const mcpIndex = files.find((f) => f.path === 'scripts/mcp-server/index.js');
+    const mcpIndex = files.find((f) => f.path === '.mcp/tms-bridge/index.js');
     expect(mcpIndex).toBeDefined();
     expect(mcpIndex?.writePolicy).toBe('create-if-absent');
   });

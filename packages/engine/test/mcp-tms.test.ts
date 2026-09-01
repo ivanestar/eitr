@@ -17,14 +17,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
   it('generates standalone MCP server files for azure-devops', () => {
     const files = planMcpServer('none', ['azure-devops']);
-    expect(files.length).toBe(6);
+    expect(files.length).toBe(3);
     const paths = files.map((f) => f.path);
     expect(paths).toContain('.mcp/tms-bridge/index.js');
     expect(paths).toContain('.mcp/tms-bridge/adapters.js');
     expect(paths).toContain('.mcp/tms-bridge/http.js');
-    expect(paths).toContain('scripts/mcp-server/index.js');
-    expect(paths).toContain('scripts/mcp-server/adapters.js');
-    expect(paths).toContain('scripts/mcp-server/http.js');
 
     const indexFile = files.find((f) => f.path === '.mcp/tms-bridge/index.js');
     expect(indexFile?.source.text).toContain('mcp__tms__get_test_case');
@@ -57,14 +54,14 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(cursorConfig?.source.text).toContain('PLAYWRIGHT_DOWNLOAD_HOST');
   });
 
-  it('generates MCP configs ONLY for selected AI assistants and handles aliases and empty lists', () => {
+  it('generates MCP configs ONLY for selected AI assistants and empty lists', () => {
     const cursorOnly = planMcpConfigs('none', ['testrail'], true, ['cursor']);
     expect(cursorOnly.map((f) => f.path)).toEqual(['.cursor/mcp.json']);
 
     const empty = planMcpConfigs('none', ['testrail'], true, []);
     expect(empty).toEqual([]);
 
-    const aliases = planMcpConfigs('none', [], true, ['gemini', 'claude-code', 'vscode']);
+    const aliases = planMcpConfigs('none', [], true, ['antigravity', 'claude', 'vscode']);
     expect(aliases.map((f) => f.path)).toEqual([
       '.mcp.json',
       '.claude/mcp.json',
@@ -78,8 +75,8 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(unknownAssistant).toEqual([]);
   });
 
-  it('generates 8 specialized SDET agents for all supported assistants (Gemini, Claude, Cursor, Windsurf, Codex, Copilot)', () => {
-    const files = planAiAgents(['gemini', 'claude', 'cursor', 'windsurf', 'codex', 'copilot']);
+  it('generates 8 specialized SDET agents for all supported assistants (Antigravity, Claude, Cursor, Windsurf, Codex, Copilot)', () => {
+    const files = planAiAgents(['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot']);
     expect(files.length).toBe(48); // 8 agents * 6 assistants
     const paths = files.map((f) => f.path);
 
@@ -154,7 +151,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
   it('generates 6 operational skills for all supported AI assistants', () => {
     const files = planAiOperationalSkills([
-      'gemini',
+      'antigravity',
       'claude',
       'cursor',
       'windsurf',
@@ -266,7 +263,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     const files = planSharedScaffold({
       taskTracker: 'jira',
       tmsProviders: ['zephyr'],
-      aiAssistants: ['gemini', 'cursor', 'claude'],
+      aiAssistants: ['antigravity', 'cursor', 'claude'],
     });
     const paths = files.map((f) => f.path);
     expect(paths).toContain('.mcp/tms-bridge/index.js');

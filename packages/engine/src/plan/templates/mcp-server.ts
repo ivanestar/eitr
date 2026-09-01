@@ -1520,24 +1520,6 @@ export function httpPostMultipart(urlStr, filePath, fieldName = 'attachment', ex
 
   return [
     {
-      path: 'scripts/mcp-server/index.js',
-      writePolicy: 'create-if-absent',
-      provenance: { origin: 'config' },
-      source: { kind: 'inline', text: indexCode },
-    },
-    {
-      path: 'scripts/mcp-server/adapters.js',
-      writePolicy: 'create-if-absent',
-      provenance: { origin: 'config' },
-      source: { kind: 'inline', text: adaptersCode },
-    },
-    {
-      path: 'scripts/mcp-server/http.js',
-      writePolicy: 'create-if-absent',
-      provenance: { origin: 'config' },
-      source: { kind: 'inline', text: httpCode },
-    },
-    {
       path: '.mcp/tms-bridge/index.js',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'config' },

@@ -336,7 +336,7 @@ export function planAiOperationalSkills(
   for (const rawAssistant of assistants) {
     const assistant = rawAssistant.toLowerCase();
 
-    if (assistant === 'gemini' || assistant === 'antigravity') {
+    if (assistant === 'antigravity') {
       for (const skill of skills) {
         descriptors.push({
           path: `.agents/skills/${skill.name}.md`,
@@ -353,7 +353,7 @@ ${skill.content}`,
           },
         });
       }
-    } else if (assistant === 'claude' || assistant === 'claude-code') {
+    } else if (assistant === 'claude') {
       for (const skill of skills) {
         descriptors.push({
           path: `.claude/skills/${skill.name}/SKILL.md`,
