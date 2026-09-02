@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { renderAppGraphHtml } from '../../engine/src/plan/templates/app-graph-html.js';
+import { renderSiteMapHtml } from '../../engine/src/plan/templates/site-map-html.js';
 import { planSharedScaffold } from '../../engine/src/plan/shared.js';
 import { checkAiTooling } from '../../cli/src/commands/doctor.js';
 import { planAiOperationalSkills } from '../../engine/src/plan/templates/ai-operational-skills.js';
@@ -12,15 +12,15 @@ import { renderGitHooks } from '../../engine/src/plan/templates/git-hooks.js';
 describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
   const assistants = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
 
-  it('AC-1: renderAppGraphHtml generates interactive HTML site graph dashboard', () => {
-    const html = renderAppGraphHtml('http://localhost:3000');
+  it('AC-1: renderSiteMapHtml generates a real site-map.json-driven viewer, not a static dashboard', () => {
+    const html = renderSiteMapHtml('http://localhost:3000');
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('Architecture & Site Topology Graph');
-    expect(html).toContain('<svg');
-    expect(html).toContain('filterGraph');
+    expect(html).toContain('Site Map');
+    expect(html).toContain("fetch('./site-map.json')");
+    expect(html).toContain('filterRows');
 
     const files = planSharedScaffold({});
-    const graphFile = files.find((f) => f.path === 'docs/app-graph.html');
+    const graphFile = files.find((f) => f.path === 'docs/site-map/site-map.html');
     expect(graphFile).toBeDefined();
     expect(graphFile?.writePolicy).toBe('create-if-absent');
   });
@@ -114,7 +114,7 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
   });
 
   it('AC-9 & AC-10: Zero-Emoji and Zero Lock-in compliance', () => {
-    const html = renderAppGraphHtml('http://localhost:3000');
+    const html = renderSiteMapHtml('http://localhost:3000');
     const hook = renderGitHooks();
 
     const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;

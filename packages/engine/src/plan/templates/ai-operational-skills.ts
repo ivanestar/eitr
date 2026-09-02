@@ -4,6 +4,30 @@ interface SkillDefinition {
   name: string;
   description: string;
   content: string;
+  /** Claude Code / Cursor / Codex CLI Agent Skills frontmatter: named argument(s), e.g. ['mode']. */
+  arguments?: string[];
+  /** Placeholder shown to the user for the argument(s), e.g. '[create|update]'. */
+  argumentHint?: string;
+  /**
+   * Suppresses model-initiated auto-invocation, so this only runs when the user explicitly types
+   * the slash command - the documented pattern for a workflow with real side effects (live network
+   * crawl, file writes), matching Claude Code's own /commit and /deploy examples.
+   */
+  disableModelInvocation?: boolean;
+}
+
+// Renders the 'arguments'/'argument-hint' frontmatter lines for assistants on the Agent Skills
+// open standard (Claude Code, Cursor, Codex CLI) when a skill declares them - empty string for a
+// skill with neither, so this composes cleanly into every assistant branch below.
+function argumentFrontmatter(skill: SkillDefinition): string {
+  const lines: string[] = [];
+  if (skill.arguments) {
+    lines.push(`arguments: [${skill.arguments.join(', ')}]`);
+  }
+  if (skill.argumentHint) {
+    lines.push(`argument-hint: ${skill.argumentHint}`);
+  }
+  return lines.length > 0 ? '\n' + lines.join('\n') : '';
 }
 
 function buildOperationalSkills(tool: string, language: string): SkillDefinition[] {
@@ -29,7 +53,7 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 1. Requirements Ingestion & GIGO Gate:
    - Ingest TMS case via 'tms-validator' (Quality Score >= 80%, atomicity <= 10 steps, concrete expected results).
 2. Live DOM & Site Map Reconnaissance:
-   - Consult \`docs/site-map.json\`, \`components/pages/\`, and \`components/widgets/\`.
+   - Consult \`docs/site-map/site-map.json\`, \`components/pages/\`, and \`components/widgets/\`.
    - Inspect live DOM (3-Tier Locator Priority, shadow DOM, iframes).
 3. Live Web Search & Recommendations:
    - Launch Web Search subagents to query official ${frameworkName} and UI library documentation for the target components.
@@ -155,7 +179,7 @@ Inspects live application DOM, extracts semantic elements, groups them into CPOM
 ## Workflow
 1. **Target Inspection & Batch Worker Mode:**
    - Single Page: Navigate to target URL using Playwright MCP or reconnaissance engine.
-   - Batch Swarm Mode: If processing multiple routes from \`docs/site-map.json\`, dispatch parallel 'pom-engineer' worker subagents (1 route per worker) for concurrent synthesis.
+   - Batch Swarm Mode: If processing multiple routes from \`docs/site-map/site-map.json\`, dispatch parallel 'pom-engineer' worker subagents (1 route per worker) for concurrent synthesis.
    - Wait for network idle and main DOM stabilization.
 2. **Semantic Hierarchy Extraction & Feed Guard:**
    - Extract elements using 3-Tier Locator Priority (getByTestId -> getByRole -> getByLabel/getByText).
@@ -165,7 +189,7 @@ Inspects live application DOM, extracts semantic elements, groups them into CPOM
      * Perform a MAXIMUM of 2 viewport scrolls to identify the repeating item structure.
      * Immediately synthesize a CPOM Collection property via \`this.list(ItemComponent, spec)\` (returning Collection<ItemComponent>) and terminate page exploration.
 3. **CPOM Synthesis & Shared Widget Reuse:**
-   - Consult \`docs/site-map.json\` and \`components/widgets/\` for existing shared widgets (e.g. Navbar, Sidebar, Dialog) and compose them via \`this.child(WidgetClass, spec)\`.
+   - Consult \`docs/site-map/site-map.json\` and \`components/widgets/\` for existing shared widgets (e.g. Navbar, Sidebar, Dialog) and compose them via \`this.child(WidgetClass, spec)\`.
    - Generate or update Page Object class inheriting from \`BasePage\`.
    - Group related interactive controls into CPOM primitives (Button, TextInput, Select, Table, Dialog) or collections (\`this.list(ItemComponent, spec)\`).
    - Enforce Method Safety Contract (Actions return Promise<void>, Snapshot readers suffixed with \`Now()\`).
@@ -201,7 +225,7 @@ Transforms an issue or test case from Jira, TestRail, Zephyr, or Azure DevOps in
    - Delegate test case to 'tms-validator' to audit atomicity (steps <= 10), expected results verifiability, and TDM prerequisites.
    - If Quality Score < 80%, halt execution and present a structured Rejection Report with remediation recommendations for the test author.
 3. **Component Resolution & Gap Analysis:**
-   - Consult \`docs/site-map.json\` and \`components/pages/\` to resolve target routes, Page Objects, and shared widgets.
+   - Consult \`docs/site-map/site-map.json\` and \`components/pages/\` to resolve target routes, Page Objects, and shared widgets.
    - If components are missing, trigger \`/scan-and-generate-pom\` to generate and liveness-verify the required Page Objects.
 4. **Human Sign-Off Gateway (Proposal Artifact & Batch Mode):**
    - Single Ticket: Present a concise Markdown automation proposal artifact with Ticket ID, Target Route, Page Objects used, Execution Plan, and TDM strategy.
@@ -281,11 +305,18 @@ Performs page-level locator updates when application design system or layout cha
     {
       name: 'map-site',
       description:
-        'Crawls application routes, builds site topology map, and identifies shared reusable widgets.',
-      content: `# Skill: Map Site (/map-site)
+        'Crawls application routes, builds site topology map, and identifies shared reusable widgets. Two modes: create (fresh crawl) and update (incremental, content-hash-gated).',
+      arguments: ['mode'],
+      argumentHint: '[create|update]',
+      disableModelInvocation: true,
+      content: `# Skill: Map Site (/map-site create, /map-site update)
 
 ## Purpose
-Crawls the application page graph with authenticated session, builds the complete route topology in \`docs/site-map.json\`, and detects recurring UI components for shared widget deduplication.
+Crawls the application page graph with authenticated session, builds the complete route topology in \`docs/site-map/site-map.json\`, and detects recurring UI components for shared widget deduplication. Two modes, chosen by the argument this skill was invoked with:
+- \`create\` (default if no argument given, or if \`docs/site-map/site-map.json\` does not exist yet): full fresh crawl of every route.
+- \`update\`: incremental pass over already-known routes plus discovery of new ones - see Step 3b.
+
+Playwright browser access for this crawl comes from this project's MCP configuration (\`.mcp.json\`, \`.agents/mcp_config.json\`, \`.codex/config.toml\`, or \`.vscode/mcp.json\`, whichever your assistant reads). **Windsurf is the one exception**: Cascade has no per-project MCP mechanism at all - its MCP servers are configured once, globally, via Windsurf's own Settings -> Cascade -> MCP Servers (or by editing \`~/.codeium/windsurf/mcp_config.json\` directly). If you're running this in Windsurf and browser tools aren't available, that one-time global step is what's missing, not something this repo can provide.
 
 ## Workflow
 1. **Authenticated Session Loading:**
@@ -298,12 +329,19 @@ Crawls the application page graph with authenticated session, builds the complet
    - Discover internal application links within base domain origin.
    - Extract page routes, titles, and major structural DOM regions (\`header\`, \`nav\`, \`aside\`, \`main\`, \`footer\`, \`table\`, \`dialog\`).
    - Bound traversal with maximum depth and page count to prevent infinite loops. Limit live exploration scrolls to maximum 2 viewports.
-3. **Deterministic Site Topology Synthesis:**
-   - Generate or update \`docs/site-map.json\` conforming exactly to \`docs/site-map.schema.json\`: an object with \`schemaVersion\`, \`generatedAt\`, \`baseUrl\`, and a \`routes\` object keyed by canonical path template (never an array) — each entry carrying a \`routeId\` stable across URL restructuring, \`sampleUrls\`, \`title\`, \`regions\`, \`components\`, and \`discoveredAt\`. Serialize \`routes\` keys in sorted order so re-runs produce a clean diff.
-   - If an existing \`docs/site-map.json\` is missing \`schemaVersion\` or does not parse under this schema, treat it as absent and regenerate fresh rather than attempting to migrate it in place.
-   - Generate human-readable \`docs/APP_GRAPH.md\` with Mermaid route graph and summary.
+3a. **Deterministic Site Topology Synthesis (create mode):**
+   - Generate \`docs/site-map/site-map.json\` conforming exactly to \`docs/site-map/site-map.schema.json\`: an object with \`schemaVersion\` (2), \`generatedAt\`, \`baseUrl\`, and a \`routes\` object keyed by canonical path template (never an array) — each entry carrying a \`routeId\` stable across URL restructuring, \`sampleUrls\`, \`title\`, \`regions\`, \`components\`, \`discoveredAt\`, \`lastCheckedAt\` (same value as \`discoveredAt\` on first creation), \`contentHash\` (see below), and \`status: "active"\`. Serialize \`routes\` keys in sorted order so re-runs produce a clean diff.
+   - If an existing \`docs/site-map/site-map.json\` is missing \`schemaVersion\` or does not parse under this schema, treat it as absent and regenerate fresh rather than attempting to migrate it in place. A from-scratch \`create\` pass prunes any \`status: "removed"\` entries from a prior file - it starts clean.
+   - \`contentHash\` is a hash (e.g. SHA-256) of the normalized structural signal for the route: \`title\` plus sorted \`regions\` plus sorted \`components\`, joined into one string - NOT raw HTML, which is too noisy (whitespace, analytics scripts, embedded timestamps cause false-positive "changed" signals). Compute it the same way every time; \`update\` mode's cheap-skip logic depends on that consistency.
+3b. **Incremental Update Synthesis (update mode) - the reason this is cheaper than \`create\`:**
+   - For every route already in \`docs/site-map/site-map.json\`: re-fetch just enough of that route's page shell to recompute \`title\`/\`regions\`/\`components\`, then recompute \`contentHash\`.
+     * Hash unchanged -> the route's real structure hasn't changed. Only bump \`lastCheckedAt\`; skip full component re-extraction and shared-widget re-mining for this route entirely.
+     * Hash changed -> run the same full extraction \`create\` mode does for this one route (Steps 2-3a's per-route logic), and update \`lastCheckedAt\`/\`contentHash\`/\`discoveredAt\`-adjacent fields accordingly.
+     * Route no longer resolves (404, vanished from nav) -> set \`status: "removed"\` rather than deleting the entry, so removal history is visible; do not include it in shared-widget mining.
+   - Any link discovered during this pass that isn't already a known route -> add as a new entry with \`status: "active"\`, same as a fresh \`create\` would.
+   - Set the file-level \`lastUpdatedAt\` to now. Leave \`generatedAt\` untouched - it's the original creation timestamp.
 4. **Shared Widget Mining (Deduplication Engine):**
-   - Identify recurring component structures appearing across >= 2 routes.
+   - Identify recurring component structures appearing across >= 2 \`active\` routes (exclude \`removed\` routes from this analysis).
    - Synthesize reusable widgets in \`components/widgets/<name>.widget.ts\`.
    - Update Page Objects to compose shared widgets via \`this.child(WidgetClass, spec)\` rather than duplicating code.
 5. **Orchestrated Fan-Out to POM Engineers (Optional on User Request):**
@@ -311,6 +349,9 @@ Crawls the application page graph with authenticated session, builds the complet
      * Dispatch parallel 'pom-engineer' worker subagents across discovered routes (1 route per worker).
      * Ensure each 'pom-engineer' synthesizes 1:1 Page Objects in \`components/pages/\` AND verifies each one against the live DOM.
      * Execute a global barrier synchronization: confirm 100% Green component liveness across all workers before completing.
+
+## Human-readable view
+\`docs/site-map/site-map.html\` reads \`docs/site-map/site-map.json\` directly at view-time (open it in a browser) - there is nothing for this skill to separately generate or keep in sync for a human-facing summary.
 `,
     },
   ];
@@ -363,7 +404,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${skill.description}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
 ---
 
 ${skill.content}`,
@@ -380,7 +421,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${skill.description}${argumentFrontmatter(skill)}
 disable-model-invocation: true
 ---
 
@@ -390,6 +431,48 @@ ${skill.content}`,
       }
     } else if (assistant === 'windsurf') {
       for (const skill of skills) {
+        if (skill.name === 'map-site') {
+          // Windsurf workflows have no confirmed argument-substitution mechanism - ship create
+          // and update as two separate, self-contained files instead of relying on a shared
+          // $mode variable the way Claude Code/Cursor/Codex CLI's `arguments` field allows.
+          descriptors.push({
+            path: `.windsurf/workflows/map-site.md`,
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: {
+              kind: 'inline',
+              text: `---
+name: map-site
+description: ${skill.description}
+---
+
+# Workflow: map-site (create mode)
+
+This workflow always runs in CREATE mode: a fresh, full crawl. For an incremental update of an existing site map instead, use the separate \`/map-site-update\` workflow.
+
+${skill.content}`,
+            },
+          });
+          descriptors.push({
+            path: `.windsurf/workflows/map-site-update.md`,
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: {
+              kind: 'inline',
+              text: `---
+name: map-site-update
+description: Incremental update of an existing docs/site-map/site-map.json using content-hash comparison - cheaper than a full re-crawl.
+---
+
+# Workflow: map-site-update (update mode)
+
+This workflow always runs in UPDATE mode: the incremental, content-hash-gated pass (Step 3b below), not a full fresh crawl. For a full fresh crawl instead, use the separate \`/map-site\` workflow.
+
+${skill.content}`,
+            },
+          });
+          continue;
+        }
         descriptors.push({
           path: `.windsurf/workflows/${skill.name}.md`,
           writePolicy: 'create-if-absent',
@@ -417,7 +500,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${skill.description}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
 ---
 
 ${skill.content}`,

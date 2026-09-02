@@ -81,7 +81,7 @@ describe('All 6 Operational Skills Evaluation Benchmark', () => {
     const simulatedOutput = `
 # Skill: Map Site (/map-site)
 1. URL Canonicalization & Pagination Normalization: strip query parameters and hashes.
-2. Write topology map to docs/site-map.json and Mermaid graph to docs/APP_GRAPH.md.
+2. Write topology map to docs/site-map/site-map.json.
 3. Extract recurring DOM patterns (frequency >= 2) into components/widgets/.
 `;
     const grade = gradeSkillCompliance(
