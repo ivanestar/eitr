@@ -8,6 +8,57 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.11.0] - 2026-09-02
+
+### Fixed
+
+- **Per-assistant MCP server config was wrong for 5 of 6 assistants**, live-verified against each
+  assistant's actual current (September 2026) documentation, not assumed from naming similarity.
+  A real-world test surfaced Antigravity CLI reaching outside a generated project to its own global
+  config instead of using anything in the repo - EITR was writing a root `.mcp.json` for it, but
+  Antigravity actually reads `.agents/mcp_config.json`. Fixing that one path surfaced the same class
+  of bug in 4 more places in the same function: Claude Code needs root `.mcp.json` (was
+  `.claude/mcp.json`); Codex CLI needs `.codex/config.toml` in TOML under `[mcp_servers.<name>]`
+  tables (was `.codex/mcp.json` in JSON - a format change, not just a path); Copilot is two real,
+  different surfaces (the VS Code extension and the standalone CLI) each needing their own file, so
+  it now writes both `.vscode/mcp.json` and root `.mcp.json` instead of only the former; and
+  Windsurf has zero project-scoped MCP mechanism at all (confirmed: its config is purely global,
+  shared machine-wide) so EITR stopped writing an inert `.windsurf/mcp.json` it would never read,
+  and `/map-site` now tells a Windsurf user this needs a one-time global install instead. A
+  follow-up review pass caught one more: `.vscode/mcp.json` was reusing the same
+  `{"mcpServers": {...}}` envelope as every other assistant, but VS Code's native schema uses a
+  top-level `"servers"` key with each entry explicitly `"type": "stdio"` - also fixed. Cursor's
+  `.cursor/mcp.json` and Aider's total lack of MCP support were both confirmed already-correct and
+  left untouched.
+
+### Changed
+
+- **`/map-site`'s `docs/` output consolidated from 4 files (half broken/redundant) into
+  `docs/site-map/`** (3 files): `docs/APP_GRAPH.md` (a ~500-line near-complete-pairwise-edge Mermaid
+  graph re-narrating `site-map.json`, plus an unspecified agent-invented "Strategy Recommendations"
+  section) is no longer generated at all; `docs/app-graph.html` (a static file with hardcoded fake
+  demo data that never reflected any real crawl) is replaced by `docs/site-map/site-map.html`, a
+  genuine zero-maintenance viewer that fetches and renders the real `site-map.json` at view-time;
+  `docs/site-map.schema.json`/`docs/site-map.json` move to `docs/site-map/`.
+- **`site-map.schema.json` bumped to `schemaVersion: 2`**: adds file-level `lastUpdatedAt` and
+  per-route `contentHash`/`lastCheckedAt`/`status` (`active`|`removed`), enabling a genuinely
+  cheaper `/map-site update` pass that skips full re-extraction for any route whose structural
+  content hash hasn't changed, instead of always doing a full re-crawl - the content-hash pattern
+  real crawlers use, not sitemap.xml's discredited `changefreq`/`lastmod` fields.
+- **`/map-site` is now invoked with an explicit mode**: `/map-site create` (fresh crawl) vs
+  `/map-site update` (incremental) as one skill with an `arguments`/`argument-hint` frontmatter
+  argument for Claude Code/Cursor/Codex CLI (the shared "Agent Skills" convention), plus
+  `disable-model-invocation: true` so a live crawl with real file writes is never auto-triggered
+  mid-conversation. Windsurf (no confirmed argument-passing mechanism) gets two separate workflow
+  files, `map-site.md` and `map-site-update.md`, instead.
+
+Verified via: `npm run build`, `npm run typecheck`, `npm run format:check`, `npx vitest run
+packages/engine/test/ packages/cli/test/` (514 passed, 1 skipped), `npm run eval` (183 passed),
+`npx vitest run packages/engine/test/mcp-tms.test.ts` (10 passed, including a regression test
+proving the `.vscode/mcp.json` schema fix), `npx vitest run packages/engine/test/format.test.ts`
+(2 passed). Independently reviewed by the `framework-auditor` agent (1 CRITICAL - the
+`.vscode/mcp.json` schema mismatch - and 5 MINOR findings, all fixed in this same release).
+
 ## [0.10.0] - 2026-09-02
 
 ### Added
