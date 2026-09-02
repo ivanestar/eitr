@@ -150,12 +150,12 @@ function validate() {
     }
     isField(entry.businessFeature, label + '.businessFeature', errors);
     isField(entry.criticalityTier, label + '.criticalityTier', errors);
-    if (
-      entry.businessFeature &&
-      typeof entry.businessFeature === 'object' &&
-      typeof entry.businessFeature.value !== 'string'
-    ) {
-      errors.push(label + '.businessFeature.value must be a string.');
+    if (entry.businessFeature && typeof entry.businessFeature === 'object') {
+      if (typeof entry.businessFeature.value !== 'string') {
+        errors.push(label + '.businessFeature.value must be a string.');
+      } else if (entry.businessFeature.value.length > 40) {
+        errors.push(label + '.businessFeature.value must be <=40 characters.');
+      }
     }
     if (
       entry.criticalityTier &&

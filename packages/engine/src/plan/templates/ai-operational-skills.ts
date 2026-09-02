@@ -25,7 +25,12 @@ function argumentFrontmatter(skill: SkillDefinition): string {
     lines.push(`arguments: [${skill.arguments.join(', ')}]`);
   }
   if (skill.argumentHint) {
-    lines.push(`argument-hint: ${skill.argumentHint}`);
+    // Always YAML-double-quoted: the hint's own documented example values ('[issue-number]',
+    // '[create|update]') start with '[', which an unquoted YAML scalar parses as a flow sequence
+    // (an array) instead of a string - exactly the "must be a string" validation error this
+    // guards against. Escape backslashes first, then quotes, so any future hint value stays safe.
+    const escaped = skill.argumentHint.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    lines.push(`argument-hint: "${escaped}"`);
   }
   return lines.length > 0 ? '\n' + lines.join('\n') : '';
 }
@@ -306,7 +311,7 @@ Performs page-level locator updates when application design system or layout cha
     {
       name: 'map-site',
       description:
-        'Crawls application routes, builds site topology map, and identifies shared reusable widgets. Two modes: create (fresh crawl) and update (incremental, content-hash-gated).',
+        'Crawls application routes, builds site topology map, and identifies shared reusable widgets. Two modes: create (fresh crawl) and update (incremental, content-hash-gated). Also supports two further optional, explicit-request-only steps: Page Object generation for mapped routes, and read-only business-intent/criticality inference gated by mechanical validation and human sign-off.',
       arguments: ['mode'],
       argumentHint: '[create|update]',
       disableModelInvocation: true,
@@ -314,10 +319,14 @@ Performs page-level locator updates when application design system or layout cha
 
 ## Purpose
 Crawls the application page graph with authenticated session, builds the complete route topology in \`docs/site-map/site-map.json\`, and detects recurring UI components for shared widget deduplication. Two modes, chosen by the argument this skill was invoked with:
-- \`create\` (default if no argument given, or if \`docs/site-map/site-map.json\` does not exist yet): full fresh crawl of every route.
-- \`update\`: incremental pass over already-known routes plus discovery of new ones - see Step 3b.
+- \`create\` (default if no argument given): full fresh crawl of every route. **If \`docs/site-map/site-map.json\` already exists, this discards it entirely** - every route's \`routeId\` identity resets too (only \`update\` preserves \`routeId\` - see Mode Resolution below and Step 3b), so anything keyed by \`routeId\` in a downstream artifact (e.g. \`docs/analysis/business-intent.json\`) becomes orphaned.
+- \`update\`: incremental pass over already-known routes plus discovery of new ones - see Step 3b. **If \`docs/site-map/site-map.json\` does not exist yet, there is nothing to update against** - see Mode Resolution below.
 
 Playwright browser access for this crawl comes from this project's MCP configuration (\`.mcp.json\`, \`.agents/mcp_config.json\`, \`.codex/config.toml\`, or \`.vscode/mcp.json\`, whichever your assistant reads). **Windsurf is the one exception**: Cascade has no per-project MCP mechanism at all - its MCP servers are configured once, globally, via Windsurf's own Settings -> Cascade -> MCP Servers (or by editing \`~/.codeium/windsurf/mcp_config.json\` directly). If you're running this in Windsurf and browser tools aren't available, that one-time global step is what's missing, not something this repo can provide.
+
+## Mode Resolution
+- \`update\` requested but \`docs/site-map/site-map.json\` does not exist: print "No existing docs/site-map/site-map.json found - running a full create pass instead." and proceed exactly as \`create\` - never silently redirect without saying so.
+- \`create\` requested and \`docs/site-map/site-map.json\` already exists and parses validly: before doing anything else, print "Found an existing site-map.json with <N> routes (last touched <lastUpdatedAt or generatedAt>). create starts fresh: routeId identity resets for every route, so any downstream artifact keyed by routeId (e.g. docs/analysis/business-intent.json) will need re-review. Use /map-site update instead to refresh in place and preserve routeId/history." Then proceed.
 
 ## Workflow
 1. **Authenticated Session Loading:**
@@ -329,17 +338,21 @@ Playwright browser access for this crawl comes from this project's MCP configura
    - Canonicalize dynamic path segments the same way: a numeric ID, UUID, or per-record slug collapses into a path template (\`/users/42\` and \`/users/43\` both become \`/users/{id}\`) instead of producing one route per record.
    - Discover internal application links within base domain origin.
    - Extract page routes, titles, and major structural DOM regions (\`header\`, \`nav\`, \`aside\`, \`main\`, \`footer\`, \`table\`, \`dialog\`).
-   - Bound traversal with maximum depth and page count to prevent infinite loops. Limit live exploration scrolls to maximum 2 viewports.
+   - Bound traversal with a maximum crawl depth of 6 hops from the start URL and a maximum of 500 pages visited, to prevent infinite loops. Limit live exploration scrolls to maximum 2 viewports.
+   - If either bound is actually hit before the crawl naturally exhausted every discoverable link, record it - see the \`coverage\` field below. Do not silently return a partial route list as if it were complete.
 3a. **Deterministic Site Topology Synthesis (create mode):**
-   - Generate \`docs/site-map/site-map.json\` conforming exactly to \`docs/site-map/site-map.schema.json\`: an object with \`schemaVersion\` (2), \`generatedAt\`, \`baseUrl\`, and a \`routes\` object keyed by canonical path template (never an array) — each entry carrying a \`routeId\` stable across URL restructuring, \`sampleUrls\`, \`title\`, \`regions\`, \`components\`, \`discoveredAt\`, \`lastCheckedAt\` (same value as \`discoveredAt\` on first creation), \`contentHash\` (see below), and \`status: "active"\`. Serialize \`routes\` keys in sorted order so re-runs produce a clean diff.
-   - If an existing \`docs/site-map/site-map.json\` is missing \`schemaVersion\` or does not parse under this schema, treat it as absent and regenerate fresh rather than attempting to migrate it in place. A from-scratch \`create\` pass prunes any \`status: "removed"\` entries from a prior file - it starts clean.
+   - Generate \`docs/site-map/site-map.json\` conforming exactly to \`docs/site-map/site-map.schema.json\`: an object with \`schemaVersion\` (2), \`generatedAt\`, \`baseUrl\`, and a \`routes\` object keyed by canonical path template (never an array) — each entry carrying a \`routeId\` stable across URL restructuring, \`sampleUrls\`, \`title\`, \`regions\`, \`components\`, \`discoveredAt\`, \`lastCheckedAt\` (same value as \`discoveredAt\` on first creation), \`contentHash\` (see below), and \`status: "active"\`. Serialize \`routes\` keys in sorted order so a re-run's diff only shows routes that actually changed.
+   - \`routeId\`: generated once, at the moment a route is first discovered (by a \`create\` pass or by \`update\` finding a genuinely new route) - a fresh, globally-unique identifier (e.g. a UUID). Never derive it from the path template and never regenerate it later for the same logical route; see Step 3b for how \`update\` preserves it. Bad: \`routeId: "users-id"\` (derived from the path template \`/users/{id}\` - breaks the moment that route is renamed to \`/customers/{id}\`). Good: \`routeId: "3f9a2b7e-4c1d-4e8a-9f2b-1a7c6d5e4f3a"\` (a fresh UUID, independent of the path entirely).
+   - If Step 2's crawl hit its own depth or page-count ceiling, set a top-level \`coverage: { "boundedBy": "maxDepth" | "maxPages", "pagesVisited": <n> }\` field so a human can tell the route list may be incomplete. Omit \`coverage\` entirely when the crawl exhausted every discoverable link on its own - its absence means completeness, the same idiom \`lastUpdatedAt\`'s absence already uses for "never updated."
+   - If an existing \`docs/site-map/site-map.json\` is missing \`schemaVersion\` or does not parse under this schema, treat it as absent and regenerate fresh rather than attempting to migrate it in place. A from-scratch \`create\` pass prunes any \`status: "removed"\` entries from a prior file, and resets \`routeId\` for every route - it starts clean (see Mode Resolution above for the required warning before this happens).
    - \`contentHash\` is a hash (e.g. SHA-256) of the normalized structural signal for the route: \`title\` plus sorted \`regions\` plus sorted \`components\`, joined into one string - NOT raw HTML, which is too noisy (whitespace, analytics scripts, embedded timestamps cause false-positive "changed" signals). Compute it the same way every time; \`update\` mode's cheap-skip logic depends on that consistency.
 3b. **Incremental Update Synthesis (update mode) - the reason this is cheaper than \`create\`:**
-   - For every route already in \`docs/site-map/site-map.json\`: re-fetch just enough of that route's page shell to recompute \`title\`/\`regions\`/\`components\`, then recompute \`contentHash\`.
+   - For every route already in \`docs/site-map/site-map.json\`: re-fetch just enough of that route's page shell to recompute \`title\`/\`regions\`/\`components\`, then recompute \`contentHash\`. This route's \`routeId\` MUST stay exactly as it already is - \`update\` never reassigns it; that stability across a URL restructure is the entire reason \`routeId\` exists separately from the path template.
      * Hash unchanged -> the route's real structure hasn't changed. Only bump \`lastCheckedAt\`; skip full component re-extraction and shared-widget re-mining for this route entirely.
      * Hash changed -> run the same full extraction \`create\` mode does for this one route (Steps 2-3a's per-route logic), and update \`lastCheckedAt\`/\`contentHash\`/\`discoveredAt\`-adjacent fields accordingly.
      * Route no longer resolves (404, vanished from nav) -> set \`status: "removed"\` rather than deleting the entry, so removal history is visible; do not include it in shared-widget mining.
-   - Any link discovered during this pass that isn't already a known route -> add as a new entry with \`status: "active"\`, same as a fresh \`create\` would.
+   - Any link discovered during this pass that isn't already a known route -> add as a new entry with \`status: "active"\` and a freshly generated \`routeId\` per Step 3a's rule, same as a fresh \`create\` would.
+   - Update the top-level \`coverage\` field the same way Step 3a does (set it if this pass hit a bound, omit it if this pass's crawl was exhaustive), rather than leaving a stale value from a prior run.
    - Set the file-level \`lastUpdatedAt\` to now. Leave \`generatedAt\` untouched - it's the original creation timestamp.
 4. **Shared Widget Mining (Deduplication Engine):**
    - Identify recurring component structures appearing across >= 2 \`active\` routes (exclude \`removed\` routes from this analysis).
@@ -355,9 +368,9 @@ Playwright browser access for this crawl comes from this project's MCP configura
    - If the user explicitly requested business-intent analysis (this step NEVER runs automatically as part of a plain \`/map-site create\`/\`/map-site update\` invocation):
      * Run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (add \`--routes=<a,b,c>\` to scope to a subset) and dispatch one read-only analysis worker per \`active\` route from its Level 2 worker list - do not enumerate routes/workers yourself.
      * **Strictly read-only. Allowlist, not denylist**: each worker may ONLY use non-mutating read operations against the target route - text/attribute reads (\`.textContent()\`, \`.getAttribute()\`, accessibility-tree snapshots, \`page.title()\`) after a single navigation (a GET-equivalent read) to the route's \`sampleUrls[0]\`. Never call \`.click()\`, \`.fill()\`, \`.check()\`, \`.selectOption()\`, or any other action method - not even a \`trial: true\` dry-run - and never focus or read the live *value* of a form field (a pre-filled field may hold real session/account data). Infer intent purely from static, non-user-specific signal: page title, heading text, form field LABELS (the label text, never the field's current value), button/link visible text, and ARIA roles/names.
-     * **PII/session-data guard on evidence excerpts**: every \`evidence[].excerpt\` MUST be a short (<=100 char) fragment of static label/heading/button text only, never a copied value from page content that could carry the signed-in user's real account data - mask any email, phone number, token, or numeric-ID-shaped text as \`[REDACTED]\` before writing an excerpt.
+     * **PII/session-data guard on evidence excerpts**: every \`evidence[].excerpt\` MUST be a short (<=100 char) fragment of static label/heading/button text only, never a copied value from page content that could carry the signed-in user's real account data - mask any email, phone number, token, or numeric-ID-shaped text - a run of 6 or more consecutive digits, or an alphanumeric token of 8+ characters where digits are the majority of its characters - as \`[REDACTED]\` before writing an excerpt.
      * For a route whose \`contentHash\` in \`docs/site-map/site-map.json\` is unchanged since that route's \`sourceContentHash\` in an existing \`docs/analysis/business-intent.json\`, skip re-inference for that route entirely and keep its existing entry - mirrors \`update\` mode's own cheap-skip logic in Step 3b.
-     * For every other active route, infer \`businessFeature\` (a short human-readable label, e.g. "Checkout", "Account Settings") and \`criticalityTier\` (\`critical\`/\`high\`/\`medium\`/\`low\`), each wrapped as a \`Field<T>\` (\`value\`, \`confidence\`, \`source\`, \`evidence\`) per \`docs/analysis/business-intent.types.ts\` - every inference MUST carry at least one \`evidence\` entry naming the literal signal and text excerpt it came from; never emit a value with no evidence.
+     * For every other active route, infer \`businessFeature\` (a label, <=40 characters, e.g. "Checkout", "Account Settings") and \`criticalityTier\` (\`critical\`/\`high\`/\`medium\`/\`low\`), each wrapped as a \`Field<T>\` (\`value\`, \`confidence\`, \`source\`, \`evidence\`) per \`docs/analysis/business-intent.types.ts\` - every inference MUST carry at least one \`evidence\` entry naming the literal signal and text excerpt it came from; never emit a value with no evidence.
      * Write the result to \`docs/analysis/business-intent.json\` conforming to \`BusinessIntentReport\` (\`schemaVersion: 1\`, keyed by \`routeId\`), with every new/changed entry's \`reviewed\` set to \`false\`.
    - **Mechanical Gate (zero model involvement):** run \`node scripts/validate-business-intent.mjs\` and stop if it reports \`FAILED\` - fix the reported shape errors and re-run before proceeding. Do not present unvalidated output to the human.
    - **Human Sign-Off Gateway:** present a Business-Intent Review Artifact table (Route, Business Feature, Criticality Tier, Confidence, Evidence Excerpt) for every new/changed entry. State explicitly: this file is NOT authoritative until a human has reviewed it - no other skill or agent should treat an entry with \`reviewed: false\` as ground truth.

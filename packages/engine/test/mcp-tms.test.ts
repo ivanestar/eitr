@@ -235,6 +235,21 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
     expect(mapSkill?.source.text).not.toContain('APP_GRAPH.md');
 
+    // skill-reviewer pass (2026-09-02): description discloses the two optional steps, crawl
+    // bounds are concrete numbers (not just "maximum depth and page count"), the PII-masking rule
+    // is mechanically defined, and the businessFeature label has a checkable bound.
+    expect(mapSkill?.source.text).toContain(
+      'Also supports two further optional, explicit-request-only steps',
+    );
+    expect(mapSkill?.source.text).toContain('maximum crawl depth of 6 hops');
+    expect(mapSkill?.source.text).toContain('maximum of 500 pages visited');
+    expect(mapSkill?.source.text).toContain(
+      'a run of 6 or more consecutive digits, or an alphanumeric token of 8+ characters',
+    );
+    expect(mapSkill?.source.text).toContain('a label, <=40 characters');
+    expect(mapSkill?.source.text).toContain('Bad: `routeId: "users-id"`');
+    expect(mapSkill?.source.text).toContain('Good: `routeId:');
+
     // Step 6 (ADR 0012 Stage 1, business-intent analysis) - AC5: the four banned mutating methods
     // are named exactly once, inside their own prohibition sentence, and nowhere else in the
     // skill's content as a real invocation. A raw whole-block substring-absence check would fail
@@ -260,6 +275,25 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     // AC9: reuses the existing Level-2 fan-out - no bespoke dispatch mechanism for Step 6.
     expect(mapSkill?.source.text).toContain('orchestrate-swarm.mjs --phase=plan');
+
+    // Mode Resolution: create-on-existing-file and update-with-no-file are both explicit and
+    // transparent (Fail loud, never silently guess), not silent redirects.
+    expect(mapSkill?.source.text).toContain('## Mode Resolution');
+    expect(mapSkill?.source.text).toContain(
+      'No existing docs/site-map/site-map.json found - running a full create pass instead.',
+    );
+    expect(mapSkill?.source.text).toContain('routeId identity resets for every route');
+
+    // routeId generation/stability rule: generated once at first discovery, never derived from
+    // the path template, and update mode never reassigns it for an already-known route.
+    expect(mapSkill?.source.text).toContain('Never derive it from the path template');
+    expect(mapSkill?.source.text).toContain(
+      "This route's `routeId` MUST stay exactly as it already is",
+    );
+
+    // Crawl coverage/truncation signal: presence-vs-absence idiom, matching lastUpdatedAt's own.
+    expect(mapSkill?.source.text).toContain('"boundedBy": "maxDepth" | "maxPages"');
+    expect(mapSkill?.source.text).toContain('its absence means completeness');
 
     // AC11: PII/session-data guard on evidence excerpts is documented (length bound + redaction).
     expect(mapSkill?.source.text).toContain('<=100 char');
@@ -289,7 +323,10 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // disable-model-invocation (real side effects: live network crawl, file writes).
     const claudeMapSkill = files.find((f) => f.path === '.claude/skills/map-site/SKILL.md');
     expect(claudeMapSkill?.source.text).toContain('arguments: [mode]');
-    expect(claudeMapSkill?.source.text).toContain('argument-hint: [create|update]');
+    // Must be YAML-double-quoted - an unquoted value starting with "[" parses as a flow-sequence
+    // (array), not a string, which is exactly the "'argument-hint' attribute must be a string"
+    // validation error a real generated project hit before this was fixed.
+    expect(claudeMapSkill?.source.text).toContain('argument-hint: "[create|update]"');
     expect(claudeMapSkill?.source.text).toContain('disable-model-invocation: true');
     // A skill without disableModelInvocation set must not get the line at all.
     const claudeHealSkill = files.find((f) => f.path === '.claude/skills/heal-test/SKILL.md');
