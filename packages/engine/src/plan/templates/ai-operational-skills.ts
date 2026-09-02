@@ -375,8 +375,6 @@ Playwright browser access for this crawl comes from this project's MCP configura
    - **Mechanical Gate (zero model involvement):** run \`node scripts/validate-business-intent.mjs\` and stop if it reports \`FAILED\` - fix the reported shape errors and re-run before proceeding. Do not present unvalidated output to the human.
    - **Human Sign-Off Gateway:** present a Business-Intent Review Artifact table (Route, Business Feature, Criticality Tier, Confidence, Evidence Excerpt) for every new/changed entry. State explicitly: this file is NOT authoritative until a human has reviewed it - no other skill or agent should treat an entry with \`reviewed: false\` as ground truth.
 
-## Human-readable view
-\`docs/site-map/site-map.html\` reads \`docs/site-map/site-map.json\` directly at view-time (open it in a browser) - there is nothing for this skill to separately generate or keep in sync for a human-facing summary.
 `,
     },
   ];
