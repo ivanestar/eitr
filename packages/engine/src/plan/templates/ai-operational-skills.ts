@@ -314,10 +314,14 @@ Performs page-level locator updates when application design system or layout cha
 
 ## Purpose
 Crawls the application page graph with authenticated session, builds the complete route topology in \`docs/site-map/site-map.json\`, and detects recurring UI components for shared widget deduplication. Two modes, chosen by the argument this skill was invoked with:
-- \`create\` (default if no argument given, or if \`docs/site-map/site-map.json\` does not exist yet): full fresh crawl of every route.
-- \`update\`: incremental pass over already-known routes plus discovery of new ones - see Step 3b.
+- \`create\` (default if no argument given): full fresh crawl of every route. **If \`docs/site-map/site-map.json\` already exists, this discards it entirely** - every route's \`routeId\` identity resets too (only \`update\` preserves \`routeId\` - see Mode Resolution below and Step 3b), so anything keyed by \`routeId\` in a downstream artifact (e.g. \`docs/analysis/business-intent.json\`) becomes orphaned.
+- \`update\`: incremental pass over already-known routes plus discovery of new ones - see Step 3b. **If \`docs/site-map/site-map.json\` does not exist yet, there is nothing to update against** - see Mode Resolution below.
 
 Playwright browser access for this crawl comes from this project's MCP configuration (\`.mcp.json\`, \`.agents/mcp_config.json\`, \`.codex/config.toml\`, or \`.vscode/mcp.json\`, whichever your assistant reads). **Windsurf is the one exception**: Cascade has no per-project MCP mechanism at all - its MCP servers are configured once, globally, via Windsurf's own Settings -> Cascade -> MCP Servers (or by editing \`~/.codeium/windsurf/mcp_config.json\` directly). If you're running this in Windsurf and browser tools aren't available, that one-time global step is what's missing, not something this repo can provide.
+
+## Mode Resolution
+- \`update\` requested but \`docs/site-map/site-map.json\` does not exist: print "No existing docs/site-map/site-map.json found - running a full create pass instead." and proceed exactly as \`create\` - never silently redirect without saying so.
+- \`create\` requested and \`docs/site-map/site-map.json\` already exists and parses validly: before doing anything else, print "Found an existing site-map.json with <N> routes (last touched <lastUpdatedAt or generatedAt>). create starts fresh: routeId identity resets for every route, so any downstream artifact keyed by routeId (e.g. docs/analysis/business-intent.json) will need re-review. Use /map-site update instead to refresh in place and preserve routeId/history." Then proceed.
 
 ## Workflow
 1. **Authenticated Session Loading:**
@@ -330,16 +334,20 @@ Playwright browser access for this crawl comes from this project's MCP configura
    - Discover internal application links within base domain origin.
    - Extract page routes, titles, and major structural DOM regions (\`header\`, \`nav\`, \`aside\`, \`main\`, \`footer\`, \`table\`, \`dialog\`).
    - Bound traversal with maximum depth and page count to prevent infinite loops. Limit live exploration scrolls to maximum 2 viewports.
+   - If either bound is actually hit before the crawl naturally exhausted every discoverable link, record it - see the \`coverage\` field below. Do not silently return a partial route list as if it were complete.
 3a. **Deterministic Site Topology Synthesis (create mode):**
    - Generate \`docs/site-map/site-map.json\` conforming exactly to \`docs/site-map/site-map.schema.json\`: an object with \`schemaVersion\` (2), \`generatedAt\`, \`baseUrl\`, and a \`routes\` object keyed by canonical path template (never an array) — each entry carrying a \`routeId\` stable across URL restructuring, \`sampleUrls\`, \`title\`, \`regions\`, \`components\`, \`discoveredAt\`, \`lastCheckedAt\` (same value as \`discoveredAt\` on first creation), \`contentHash\` (see below), and \`status: "active"\`. Serialize \`routes\` keys in sorted order so re-runs produce a clean diff.
-   - If an existing \`docs/site-map/site-map.json\` is missing \`schemaVersion\` or does not parse under this schema, treat it as absent and regenerate fresh rather than attempting to migrate it in place. A from-scratch \`create\` pass prunes any \`status: "removed"\` entries from a prior file - it starts clean.
+   - \`routeId\`: generated once, at the moment a route is first discovered (by a \`create\` pass or by \`update\` finding a genuinely new route) - a fresh, globally-unique identifier (e.g. a UUID). Never derive it from the path template (that would defeat its entire purpose - surviving a URL restructure) and never regenerate it later for the same logical route; see Step 3b for how \`update\` preserves it.
+   - If Step 2's crawl hit its own depth or page-count ceiling, set a top-level \`coverage: { "boundedBy": "maxDepth" | "maxPages", "pagesVisited": <n> }\` field so a human can tell the route list may be incomplete. Omit \`coverage\` entirely when the crawl exhausted every discoverable link on its own - its absence means completeness, the same idiom \`lastUpdatedAt\`'s absence already uses for "never updated."
+   - If an existing \`docs/site-map/site-map.json\` is missing \`schemaVersion\` or does not parse under this schema, treat it as absent and regenerate fresh rather than attempting to migrate it in place. A from-scratch \`create\` pass prunes any \`status: "removed"\` entries from a prior file, and resets \`routeId\` for every route - it starts clean (see Mode Resolution above for the required warning before this happens).
    - \`contentHash\` is a hash (e.g. SHA-256) of the normalized structural signal for the route: \`title\` plus sorted \`regions\` plus sorted \`components\`, joined into one string - NOT raw HTML, which is too noisy (whitespace, analytics scripts, embedded timestamps cause false-positive "changed" signals). Compute it the same way every time; \`update\` mode's cheap-skip logic depends on that consistency.
 3b. **Incremental Update Synthesis (update mode) - the reason this is cheaper than \`create\`:**
-   - For every route already in \`docs/site-map/site-map.json\`: re-fetch just enough of that route's page shell to recompute \`title\`/\`regions\`/\`components\`, then recompute \`contentHash\`.
+   - For every route already in \`docs/site-map/site-map.json\`: re-fetch just enough of that route's page shell to recompute \`title\`/\`regions\`/\`components\`, then recompute \`contentHash\`. This route's \`routeId\` MUST stay exactly as it already is - \`update\` never reassigns it; that stability across a URL restructure is the entire reason \`routeId\` exists separately from the path template.
      * Hash unchanged -> the route's real structure hasn't changed. Only bump \`lastCheckedAt\`; skip full component re-extraction and shared-widget re-mining for this route entirely.
      * Hash changed -> run the same full extraction \`create\` mode does for this one route (Steps 2-3a's per-route logic), and update \`lastCheckedAt\`/\`contentHash\`/\`discoveredAt\`-adjacent fields accordingly.
      * Route no longer resolves (404, vanished from nav) -> set \`status: "removed"\` rather than deleting the entry, so removal history is visible; do not include it in shared-widget mining.
-   - Any link discovered during this pass that isn't already a known route -> add as a new entry with \`status: "active"\`, same as a fresh \`create\` would.
+   - Any link discovered during this pass that isn't already a known route -> add as a new entry with \`status: "active"\` and a freshly generated \`routeId\` per Step 3a's rule, same as a fresh \`create\` would.
+   - Update the top-level \`coverage\` field the same way Step 3a does (set it if this pass hit a bound, omit it if this pass's crawl was exhaustive), rather than leaving a stale value from a prior run.
    - Set the file-level \`lastUpdatedAt\` to now. Leave \`generatedAt\` untouched - it's the original creation timestamp.
 4. **Shared Widget Mining (Deduplication Engine):**
    - Identify recurring component structures appearing across >= 2 \`active\` routes (exclude \`removed\` routes from this analysis).

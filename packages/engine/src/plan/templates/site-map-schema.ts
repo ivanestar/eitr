@@ -39,6 +39,23 @@ export function renderSiteMapSchema(): string {
       "type": "string",
       "format": "uri"
     },
+    "coverage": {
+      "type": "object",
+      "description": "Present only when the most recent crawl pass hit its own depth/page-count ceiling before exhausting every discoverable link - absence means the crawl completed on its own and the route list is not known to be truncated.",
+      "required": ["boundedBy", "pagesVisited"],
+      "additionalProperties": false,
+      "properties": {
+        "boundedBy": {
+          "type": "string",
+          "enum": ["maxDepth", "maxPages"],
+          "description": "Which traversal limit actually stopped this crawl pass."
+        },
+        "pagesVisited": {
+          "type": "integer",
+          "description": "Total pages actually fetched during this crawl pass."
+        }
+      }
+    },
     "routes": {
       "type": "object",
       "description": "Keyed by canonical path template with dynamic segments collapsed (e.g. \\"/users/{id}\\" covers both /users/42 and /users/43). Serialize keys in sorted order for a deterministic diff.",

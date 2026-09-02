@@ -261,6 +261,27 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // AC9: reuses the existing Level-2 fan-out - no bespoke dispatch mechanism for Step 6.
     expect(mapSkill?.source.text).toContain('orchestrate-swarm.mjs --phase=plan');
 
+    // Mode Resolution: create-on-existing-file and update-with-no-file are both explicit and
+    // transparent (Fail loud, never silently guess), not silent redirects.
+    expect(mapSkill?.source.text).toContain('## Mode Resolution');
+    expect(mapSkill?.source.text).toContain(
+      'No existing docs/site-map/site-map.json found - running a full create pass instead.',
+    );
+    expect(mapSkill?.source.text).toContain('routeId identity resets for every route');
+
+    // routeId generation/stability rule: generated once at first discovery, never derived from
+    // the path template, and update mode never reassigns it for an already-known route.
+    expect(mapSkill?.source.text).toContain(
+      'Never derive it from the path template (that would defeat its entire purpose',
+    );
+    expect(mapSkill?.source.text).toContain(
+      "This route's `routeId` MUST stay exactly as it already is",
+    );
+
+    // Crawl coverage/truncation signal: presence-vs-absence idiom, matching lastUpdatedAt's own.
+    expect(mapSkill?.source.text).toContain('"boundedBy": "maxDepth" | "maxPages"');
+    expect(mapSkill?.source.text).toContain('its absence means completeness');
+
     // AC11: PII/session-data guard on evidence excerpts is documented (length bound + redaction).
     expect(mapSkill?.source.text).toContain('<=100 char');
     expect(mapSkill?.source.text).toContain('[REDACTED]');
