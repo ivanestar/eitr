@@ -17,8 +17,20 @@ is for gaps significant enough to shape future architecture, not routine finding
   idle) beyond what auto-waiting covers is not yet built.
 - **Middleware/interceptors:** no generic hook point around CPOM Actions (auto-logging every
   `click()`, telemetry dispatch, visual-regression snapshot capture on action).
-- **Visual regression:** masking helpers exist (`shared/utils/visual.ts`) but there is no generated
-  `toHaveScreenshot()` example or CI wiring for baseline artifacts yet.
+- **Visual regression (`toHaveScreenshot()` baseline testing):** deliberately excluded, not planned
+  (maintainer decision, 2026-09-02). It was flagged as an architectural mismatch before this
+  decision: `shared/utils/visual.ts`, a screenshot-mask helper, was being generated unconditionally
+  into every TypeScript project (`assets.ts`) despite research classifying baseline visual regression
+  as Extended/opt-in - Playwright's own docs describe it as optional and warn about cross-platform
+  snapshot fragility - and despite zero generated example ever using it. Rather than promote it to a
+  documented opt-in pattern, the maintainer chose to remove it outright: the maintenance cost (flaky
+  cross-platform/cross-browser pixel diffs, binary baseline images that don't review cleanly in a
+  PR, recurring baseline-approval churn on every legitimate UI change) was judged not worth it for
+  this project's actual usage pattern. The dead helper and its unconditional wiring have been
+  removed. This does not affect the unrelated `trace-debugger` "Visual Diff & Screenshot Overlay"
+  capability (comparing pre/post-failure frames during self-healing triage), which stays. Re-open
+  only on a new, explicit maintainer decision to build this - not on a future audit finding the gap
+  again.
 - **Requirements → test-case generation:** an agent that derives test cases from live application
   analysis or existing requirements documentation, rather than from an already-written TMS ticket,
   is a considered future extension (see the README's Introduction) but not yet built.

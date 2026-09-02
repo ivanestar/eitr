@@ -25,6 +25,5 @@ export const BASE_ASSET_FILES: Record<string, string> = {
   'components/widgets/dialog.ts': 'components/widgets/dialog.ts',
   'components/widgets/table.ts': 'components/widgets/table.ts',
   'components/widgets/index.ts': 'components/widgets/index.ts',
-  'shared/utils/visual.ts': 'shared/utils/visual.ts',
   'shared/utils/network.ts': 'shared/utils/network.ts',
 };
