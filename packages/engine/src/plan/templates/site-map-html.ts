@@ -117,6 +117,18 @@ export function renderSiteMapHtml(baseUrl?: string): string {
       color: var(--accent);
       font-size: 1.1rem;
     }
+    button {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--accent);
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button:hover {
+      border-color: var(--accent);
+    }
   </style>
 </head>
 <body>
@@ -129,6 +141,8 @@ export function renderSiteMapHtml(baseUrl?: string): string {
   </header>
   <main>
     <p class="status" id="status">Loading site-map.json...</p>
+    <button id="chooseFileBtn" hidden onclick="document.getElementById('fileInput').click()">Choose site-map.json manually</button>
+    <input type="file" id="fileInput" accept="application/json,.json" hidden onchange="handleFilePicked(event)">
     <table id="routesTable" hidden>
       <thead>
         <tr>
@@ -157,9 +171,34 @@ export function renderSiteMapHtml(baseUrl?: string): string {
         const data = await response.json();
         renderSiteMap(data);
       } catch (err) {
-        statusEl.textContent = 'Could not load site-map.json (' + err.message + '). Run /map-site create to generate it.';
+        const isFileProtocol = window.location.protocol === 'file:';
+        statusEl.textContent = isFileProtocol
+          ? 'Browsers block a local file from fetching another local file directly (' + err.message + '). Click "Choose site-map.json manually" below, or serve this folder over HTTP instead (e.g. npx serve docs/site-map) and reopen the printed URL.'
+          : 'Could not load site-map.json (' + err.message + '). Run /map-site create to generate it.';
         statusEl.classList.add('error');
+        document.getElementById('chooseFileBtn').hidden = false;
       }
+    }
+
+    function handleFilePicked(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById('status');
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          statusEl.classList.remove('error');
+          document.getElementById('chooseFileBtn').hidden = true;
+          renderSiteMap(data);
+        } catch (err) {
+          statusEl.textContent = 'Selected file is not valid JSON (' + err.message + ').';
+        }
+      };
+      reader.onerror = () => {
+        statusEl.textContent = 'Could not read the selected file.';
+      };
+      reader.readAsText(file);
     }
 
     function renderSiteMap(data) {
