@@ -268,12 +268,12 @@ scaffolded by default. Export the new file from \`components/primitives/index.ts
 
 ## Live-DOM Liveness Verification & Mandatory Execution Loop
 - 1:1 Strict Parity: For EVERY Page Object created or updated in \`components/pages/<name>.page.ts\`, you MUST verify all of its locators directly against the live application before reporting it complete (0 unverified Page Objects). This verification is a live check, not a persistent generated test file.
-- Apply the 3-Tier Component Liveness Check:
-  * Tier 1 (Liveness): Uniqueness (\`count === 1\`), visibility, rendered dimensions, hit-test readiness.
+- Apply the 3-Tier Component Liveness Check. A raw DOM/accessibility-tree match (the element exists in the markup) is NEVER sufficient evidence by itself - it only proves the element is present, not that a real user can see or reach it. An element that is in the DOM but hidden (\`display: none\`, off-screen, zero-size, \`opacity: 0\`, or covered by another element) MUST NOT become a CPOM property or method - this is exactly how a hidden nav search input once became a phantom \`searchInput\`/\`search()\` that a generated test then exercised against something no user could ever click:
+  * Tier 1 (Actionable Visibility, per element, not per page): (a) Uniqueness (\`await locator.count() === 1\`); (b) \`await expect(locator).toBeVisible()\` (non-empty bounding box, not \`visibility:hidden\`/\`display:none\` - this check alone does NOT catch \`opacity: 0\`); (c) an explicit opacity check, since Playwright's own visibility check doesn't cover it: \`await locator.evaluate(el => getComputedStyle(el).opacity !== '0')\`; (d) \`await locator.click({ trial: true })\` (or \`.fill({ trial: true })\` for text inputs) - this runs Playwright's full actionability pipeline (stable, receives pointer events i.e. not obscured by another element, enabled) WITHOUT performing the action, so it is safe to run against every candidate element including destructive ones. An element failing (a)-(d) is a phantom: do not scaffold a property or method for it, and if one was already scaffolded for it in an earlier pass, remove it.
   * Tier 2 (State Read): Safe point-in-time reads (\`valueNow()\`, \`optionsNow()\`, \`rowCountNow()\`).
   * Tier 3 (Interaction): Non-destructive UI triggers (tabs, accordions) without triggering mutating actions (submit, delete, pay).
 - MANDATORY AUTONOMOUS VERIFICATION:
-  * You MUST NEVER end your turn without verifying the generated Page Object against the live DOM (via the embedded Playwright MCP tools or an equivalent live check).
+  * You MUST NEVER end your turn without running the Tier 1 actionable-visibility check on every single locator you scaffold, individually - not just confirming the page loads or that a container element is visible (via the embedded Playwright MCP tools or an equivalent live check).
 - AUTONOMOUS DEBUGGING & TWO-STRIKE SELF-HEALING:
   * If verification fails due to locator mismatch, timing, or strict mode violations:
     1. Inspect the terminal error output and DOM trace.
