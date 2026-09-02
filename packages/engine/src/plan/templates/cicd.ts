@@ -47,9 +47,15 @@ jobs:
 `;
   }
 
-  // No CI sharding for C#: no free, official automatic-balanced-split mechanism exists for
-  // NUnit/dotnet test either - only [Category("...")] + `dotnet test --filter TestCategory=...`
-  // (manual tagging, no auto-balancing), same shape and same gap as Java above. See TODO.md.
+  // Deterministic FNV-1a hash-based 4-way class sharding (Track 8 of the SDD remediation spec).
+  // Partitions by deterministic hash of test-class name, i.e. balances shard count, not measured
+  // execution time - a shard can still run slower than its siblings if it happens to collect the
+  // sluggish tests, the same class of limitation pytest-split/Playwright's own --shard accept by
+  // default. Test classes are discovered by file-name convention (Tests/**/*Tests.cs), not by
+  // parsing `dotnet test --list-tests` output - that command's free-text format is not a
+  // documented, stable, locale-independent contract. FNV-1a (non-cryptographic) is used instead of
+  // MD5/SHA so this keeps working under FIPS-enforced mode, where .NET's
+  // System.Security.Cryptography blocks non-FIPS-approved algorithms.
   if (language === 'csharp') {
     return `name: E2E Tests (.NET + Playwright)
 on:
@@ -76,6 +82,10 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-dotnet@v6
@@ -87,24 +97,62 @@ jobs:
       run: dotnet list package --vulnerable --include-transitive
     - name: Install Playwright Browsers
       run: pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps
-    - name: Run tests
-      run: dotnet test --logger "junit;LogFilePath=test-results/junit-results.xml"
+    - name: Run NUnit Shard \${{ matrix.shard }}/4
+      shell: pwsh
+      run: |
+        # Mask literal is decimal (4294967295), not 0xFFFFFFFF: PowerShell parses an 8-digit hex
+        # literal as a 32-bit-signed pattern first (all-Fs -> Int32 -1), so "-band 0xFFFFFFFF" is
+        # a silent no-op AND-with-minus-one that never actually truncates to 32 bits, letting $h
+        # grow unbounded across iterations until it overflows into a double and the next
+        # arithmetic op throws. Decimal 4294967295 parses directly as a positive Int64 and masks
+        # correctly - verified by hand-running this exact block before landing it here.
+        function Get-Fnv1a32([string]$str) {
+          $bytes = [System.Text.Encoding]::UTF8.GetBytes($str)
+          [uint64]$h = 2166136261
+          foreach ($b in $bytes) {
+            $h = (($h -bxor $b) * 16777619) -band 4294967295
+          }
+          return [uint32]$h
+        }
+        # Deterministic, locale-independent discovery by file convention (mirrors the Java step
+        # below) instead of parsing \`dotnet test --list-tests\` free-text output. Lowercase
+        # "tests" matches this project's generated test directory (a capitalized "Tests/" does
+        # not exist); both "*Test.cs" and "*Tests.cs" are matched since the generated seed file
+        # uses the singular suffix but the plural is also a common convention - verified against
+        # a real generated project before landing this, not assumed from naming convention alone.
+        $testClasses = @(
+          Get-ChildItem -Path "tests" -Filter "*Test.cs" -Recurse -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "tests" -Filter "*Tests.cs" -Recurse -ErrorAction SilentlyContinue
+        ) | ForEach-Object { $_.BaseName } | Select-Object -Unique
+        if ($testClasses.Count -eq 0) {
+          Write-Host "::warning::No test classes discovered under tests/ at all - every shard will run zero tests. If this is unexpected, check the discovery path/filter above."
+        }
+        $shardClasses = $testClasses | Where-Object {
+          ((Get-Fnv1a32 $_) % 4) -eq \${{ matrix.shard }}
+        }
+        if ($shardClasses) {
+          # Passed directly, not via an "@rsp" response file: verified by hand against a real
+          # generated project that dotnet test's own response-file argument parsing does not
+          # correctly split "--filter <value>" back into two tokens (surfaces as a confusing
+          # MSBuild "unknown switch" error) - the filter works correctly as a normal argument.
+          $filter = ($shardClasses | ForEach-Object { "FullyQualifiedName~$_" }) -join ' | '
+          dotnet test --no-build --filter "$filter" --logger "junit;LogFilePath=test-results/junit-results-\${{ matrix.shard }}.xml"
+        } else {
+          Write-Host "No test classes assigned to shard \${{ matrix.shard }}."
+        }
     - uses: actions/upload-artifact@v7
       if: always()
       with:
-        name: test-results
+        name: test-results-\${{ matrix.shard }}
         path: test-results/
         retention-days: 30
 `;
   }
 
-  // No CI sharding for Java: unlike TS/JS (native --shard) and Python (pytest-split), neither
-  // Maven Surefire nor Gradle ships a free, official automatic-balanced-split mechanism -
-  // JUnit 5 only supports tag/group *filtering* (maven-surefire-plugin's <groups>/<excludedGroups>
-  // or Gradle's useJUnitPlatform { includeTags(...) }), which requires hand-tagging every test and
-  // never auto-balances. The one automatic option, Gradle Develocity Test Distribution, is a paid
-  // product - inappropriate to wire into a free/OSS scaffolder. Deliberately not implemented; see
-  // TODO.md for the researched rationale.
+  // Deterministic FNV-1a hash-based 4-way class sharding (Track 8 of the SDD remediation spec) -
+  // same rationale and scope boundary as the C# branch above. Test classes discovered by
+  // file-name convention (src/test/java/**/*Test.java), never by parsing a build-tool's free-text
+  // test-listing output.
   if (language === 'java') {
     if (automationTool?.includes('gradle')) {
       return `name: E2E Tests (Java + Playwright + Gradle)
@@ -122,6 +170,10 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-java@v6
@@ -133,12 +185,49 @@ jobs:
       run: gradle playwrightInstall
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
       run: java scripts/LintCpom.java
-    - name: Run tests
-      run: gradle test
+    - name: Run Java Shard \${{ matrix.shard }}/4 (Gradle)
+      shell: pwsh
+      run: |
+        # Mask literal is decimal (4294967295), not 0xFFFFFFFF: PowerShell parses an 8-digit hex
+        # literal as a 32-bit-signed pattern first (all-Fs -> Int32 -1), so "-band 0xFFFFFFFF" is
+        # a silent no-op AND-with-minus-one that never actually truncates to 32 bits, letting $h
+        # grow unbounded across iterations until it overflows into a double and the next
+        # arithmetic op throws. Decimal 4294967295 parses directly as a positive Int64 and masks
+        # correctly - verified by hand-running this exact block before landing it here.
+        function Get-Fnv1a32([string]$str) {
+          $bytes = [System.Text.Encoding]::UTF8.GetBytes($str)
+          [uint64]$h = 2166136261
+          foreach ($b in $bytes) {
+            $h = (($h -bxor $b) * 16777619) -band 4294967295
+          }
+          return [uint32]$h
+        }
+        # Both "*Test.java" (matches this project's generated seed file, SmokeTest.java) and
+        # "*Tests.java" are matched, mirroring Maven Surefire's own default multi-pattern
+        # inclusion (which accepts both suffixes) - verified against a real generated project
+        # before landing this, not assumed from naming convention alone.
+        $allTests = @(
+          Get-ChildItem -Path "src/test/java" -Filter "*Test.java" -Recurse -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "src/test/java" -Filter "*Tests.java" -Recurse -ErrorAction SilentlyContinue
+        ) | ForEach-Object { $_.BaseName } | Select-Object -Unique
+        if ($allTests.Count -eq 0) {
+          Write-Host "::warning::No test classes discovered under src/test/java/ at all - every shard will run zero tests. If this is unexpected, check the discovery path/filter above."
+        }
+        $shardTests = $allTests | Where-Object {
+          ((Get-Fnv1a32 $_) % 4) -eq \${{ matrix.shard }}
+        }
+        if ($shardTests) {
+          # Splat, not a joined string: gradle needs each "--tests" flag as its own argv entry -
+          # a single space-joined string would arrive as one malformed argument in PowerShell.
+          $gradleArgs = @('test') + ($shardTests | ForEach-Object { '--tests', "*.$_" })
+          & gradle @gradleArgs
+        } else {
+          Write-Host "No test classes assigned to shard \${{ matrix.shard }}."
+        }
     - uses: actions/upload-artifact@v7
       if: always()
       with:
-        name: test-results
+        name: test-results-\${{ matrix.shard }}
         path: build/reports/tests/
         retention-days: 30
 `;
@@ -158,6 +247,10 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-java@v6
@@ -169,12 +262,53 @@ jobs:
       run: mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
     - name: Audit CPOM Contract & Anti-Fake-Green Rules
       run: java scripts/LintCpom.java
-    - name: Run tests
-      run: mvn test
+    - name: Run Java Shard \${{ matrix.shard }}/4 (Maven)
+      shell: pwsh
+      run: |
+        # Mask literal is decimal (4294967295), not 0xFFFFFFFF: PowerShell parses an 8-digit hex
+        # literal as a 32-bit-signed pattern first (all-Fs -> Int32 -1), so "-band 0xFFFFFFFF" is
+        # a silent no-op AND-with-minus-one that never actually truncates to 32 bits, letting $h
+        # grow unbounded across iterations until it overflows into a double and the next
+        # arithmetic op throws. Decimal 4294967295 parses directly as a positive Int64 and masks
+        # correctly - verified by hand-running this exact block before landing it here.
+        function Get-Fnv1a32([string]$str) {
+          $bytes = [System.Text.Encoding]::UTF8.GetBytes($str)
+          [uint64]$h = 2166136261
+          foreach ($b in $bytes) {
+            $h = (($h -bxor $b) * 16777619) -band 4294967295
+          }
+          return [uint32]$h
+        }
+        # Both "*Test.java" (matches this project's generated seed file, SmokeTest.java) and
+        # "*Tests.java" are matched, mirroring Maven Surefire's own default multi-pattern
+        # inclusion (which accepts both suffixes) - verified against a real generated project
+        # before landing this, not assumed from naming convention alone.
+        $allTests = @(
+          Get-ChildItem -Path "src/test/java" -Filter "*Test.java" -Recurse -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "src/test/java" -Filter "*Tests.java" -Recurse -ErrorAction SilentlyContinue
+        ) | ForEach-Object { $_.BaseName } | Select-Object -Unique
+        if ($allTests.Count -eq 0) {
+          Write-Host "::warning::No test classes discovered under src/test/java/ at all - every shard will run zero tests. If this is unexpected, check the discovery path/filter above."
+        }
+        $shardTests = $allTests | Where-Object {
+          ((Get-Fnv1a32 $_) % 4) -eq \${{ matrix.shard }}
+        }
+        if ($shardTests) {
+          $testPattern = ($shardTests -join ',')
+          # Both -D arguments are quoted defensively: an unquoted "-Dproperty=value" argument was
+          # reproduced by hand corrupting into an invalid Maven lifecycle-phase token against
+          # mvn.cmd (Windows). This job runs on ubuntu-latest, where Maven's launcher is a plain
+          # POSIX shell script rather than a batch-file wrapper, so the specific corruption may be
+          # Windows-only - quoting is kept on every platform anyway since it is harmless and
+          # removes any doubt.
+          mvn test "-Dtest=$testPattern" "-Dsurefire.failIfNoSpecifiedTests=false"
+        } else {
+          Write-Host "No test classes assigned to shard \${{ matrix.shard }}."
+        }
     - uses: actions/upload-artifact@v7
       if: always()
       with:
-        name: test-results
+        name: test-results-\${{ matrix.shard }}
         path: target/surefire-reports/
         retention-days: 30
 `;
@@ -537,7 +671,8 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
 `;
   }
 
-  // No CI sharding for C# — see the same-worded comment in renderGithubActions above.
+  // Unlike GitHub Actions above (Track 8), sharding is deliberately not implemented here for
+  // Jenkins - Track 8's own acceptance criterion is GitHub-Actions-only.
   if (language === 'csharp') {
     return `pipeline {
     agent {
@@ -586,7 +721,8 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
 `;
   }
 
-  // No CI sharding for Java — see the same-worded comment in renderGithubActions above.
+  // Unlike GitHub Actions above (Track 8), sharding is deliberately not implemented here for
+  // Jenkins - Track 8's own acceptance criterion is GitHub-Actions-only.
   if (language === 'java') {
     const isGradle = automationTool?.includes('gradle');
     const installCmd = isGradle
