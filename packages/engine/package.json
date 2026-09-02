@@ -1,6 +1,6 @@
 {
   "name": "@eitr/engine",
-  "version": "0.17.0",
+  "version": "0.20.0",
   "description": "Core scaffolding engine for EITR",
   "license": "Apache-2.0",
   "private": true,
@@ -20,6 +20,7 @@
     "@types/node": "^20.14.0",
     "prettier": "^3.3.0",
     "typescript": "^5.5.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "yaml": "^2.5.0"
   }
 }

@@ -1,4 +1,5 @@
 import type { FileDescriptor } from '../../types/generation-plan.js';
+import { yamlSafeScalar } from './yaml-frontmatter.js';
 
 interface SkillDefinition {
   name: string;
@@ -28,11 +29,25 @@ function argumentFrontmatter(skill: SkillDefinition): string {
     // Always YAML-double-quoted: the hint's own documented example values ('[issue-number]',
     // '[create|update]') start with '[', which an unquoted YAML scalar parses as a flow sequence
     // (an array) instead of a string - exactly the "must be a string" validation error this
-    // guards against. Escape backslashes first, then quotes, so any future hint value stays safe.
-    const escaped = skill.argumentHint.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    lines.push(`argument-hint: "${escaped}"`);
+    // guards against.
+    lines.push(`argument-hint: ${yamlSafeScalar(skill.argumentHint)}`);
   }
   return lines.length > 0 ? '\n' + lines.join('\n') : '';
+}
+
+// Antigravity has no slash-command argument-substitution mechanism at all - live-verified
+// 2026-09-03 via the installed Antigravity CLI's own bundled documentation: skills are
+// autonomously activated by the agent from their `description`, or explicitly requested by name
+// in chat, never invoked as `/name arg`. A skill whose shared `content` body talks about "the
+// argument this skill was invoked with" (map-site's create/update mode selection) is therefore
+// describing a mechanism that does not exist on this assistant - mirrors the same real gap
+// Windsurf's map-site split already works around with its own inline caveat, generalized here for
+// any current or future skill that declares `arguments` rather than special-cased per skill name.
+function antigravityInvocationNote(skill: SkillDefinition): string {
+  if (!skill.arguments) return '';
+  return `> **Antigravity note:** this assistant has no slash-command argument mechanism - skills are activated autonomously from their description, or by explicitly asking for them in chat. Wherever the text below refers to "the argument this skill was invoked with," state the mode directly instead (e.g. "run ${skill.name} in create mode").
+
+`;
 }
 
 function buildOperationalSkills(tool: string, language: string): SkillDefinition[] {
@@ -403,17 +418,24 @@ export function planAiOperationalSkills(
     if (assistant === 'antigravity') {
       for (const skill of skills) {
         descriptors.push({
-          path: `.agents/skills/${skill.name}.md`,
+          // Folder-per-skill with a SKILL.md file, not a flat <name>.md file - live-verified
+          // 2026-09-03 against the exact installed Antigravity CLI's own bundled documentation
+          // (`agy --print`, its built-in `agy-customizations` skill): "A skill cannot be a single
+          // standalone file placed directly in .agents/skills/. It must be placed inside its own
+          // subfolder and named SKILL.md." A flat file is silently never discovered at all - not
+          // a parsing error, just invisible - which is a stricter failure than the YAML-escaping
+          // bug already fixed for this same block (that fix was necessary but not sufficient).
+          path: `.agents/skills/${skill.name}/SKILL.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
-${skill.content}`,
+${antigravityInvocationNote(skill)}${skill.content}`,
           },
         });
       }
@@ -427,7 +449,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
+description: ${yamlSafeScalar(skill.description)}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
 ---
 
 ${skill.content}`,
@@ -444,7 +466,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}${argumentFrontmatter(skill)}
+description: ${yamlSafeScalar(skill.description)}${argumentFrontmatter(skill)}
 disable-model-invocation: true
 ---
 
@@ -466,7 +488,7 @@ ${skill.content}`,
               kind: 'inline',
               text: `---
 name: map-site
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 # Workflow: map-site (create mode)
@@ -484,7 +506,7 @@ ${skill.content}`,
               kind: 'inline',
               text: `---
 name: map-site-update
-description: Incremental update of an existing docs/site-map/site-map.json using content-hash comparison - cheaper than a full re-crawl.
+description: ${yamlSafeScalar('Incremental update of an existing docs/site-map/site-map.json using content-hash comparison - cheaper than a full re-crawl.')}
 ---
 
 # Workflow: map-site-update (update mode)
@@ -504,7 +526,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 # Workflow: ${skill.name}
@@ -523,7 +545,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
+description: ${yamlSafeScalar(skill.description)}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
 ---
 
 ${skill.content}`,
@@ -539,7 +561,7 @@ ${skill.content}`,
           source: {
             kind: 'inline',
             text: `---
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 ${skill.content}`,
@@ -553,7 +575,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 ${skill.content}`,

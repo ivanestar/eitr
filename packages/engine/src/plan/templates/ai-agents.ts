@@ -1,4 +1,5 @@
 import type { FileDescriptor } from '../../types/generation-plan.js';
+import { yamlSafeScalar } from './yaml-frontmatter.js';
 
 interface AgentDefinition {
   name: string;
@@ -450,7 +451,7 @@ export function planAiAgents(
             kind: 'inline',
             text: `---
 name: ${agent.name}
-description: ${agent.description}
+description: ${yamlSafeScalar(agent.description)}
 role: ${agent.role}
 subagent: true
 ---
@@ -469,7 +470,7 @@ ${agent.systemPrompt}`,
             kind: 'inline',
             text: `---
 name: ${agent.name}
-description: ${agent.description}
+description: ${yamlSafeScalar(agent.description)}
 tools:
 ${agent.tools.map((t) => `  - ${t}`).join('\n')}
 ---
@@ -490,7 +491,7 @@ ${agent.systemPrompt}`,
             kind: 'inline',
             text: `---
 name: ${agent.name}
-description: ${agent.description}
+description: ${yamlSafeScalar(agent.description)}
 ---
 
 # ${agent.role}
@@ -509,7 +510,7 @@ ${agent.systemPrompt}`,
             kind: 'inline',
             text: `---
 trigger: model_decision
-description: ${agent.description}
+description: ${yamlSafeScalar(agent.description)}
 ---
 
 # ${agent.role} (${agent.name})
@@ -555,7 +556,7 @@ ${agent.systemPrompt}
             kind: 'inline',
             text: `---
 name: ${agent.name}
-description: ${agent.description}
+description: ${yamlSafeScalar(agent.description)}
 role: ${agent.role}
 ---
 

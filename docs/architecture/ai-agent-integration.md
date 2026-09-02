@@ -53,8 +53,9 @@ than one shared format every assistant has to interpret:
 - **Windsurf:** `.windsurf/rules/*.md`
 - **Claude Code:** `CLAUDE.md` and `.claude/skills/*/SKILL.md`
 - **GitHub Copilot:** `.github/copilot-instructions.md`
-- **Antigravity:** `.agents/agents/*/agent.md` and `.agents/skills/*.md` (flat file per skill, not a
-  `SKILL.md`-per-folder layout) and `AGENTS.md`
+- **Antigravity:** `.agents/agents/*/agent.md` and `.agents/skills/*/SKILL.md` (folder per skill,
+  live-verified 2026-09-03 against the installed Antigravity CLI's own bundled documentation - a
+  flat `.agents/skills/<name>.md` file is silently never discovered at all) and `AGENTS.md`
 - **OpenAI Codex:** `.codex/skills/*/SKILL.md`
 - **Aider:** `.aider.conf.yml`, `CONVENTIONS.md`, and `AGENTS.md`
 
