@@ -8,6 +8,35 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.13.0] - 2026-09-02
+
+### Removed
+
+- **Visual regression scaffolding removed entirely (screenshot-mask helper + its unconditional
+  generation), maintainer decision.** `shared/utils/visual.ts` (a Playwright screenshot-mask helper
+  for dynamic UI elements) was being generated unconditionally into every TypeScript project via
+  `BASE_ASSET_FILES` in `packages/engine/src/plan/assets.ts`, despite zero generated example ever
+  using it - an architectural mismatch already flagged internally: research classifies baseline
+  visual regression (`toHaveScreenshot()`) as an Extended/opt-in capability (Playwright's own docs
+  warn about cross-platform snapshot fragility), and `docs/architecture/README.md`'s Non-Goals
+  section already listed visual regression as out of scope for the generation step. Rather than
+  build the feature out to Core (real example tests + CI baseline-artifact wiring) or downgrade it
+  to a documented opt-in pattern, the maintainer chose full removal: the maintenance cost
+  (cross-platform/cross-browser pixel-diff flakiness, unreviewable binary baseline images in PRs,
+  recurring baseline-approval churn on every legitimate UI change) was judged not worth it for how
+  EITR is actually used. `docs/architecture/known-gaps.md` reworded accordingly (from "not yet
+  built" to "deliberately excluded, not planned"). Does not affect the unrelated `trace-debugger`
+  "Visual Diff & Screenshot Overlay" self-healing capability (comparing pre/post-failure frames
+  during test triage), which is untouched.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/apply.test.ts packages/engine/test/apply.idempotency.test.ts
+packages/engine/test/e2e-scaffold.test.ts packages/engine/test/plan.matrix.test.ts
+packages/engine/test/contract.test.ts` (119 passed), `npm run eval` (183 passed, including
+`visual-diff-healing.test.ts`, confirming the unrelated trace-debugger capability is unaffected).
+Grep-confirmed zero remaining references to `shared/utils/visual`/`createVisualMaskOptions` outside
+this historical CHANGELOG entry and the explanatory note in `known-gaps.md`.
+
 ## [0.12.2] - 2026-09-02
 
 ### Fixed
