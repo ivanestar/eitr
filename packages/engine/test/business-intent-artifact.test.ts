@@ -236,6 +236,24 @@ describe('scripts/validate-business-intent.mjs (real execution)', () => {
     }
   });
 
+  // skill-reviewer pass (2026-09-02): the skill prose bounds businessFeature to <=40 characters -
+  // the validator must enforce that bound mechanically, matching how excerpt's own bound is
+  // enforced, rather than leaving it as a prose-only convention.
+  it('fails a businessFeature value exceeding 40 characters', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedReport());
+      bad.routes['route-checkout'].businessFeature.value = 'x'.repeat(41);
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.some((e: string) => e.includes('<=40 characters'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // Review-phase regression: isField()'s evidence check previously only inspected excerpt.length
   // once excerpt already happened to be a string, never validating that an evidence entry has a
   // known signal or an excerpt at all - a malformed entry like `{}` silently passed the gate.

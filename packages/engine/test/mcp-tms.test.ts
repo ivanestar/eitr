@@ -235,6 +235,21 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
     expect(mapSkill?.source.text).not.toContain('APP_GRAPH.md');
 
+    // skill-reviewer pass (2026-09-02): description discloses the two optional steps, crawl
+    // bounds are concrete numbers (not just "maximum depth and page count"), the PII-masking rule
+    // is mechanically defined, and the businessFeature label has a checkable bound.
+    expect(mapSkill?.source.text).toContain(
+      'Also supports two further optional, explicit-request-only steps',
+    );
+    expect(mapSkill?.source.text).toContain('maximum crawl depth of 6 hops');
+    expect(mapSkill?.source.text).toContain('maximum of 500 pages visited');
+    expect(mapSkill?.source.text).toContain(
+      'a run of 6 or more consecutive digits, or an alphanumeric token of 8+ characters',
+    );
+    expect(mapSkill?.source.text).toContain('a label, <=40 characters');
+    expect(mapSkill?.source.text).toContain('Bad: `routeId: "users-id"`');
+    expect(mapSkill?.source.text).toContain('Good: `routeId:');
+
     // Step 6 (ADR 0012 Stage 1, business-intent analysis) - AC5: the four banned mutating methods
     // are named exactly once, inside their own prohibition sentence, and nowhere else in the
     // skill's content as a real invocation. A raw whole-block substring-absence check would fail
@@ -271,9 +286,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     // routeId generation/stability rule: generated once at first discovery, never derived from
     // the path template, and update mode never reassigns it for an already-known route.
-    expect(mapSkill?.source.text).toContain(
-      'Never derive it from the path template (that would defeat its entire purpose',
-    );
+    expect(mapSkill?.source.text).toContain('Never derive it from the path template');
     expect(mapSkill?.source.text).toContain(
       "This route's `routeId` MUST stay exactly as it already is",
     );
