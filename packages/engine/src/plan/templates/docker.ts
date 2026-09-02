@@ -6,7 +6,7 @@ export function renderDockerfile(tool?: string, language?: string): string {
 
   if (lang === 'python') {
     return `# Hermetic container configuration for Python Playwright test automation.
-FROM mcr.microsoft.com/playwright/python:v1.51.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.62.0-jammy
 
 # Non-root user, matching Microsoft's own documented convention for Playwright Docker images
 # (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser
@@ -35,7 +35,7 @@ CMD ["pytest"]
 
   if (lang === 'csharp') {
     return `# Hermetic container configuration for C# .NET Playwright test automation.
-FROM mcr.microsoft.com/playwright/dotnet:v1.51.0-jammy
+FROM mcr.microsoft.com/playwright/dotnet:v1.62.0-jammy
 
 # Non-root user, matching Microsoft's own documented convention for Playwright Docker images
 # (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser
@@ -64,7 +64,7 @@ CMD ["dotnet", "test", "--no-build", "-c", "Release"]
 
   if (lang === 'java') {
     return `# Hermetic container configuration for Java Playwright test automation.
-FROM mcr.microsoft.com/playwright/java:v1.51.0-jammy
+FROM mcr.microsoft.com/playwright/java:v1.52.0-jammy
 
 # Non-root user, matching Microsoft's own documented convention for Playwright Docker images
 # (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser

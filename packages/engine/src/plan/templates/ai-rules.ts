@@ -502,6 +502,79 @@ export function renderConventionsMd(
     exCss = `this.child(Component, { kind: 'css', css: 'form.login-form input[type="email"]' })`;
   }
 
+  // ── Section 6-8 language-native API snippets ─────────────────────────────
+  // Section 7: Collection / list API per language
+  let listSyntax: string;
+  if (language === 'python') {
+    listSyntax = '`self._list(ItemComponent, spec)` (returning a list of `ItemComponent`)';
+  } else if (language === 'java') {
+    listSyntax =
+      '`new Collection<>(getLocator().locator(itemSelector))` (returning `Collection<ItemComponent>`)';
+  } else if (language === 'csharp') {
+    listSyntax =
+      '`new Collection<ItemComponent>(Locator.Locator(itemSelector))` (returning `Collection<ItemComponent>`)';
+  } else {
+    listSyntax = '`this.list(ItemComponent, spec)` (returning `Collection<ItemComponent>`)';
+  }
+
+  // Section 6: liveness check examples
+  let s6Liveness: string;
+  if (language === 'python') {
+    s6Liveness =
+      '(b) `expect(locator).to_be_visible()`; (c) explicit opacity check via `page.evaluate("el => getComputedStyle(el).opacity", el) != \'0\'`; (d) `locator.click(trial=True)`';
+  } else if (language === 'java') {
+    s6Liveness =
+      '(b) `assertThat(locator).isVisible()`; (c) explicit opacity check via `(String) page.evaluate("el => getComputedStyle(el).opacity", locator.elementHandle())`; (d) `locator.click(new Locator.ClickOptions().setTrial(true))`';
+  } else if (language === 'csharp') {
+    s6Liveness =
+      '(b) `await Expect(locator).ToBeVisibleAsync()`; (c) explicit opacity check via `await Page.EvaluateAsync<string>("el => getComputedStyle(el).opacity", handle)`; (d) `await locator.ClickAsync(new() { Trial = true })`';
+  } else {
+    s6Liveness =
+      "(b) `await expect(locator).toBeVisible()` (note this does NOT catch `opacity: 0`); (c) an explicit opacity check (`getComputedStyle(el).opacity !== '0'`); (d) `await locator.click({ trial: true })` (or `.fill({ trial: true })`)";
+  }
+
+  // Section 8: web-first assertion syntax
+  let s8Assertion: string;
+  if (language === 'python') {
+    s8Assertion = '`expect(component.locator).to_be_visible()`';
+  } else if (language === 'java') {
+    s8Assertion = '`assertThat(component.getLocator()).isVisible()`';
+  } else if (language === 'csharp') {
+    s8Assertion = '`await Expect(component.Locator).ToBeVisibleAsync()`';
+  } else {
+    s8Assertion = '`await expect(component.locator).toBeVisible()`';
+  }
+
+  // Section 8: async event synchronization
+  let s8AsyncSync: string;
+  if (language === 'python') {
+    s8AsyncSync =
+      '- When waiting for asynchronous events (dialogs, popups), always synchronize via `with page.expect_event("dialog") as dialog_info: trigger_action(); dialog = dialog_info.value`.';
+  } else if (language === 'java') {
+    s8AsyncSync =
+      "- When waiting for asynchronous events (dialogs, popups), always synchronize via `page.onDialog(dialog -> { /* handle */ }); triggerAction();` using Playwright Java's event handler pattern.";
+  } else if (language === 'csharp') {
+    s8AsyncSync =
+      '- When waiting for asynchronous events (dialogs, popups), always synchronize via `var dialogTask = Page.WaitForEventAsync(PageEvent.Dialog); await triggerActionAsync(); var dialog = await dialogTask;`.';
+  } else {
+    s8AsyncSync =
+      "- When waiting for asynchronous events (dialogs, popups), always synchronize via `Promise.all([page.waitForEvent('dialog'), triggerAction()])`.";
+  }
+
+  // Section 8: route mock API names
+  let s8RouteMocks: string;
+  if (language === 'python') {
+    s8RouteMocks = '`page.route()`/`context.route()`/`browser_context.route()`';
+  } else if (language === 'java') {
+    s8RouteMocks = '`page.route()`/`context.route()`/`browserContext.route()`';
+  } else if (language === 'csharp') {
+    s8RouteMocks =
+      '`await Page.RouteAsync()`/`await Context.RouteAsync()`/`await BrowserContext.RouteAsync()`';
+  } else {
+    s8RouteMocks =
+      '`page.route()`/`context.route()`/`browserContext.route()`/`routeFromHAR()`, or `cy.intercept()`';
+  }
+
   return `# Project Coding Conventions
 
 ## Directory Architecture
@@ -542,7 +615,7 @@ ${componentSyntax}
 ### 6. Execution-First SDET Protocol & Mandatory Live-DOM Liveness Parity
 - Every Page Object in \`components/pages/<name>.page.${ext}\` MUST be verified directly against the live DOM before being treated as complete (1:1 strict parity between Page Objects and verified pages).
 - Autonomous Execution: Whenever creating or modifying Page Objects, you MUST immediately verify them against the live application (via the embedded Playwright MCP tools or the direct test runner).
-- Actionable Visibility, Not Mere DOM Presence: an element existing in the DOM/accessibility tree is NEVER sufficient evidence to scaffold a property or method for it - a hidden nav search input becoming a phantom \`searchInput\`/\`search()\` is exactly this failure mode. Before scaffolding a locator, confirm per element: (a) it resolves uniquely; (b) \`await expect(locator).toBeVisible()\` (note this does NOT catch \`opacity: 0\`); (c) an explicit opacity check (\`getComputedStyle(el).opacity !== '0'\`); (d) \`await locator.click({ trial: true })\` (or \`.fill({ trial: true })\`) to run Playwright's full actionability pipeline (stable, not obscured by another element, enabled) without performing the action. Remove any already-scaffolded property that fails this check.
+- Actionable Visibility, Not Mere DOM Presence: an element existing in the DOM/accessibility tree is NEVER sufficient evidence to scaffold a property or method for it - a hidden nav search input becoming a phantom \`searchInput\`/\`search()\` is exactly this failure mode. Before scaffolding a locator, confirm per element: (a) it resolves uniquely; ${s6Liveness} to run Playwright's full actionability pipeline (stable, not obscured by another element, enabled) without performing the action. Remove any already-scaffolded property that fails this check.
 - Self-Healing vs Real Bugs:
   * If verification fails due to selector drift / timing, adjust locators and re-verify under the Two-Strike Rule.
   * If a genuine application defect is found (backend 500, broken UI), document the real bug clearly without masking.
@@ -552,15 +625,15 @@ ${componentSyntax}
 ### 7. Bounded DOM Exploration & Anti-Infinite-Scroll Protocol
 - When inspecting pages with infinite scroll, virtual lists, or dynamic feeds (e.g. social feeds, catalog grids, event streams), NEVER attempt to scroll to the end of the page.
 - Perform a MAXIMUM of 2 viewport scrolls to identify the repeating item structure.
-- Immediately synthesize a CPOM Collection property via \`this.list(ItemComponent, spec)\` (returning \`Collection<ItemComponent>\`) and terminate page exploration.
+- Immediately synthesize a CPOM Collection property via ${listSyntax} and terminate page exploration.
 - All DOM exploration and scrolling loops MUST have a hard iteration ceiling (maximum 3 iterations); unbounded \`while(true)\` exploration is strictly prohibited.
 
 ### 8. Web-First Assertions & Prohibition of *Now() in Expectations
-- You MUST use Web-First auto-retrying assertions: \`await expect(component.locator).toBeVisible()\`.
-- Point-in-time snapshot reader methods with \`Now()\` suffix (e.g. \`isVisibleNow()\`, \`valueNow()\`) MUST NOT be used inside \`expect()\` assertions.
-- When waiting for asynchronous events (dialogs, popups), always synchronize via \`Promise.all([page.waitForEvent('dialog'), triggerAction()])\`.
+- You MUST use Web-First auto-retrying assertions: ${s8Assertion}.
+- Point-in-time snapshot reader methods with \`Now()\` suffix (e.g. \`isVisibleNow()\`, \`valueNow()\`) MUST NOT be used inside assertions.
+${s8AsyncSync}
 - Use \`apiClient\` zero-dependency TDM generators: \`createUniqueId()\`, \`createTestEmail()\`, \`createTestPhone()\`, \`createTestPassword()\`, \`createTestUuid()\`, \`createTestName()\`, \`createTestAmount()\`, \`createTestDate()\`.
-- NEVER register a network route mock/interception (\`page.route()\`/\`context.route()\`/\`browserContext.route()\`/\`routeFromHAR()\`, or \`cy.intercept()\`) to force a failing test to pass — fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
+- NEVER register a network route mock/interception (${s8RouteMocks}) to force a failing test to pass — fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
 
 ### 9. Protocol 123 SDET Engineering Standard
 - Whenever tasked with automating tickets, establishing baselines, or refactoring code by Protocol 123:

@@ -85,7 +85,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       path: '.githooks/pre-commit',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
-      source: { kind: 'inline', text: renderGitHooks() },
+      source: { kind: 'inline', text: renderGitHooks(opts.language, opts.automationTool) },
     },
     // Only meaningful when an AI assistant is actually configured to invoke it - mirrors the same
     // gating planAiAgents()/planAiOperationalSkills() already apply to their own output.
@@ -240,7 +240,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       path: '.vscode/extensions.json',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
-      source: { kind: 'inline', text: renderVscodeExtensions(opts.automationTool) },
+      source: { kind: 'inline', text: renderVscodeExtensions(opts.automationTool, opts.language) },
     },
     {
       path: '.vscode/launch.json',

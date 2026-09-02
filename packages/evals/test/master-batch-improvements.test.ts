@@ -102,9 +102,24 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
   });
 
   it('AC-8: Git Pre-Commit Hook template generation', () => {
-    const hook = renderGitHooks();
-    expect(hook).toContain('npm run lint');
-    expect(hook).toContain('npm run eval');
+    // TS/Playwright hook must use real scripts that exist in the generated package.json
+    const hook = renderGitHooks('typescript', 'playwright');
+    expect(hook).toContain('npm run lint:cpom');
+    expect(hook).toContain('npm run lint:eslint');
+    expect(hook).toContain('npm test');
+    // Must NOT emit EITR-internal script names that are absent from generated projects
+    expect(hook).not.toContain('npm run eval');
+    expect(hook).not.toContain('npm run lint\n');
+
+    // Python hook must use native commands
+    const pyHook = renderGitHooks('python', 'playwright');
+    expect(pyHook).toContain('pytest');
+    expect(pyHook).not.toContain('npm run eval');
+
+    // Java+Maven hook must use mvn
+    const javaHook = renderGitHooks('java', 'playwright-maven');
+    expect(javaHook).toContain('mvn test -q');
+    expect(javaHook).not.toContain('npm run eval');
 
     const files = planSharedScaffold({});
     const hookFile = files.find(
