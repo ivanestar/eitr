@@ -8,6 +8,34 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.10.0] - 2026-09-02
+
+### Added
+
+- **Python CPOM Rule 5: Fixture Dependency Injection** (`master_sdd_remediation_spec.md` Track 2):
+  previously marked "Deferred" in `lint_cpom.py` since `conftest.py` had no Page-Object-returning
+  fixture convention to check against. `conftest.py` now includes a commented Page Object fixture
+  pattern (matching the existing TypeScript `fixtures.ts` convention), the example test gets a
+  matching commented usage example, and the linter's AST visitor now flags any raw
+  `PageObject(...)`/`Component(...)`-shaped construction in `tests/`, exempting `conftest.py` and
+  any `*fixture*.py` file - closing the last remaining architectural gap between Python and the
+  TS/Java/C# CPOM contract.
+
+### Fixed
+
+- **TeamCity CI templates now run the CPOM contract linter for every language**: both the Kotlin
+  DSL (`renderTeamcityKotlinDsl`) and the markdown setup guide (`renderTeamcityInstructions`) were
+  missing the "Audit CPOM Contract & Anti-Fake-Green Rules" step for Python/C#/Java (the DSL) and
+  for every language including the default TS+Playwright branch (the setup guide) - the only one of
+  the 4 generated CI providers with this gap. Cypress branches are unaffected (a separate,
+  consistent gap across all 4 providers, and Cypress remains withheld from the CLI questionnaire).
+
+Verified via: `npm run build`, `npm run typecheck`, `npm run format:check`, `npx vitest run
+packages/engine/test/ packages/cli/test/` (42 files, 514 passed, 1 skipped - expected
+.NET-10-SDK-absent C# skip), `npx vitest run packages/engine/test/cpom-linter-parity.test.ts`
+(Rule 5 regression test) and `packages/engine/test/cicd-content.test.ts` (TeamCity linter-parity
+regression test).
+
 ## [0.9.0] - 2026-09-01
 
 ### Removed
