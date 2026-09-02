@@ -32,12 +32,12 @@ afterEach(async () => {
   }
 });
 
-function materializeBridge(): string {
+function materializeBridge(tmsProviders: readonly string[] = []): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-mcp-protocol-'));
   tmpDirs.push(dir);
   // aiAssistants non-empty so planMcpServer emits the bridge files even with no TMS provider
   // configured (mcp__inspect_dom and mcp__run_test don't require any TMS/env setup).
-  const files = planMcpServer('none', [], ['claude'], 'playwright', 'typescript');
+  const files = planMcpServer('none', tmsProviders, ['claude'], 'playwright', 'typescript');
   const byBasename: Record<string, string> = {};
   for (const f of files) {
     if (f.path.startsWith('.mcp/tms-bridge/')) {
@@ -166,6 +166,70 @@ describe('MCP bridge protocol layer (real spawned process, real stdio JSON-RPC)'
       expect(resp.result.cacheScope).toBe('session');
       expect(Array.isArray(resp.result.tools)).toBe(true);
       expect(resp.result.tools.some((t: any) => t.name === 'mcp__inspect_dom')).toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('standalone mode (no TMS/task-tracker configured) exposes exactly 2 tools', async () => {
+    const dir = materializeBridge();
+    const client = startMcpClient(dir);
+    try {
+      const resp = await client.call('tools/list', {});
+      expect(resp.result.tools).toHaveLength(2);
+      expect(resp.result.tools.map((t: any) => t.name).sort()).toEqual([
+        'mcp__inspect_dom',
+        'mcp__run_test',
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('TMS-configured mode exposes exactly 11 tools (2 base + 9 mcp__tms__*)', async () => {
+    const dir = materializeBridge(['zephyr']);
+    const client = startMcpClient(dir);
+    try {
+      const resp = await client.call('tools/list', {});
+      expect(resp.result.tools).toHaveLength(11);
+      const names: string[] = resp.result.tools.map((t: any) => t.name);
+      expect(names).toContain('mcp__run_test');
+      expect(names).toContain('mcp__inspect_dom');
+      const tmsNames = names.filter((n) => n.startsWith('mcp__tms__'));
+      expect(tmsNames).toHaveLength(9);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('an invalid tool parameter (missing required "route") returns result.isError: true with content, not a thrown/crashed process', async () => {
+    const dir = materializeBridge();
+    const client = startMcpClient(dir);
+    try {
+      const resp = await client.call('tools/call', {
+        name: 'mcp__inspect_dom',
+        arguments: {},
+      });
+      expect(resp.error).toBeUndefined();
+      expect(resp.result.isError).toBe(true);
+      expect(Array.isArray(resp.result.content)).toBe(true);
+      expect(resp.result.content.length).toBeGreaterThan(0);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('an unknown tool name returns result.isError: true with content', async () => {
+    const dir = materializeBridge();
+    const client = startMcpClient(dir);
+    try {
+      const resp = await client.call('tools/call', {
+        name: 'mcp__totally_unknown_tool',
+        arguments: {},
+      });
+      expect(resp.error).toBeUndefined();
+      expect(resp.result.isError).toBe(true);
+      expect(resp.result.content[0].text).toContain('Unknown tool');
     } finally {
       await client.close();
     }
