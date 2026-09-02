@@ -8,6 +8,26 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.12.1] - 2026-09-02
+
+### Added
+
+- **Rule 6 (Anti-Over-Mocking Guard) taught to the AI agents/rules that actually write tests**,
+  closing a gap found immediately after 0.12.0 shipped the linter check alone: `test-automator` and
+  `assertion-auditor` (`packages/engine/src/plan/templates/ai-agents.ts`) and the shared "Generation
+  Rules"/`CONVENTIONS.md` prose (`ai-rules.ts`, feeding every assistant's `AGENTS.md`/`CLAUDE.md`
+  variant) now document the rule and the `// @allow-mock: <reason>` (`#` in Python) suppression
+  syntax, so an AI assistant working in a freshly-generated project knows the rule exists and how to
+  legitimately suppress it, instead of only discovering it as an opaque lint failure. Also codified
+  as a standing rule in `CLAUDE.md`/`AGENTS.md` Section 13 ("Generated-Agent Rule Propagation"): any
+  future rule/convention/capability added to the generated frameworks must be checked against, and
+  where relevant taught to, every AI agent and AI-facing rules doc EITR scaffolds into that project -
+  not just mechanically enforced by a linter or build gate.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/e2e-scaffold.test.ts packages/engine/test/mcp-tms.test.ts` (14 passed),
+`npm run eval` (183 passed).
+
 ## [0.12.0] - 2026-09-02
 
 ### Added

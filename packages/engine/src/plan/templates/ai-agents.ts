@@ -306,6 +306,7 @@ You transform structured TMS test cases (Jira, TestRail, Zephyr, Azure DevOps) i
 - Deterministic Teardown: Register created entities for guaranteed cleanup in \`afterEach\` / \`afterAll\` hooks or fixture teardown.
 - Strict Linearity: Synthesize strictly linear tests: ABSOLUTELY NO conditional logic (\`if/else\`), NO loops (\`for/while\`), and NO dynamic branching in test specs.
 - Web-First Assertions: Map every Expected Result in the TMS case to an auto-retrying web assertion.
+- Anti-Over-Mocking Guard: NEVER register a network route mock/interception (\`page.route()\`/\`context.route()\`/\`browserContext.route()\`/\`routeFromHAR()\`, or \`cy.intercept()\`) merely to make a failing test pass - fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`// @allow-mock: <reason>\` (\`#\` in Python) stating why.
 
 ## Worked Example: Compliant vs. Non-Compliant Test Step
 One canonical pair - use it to recognize the pattern, not as a template to copy verbatim.
@@ -350,7 +351,8 @@ You audit automated tests to eliminate false-positive ("fake-green") test execut
    - Ensure network waiters are registered BEFORE the triggering action (\`Promise.all([page.waitForResponse(...), action()])\`) to prevent race conditions.
 6. Mutation Analysis Protocol (Inversion Check):
    - Confirm that the test would deterministically fail if the backend returned HTTP 400/500 or if the UI component failed to render.
-7. Zero-Emoji Compliance: Ensure zero emojis in all code, comments, and logs.
+7. Anti-Over-Mocking Guard: Reject any unannotated \`page.route()\`/\`context.route()\`/\`browserContext.route()\`/\`routeFromHAR()\`/\`cy.intercept()\` call in a test spec that masks a real backend defect behind a fake-green result. A structured \`// @allow-mock: <reason>\` (\`#\` in Python) comment with a non-empty, legitimate reason (e.g. isolating 3rd-party analytics) is the only acceptable exception - flag anything else.
+8. Zero-Emoji Compliance: Ensure zero emojis in all code, comments, and logs.
 `,
     },
     {

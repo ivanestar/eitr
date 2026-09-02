@@ -56,6 +56,7 @@ export function renderAiGenerateText(
   const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
   const ext = language === 'python' ? 'py' : 'ts';
   const specExt = tool === 'cypress' ? `cy.${ext}` : language === 'python' ? 'py' : `spec.${ext}`;
+  const commentPrefix = language === 'python' ? '#' : '//';
 
   let componentSyntax = '';
   if (tool === 'cypress') {
@@ -128,6 +129,7 @@ ${componentSyntax}
 - **Strict Linearity (Zero Branching):** ABSOLUTELY NO conditional logic (\`if/else\`, \`switch\`), NO loops (\`for/while/forEach\`), and NO \`try/catch\` wrapping assertions inside test specs.
 - **Step Demarcation:** Every step MUST be explicitly demarcated with \`await test.step('Step N: <action>', async () => { ... })\` (or \`cy.step()\`).
 - **Dependency Injection via Fixtures:** Never instantiate Page Objects via constructor (\`new LoginPage(page)\`) inside test files. Always inject them through fixture extensions (\`test.extend<{ loginPage: LoginPage, apiClient: ApiClient }>()\`).
+- **Anti-Over-Mocking Guard:** NEVER register a network route mock/interception (\`page.route()\`/\`context.route()\`/\`browserContext.route()\`/\`routeFromHAR()\`, or \`cy.intercept()\`) to force a failing test to pass — fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
 - **Metadata Tagging:** For every TMS scenario test, attach the ticket metadata tag: \`test('TC-{id}: {title}', { tag: ['@TC-{id}'] }, async ({ ... }) => ...)\`.
 - **Test Runner Execution Command:** Run tests using \`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`.
 
@@ -452,6 +454,7 @@ export function renderConventionsMd(
 ): string {
   const ext = language === 'python' ? 'py' : 'ts';
   const specExt = tool === 'cypress' ? `cy.${ext}` : language === 'python' ? 'py' : `spec.${ext}`;
+  const commentPrefix = language === 'python' ? '#' : '//';
 
   let componentSyntax = '';
   if (tool === 'cypress') {
@@ -555,6 +558,7 @@ ${componentSyntax}
 - Point-in-time snapshot reader methods with \`Now()\` suffix (e.g. \`isVisibleNow()\`, \`valueNow()\`) MUST NOT be used inside \`expect()\` assertions.
 - When waiting for asynchronous events (dialogs, popups), always synchronize via \`Promise.all([page.waitForEvent('dialog'), triggerAction()])\`.
 - Use \`apiClient\` zero-dependency TDM generators: \`createUniqueId()\`, \`createTestEmail()\`, \`createTestPhone()\`, \`createTestPassword()\`, \`createTestUuid()\`, \`createTestName()\`, \`createTestAmount()\`, \`createTestDate()\`.
+- NEVER register a network route mock/interception (\`page.route()\`/\`context.route()\`/\`browserContext.route()\`/\`routeFromHAR()\`, or \`cy.intercept()\`) to force a failing test to pass — fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
 
 ### 9. Protocol 123 SDET Engineering Standard
 - Whenever tasked with automating tickets, establishing baselines, or refactoring code by Protocol 123:
