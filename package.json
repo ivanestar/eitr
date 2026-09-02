@@ -8,7 +8,7 @@
     "dist",
     "llms.txt"
   ],
-  "version": "0.12.1",
+  "version": "0.12.2",
   "type": "module",
   "engines": {
     "node": ">=18.0.0",

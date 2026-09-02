@@ -8,6 +8,28 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.12.2] - 2026-09-02
+
+### Fixed
+
+- **`pom-engineer`'s Tier 1 liveness check now catches occluded/`opacity: 0` phantom elements.** Real
+  incident: the agent scaffolded a `searchInput`/`searchSubmit`/`search()` on
+  `header-navigation.widget.ts` from a hidden nav search input that existed in the DOM but was never
+  rendered to a real user - the previous Tier 1 wording ("visibility, rendered dimensions, hit-test
+  readiness") was loose enough for an agent under context pressure to accept raw DOM/
+  accessibility-tree presence as sufficient proof. Playwright's own `toBeVisible()`/`isVisible()`
+  checks bounding box and `visibility` CSS only - neither that nor a raw DOM `checkVisibility()` call
+  catches `opacity: 0` or an element occluded by another element on top of it. `pom-engineer`'s system
+  prompt, the `scan-and-generate-pom` skill, and the generated `CLAUDE.md`/`AGENTS.md`
+  Execution-First SDET Protocol section now specify the actual 4-part check: unique match,
+  `expect(locator).toBeVisible()`, an explicit opacity check, and `locator.click({ trial: true })` (or
+  `.fill({ trial: true })`) to run Playwright's full actionability pipeline without performing the
+  action - safe even against destructive controls (submit, delete, pay).
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/mcp-tms.test.ts packages/evals/test/all-agents.eval.test.ts
+packages/evals/test/all-skills.eval.test.ts packages/evals/test/all-rules.eval.test.ts` (31 passed).
+
 ## [0.12.1] - 2026-09-02
 
 ### Added
