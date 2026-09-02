@@ -25,7 +25,8 @@ Generated Test Repository
 │   ├── /automate-ticket      -- End-to-end flow: TMS ticket -> DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
 │   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
-│   └── /map-site             -- Route graph crawler, site topology & shared widget mining
+│   └── /map-site             -- Route graph crawler, site topology, shared widget mining &
+│                                 optional read-only business-intent analysis (ADR 0012 Stage 1)
 │
 ├── 3. Model Context Protocol (MCP) Layer (.mcp.json, .cursor/mcp.json, .claude/mcp.json, etc.)
 │   ├── Playwright MCP        -- Live DOM querying, selector evaluation, visual feedback
@@ -71,6 +72,22 @@ To prevent automated tests from passing without verifying actual business logic:
   caused them (`Promise.all([page.waitForResponse(...), action()])` or an `apiClient` check).
 - **Mutation analysis:** a test must deterministically fail if the backend returns HTTP 4xx/5xx or
   the UI component fails to render - not just pass by never actually looking.
+
+## Business-intent analysis (`/map-site` Step 6, ADR 0012 Stage 1)
+
+An opt-in, strictly read-only `/map-site` step infers per-route business intent
+(`businessFeature`) and criticality (`criticalityTier`) into a typed artifact,
+`docs/analysis/business-intent.json` (`docs/analysis/business-intent.types.ts` documents its
+shape - `schemaVersion: 1`, `Field<T>`-wrapped values, keyed by `routeId`). It never runs
+automatically and never performs a mutating Playwright call of any kind, not even a `trial: true`
+dry-run - inference draws only from already-rendered page title, heading text, form field labels,
+button/link text, and ARIA roles reached by a single navigation per route. A zero-dependency
+validator (`scripts/validate-business-intent.mjs`) mechanically checks the artifact's shape before
+a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
+`reviewed: false` as ground truth. See
+[`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
+for the design decision this implements and what remains out of scope for this first stage
+(transport choice, cross-route journey synthesis, test-condition derivation).
 
 ## Self-healing (Two-Strike Rule & 4-point trace triage)
 

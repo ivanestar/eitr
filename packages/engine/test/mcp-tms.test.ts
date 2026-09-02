@@ -235,6 +235,56 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
     expect(mapSkill?.source.text).not.toContain('APP_GRAPH.md');
 
+    // Step 6 (ADR 0012 Stage 1, business-intent analysis) - AC5: the four banned mutating methods
+    // are named exactly once, inside their own prohibition sentence, and nowhere else in the
+    // skill's content as a real invocation. A raw whole-block substring-absence check would fail
+    // here by construction, since the prohibition sentence must name what it forbids.
+    const prohibitionSentence =
+      'Never call `.click()`, `.fill()`, `.check()`, `.selectOption()`, or any other action method';
+    expect(mapSkill?.source.text).toContain(prohibitionSentence);
+    const businessIntentTextWithoutProhibition = (mapSkill?.source.text ?? '')
+      .split(prohibitionSentence)
+      .join('');
+    expect(businessIntentTextWithoutProhibition).not.toContain('.click(');
+    expect(businessIntentTextWithoutProhibition).not.toContain('.fill(');
+    expect(businessIntentTextWithoutProhibition).not.toContain('.check(');
+    expect(businessIntentTextWithoutProhibition).not.toContain('.selectOption(');
+
+    // AC6: idempotent re-run via the sourceContentHash cheap-skip rule is documented.
+    expect(mapSkill?.source.text).toContain('sourceContentHash');
+    expect(mapSkill?.source.text).toContain('skip re-inference for that route entirely');
+
+    // AC8: Human Sign-Off Gateway precedes trusting business-intent.json.
+    expect(mapSkill?.source.text).toContain('Business-Intent Review Artifact');
+    expect(mapSkill?.source.text).toContain('NOT authoritative until a human has reviewed it');
+
+    // AC9: reuses the existing Level-2 fan-out - no bespoke dispatch mechanism for Step 6.
+    expect(mapSkill?.source.text).toContain('orchestrate-swarm.mjs --phase=plan');
+
+    // AC11: PII/session-data guard on evidence excerpts is documented (length bound + redaction).
+    expect(mapSkill?.source.text).toContain('<=100 char');
+    expect(mapSkill?.source.text).toContain('[REDACTED]');
+
+    // AC7: Step 6's marker text renders identically into all 8 map-site-bearing generated paths.
+    const mapSiteBearingPaths = [
+      '.agents/skills/map-site.md',
+      '.claude/skills/map-site/SKILL.md',
+      '.cursor/skills/map-site/SKILL.md',
+      '.windsurf/workflows/map-site.md',
+      '.windsurf/workflows/map-site-update.md',
+      '.codex/skills/map-site/SKILL.md',
+      '.github/prompts/map-site.prompt.md',
+      '.github/skills/map-site/SKILL.md',
+    ];
+    for (const p of mapSiteBearingPaths) {
+      const f = files.find((file) => file.path === p);
+      expect(f?.source.text, `${p} should exist`).toBeDefined();
+      expect(f?.source.text, `${p} should mention Business-Intent`).toContain('Business-Intent');
+      expect(f?.source.text, `${p} should reference the validator script`).toContain(
+        'validate-business-intent.mjs',
+      );
+    }
+
     // Claude Code's map-site gets the create|update argument frontmatter and
     // disable-model-invocation (real side effects: live network crawl, file writes).
     const claudeMapSkill = files.find((f) => f.path === '.claude/skills/map-site/SKILL.md');

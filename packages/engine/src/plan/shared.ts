@@ -33,6 +33,8 @@ import { renderSiteMapSchema } from './templates/site-map-schema.js';
 import { renderGitHooks } from './templates/git-hooks.js';
 import { renderOverridesReadme } from './templates/overrides-readme.js';
 import { renderSwarmDispatcher } from './templates/swarm-dispatcher.js';
+import { renderBusinessIntentTypes } from './templates/business-intent-types.js';
+import { renderBusinessIntentValidator } from './templates/business-intent-validator.js';
 
 /**
  * Emits project infrastructure files that are fully independent of the language and automation
@@ -96,6 +98,18 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderSwarmDispatcher() },
+          },
+          {
+            path: 'docs/analysis/business-intent.types.ts',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderBusinessIntentTypes() },
+          },
+          {
+            path: 'scripts/validate-business-intent.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderBusinessIntentValidator() },
           },
         ] as FileDescriptor[])
       : []),
