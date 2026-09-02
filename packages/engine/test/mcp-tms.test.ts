@@ -247,7 +247,8 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     const pomSkill = files.find((f) => f.path === '.agents/skills/scan-and-generate-pom.md');
     expect(pomSkill?.source.text).not.toContain('tests/pom-sanity');
-    expect(pomSkill?.source.text).toContain('Tier 1: Uniqueness');
+    expect(pomSkill?.source.text).toContain('Tier 1 (Actionable Visibility');
+    expect(pomSkill?.source.text).toContain('locator.click({ trial: true })');
     expect(pomSkill?.source.text).toContain('Mandatory Execution & Self-Healing Loop');
     expect(pomSkill?.source.text).toContain('Mandatory Handoff Report');
 

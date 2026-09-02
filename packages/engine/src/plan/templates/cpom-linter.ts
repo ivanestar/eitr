@@ -13,6 +13,8 @@ export function renderCpomLinter(): string {
  * 3. Zero Assertions inside Component & Page Object classes (expect inside components/)
  * 4. Unawaited Promise Guard in test assertions (e.g. expect(locator.isVisible()).toBeTruthy())
  * 5. Fixture Dependency Injection (No direct new PageObject(page) in tests)
+ * 6. Anti-Over-Mocking Guard (No page.route/context.route/browserContext.route/routeFromHAR or
+ *    cy.intercept in test specs without a structured "// @allow-mock: <reason>" annotation)
  */
 
 import fs from 'node:fs';
@@ -55,6 +57,17 @@ const STRUCTURAL_GETTER_EXEMPTIONS = new Set([
   'isEditable',
   'isDisabled',
 ]);
+
+// Rule 6 suppression: a "// @allow-mock: <reason>" comment on the flagged line, the line before,
+// or the line after, with a non-empty reason - legitimate 3rd-party isolation (analytics, Sentry)
+// must state why, not just silence the rule.
+const ALLOW_MOCK_PATTERN = /\\/\\/\\s*@allow-mock:\\s*\\S.*/;
+
+function hasAllowMockSuppression(fileLines, idx) {
+  return [fileLines[idx], fileLines[idx - 1], fileLines[idx + 1]].some(
+    (candidate) => candidate !== undefined && ALLOW_MOCK_PATTERN.test(candidate),
+  );
+}
 
 const violations = [];
 
@@ -163,6 +176,24 @@ function auditFile(filePath) {
           line: lineNum,
           rule: 'Rule 5: Fixture Dependency Injection',
           message: 'Direct Page Object instantiation detected in test spec. Inject Page Objects via Playwright test.extend fixtures instead.',
+          snippet: trimmed,
+        });
+      }
+    }
+
+    // Rule 6: Anti-Over-Mocking Guard
+    if (isTest && !isFixtureOrSetup) {
+      if (
+        /\\b(?:page|context|browserContext)\\.(?:route|routeFromHAR)\\s*\\(|\\bcy\\.intercept\\s*\\(/.test(
+          line,
+        ) &&
+        !hasAllowMockSuppression(lines, i)
+      ) {
+        violations.push({
+          file: relPath,
+          line: lineNum,
+          rule: 'Rule 6: Inappropriate Mocking Guard',
+          message: 'Network route interception/mocking detected in a test spec. This can mask a real backend defect behind a fake-green test. If this is legitimate 3rd-party isolation (e.g. analytics, Sentry), annotate with "// @allow-mock: <reason>".',
           snippet: trimmed,
         });
       }

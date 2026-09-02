@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { planSharedScaffold } from '../src/plan/shared.js';
 import { plan } from '../src/plan/plan.js';
 import { apply } from '../src/apply/apply.js';
+import { renderCpomLinter } from '../src/plan/templates/cpom-linter.js';
 import { renderCpomLinterPython } from '../src/plan/templates/cpom-linter-python.js';
 import { renderCpomLinterJava } from '../src/plan/templates/cpom-linter-java.js';
 import { renderCpomLinterCsharp } from '../src/plan/templates/cpom-linter-csharp.js';
@@ -77,36 +78,39 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(javaFiles.map((f) => f.path)).not.toContain('scripts/LintCpom.cs');
   });
 
-  it('Python linter documents Rules 1-3 and 5 real, Rule 4 N/A', () => {
+  it('Python linter documents Rules 1-3, 5, and 6 real, Rule 4 N/A', () => {
     const text = renderCpomLinterPython();
     expect(text).toContain('Rule 1: Zero Arbitrary Delays');
     expect(text).toContain('Rule 2: Mandatory _now Suffix');
     expect(text).toContain('Rule 3: Zero Assertions in Components');
     expect(text).toContain('N/A for Python');
     expect(text).toContain('Rule 5: Fixture Dependency Injection');
+    expect(text).toContain('Rule 6: Inappropriate Mocking Guard');
     expect(text).not.toContain('Deferred');
     expect(text).not.toContain('EITR');
     expect(text).not.toContain('Eitr');
   });
 
-  it('Java linter covers all 5 rules with Now()/get*Now() parity', () => {
+  it('Java linter covers all 6 rules with Now()/get*Now() parity', () => {
     const text = renderCpomLinterJava();
     expect(text).toContain('Rule 1: Zero Arbitrary Delays');
     expect(text).toContain('Rule 2: Mandatory Now() Suffix');
     expect(text).toContain('Rule 3: Zero Assertions in Components');
     expect(text).toContain('Rule 4: Non-Retrying State Assertion Guard');
     expect(text).toContain('Rule 5: Fixture Dependency Injection');
+    expect(text).toContain('Rule 6: Inappropriate Mocking Guard');
     expect(text).not.toContain('EITR');
     expect(text).not.toContain('Eitr');
   });
 
-  it('C# linter covers all 5 rules, flags raw Assert.* as the anti-pattern, and recognizes Expect(...) as the real assertion idiom', () => {
+  it('C# linter covers all 6 rules, flags raw Assert.* as the anti-pattern, and recognizes Expect(...) as the real assertion idiom', () => {
     const text = renderCpomLinterCsharp();
     expect(text).toContain('Rule 1: Zero Arbitrary Delays');
     expect(text).toContain('Rule 2: Mandatory NowAsync() Suffix');
     expect(text).toContain('Rule 3: Zero Assertions in Components');
     expect(text).toContain('Rule 4: Non-Retrying State Assertion Guard');
     expect(text).toContain('Rule 5: Fixture Dependency Injection');
+    expect(text).toContain('Rule 6: Inappropriate Mocking Guard');
     // Rule 3 flags an assertion of ANY kind inside a component (Assert.* or Expect(...) alike -
     // components must have neither); Rule 4 specifically flags a raw Assert.That/IsTrue/IsFalse
     // wrapping a state-read call in tests, recommending Expect(...) instead. Both patterns must
@@ -344,6 +348,336 @@ describe('Per-language CPOM contract linter parity', () => {
         });
         expect(result.stderr).toBe('');
         expect(result.status).toBe(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  // Track 3 (Anti-Over-Mocking Guard, Rule 6): each language's linter must actually fail on an
+  // unannotated route mock in a test spec, and actually pass once a non-empty "@allow-mock:"
+  // reason is attached - proving the rule works end-to-end, not just that its name string exists
+  // in the rendered source.
+  it('TypeScript/Cypress linter Rule 6 flags an unannotated route mock but allows an annotated one', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-ts-rule6-'));
+    try {
+      writeFileSync(join(dir, 'lint-cpom.js'), renderCpomLinter(), 'utf8');
+      const testsDir = join(dir, 'tests');
+      mkdirSync(testsDir, { recursive: true });
+      writeFileSync(
+        join(testsDir, 'checkout.spec.ts'),
+        [
+          "import { test, expect } from '@playwright/test';",
+          '',
+          "test('checkout flow', async ({ page }) => {",
+          "  await page.route('**/api/checkout', (route) => route.fulfill({ status: 200, body: '{}' }));",
+          "  await page.goto('/checkout');",
+          '});',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(testsDir, 'dashboard.spec.ts'),
+        [
+          "import { test, expect } from '@playwright/test';",
+          '',
+          "test('dashboard loads', async ({ page }) => {",
+          '  // @allow-mock: isolate 3rd-party analytics beacon, unrelated to the feature under test',
+          "  await page.route('**/analytics.js', (route) => route.abort());",
+          "  await page.goto('/dashboard');",
+          '});',
+        ].join('\n'),
+        'utf8',
+      );
+      const result = spawnSync('node', ['lint-cpom.js'], { cwd: dir, encoding: 'utf8' });
+      expect(result.status).toBe(1);
+      const rule6Violations = (result.stderr.match(/Rule 6: Inappropriate Mocking Guard/g) ?? [])
+        .length;
+      expect(rule6Violations).toBe(1);
+      expect(result.stderr).toContain('tests/checkout.spec.ts');
+      expect(result.stderr).not.toContain('tests/dashboard.spec.ts');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('TypeScript/Cypress linter Rule 6 flags an unannotated cy.intercept() in cypress/e2e specs but allows an annotated one', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-ts-rule6-cypress-'));
+    try {
+      writeFileSync(join(dir, 'lint-cpom.js'), renderCpomLinter(), 'utf8');
+      const e2eDir = join(dir, 'cypress', 'e2e');
+      mkdirSync(e2eDir, { recursive: true });
+      writeFileSync(
+        join(e2eDir, 'checkout.cy.ts'),
+        [
+          "describe('checkout', () => {",
+          "  it('completes checkout', () => {",
+          "    cy.intercept('GET', '**/api/checkout', { statusCode: 200, body: {} });",
+          "    cy.visit('/checkout');",
+          '  });',
+          '});',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(e2eDir, 'dashboard.cy.ts'),
+        [
+          "describe('dashboard', () => {",
+          "  it('loads dashboard', () => {",
+          '    // @allow-mock: isolate 3rd-party analytics beacon, unrelated to the feature under test',
+          "    cy.intercept('GET', '**/analytics.js', { statusCode: 204 });",
+          "    cy.visit('/dashboard');",
+          '  });',
+          '});',
+        ].join('\n'),
+        'utf8',
+      );
+      const result = spawnSync('node', ['lint-cpom.js'], { cwd: dir, encoding: 'utf8' });
+      expect(result.status).toBe(1);
+      const rule6Violations = (result.stderr.match(/Rule 6: Inappropriate Mocking Guard/g) ?? [])
+        .length;
+      expect(rule6Violations).toBe(1);
+      expect(result.stderr).toContain('cypress/e2e/checkout.cy.ts');
+      expect(result.stderr).not.toContain('cypress/e2e/dashboard.cy.ts');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(pythonCmd === null)(
+    'Python linter Rule 6 flags an unannotated route mock but allows an annotated one',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-py-rule6-'));
+      try {
+        writeFileSync(join(dir, 'lint_cpom.py'), renderCpomLinterPython(), 'utf8');
+        const testsDir = join(dir, 'tests');
+        mkdirSync(testsDir, { recursive: true });
+        writeFileSync(
+          join(testsDir, 'test_checkout.py'),
+          [
+            'def test_checkout(page):',
+            "    page.route('**/api/checkout', lambda route: route.fulfill(status=200, body='{}'))",
+            "    page.goto('/checkout')",
+          ].join('\n'),
+          'utf8',
+        );
+        writeFileSync(
+          join(testsDir, 'test_dashboard.py'),
+          [
+            'def test_dashboard(page):',
+            '    # @allow-mock: isolate 3rd-party analytics beacon, unrelated to the feature under test',
+            "    page.route('**/analytics.js', lambda route: route.abort())",
+            "    page.goto('/dashboard')",
+          ].join('\n'),
+          'utf8',
+        );
+        const result = spawnSync(pythonCmd as string, ['lint_cpom.py'], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+        expect(result.status).toBe(1);
+        const rule6Violations = (result.stderr.match(/Rule 6: Inappropriate Mocking Guard/g) ?? [])
+          .length;
+        expect(rule6Violations).toBe(1);
+        expect(result.stderr).toContain('tests/test_checkout.py');
+        expect(result.stderr).not.toContain('tests/test_dashboard.py');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(pythonCmd === null)(
+    'Python linter Rule 6 does not flag a .route() call on a receiver other than page/context/browser_context',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-py-rule6-scope-'));
+      try {
+        writeFileSync(join(dir, 'lint_cpom.py'), renderCpomLinterPython(), 'utf8');
+        const testsDir = join(dir, 'tests');
+        mkdirSync(testsDir, { recursive: true });
+        writeFileSync(
+          join(testsDir, 'test_router.py'),
+          [
+            'class FakeRouter:',
+            '    def route(self, pattern):',
+            '        return pattern',
+            '',
+            'def test_router_helper():',
+            '    router = FakeRouter()',
+            "    router.route('/some/pattern')",
+          ].join('\n'),
+          'utf8',
+        );
+        const result = spawnSync(pythonCmd as string, ['lint_cpom.py'], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+        expect(result.status).toBe(0);
+        expect(result.stdout).toContain('[PASS]');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(!javaAvailable)(
+    'Java linter Rule 6 flags an unannotated route mock but allows an annotated one',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-java-rule6-'));
+      try {
+        const filePath = join(dir, 'LintCpom.java');
+        writeFileSync(filePath, renderCpomLinterJava(), 'utf8');
+        const testsDir = join(dir, 'src', 'test', 'java', 'tests');
+        mkdirSync(testsDir, { recursive: true });
+        writeFileSync(
+          join(testsDir, 'CheckoutTest.java'),
+          [
+            'public class CheckoutTest {',
+            '    void checkout() {',
+            '        page.route("**/api/checkout", route -> route.fulfill(new Route.FulfillOptions().setStatus(200)));',
+            '    }',
+            '}',
+          ].join('\n'),
+          'utf8',
+        );
+        writeFileSync(
+          join(testsDir, 'DashboardTest.java'),
+          [
+            'public class DashboardTest {',
+            '    void dashboard() {',
+            '        // @allow-mock: isolate 3rd-party analytics beacon, unrelated to the feature under test',
+            '        page.route("**/analytics.js", route -> route.abort());',
+            '    }',
+            '}',
+          ].join('\n'),
+          'utf8',
+        );
+        const result = spawnSync('java', ['LintCpom.java'], { cwd: dir, encoding: 'utf8' });
+        expect(result.status).toBe(1);
+        const rule6Violations = (result.stderr.match(/Rule 6: Inappropriate Mocking Guard/g) ?? [])
+          .length;
+        expect(rule6Violations).toBe(1);
+        expect(result.stderr).toContain('CheckoutTest.java');
+        expect(result.stderr).not.toContain('DashboardTest.java');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(!javaAvailable)(
+    'Java linter Rule 6 requires @allow-mock directly after //, not merely later on the same line',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-java-rule6-strict-'));
+      try {
+        const filePath = join(dir, 'LintCpom.java');
+        writeFileSync(filePath, renderCpomLinterJava(), 'utf8');
+        const testsDir = join(dir, 'src', 'test', 'java', 'tests');
+        mkdirSync(testsDir, { recursive: true });
+        writeFileSync(
+          join(testsDir, 'CheckoutTest.java'),
+          [
+            'public class CheckoutTest {',
+            '    void checkout() {',
+            '        // See https://example.com/docs @allow-mock: this is not a real suppression',
+            '        page.route("**/api/checkout", route -> route.fulfill(new Route.FulfillOptions().setStatus(200)));',
+            '    }',
+            '}',
+          ].join('\n'),
+          'utf8',
+        );
+        const result = spawnSync('java', ['LintCpom.java'], { cwd: dir, encoding: 'utf8' });
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain('Rule 6: Inappropriate Mocking Guard');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(!dotnet10Available)(
+    'C# linter Rule 6 flags an unannotated route mock but allows an annotated one',
+    { timeout: 120000 },
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-csharp-rule6-'));
+      try {
+        const filePath = join(dir, 'LintCpom.cs');
+        writeFileSync(filePath, renderCpomLinterCsharp(), 'utf8');
+        const testsDir = join(dir, 'tests');
+        mkdirSync(testsDir, { recursive: true });
+        writeFileSync(
+          join(testsDir, 'CheckoutTests.cs'),
+          [
+            'public class CheckoutTests',
+            '{',
+            '    async Task Checkout()',
+            '    {',
+            '        await Page.RouteAsync("**/api/checkout", route => route.FulfillAsync(new() { Status = 200 }));',
+            '    }',
+            '}',
+          ].join('\n'),
+          'utf8',
+        );
+        writeFileSync(
+          join(testsDir, 'DashboardTests.cs'),
+          [
+            'public class DashboardTests',
+            '{',
+            '    async Task Dashboard()',
+            '    {',
+            '        // @allow-mock: isolate 3rd-party analytics beacon, unrelated to the feature under test',
+            '        await Page.RouteAsync("**/analytics.js", route => route.AbortAsync());',
+            '    }',
+            '}',
+          ].join('\n'),
+          'utf8',
+        );
+        const result = spawnSync('dotnet', ['run', '--file', 'LintCpom.cs'], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+        expect(result.status).toBe(1);
+        const rule6Violations = (result.stderr.match(/Rule 6: Inappropriate Mocking Guard/g) ?? [])
+          .length;
+        expect(rule6Violations).toBe(1);
+        expect(result.stderr).toContain('CheckoutTests.cs');
+        expect(result.stderr).not.toContain('DashboardTests.cs');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(!dotnet10Available)(
+    'C# linter Rule 6 requires @allow-mock directly after //, not merely later on the same line',
+    { timeout: 120000 },
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-csharp-rule6-strict-'));
+      try {
+        const filePath = join(dir, 'LintCpom.cs');
+        writeFileSync(filePath, renderCpomLinterCsharp(), 'utf8');
+        const testsDir = join(dir, 'tests');
+        mkdirSync(testsDir, { recursive: true });
+        writeFileSync(
+          join(testsDir, 'CheckoutTests.cs'),
+          [
+            'public class CheckoutTests',
+            '{',
+            '    async Task Checkout()',
+            '    {',
+            '        // See https://example.com/docs @allow-mock: this is not a real suppression',
+            '        await Page.RouteAsync("**/api/checkout", route => route.FulfillAsync(new() { Status = 200 }));',
+            '    }',
+            '}',
+          ].join('\n'),
+          'utf8',
+        );
+        const result = spawnSync('dotnet', ['run', '--file', 'LintCpom.cs'], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain('Rule 6: Inappropriate Mocking Guard');
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

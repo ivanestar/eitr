@@ -33,6 +33,10 @@ import java.util.List;
  *      the browser instead of auto-retrying.
  *   5. Fixture Dependency Injection - rejects raw "new SomePage(...)" / "new SomeComponent(...)"
  *      in test specs outside setup/fixture files.
+ *   6. Anti-Over-Mocking Guard - rejects unannotated page.route()/context.route()/
+ *      browserContext.route()/routeFromHAR() calls in test specs. A "// @allow-mock: <reason>"
+ *      comment on the flagged line, the line before, or the line after suppresses it (legitimate
+ *      3rd-party isolation like analytics or Sentry).
  */
 public class LintCpom {
 
@@ -60,6 +64,11 @@ public class LintCpom {
     // a future getValueNow()-shaped method is still correctly caught.
     private static final List<String> STRUCTURAL_RETURN_TYPES = Arrays.asList(
         "Locator", "Page", "BrowserContext", "Frame", "FrameLocator", "ElementHandle"
+    );
+
+    private static final List<String> MOCK_CALL_NEEDLES = Arrays.asList(
+        "page.route(", "context.route(", "browserContext.route(",
+        "page.routeFromHAR(", "context.routeFromHAR(", "browserContext.routeFromHAR("
     );
 
     private static final class Violation {
@@ -207,7 +216,45 @@ public class LintCpom {
                         trimmed));
                 }
             }
+
+            if (isTest && !isFixtureOrSetup) {
+                for (String needle : MOCK_CALL_NEEDLES) {
+                    if (line.contains(needle) && !hasAllowMockSuppression(lines, i)) {
+                        VIOLATIONS.add(new Violation(relPath, lineNum, "Rule 6: Inappropriate Mocking Guard",
+                            "Network route interception/mocking detected (\\"" + needle + "...)\\"). This can mask "
+                                + "a real backend defect behind a fake-green test. If this is legitimate 3rd-party "
+                                + "isolation (e.g. analytics, Sentry), annotate with \\"// @allow-mock: <reason>\\".",
+                            trimmed));
+                        break;
+                    }
+                }
+            }
         }
+    }
+
+    private static boolean hasAllowMockSuppression(List<String> lines, int idx) {
+        for (int i = idx - 1; i <= idx + 1; i++) {
+            if (i < 0 || i >= lines.size()) {
+                continue;
+            }
+            if (lineHasAllowMockMarker(lines.get(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean lineHasAllowMockMarker(String candidate) {
+        int markerIdx = candidate.indexOf("@allow-mock:");
+        if (markerIdx < 0) {
+            return false;
+        }
+        int slashIdx = candidate.lastIndexOf("//", markerIdx);
+        if (slashIdx < 0 || !candidate.substring(slashIdx + 2, markerIdx).trim().isEmpty()) {
+            return false;
+        }
+        String reason = candidate.substring(markerIdx + "@allow-mock:".length()).trim();
+        return !reason.isEmpty();
     }
 
     private static boolean startsWithPrefix(String name, String prefix) {

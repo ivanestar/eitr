@@ -8,6 +8,73 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.12.2] - 2026-09-02
+
+### Fixed
+
+- **`pom-engineer`'s Tier 1 liveness check now catches occluded/`opacity: 0` phantom elements.** Real
+  incident: the agent scaffolded a `searchInput`/`searchSubmit`/`search()` on
+  `header-navigation.widget.ts` from a hidden nav search input that existed in the DOM but was never
+  rendered to a real user - the previous Tier 1 wording ("visibility, rendered dimensions, hit-test
+  readiness") was loose enough for an agent under context pressure to accept raw DOM/
+  accessibility-tree presence as sufficient proof. Playwright's own `toBeVisible()`/`isVisible()`
+  checks bounding box and `visibility` CSS only - neither that nor a raw DOM `checkVisibility()` call
+  catches `opacity: 0` or an element occluded by another element on top of it. `pom-engineer`'s system
+  prompt, the `scan-and-generate-pom` skill, and the generated `CLAUDE.md`/`AGENTS.md`
+  Execution-First SDET Protocol section now specify the actual 4-part check: unique match,
+  `expect(locator).toBeVisible()`, an explicit opacity check, and `locator.click({ trial: true })` (or
+  `.fill({ trial: true })`) to run Playwright's full actionability pipeline without performing the
+  action - safe even against destructive controls (submit, delete, pay).
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/mcp-tms.test.ts packages/evals/test/all-agents.eval.test.ts
+packages/evals/test/all-skills.eval.test.ts packages/evals/test/all-rules.eval.test.ts` (31 passed).
+
+## [0.12.1] - 2026-09-02
+
+### Added
+
+- **Rule 6 (Anti-Over-Mocking Guard) taught to the AI agents/rules that actually write tests**,
+  closing a gap found immediately after 0.12.0 shipped the linter check alone: `test-automator` and
+  `assertion-auditor` (`packages/engine/src/plan/templates/ai-agents.ts`) and the shared "Generation
+  Rules"/`CONVENTIONS.md` prose (`ai-rules.ts`, feeding every assistant's `AGENTS.md`/`CLAUDE.md`
+  variant) now document the rule and the `// @allow-mock: <reason>` (`#` in Python) suppression
+  syntax, so an AI assistant working in a freshly-generated project knows the rule exists and how to
+  legitimately suppress it, instead of only discovering it as an opaque lint failure. Also codified
+  as a standing rule in `CLAUDE.md`/`AGENTS.md` Section 13 ("Generated-Agent Rule Propagation"): any
+  future rule/convention/capability added to the generated frameworks must be checked against, and
+  where relevant taught to, every AI agent and AI-facing rules doc EITR scaffolds into that project -
+  not just mechanically enforced by a linter or build gate.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/e2e-scaffold.test.ts packages/engine/test/mcp-tms.test.ts` (14 passed),
+`npm run eval` (183 passed).
+
+## [0.12.0] - 2026-09-02
+
+### Added
+
+- **CPOM linter Rule 6: Anti-Over-Mocking Guard**, across all 4 languages (TypeScript/Cypress,
+  Python, Java, C#). Flags an unannotated network route mock/interception
+  (`page.route()`/`context.route()`/`browserContext.route()`/`routeFromHAR()` and their
+  language-native equivalents, plus `cy.intercept()` for Cypress) in a test spec - a known
+  AI-coding-assistant failure mode where a failing test gets "fixed" by mocking the tested endpoint
+  instead of the real backend defect getting fixed, producing a false-green test. Suppress with a
+  structured `// @allow-mock: <reason>` (`#` in Python) comment carrying a non-empty reason, on the
+  flagged line, the line before, or the line after - for legitimate 3rd-party isolation (analytics,
+  Sentry). Fixture/setup files are exempt, matching Rule 5's existing exemption in every language.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/cpom-linter-parity.test.ts packages/engine/test/e2e-scaffold.test.ts
+packages/engine/test/plan.matrix.test.ts` (126 passed, 3 skipped - the 3 skips are the pre-existing
+.NET-10-gated C# real-execution tests; this machine only has .NET 8 installed, CI has a separate
+.NET 10 job). Independently reviewed by the `framework-auditor` agent: 1 MAJOR (Python's Rule 6
+matched `.route(...)` on any receiver, not just `page`/`context`/`browser_context` like the other 3
+languages) and 2 MINOR (Java/C#'s `// @allow-mock:` suppression check matched a `//` and
+`@allow-mock:` appearing anywhere on the same line rather than immediately adjacent; the TS/Cypress
+`cy.intercept()` detection branch had no real-execution test) - all 3 fixed in this same release,
+each with its own new regression test proving the fix.
+
 ## [0.11.0] - 2026-09-02
 
 ### Fixed
