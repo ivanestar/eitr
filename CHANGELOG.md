@@ -8,6 +8,39 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.16.0] - 2026-09-02
+
+### Added
+
+- **Business-intent analysis (`/map-site` Step 6), ADR 0012 Stage 1**: an opt-in, strictly
+  read-only step infers per-route business intent (`businessFeature`) and criticality
+  (`criticalityTier`) into a new typed artifact, `docs/analysis/business-intent.json`
+  (`docs/analysis/business-intent.types.ts` documents the shape - `schemaVersion: 1`,
+  `Field<T>`-wrapped values keyed by `routeId`, mirroring `StackProfile`'s existing confidence-
+  wrapper convention). Never runs automatically and never performs a mutating Playwright call of
+  any kind, not even a `trial: true` dry-run - inference draws only from already-rendered page
+  title, heading text, form field labels, button/link text, and ARIA roles reached by a single
+  navigation per route. A new zero-dependency validator (`scripts/validate-business-intent.mjs`)
+  mechanically checks the artifact's shape - including a PII/session-data guard rejecting any
+  evidence excerpt over 100 characters - before a Human Sign-Off Gateway presents results for
+  review; no other skill or agent treats an entry with `reviewed: false` as ground truth. Reuses
+  the existing `orchestrate-swarm.mjs --phase=plan` per-route fan-out unmodified - no new dispatch
+  mechanism, no new persistent agent. Implemented via Protocol 456 against an SDD plan that had
+  already been through an independent review swarm (Protocol 123 Phase 3) as a design document
+  before any code was written. Explicitly out of scope for this first stage: live-app transport
+  choice, cross-route journey synthesis, test-condition derivation - see
+  `docs/architecture/decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md` for
+  the full design and what Stage 2+ still requires.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/mcp-tms.test.ts packages/engine/test/business-intent-artifact.test.ts
+packages/engine/test/plan.matrix.test.ts` (124 passed, including 8 real-subprocess validator cases
+and a standalone `tsc --noEmit --strict` compile check of the emitted types file), `npx prettier
+--check` on every touched file. Independently reviewed by the `code-reviewer` agent against the
+real diff: 0 CRITICAL/MAJOR, 3 MINOR findings (an evidence-shape validation gap, an edge case in
+the dangling-routeId check, an unsubstantiated "already used elsewhere" claim in the skill prose) -
+all three fixed with dedicated regression tests in the same pass.
+
 ## [0.15.1] - 2026-09-02
 
 ### Added

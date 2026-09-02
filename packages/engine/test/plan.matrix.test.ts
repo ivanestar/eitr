@@ -132,4 +132,26 @@ describe('plan() framework & CI/CD matrix integration', () => {
       'scripts/orchestrate-swarm.mjs',
     );
   });
+
+  // AC1 (ADR 0012 Stage 1) - the two static business-intent files follow the exact same
+  // AI-assistant gating as orchestrate-swarm.mjs above; Step 6's own runtime behavior is a
+  // separate, opt-in question these two files are unaffected by (see plan D5).
+  it('emits docs/analysis/business-intent.types.ts and scripts/validate-business-intent.mjs only when at least one AI assistant is configured', () => {
+    const withDefaultAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+    });
+    const defaultPaths = withDefaultAssistants.files.map((f) => f.path);
+    expect(defaultPaths).toContain('docs/analysis/business-intent.types.ts');
+    expect(defaultPaths).toContain('scripts/validate-business-intent.mjs');
+
+    const withNoAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+      aiAssistants: [],
+    });
+    const noAssistantPaths = withNoAssistants.files.map((f) => f.path);
+    expect(noAssistantPaths).not.toContain('docs/analysis/business-intent.types.ts');
+    expect(noAssistantPaths).not.toContain('scripts/validate-business-intent.mjs');
+  });
 });

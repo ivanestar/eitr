@@ -1,0 +1,73 @@
+// Template for generating docs/analysis/business-intent.types.ts, the typed contract for
+// docs/analysis/business-intent.json (Stage 1 of the app-analysis pipeline settled by ADR 0012,
+// docs/architecture/decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md).
+// create-if-absent.
+//
+// Deliberately a plain TypeScript interface file, not a JSON Schema document: this repo's own
+// deterministic core already settled on "typed interface + schemaVersion literal, checked only by
+// tsc, no runtime validator" (StackProfile/GenerationPlan, packages/engine/src/types/) rather than
+// the JSON-Schema-file approach site-map.schema.json takes - and that approach is itself unenforced
+// here (no ajv dependency anywhere; the only test touching it checks the file exists, not its
+// shape). Real mechanical enforcement for this artifact comes from
+// scripts/validate-business-intent.mjs instead (see business-intent-validator.ts).
+
+export function renderBusinessIntentTypes(): string {
+  return `// Typed contract for docs/analysis/business-intent.json, produced by the /map-site skill's
+// optional business-intent analysis step (Step 6). Reference this file when reading or writing
+// that JSON - it is documentation-as-code, not a compiled/imported module: nothing in this project
+// imports it at runtime. scripts/validate-business-intent.mjs enforces its shape mechanically.
+
+export type Confidence = 'high' | 'medium' | 'low';
+
+export type CriticalityTier = 'critical' | 'high' | 'medium' | 'low';
+
+// Which already-rendered, read-only signal grounded a Field<T>'s value. This analysis step
+// performs zero .click()/.fill()/.check()/.selectOption() calls, not even trial:true dry-runs -
+// see /map-site's own Step 6 instructions for the full rule.
+export type BusinessIntentSource =
+  'route-path' | 'heading-text' | 'form-labels' | 'button-link-text' | 'aria-roles' | 'manual';
+
+export interface Evidence {
+  signal: BusinessIntentSource;
+  excerpt: string;
+}
+
+// Same wrapper shape as this project's own StackProfile Field<T> (value, confidence, source,
+// evidence) - a distinct type here, not an import: that type is internal to the deterministic
+// StackProfile detection pipeline, while this artifact is produced entirely by an AI agent inside
+// this generated project. The structural convention is intentionally identical.
+export interface Field<T> {
+  value: T;
+  confidence: Confidence;
+  source: BusinessIntentSource;
+  evidence: Evidence[];
+}
+
+export interface BusinessIntentEntry {
+  // Joins against docs/site-map/site-map.json's routes[*].routeId - routeId, not the path
+  // template key, because routeId is documented there as stable across a URL restructure, and
+  // this artifact is a separate file with its own lifecycle.
+  routeId: string;
+  businessFeature: Field<string>;
+  criticalityTier: Field<CriticalityTier>;
+  // Copy of site-map.json's routes[routeId].contentHash at the moment this entry was inferred.
+  // A re-run compares the CURRENT site-map.json contentHash for this routeId against this
+  // stored value: unchanged means the route's structure hasn't moved and inference is skipped
+  // for it, mirroring site-map.json's own update-mode cheap-skip logic.
+  sourceContentHash: string;
+  analyzedAt: string;
+  // False until a human has reviewed this entry per /map-site's Human Sign-Off Gateway. No other
+  // skill or agent should treat an entry with reviewed: false as ground truth.
+  reviewed: boolean;
+}
+
+export interface BusinessIntentReport {
+  schemaVersion: 1;
+  generatedAt: string;
+  // Keyed by routeId (see BusinessIntentEntry.routeId), unlike site-map.json's own routes object
+  // which is keyed by canonical path template - resolve a path with
+  // Object.values(siteMap.routes).find(r => r.routeId === id) or a one-time routeId index.
+  routes: Record<string, BusinessIntentEntry>;
+}
+`;
+}
