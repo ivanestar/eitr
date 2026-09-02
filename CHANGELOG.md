@@ -8,6 +8,26 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.15.1] - 2026-09-02
+
+### Added
+
+- **MCP protocol conformance test coverage completed (Track 10, Step 2)**: `mcp-protocol-system.test.ts`
+  now also asserts standalone mode exposes exactly 2 tools (`mcp__run_test`/`mcp__inspect_dom`),
+  TMS-configured mode exposes exactly 11 (2 base + 9 `mcp__tms__*`), and an invalid tool call (a
+  missing required parameter, and separately an unknown tool name) returns `result.isError: true`
+  with a `content` array rather than crashing the process or silently succeeding. Of Track 10 Step
+  2's 5 originally-specified assertions, 2 (legacy `initialize` protocolVersion, `server/discover`
+  resultType/supportedVersions) were already covered by tests written alongside Step 1's security
+  fix; this closes the remaining 3. No behavior changed - Step 1's already-reviewed implementation
+  already behaved correctly, this is test-coverage only, verified via a real spawned node process
+  talking JSON-RPC over stdio against the actual generated bridge, not mocked.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/mcp-protocol-system.test.ts` (16 passed, up from 12), `npx vitest run
+packages/engine/test/mcp-tms.test.ts packages/engine/test/tms-adapters.test.ts` (24 passed),
+`npm run eval` (183 passed).
+
 ## [0.15.0] - 2026-09-02
 
 ### Added
