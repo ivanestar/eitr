@@ -8,6 +8,36 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.14.0] - 2026-09-02
+
+### Added
+
+- **Deterministic swarm dispatch (`scripts/orchestrate-swarm.mjs`), replacing LLM-reasoned "dispatch
+  N parallel workers" instructions across the whole AI-agent orchestration surface, not just
+  `sdet-orchestrator`.** Nondeterministic dispatch is a known failure mode on less capable models or
+  under heavy context load: skipped routes, no real parallelization, token exhaustion. The new
+  zero-dependency Node script reads `docs/site-map/site-map.json` and computes a 4-tier DAG
+  (`--phase=plan`, optionally scoped via `--routes=<a,b,c>`/`--routes-file=<path>`), checks whether
+  dispatched workers actually produced their expected files (`--phase=verify`/`--phase=verify-worker`,
+  pure file-existence/non-empty checks - live DOM liveness verification itself stays the agent's job),
+  and regenerates `components/widgets/index.ts` deterministically (`--phase=reindex`). Wired into
+  `sdet-orchestrator`'s prompt and, going beyond the original plan's scope on maintainer request, into
+  the `/scan-and-generate-pom`, `/bulk-rescan`, and `/map-site` operational skills, which previously
+  each described their own ad-hoc dispatch prose independently. Only generated when at least one AI
+  assistant is configured (mirrors the existing `planAiAgents`/`planAiOperationalSkills` gating).
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/swarm-dispatcher.test.ts packages/engine/test/plan.matrix.test.ts` (117 passed,
+real-execution tests spawning the generated script itself - route filtering, DAG shape, root-path
+slug edge case, verify/verify-worker pass+fail+empty-file states, reindex determinism, and clean
+error handling for a missing site-map, malformed JSON, a malformed route entry, and a missing
+`--routes-file`), `npx vitest run packages/engine/test/mcp-tms.test.ts
+packages/engine/test/e2e-scaffold.test.ts packages/engine/test/apply.test.ts
+packages/engine/test/contract.test.ts` (26 passed), `npm run eval` (183 passed). Independently
+reviewed by the `code-reviewer` agent: PASS, 3 MINOR findings (missing error handling on
+`--routes-file`, an unguarded malformed route entry, an untested `EMPTY`-status branch) all fixed
+with dedicated regression tests in the same pass.
+
 ## [0.13.0] - 2026-09-02
 
 ### Removed

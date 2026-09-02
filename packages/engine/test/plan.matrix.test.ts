@@ -113,4 +113,23 @@ describe('plan() framework & CI/CD matrix integration', () => {
       }),
     ).toThrow(UnsupportedLanguageError);
   });
+
+  it('emits scripts/orchestrate-swarm.mjs only when at least one AI assistant is configured', () => {
+    const withDefaultAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+    });
+    expect(withDefaultAssistants.files.map((f) => f.path)).toContain(
+      'scripts/orchestrate-swarm.mjs',
+    );
+
+    const withNoAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+      aiAssistants: [],
+    });
+    expect(withNoAssistants.files.map((f) => f.path)).not.toContain(
+      'scripts/orchestrate-swarm.mjs',
+    );
+  });
 });
