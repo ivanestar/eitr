@@ -1,7 +1,8 @@
 // Template for generating docs/site-map/site-map.schema.json, the JSON Schema for
-// docs/site-map/site-map.json. create-if-absent. See decisions/0010-agent-operations-as-skills-
-// not-cli.md for why this exists as a formal schema rather than the one line of prose the
-// /map-site skill used to rely on.
+// docs/site-map/site-map.json. create-if-absent. A real, separate JSON Schema file (rather than
+// folding the shape into the /map-site skill's own prose) lets any tooling - a lint script, an
+// editor's file-association settings, ajv in a test - check site-map.json's shape mechanically,
+// instead of relying on an agent remembering the contract correctly every time it writes the file.
 //
 // Written as a literal string (not JSON.stringify(obj, null, 2)) because JSON.stringify always
 // puts every array element on its own line regardless of length, while Prettier's JSON printer
@@ -43,7 +44,14 @@ export function renderSiteMapSchema(): string {
       "description": "Keyed by canonical path template with dynamic segments collapsed (e.g. \\"/users/{id}\\" covers both /users/42 and /users/43). Serialize keys in sorted order for a deterministic diff.",
       "additionalProperties": {
         "type": "object",
-        "required": ["routeId", "sampleUrls", "discoveredAt", "lastCheckedAt", "status"],
+        "required": [
+          "routeId",
+          "sampleUrls",
+          "discoveredAt",
+          "lastCheckedAt",
+          "contentHash",
+          "status"
+        ],
         "additionalProperties": false,
         "properties": {
           "routeId": {

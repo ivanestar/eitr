@@ -448,7 +448,7 @@ description: ${skill.description}
 
 # Workflow: map-site (create mode)
 
-This workflow always runs in CREATE mode: a fresh, full crawl. For an incremental update of an existing site map instead, use the separate \`/map-site-update\` workflow.
+This workflow always runs in CREATE mode: a fresh, full crawl. For an incremental update of an existing site map instead, use the separate \`/map-site-update\` workflow. (Windsurf workflows don't take arguments, unlike Claude Code/Cursor/Codex CLI - ignore the "chosen by the argument this skill was invoked with" line below; this file's mode is fixed by which workflow you ran, not a parameter.)
 
 ${skill.content}`,
             },
@@ -466,7 +466,7 @@ description: Incremental update of an existing docs/site-map/site-map.json using
 
 # Workflow: map-site-update (update mode)
 
-This workflow always runs in UPDATE mode: the incremental, content-hash-gated pass (Step 3b below), not a full fresh crawl. For a full fresh crawl instead, use the separate \`/map-site\` workflow.
+This workflow always runs in UPDATE mode: the incremental, content-hash-gated pass (Step 3b below), not a full fresh crawl. For a full fresh crawl instead, use the separate \`/map-site\` workflow. (Windsurf workflows don't take arguments, unlike Claude Code/Cursor/Codex CLI - ignore the "chosen by the argument this skill was invoked with" line below; this file's mode is fixed by which workflow you ran, not a parameter.)
 
 ${skill.content}`,
             },

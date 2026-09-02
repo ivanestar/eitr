@@ -74,6 +74,17 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(codexConfig?.source.text).toContain('[mcp_servers.playwright]');
     expect(codexConfig?.source.text).toContain('env_vars = ');
     expect(codexConfig?.source.text).not.toContain('${env:');
+
+    // VS Code's native MCP schema is structurally different from every other assistant here, not
+    // just a different path: top-level "servers" (not "mcpServers"), each entry explicitly typed.
+    // Reusing the "mcpServers" shape would produce a file VS Code / Copilot Chat silently never
+    // reads any servers from - live-verified Sept 2026 against code.visualstudio.com's own docs.
+    const vscodeConfig = files.find((f) => f.path === '.vscode/mcp.json');
+    const vscodeJson = JSON.parse(vscodeConfig?.source.text ?? '{}');
+    expect(vscodeJson.servers).toBeDefined();
+    expect(vscodeJson.mcpServers).toBeUndefined();
+    expect(vscodeJson.servers.playwright.type).toBe('stdio');
+    expect(vscodeJson.servers.playwright.command).toBe('npx');
   });
 
   it('generates MCP configs ONLY for selected AI assistants and empty lists', () => {

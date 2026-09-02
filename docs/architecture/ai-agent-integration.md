@@ -112,8 +112,8 @@ rather than generating a flaky test from an underspecified one.
 ## Deterministic generation & human sign-off
 
 - **Component registry indexing:** Page Objects and shared widgets are indexed from
-  `docs/site-map.json` and `components/` to match scenario steps to existing CPOM classes instead
-  of regenerating duplicates.
+  `docs/site-map/site-map.json` and `components/` to match scenario steps to existing CPOM classes
+  instead of regenerating duplicates.
 - **Human sign-off gateway** (`/automate-ticket`): before writing test files, the agent presents a
   structured proposal (summary, steps, preconditions, Page Objects used, TDM strategy) for explicit
   review - zero code is written until approved.

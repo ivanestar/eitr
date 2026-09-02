@@ -4,9 +4,13 @@
 //   - Antigravity CLI reads .agents/mcp_config.json (never a root .mcp.json).
 //   - Claude Code reads root .mcp.json ("Project" scope, meant to be committed to source control).
 //   - Cursor reads .cursor/mcp.json.
-//   - Copilot is two different real surfaces: the VS Code Copilot Chat extension (.vscode/mcp.json)
-//     and the standalone Copilot CLI (root .mcp.json, then .github/mcp.json - never .vscode/mcp.json).
-//     Both are written so either surface works.
+//   - Copilot is two different real surfaces: the VS Code Copilot Chat extension (.vscode/mcp.json,
+//     top-level "servers" key with each entry explicitly "type": "stdio" - a different schema from
+//     every other assistant here, not just a different path) and the standalone Copilot CLI (root
+//     .mcp.json, then .github/mcp.json - never .vscode/mcp.json). Both are written so either
+//     surface works.
+//   - A bare "vscode" assistant selection (VS Code without Copilot) gets the same .vscode/mcp.json
+//     on its own, since that file belongs to VS Code's native MCP support, not Copilot specifically.
 //   - Codex CLI reads .codex/config.toml (TOML, not JSON) under [mcp_servers.<name>] tables.
 //   - Windsurf has NO project-scoped MCP mechanism at all - its config is purely global
 //     (~/.codeium/windsurf/mcp_config.json, shared across every workspace on the machine), so no
@@ -94,9 +98,13 @@ function serializeServersAsToml(servers: Record<string, ServerConfig>): string {
     const envVars: string[] = [];
     const literalEnv: Record<string, string> = {};
     for (const [key, value] of Object.entries(config.env ?? {})) {
-      const placeholder = /^\$\{env:([A-Z0-9_]+)\}$/.exec(value);
-      if (placeholder) {
-        envVars.push(placeholder[1]);
+      // The var name Codex passes through is this entry's own key, not whatever name happens to
+      // be written inside the ${env:...} placeholder - the regex only tests whether the value is
+      // a self-referencing passthrough marker at all, so a future stanza can't silently emit the
+      // wrong env_vars entry if a placeholder's inner name ever drifted from its key.
+      const isPassthroughPlaceholder = /^\$\{env:[A-Z0-9_]+\}$/.test(value);
+      if (isPassthroughPlaceholder) {
+        envVars.push(key);
       } else {
         literalEnv[key] = value;
       }
@@ -147,6 +155,7 @@ export function planMcpConfigs(
 
   const jsonTargetPaths = new Set<string>();
   let needsCodexToml = false;
+  let needsVscodeJson = false;
 
   for (const rawAssistant of assistants) {
     const assistant = rawAssistant.toLowerCase();
@@ -157,17 +166,17 @@ export function planMcpConfigs(
     } else if (assistant === 'claude') {
       jsonTargetPaths.add('.mcp.json');
     } else if (assistant === 'copilot') {
-      jsonTargetPaths.add('.vscode/mcp.json');
+      needsVscodeJson = true;
       jsonTargetPaths.add('.mcp.json');
     } else if (assistant === 'vscode') {
-      jsonTargetPaths.add('.vscode/mcp.json');
+      needsVscodeJson = true;
     } else if (assistant === 'codex') {
       needsCodexToml = true;
     }
     // windsurf: intentionally no file - see the module doc comment above.
   }
 
-  if (jsonTargetPaths.size === 0 && !needsCodexToml) {
+  if (jsonTargetPaths.size === 0 && !needsCodexToml && !needsVscodeJson) {
     return [];
   }
 
@@ -228,6 +237,36 @@ export function planMcpConfigs(
         source: { kind: 'inline' as const, text: jsonText },
       });
     }
+  }
+
+  if (needsVscodeJson) {
+    // VS Code's native MCP schema differs structurally from every other assistant here, not just
+    // by path: a top-level "servers" key (not "mcpServers"), with each entry explicitly typed
+    // ("type": "stdio") - confirmed live against code.visualstudio.com/docs/agent-customization/
+    // mcp-servers (September 2026). Reusing the "mcpServers" shape here would silently produce a
+    // file VS Code / Copilot Chat never actually reads any servers from.
+    const vscodeServers: Record<string, unknown> = {};
+    for (const [name, config] of Object.entries(servers)) {
+      vscodeServers[name] = { type: 'stdio', ...config };
+    }
+    const vscodeConfigObj = { servers: vscodeServers };
+    const vscodeJsonText =
+      JSON.stringify(vscodeConfigObj, null, 2)
+        .replace(
+          /"args": \[\s+"-y",\s+"@modelcontextprotocol\/server-playwright"\s+\]/g,
+          '"args": ["-y", "@modelcontextprotocol/server-playwright"]',
+        )
+        .replace(
+          /"args": \[\s+"\.mcp\/tms-bridge\/index\.js"\s+\]/g,
+          '"args": [".mcp/tms-bridge/index.js"]',
+        ) + '\n';
+
+    descriptors.push({
+      path: '.vscode/mcp.json',
+      writePolicy: 'create-if-absent' as const,
+      provenance: { origin: 'config' as const },
+      source: { kind: 'inline' as const, text: vscodeJsonText },
+    });
   }
 
   if (needsCodexToml) {

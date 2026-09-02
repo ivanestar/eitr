@@ -5,8 +5,19 @@
 // in sync, so it can never drift from the actual crawl the way a separately-authored Mermaid/HTML
 // summary would.
 
+// Generation-time escape for baseUrl, which comes from the user's own CLI input, not crawled page
+// content (the real untrusted-data path - route titles/regions/components - is escaped at
+// view-time in the page's own script via the textContent round-trip below). Defense in depth only.
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 export function renderSiteMapHtml(baseUrl?: string): string {
-  const url = baseUrl ?? 'http://localhost:3000';
+  const url = escapeHtmlAttr(baseUrl ?? 'http://localhost:3000');
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
