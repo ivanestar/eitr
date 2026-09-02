@@ -440,7 +440,7 @@ workflow:
 
 pytest-playwright-tests:
   stage: test
-  image: mcr.microsoft.com/playwright/python:v1.51.0-jammy
+  image: mcr.microsoft.com/playwright/python:v1.62.0-jammy
   parallel: 4
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
@@ -635,7 +635,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
                     }
                 }
                 agent {
-                    docker { image 'mcr.microsoft.com/playwright/python:v1.51.0-jammy' }
+                    docker { image 'mcr.microsoft.com/playwright/python:v1.62.0-jammy' }
                 }
                 stages {
                     stage('Install') {

@@ -313,7 +313,15 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
   // 7. Java + Playwright (Gradle)
   it(
     '7/7: E2E Full Cycle — Java + Playwright Gradle (questionnaire -> generate -> real gradle test run -> cleanup)',
-    { timeout: 180000 },
+    // 300s, not 180s like the other combinations: this path pays 3 separate cold Gradle JVM/daemon
+    // startups (testClasses, playwrightInstall, test) plus first-ever resolution of the pinned
+    // Playwright artifact version from Maven Central and an uncached Chromium download - on a fresh
+    // CI runner this is measurably slower than Maven's single-process model even though both build
+    // the same generated project (observed: run 33639210399 hit the 180000ms wall still executing,
+    // not near completion). Deliberately not caching ~/.cache/ms-playwright (see ci.yml) means the
+    // browser download itself is never avoidable, so the timeout - not the cache strategy - is what
+    // needs to absorb this tool's inherent cold-start variance.
+    { timeout: 300000 },
     async () => {
       const cwd = makeTempCwd();
 

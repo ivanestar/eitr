@@ -1,25 +1,77 @@
-// Template for generating .githooks/pre-commit and husky pre-commit hooks. create-if-absent.
+// Template for generating .githooks/pre-commit. create-if-absent.
+// Parameterised by language and tool so the commands actually exist in the generated project.
 
-export function renderGitHooks(): string {
+export function renderGitHooks(
+  language: string = 'typescript',
+  tool: string = 'playwright',
+): string {
+  const isGradle = tool === 'playwright-gradle';
+  const isMaven = language === 'java' && !isGradle;
+
+  let lintStep: string;
+  let testStep: string;
+
+  if (language === 'python') {
+    lintStep = `python scripts/LintCpom.py || {
+  echo "CPOM linter failed."
+  exit 1
+}`;
+    testStep = `pytest --tb=short -q || {
+  echo "Tests failed."
+  exit 1
+}`;
+  } else if (language === 'csharp') {
+    lintStep = `dotnet build -t:LintCpom || {
+  echo "CPOM linter failed."
+  exit 1
+}`;
+    testStep = `dotnet test || {
+  echo "Tests failed."
+  exit 1
+}`;
+  } else if (language === 'java' && isGradle) {
+    lintStep = `./gradlew check -q || {
+  echo "CPOM linter / check failed."
+  exit 1
+}`;
+    testStep = `./gradlew test -q || {
+  echo "Tests failed."
+  exit 1
+}`;
+  } else if (language === 'java' && isMaven) {
+    lintStep = `mvn validate -q || {
+  echo "CPOM linter / validate failed."
+  exit 1
+}`;
+    testStep = `mvn test -q || {
+  echo "Tests failed."
+  exit 1
+}`;
+  } else {
+    // TypeScript / JavaScript (default)
+    lintStep = `npm run lint:cpom && npm run lint:eslint || {
+  echo "Linting failed. Run 'npm run lint:cpom' or 'npm run lint:eslint' to inspect."
+  exit 1
+}`;
+    testStep = `npm test || {
+  echo "Tests failed."
+  exit 1
+}`;
+  }
+
   return `#!/bin/sh
-# Pre-Commit Quality & Eval Gate
-# Ensures zero broken linters or regressions before commit
+# Pre-Commit Quality Gate
+# Ensures zero CPOM violations and no regressions before commit.
 
-echo "Running code quality & prompt evaluation checks..."
+echo "Running pre-commit quality checks..."
 
-# 1. Run Prettier / Formatter checks
-npm run lint || {
-  echo "Linting failed. Run 'npm run format' to fix formatting."
-  exit 1
-}
+# 1. CPOM lint & static checks
+${lintStep}
 
-# 2. Run isolated evals and tests
-npm run eval || {
-  echo "Prompt evaluation benchmarks failed."
-  exit 1
-}
+# 2. Test suite
+${testStep}
 
-echo "All pre-commit checks passed successfully!"
+echo "All pre-commit checks passed."
 exit 0
 `;
 }
