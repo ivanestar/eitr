@@ -179,7 +179,7 @@ Inspects live application DOM, extracts semantic elements, groups them into CPOM
 ## Workflow
 1. **Target Inspection & Batch Worker Mode:**
    - Single Page: Navigate to target URL using Playwright MCP or reconnaissance engine.
-   - Batch Swarm Mode: If processing multiple routes from \`docs/site-map/site-map.json\`, dispatch parallel 'pom-engineer' worker subagents (1 route per worker) for concurrent synthesis.
+   - Batch Swarm Mode: If processing multiple routes, run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (add \`--routes=<a,b,c>\` to scope to a specific subset) and dispatch parallel 'pom-engineer' worker subagents per its Level 2 worker list (1 route per worker) for concurrent synthesis - do not enumerate routes/workers yourself.
    - Wait for network idle and main DOM stabilization.
 2. **Semantic Hierarchy Extraction & Feed Guard:**
    - Extract elements using 3-Tier Locator Priority (getByTestId -> getByRole -> getByLabel/getByText).
@@ -204,6 +204,7 @@ Inspects live application DOM, extracts semantic elements, groups them into CPOM
      * Inspect error traces, perform live DOM triage, adjust locators in the Page Object, and re-verify (Two-Strike Rule).
    - If failures are due to genuine application bugs (e.g. backend 500 error, unhandled JS exception, broken UI component):
      * Do NOT modify anything to hide the bug. Explicitly document and report the real product defect.
+   - Batch Swarm Mode barrier: once every dispatched worker reports done, run \`node scripts/orchestrate-swarm.mjs --phase=verify --targets=<comma-separated Page Object paths each worker was expected to produce>\` to confirm every worker actually wrote its file before declaring the batch complete.
 6. **Mandatory Handoff Report:**
    - Present a structured summary listing generated Page Objects, liveness verification status (pass/fail counts), and any detected real application defects.
    - PROHIBIT delivering unverified or red code to the user without explicit defect reporting.
@@ -289,9 +290,9 @@ Performs page-level locator updates when application design system or layout cha
 
 ## Workflow
 1. **Impacted Target Identification:**
-   - Run the existing test suite (\`npm test\`) to identify broken components.
+   - Run the existing test suite (\`npm test\`) to identify broken components, and map each failing test back to its route.
 2. **Parallel Worker Swarm (Fan-Out / Fan-In):**
-   - Orchestrator dispatches parallel 'pom-engineer' worker subagents (Worker Swarm) across affected non-overlapping routes for high-speed concurrent rescanning.
+   - Run \`node scripts/orchestrate-swarm.mjs --phase=plan --routes=<comma-separated affected route paths from Step 1>\` and dispatch parallel 'pom-engineer' worker subagents (Worker Swarm) per its Level 2 worker list for high-speed concurrent rescanning - scoping via \`--routes\` keeps this to exactly the affected, non-overlapping routes rather than the whole site.
 3. **Component Locator Update:**
    - Update component locators and selectors inside Page Object classes adhering to 3-Tier Locator Priority.
    - Preserve existing public Page Object method signatures to avoid breaking test spec contracts.
@@ -344,11 +345,12 @@ Playwright browser access for this crawl comes from this project's MCP configura
    - Identify recurring component structures appearing across >= 2 \`active\` routes (exclude \`removed\` routes from this analysis).
    - Synthesize reusable widgets in \`components/widgets/<name>.widget.ts\`.
    - Update Page Objects to compose shared widgets via \`this.child(WidgetClass, spec)\` rather than duplicating code.
+   - Run \`node scripts/orchestrate-swarm.mjs --phase=reindex\` so \`components/widgets/index.ts\` picks up any newly-added widgets deterministically, without write collisions from parallel workers.
 5. **Orchestrated Fan-Out to POM Engineers (Optional on User Request):**
    - If the user explicitly requested generating Page Objects for the mapped routes:
-     * Dispatch parallel 'pom-engineer' worker subagents across discovered routes (1 route per worker).
+     * Run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (this file's own \`docs/site-map/site-map.json\` output feeds it directly) and dispatch parallel 'pom-engineer' worker subagents per its Level 2 worker list (1 route per worker) - do not enumerate routes/workers yourself.
      * Ensure each 'pom-engineer' synthesizes 1:1 Page Objects in \`components/pages/\` AND verifies each one against the live DOM.
-     * Execute a global barrier synchronization: confirm 100% Green component liveness across all workers before completing.
+     * Execute a global barrier synchronization via \`node scripts/orchestrate-swarm.mjs --phase=verify --targets=<comma-separated Page Object paths each worker produced>\` - confirm 100% Green component liveness across all workers before completing.
 
 ## Human-readable view
 \`docs/site-map/site-map.html\` reads \`docs/site-map/site-map.json\` directly at view-time (open it in a browser) - there is nothing for this skill to separately generate or keep in sync for a human-facing summary.

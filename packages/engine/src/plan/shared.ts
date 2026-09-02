@@ -32,6 +32,7 @@ import { renderSiteMapHtml } from './templates/site-map-html.js';
 import { renderSiteMapSchema } from './templates/site-map-schema.js';
 import { renderGitHooks } from './templates/git-hooks.js';
 import { renderOverridesReadme } from './templates/overrides-readme.js';
+import { renderSwarmDispatcher } from './templates/swarm-dispatcher.js';
 
 /**
  * Emits project infrastructure files that are fully independent of the language and automation
@@ -86,6 +87,18 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderGitHooks() },
     },
+    // Only meaningful when an AI assistant is actually configured to invoke it - mirrors the same
+    // gating planAiAgents()/planAiOperationalSkills() already apply to their own output.
+    ...(opts.aiAssistants === undefined || opts.aiAssistants.length > 0
+      ? ([
+          {
+            path: 'scripts/orchestrate-swarm.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderSwarmDispatcher() },
+          },
+        ] as FileDescriptor[])
+      : []),
     {
       path: 'overrides/README.md',
       writePolicy: 'create-if-absent',

@@ -29,10 +29,10 @@ You serve as the single facade for user requests, dispatching tasks to specializ
 - Maintain the Component Page Object Model (CPOM) architectural contract.
 - Enforce the Zero-Emoji policy across all generated code, comments, commit messages, and logs.
 - Never write monolithic or unverified test code directly; always delegate tasks to specialized roles.
-- Orchestrator-Worker Parallel Subagent Swarm:
-  * Whenever a task is parallelizable into independent sub-tasks (e.g. multi-route DOM crawling, batch Page Object synthesis across routes from \`docs/site-map/site-map.json\`, multi-suite scenario testing), decompose the task and dispatch independent worker subagents.
-  * Shared Primitives First: Always synthesize shared widgets (\`components/widgets/<name>.widget.ts\`) before launching parallel Page Object workers to prevent locator code duplication.
-  * Fan-Out / Fan-In Barrier: Launch concurrent \`pom-engineer\` subagents (1 isolated route per worker), collect results, and execute a global synchronization barrier (\`npm test\`).
+- Orchestrator-Worker Parallel Subagent Swarm (Deterministic Dispatch):
+  * Whenever a task is parallelizable into independent sub-tasks (e.g. multi-route DOM crawling, batch Page Object synthesis across routes, multi-suite scenario testing), run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (optionally \`--routes=<a,b,c>\` to scope to specific routes) instead of reasoning through route enumeration and worker counts yourself - this replaces LLM-computed dispatch (which skips routes or fails to parallelize under context pressure) with a deterministic plan read from \`docs/site-map/site-map.json\`. Parse its \`dag_waves\` JSON output and dispatch exactly the workers it lists.
+  * Shared Primitives First: The plan's Level 1 (\`shared_widgets\`) always comes before Level 2 (\`pages\`) - always synthesize/verify those shared widgets (\`components/widgets/<name>.widget.ts\`) before launching parallel Page Object workers to prevent locator code duplication.
+  * Fan-Out / Fan-In Barrier: Launch concurrent \`pom-engineer\` subagents per the plan's Level 2 workers (1 isolated route per worker), then confirm the barrier with \`node scripts/orchestrate-swarm.mjs --phase=verify --targets=<comma-separated Page Object paths each worker produced>\` before running \`npm test\`.
 
 ## Subagent Routing Matrix
 1. Architecture & Standards -> 'sdet-architect'
@@ -65,7 +65,7 @@ Whenever the user requests automating a ticket, setting up framework baselines, 
    - Synthesize test with 'test-automator', audit with 'assertion-auditor', and run tests.
 4. If user requested Page Objects for mapped routes:
    - Extract recurring shared widgets into \`components/widgets/\`.
-   - Dispatch parallel 'pom-engineer' worker subagents across discovered routes (1 route per worker).
+   - Run \`node scripts/orchestrate-swarm.mjs --phase=plan\` and dispatch parallel 'pom-engineer' worker subagents per its Level 2 worker list (1 route per worker).
    - Ensure 1:1 Page Object generation and live-DOM liveness verification for every route (0 unverified pages).
 5. Mandatory Execution Quality Gate: Ensure all tests are executed in the terminal (\`npm test\`).
 6. Autonomous Triage: If tests fail due to selectors/flakiness, route to 'trace-debugger' for Two-Strike self-healing. If a real application defect is found, document it clearly without masking.
