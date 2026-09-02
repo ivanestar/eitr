@@ -8,6 +8,50 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.17.0] - 2026-09-02
+
+### Fixed
+
+- **`/map-site` robustness**: `create` on an already-existing `site-map.json` now warns before
+  discarding `routeId` identity (previously silent); `update` with no existing file now explicitly
+  announces its fallback to `create` instead of silently redirecting; `routeId` generation/
+  preservation rules are now explicit in the skill's own prose (previously undocumented anywhere,
+  risking silent orphaning of `docs/analysis/business-intent.json`'s `routeId`-keyed entries on
+  every `create` rerun); a new optional `coverage` field on `site-map.json` signals when the crawl
+  hit its depth/page-count ceiling. Crawl bounds are now concrete numbers (6 hops / 500 pages)
+  rather than an unenforceable "maximum depth and page count" phrase.
+- **`argument-hint` YAML frontmatter bug**: found by actually generating a framework -
+  `.claude/skills/map-site/SKILL.md` failed Claude Code's own validation ("The 'argument-hint'
+  attribute must be a string") because the unquoted value `[create|update]` parses as a YAML array,
+  not a string. Fixed by always double-quoting the rendered value.
+- **skill-reviewer findings applied to `/map-site`** (independent 4-metric review, 7.5/10 average):
+  missing capability disclosure in the skill's `description`, an unspecified PII-masking heuristic
+  ("numeric-ID-shaped text"), an unquantified label-length rule, and a missing worked example - all
+  fixed, with the businessFeature length bound now enforced mechanically in
+  `scripts/validate-business-intent.mjs` as well as documented in prose.
+
+### Removed
+
+- **Human-readable site-map viewer (`docs/site-map/site-map.html`)**: deliberately removed
+  (maintainer decision, 2026-09-02), not replaced. Its `fetch('./site-map.json')` call is blocked
+  by a real, well-known browser restriction whenever the file is opened directly (`file://`
+  protocol) - the single most natural way a user would open it - and it had already fallen behind
+  the schema it existed to visualize (no awareness of the new `coverage`/`routeId` fields or the
+  sibling `docs/analysis/business-intent.json`). Its actual audience - an SDET already working
+  inside an AI coding assistant - has a strictly better interface to the same data already (asking
+  the assistant to read `site-map.json` directly). Same reasoning this project already applied to
+  removing visual regression scaffolding (`[0.13.0]`). `docs/site-map/site-map.json` and its schema
+  are unaffected and remain the source of truth for every real consumer (`pom-engineer`,
+  `/scan-and-generate-pom`, `/automate-ticket`, the business-intent Step 6).
+  `docs/architecture/known-gaps.md` updated accordingly.
+
+Verified via: `npx tsc -b packages/engine packages/evals --force` (clean compile), `npx vitest run
+packages/engine/test` (28 files, 430 passed + 3 skipped), `npx vitest run
+packages/evals/test/master-batch-improvements.test.ts` (7 passed), `npm run eval` (182 passed),
+`npx prettier --check` on every touched file, and a repo-wide grep confirming zero remaining
+references to `site-map-html`/`site-map.html` outside this changelog entry and a deliberate
+regression-guard assertion in `mcp-tms.test.ts`.
+
 ## [0.16.0] - 2026-09-02
 
 ### Added

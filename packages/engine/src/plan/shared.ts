@@ -28,7 +28,6 @@ import { renderCpomLinterJava } from './templates/cpom-linter-java.js';
 import { renderCpomLinterCsharp } from './templates/cpom-linter-csharp.js';
 import { renderEslintConfig } from './templates/eslint-config.js';
 import { renderDockerfile, renderDockerignore } from './templates/docker.js';
-import { renderSiteMapHtml } from './templates/site-map-html.js';
 import { renderSiteMapSchema } from './templates/site-map-schema.js';
 import { renderGitHooks } from './templates/git-hooks.js';
 import { renderOverridesReadme } from './templates/overrides-readme.js';
@@ -70,12 +69,6 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderEditorConfig() },
-    },
-    {
-      path: 'docs/site-map/site-map.html',
-      writePolicy: 'create-if-absent',
-      provenance: { origin: 'project' },
-      source: { kind: 'inline', text: renderSiteMapHtml(opts.baseUrl) },
     },
     {
       path: 'docs/site-map/site-map.schema.json',

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { renderSiteMapHtml } from '../../engine/src/plan/templates/site-map-html.js';
 import { planSharedScaffold } from '../../engine/src/plan/shared.js';
 import { checkAiTooling } from '../../cli/src/commands/doctor.js';
 import { planAiOperationalSkills } from '../../engine/src/plan/templates/ai-operational-skills.js';
@@ -11,19 +10,6 @@ import { renderGitHooks } from '../../engine/src/plan/templates/git-hooks.js';
 
 describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
   const assistants = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
-
-  it('AC-1: renderSiteMapHtml generates a real site-map.json-driven viewer, not a static dashboard', () => {
-    const html = renderSiteMapHtml('http://localhost:3000');
-    expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('Site Map');
-    expect(html).toContain("fetch('./site-map.json')");
-    expect(html).toContain('filterRows');
-
-    const files = planSharedScaffold({});
-    const graphFile = files.find((f) => f.path === 'docs/site-map/site-map.html');
-    expect(graphFile).toBeDefined();
-    expect(graphFile?.writePolicy).toBe('create-if-absent');
-  });
 
   it('AC-2: eitr doctor --ai diagnostic check function is available', async () => {
     expect(typeof checkAiTooling).toBe('function');
@@ -129,11 +115,11 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
   });
 
   it('AC-9 & AC-10: Zero-Emoji and Zero Lock-in compliance', () => {
-    const html = renderSiteMapHtml('http://localhost:3000');
+    const authSetup = renderAuthSetupTs();
     const hook = renderGitHooks();
 
     const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
-    expect(emojiRegex.test(html)).toBe(false);
+    expect(emojiRegex.test(authSetup)).toBe(false);
     expect(emojiRegex.test(hook)).toBe(false);
   });
 });

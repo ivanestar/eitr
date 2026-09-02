@@ -382,11 +382,15 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).not.toContain('.windsurf/mcp.json');
     expect(paths).not.toContain('.codex/mcp.json');
 
-    // Site map (docs/site-map/ subfolder, not the old flat docs/ paths)
+    // Site map (docs/site-map/ subfolder, not the old flat docs/ paths). No HTML viewer - removed
+    // deliberately (maintainer decision, 2026-09-02): fetch() to a sibling local file is blocked
+    // under file://, the viewer had already drifted behind the schema (no coverage/routeId/
+    // business-intent.json awareness), and an AI-assistant-driven SDET has a strictly better
+    // interface to the same data already (ask the assistant) - see known-gaps.md.
     expect(paths).toContain('docs/site-map/site-map.schema.json');
-    expect(paths).toContain('docs/site-map/site-map.html');
     expect(paths).not.toContain('docs/site-map.schema.json');
     expect(paths).not.toContain('docs/app-graph.html');
+    expect(paths).not.toContain('docs/site-map/site-map.html');
 
     // Root Context & Layer 1
     expect(paths).toContain('AGENTS.md');
