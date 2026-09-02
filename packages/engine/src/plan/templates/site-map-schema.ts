@@ -1,6 +1,8 @@
-// Template for generating docs/site-map.schema.json, the JSON Schema for docs/site-map.json.
-// create-if-absent. See decisions/0010-agent-operations-as-skills-not-cli.md for why this exists
-// as a formal schema rather than the one line of prose the /map-site skill used to rely on.
+// Template for generating docs/site-map/site-map.schema.json, the JSON Schema for
+// docs/site-map/site-map.json. create-if-absent. A real, separate JSON Schema file (rather than
+// folding the shape into the /map-site skill's own prose) lets any tooling - a lint script, an
+// editor's file-association settings, ajv in a test - check site-map.json's shape mechanically,
+// instead of relying on an agent remembering the contract correctly every time it writes the file.
 //
 // Written as a literal string (not JSON.stringify(obj, null, 2)) because JSON.stringify always
 // puts every array element on its own line regardless of length, while Prettier's JSON printer
@@ -20,12 +22,18 @@ export function renderSiteMapSchema(): string {
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "const": 1,
-      "description": "Bump this on any breaking shape change. A consumer that sees a missing or unrecognized value should treat the file as absent and ask /map-site to regenerate it, not attempt to migrate it in place."
+      "const": 2,
+      "description": "Bump this on any breaking shape change. A consumer that sees a missing or unrecognized value should treat the file as absent and ask /map-site create to regenerate it, not attempt to migrate it in place."
     },
     "generatedAt": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "When /map-site create originally produced this file. Never changes on a later /map-site update pass - see lastUpdatedAt for that."
+    },
+    "lastUpdatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the most recent /map-site update pass ran. Absent on a file that has only ever been created, never updated."
     },
     "baseUrl": {
       "type": "string",
@@ -36,7 +44,14 @@ export function renderSiteMapSchema(): string {
       "description": "Keyed by canonical path template with dynamic segments collapsed (e.g. \\"/users/{id}\\" covers both /users/42 and /users/43). Serialize keys in sorted order for a deterministic diff.",
       "additionalProperties": {
         "type": "object",
-        "required": ["routeId", "sampleUrls", "discoveredAt"],
+        "required": [
+          "routeId",
+          "sampleUrls",
+          "discoveredAt",
+          "lastCheckedAt",
+          "contentHash",
+          "status"
+        ],
         "additionalProperties": false,
         "properties": {
           "routeId": {
@@ -70,7 +85,22 @@ export function renderSiteMapSchema(): string {
           },
           "discoveredAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "When this route was first found. Never changes once set."
+          },
+          "lastCheckedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this specific route was last actually re-fetched, by either /map-site create or /map-site update - distinct from discoveredAt (first found) and the file-level lastUpdatedAt (whole-file pass timestamp)."
+          },
+          "contentHash": {
+            "type": "string",
+            "description": "Hash of a normalized structural signal for this route - title plus sorted regions plus sorted components, NOT raw HTML (too noisy: whitespace, analytics scripts, and embedded timestamps would cause false-positive \\"changed\\" signals). /map-site update recomputes this per route and skips full re-extraction when it matches the stored value; every pass must compute it the same way for the comparison to mean anything."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "removed"],
+            "description": "\\"removed\\" means /map-site update could no longer resolve this route (404, vanished from nav) - the entry is kept, not silently deleted, so a consumer can see route-removal history. A full /map-site create pass prunes \\"removed\\" entries when it regenerates fresh."
           }
         }
       }

@@ -102,8 +102,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
       mustContainKeySteps: [
         'URL Canonicalization',
         'Pagination Normalization',
-        'docs/site-map.json',
-        'docs/APP_GRAPH.md',
+        'docs/site-map/site-map.json',
         'frequency >= 2',
         'components/widgets/',
       ],
