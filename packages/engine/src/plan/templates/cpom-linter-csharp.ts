@@ -40,6 +40,10 @@ export function renderCpomLinterCsharp(): string {
 //      heuristic - same confidence tier as the existing TypeScript Rule 4.
 //   5. Fixture Dependency Injection - rejects raw "new SomePage(...)" / "new SomeComponent(...)"
 //      in test specs outside setup/fixture files.
+//   6. Anti-Over-Mocking Guard - rejects unannotated Page.RouteAsync()/Context.RouteAsync()/
+//      BrowserContext.RouteAsync()/RouteFromHARAsync() calls in test specs. A
+//      "// @allow-mock: <reason>" comment on the flagged line, the line before, or the line
+//      after suppresses it (legitimate 3rd-party isolation like analytics or Sentry).
 
 using System;
 using System.Collections.Generic;
@@ -62,6 +66,10 @@ var stateReadCalls = new[] {
 // than by a fixed name list, so a future GetLocator()-shaped accessor is still exempt and a future
 // GetValueNowAsync()-shaped state reader is still correctly caught.
 var structuralReturnTypes = new HashSet<string> { "ILocator", "IPage", "IBrowserContext", "IFrame", "IFrameLocator", "IElementHandle" };
+var mockCallNeedles = new[] {
+    "Page.RouteAsync(", "Context.RouteAsync(", "BrowserContext.RouteAsync(",
+    "Page.RouteFromHARAsync(", "Context.RouteFromHARAsync(", "BrowserContext.RouteFromHARAsync("
+};
 
 var violations = new List<(string File, int Line, string Rule, string Message, string Snippet)>();
 var files = new List<string>();
@@ -213,7 +221,55 @@ void AuditFile(string file)
                     trimmed));
             }
         }
+
+        if (isTest && !isFixtureOrSetup)
+        {
+            foreach (var needle in mockCallNeedles)
+            {
+                if (line.Contains(needle) && !HasAllowMockSuppression(lines, i))
+                {
+                    violations.Add((relPath, lineNum, "Rule 6: Inappropriate Mocking Guard",
+                        $"Network route interception/mocking detected (\\"{needle}...)\\"). This can mask a real " +
+                        "backend defect behind a fake-green test. If this is legitimate 3rd-party isolation " +
+                        "(e.g. analytics, Sentry), annotate with \\"// @allow-mock: <reason>\\".",
+                        trimmed));
+                    break;
+                }
+            }
+        }
     }
+}
+
+bool HasAllowMockSuppression(string[] lines, int idx)
+{
+    for (var i = idx - 1; i <= idx + 1; i++)
+    {
+        if (i < 0 || i >= lines.Length)
+        {
+            continue;
+        }
+        if (LineHasAllowMockMarker(lines[i]))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool LineHasAllowMockMarker(string candidate)
+{
+    var markerIdx = candidate.IndexOf("@allow-mock:", StringComparison.Ordinal);
+    if (markerIdx < 0)
+    {
+        return false;
+    }
+    var slashIdx = candidate.LastIndexOf("//", markerIdx, StringComparison.Ordinal);
+    if (slashIdx < 0 || candidate.Substring(slashIdx + 2, markerIdx - slashIdx - 2).Trim().Length > 0)
+    {
+        return false;
+    }
+    var reason = candidate.Substring(markerIdx + "@allow-mock:".Length).Trim();
+    return reason.Length > 0;
 }
 
 bool StartsWithPrefix(string name, string prefix)

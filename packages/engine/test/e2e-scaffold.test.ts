@@ -15,7 +15,7 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     testIdAttribute: { value: 'data-testid', confidence: 'high' },
   };
 
-  it('generates scripts/lint-cpom.js with 5 core CPOM rules in shared scaffold', () => {
+  it('generates scripts/lint-cpom.js with 6 core CPOM rules in shared scaffold', () => {
     const files = planSharedScaffold({ language: 'typescript', automationTool: 'playwright' });
     const paths = files.map((f) => f.path);
     expect(paths).toContain('scripts/lint-cpom.js');
@@ -27,6 +27,7 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     expect(linterFile?.source.text).toContain('Rule 3: Zero Assertions in Components');
     expect(linterFile?.source.text).toContain('Rule 4: Unawaited Promise Guard');
     expect(linterFile?.source.text).toContain('Rule 5: Fixture Dependency Injection');
+    expect(linterFile?.source.text).toContain('Rule 6: Inappropriate Mocking Guard');
   });
 
   it('renders package.json with lint:cpom script', () => {

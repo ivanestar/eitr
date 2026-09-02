@@ -8,6 +8,31 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.12.0] - 2026-09-02
+
+### Added
+
+- **CPOM linter Rule 6: Anti-Over-Mocking Guard**, across all 4 languages (TypeScript/Cypress,
+  Python, Java, C#). Flags an unannotated network route mock/interception
+  (`page.route()`/`context.route()`/`browserContext.route()`/`routeFromHAR()` and their
+  language-native equivalents, plus `cy.intercept()` for Cypress) in a test spec - a known
+  AI-coding-assistant failure mode where a failing test gets "fixed" by mocking the tested endpoint
+  instead of the real backend defect getting fixed, producing a false-green test. Suppress with a
+  structured `// @allow-mock: <reason>` (`#` in Python) comment carrying a non-empty reason, on the
+  flagged line, the line before, or the line after - for legitimate 3rd-party isolation (analytics,
+  Sentry). Fixture/setup files are exempt, matching Rule 5's existing exemption in every language.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/cpom-linter-parity.test.ts packages/engine/test/e2e-scaffold.test.ts
+packages/engine/test/plan.matrix.test.ts` (126 passed, 3 skipped - the 3 skips are the pre-existing
+.NET-10-gated C# real-execution tests; this machine only has .NET 8 installed, CI has a separate
+.NET 10 job). Independently reviewed by the `framework-auditor` agent: 1 MAJOR (Python's Rule 6
+matched `.route(...)` on any receiver, not just `page`/`context`/`browser_context` like the other 3
+languages) and 2 MINOR (Java/C#'s `// @allow-mock:` suppression check matched a `//` and
+`@allow-mock:` appearing anywhere on the same line rather than immediately adjacent; the TS/Cypress
+`cy.intercept()` detection branch had no real-execution test) - all 3 fixed in this same release,
+each with its own new regression test proving the fix.
+
 ## [0.11.0] - 2026-09-02
 
 ### Fixed

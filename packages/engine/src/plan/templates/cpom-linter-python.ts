@@ -21,9 +21,14 @@ Rules enforced (parity with scripts/lint-cpom.js for TypeScript/Cypress):
   5. Fixture Dependency Injection - rejects raw PageObject(page)/Component(page) construction in
      test files (tests/), mirroring the TS/Java/C# rule. conftest.py and any file with "fixture"
      in its name are exempt (that is where such construction is meant to happen).
+  6. Anti-Over-Mocking Guard - rejects unannotated page.route()/context.route()/route_from_har()
+     calls in test files. A "# @allow-mock: <reason>" comment on the flagged line, the line
+     before, or the line after suppresses it (legitimate 3rd-party isolation like analytics or
+     Sentry), mirroring the TS/Java/C# rule.
 """
 import ast
 import os
+import re
 import sys
 
 IGNORED_DIR_NAMES = {
@@ -65,16 +70,28 @@ STRUCTURAL_GETTER_EXEMPTIONS = {
 
 CPOM_BASE_CLASS_NAMES = {"BasePage", "Component"}
 
+MOCK_CALL_NAMES = {"route", "route_from_har"}
+MOCK_RECEIVER_NAMES = {"page", "context", "browser_context"}
+
+ALLOW_MOCK_PATTERN = re.compile(r"#\\s*@allow-mock:\\s*\\S")
+
 
 class CpomVisitor(ast.NodeVisitor):
     """Walks one file's AST, collecting CPOM contract violations."""
 
-    def __init__(self, is_component: bool, is_test: bool, is_fixture: bool) -> None:
+    def __init__(self, is_component: bool, is_test: bool, is_fixture: bool, lines: list[str]) -> None:
         self.is_component = is_component
         self.is_test = is_test
         self.is_fixture = is_fixture
+        self.lines = lines
         self.class_depth = 0
         self.violations: list[tuple[int, str, str]] = []
+
+    def _has_allow_mock_suppression(self, lineno: int) -> bool:
+        for candidate in (lineno, lineno - 1, lineno + 1):
+            if 1 <= candidate <= len(self.lines) and ALLOW_MOCK_PATTERN.search(self.lines[candidate - 1]):
+                return True
+        return False
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.class_depth += 1
@@ -118,8 +135,11 @@ class CpomVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
         attr_name = None
+        receiver_name = None
         if isinstance(func, ast.Attribute):
             attr_name = func.attr
+            if isinstance(func.value, ast.Name):
+                receiver_name = func.value.id
         elif isinstance(func, ast.Name):
             attr_name = func.id
 
@@ -153,6 +173,22 @@ class CpomVisitor(ast.NodeVisitor):
                 "Inject it as a pytest fixture parameter instead (see conftest.py).",
             ))
 
+        if (
+            self.is_test
+            and not self.is_fixture
+            and attr_name in MOCK_CALL_NAMES
+            and receiver_name in MOCK_RECEIVER_NAMES
+            and not self._has_allow_mock_suppression(node.lineno)
+        ):
+            self.violations.append((
+                node.lineno,
+                "Rule 6: Inappropriate Mocking Guard",
+                'Network route interception/mocking detected ("' + attr_name + '(...)"). This '
+                "can mask a real backend defect behind a fake-green test. If this is legitimate "
+                '3rd-party isolation (e.g. analytics, Sentry), annotate with '
+                '"# @allow-mock: <reason>".',
+            ))
+
         self.generic_visit(node)
 
 
@@ -184,7 +220,7 @@ def audit_file(cwd: str, path: str, violations_out: list[tuple[str, int, str, st
         violations_out.append((rel_path, 0, "Rule 0: Parse Error", str(err)))
         return
 
-    visitor = CpomVisitor(is_component, is_test, is_fixture)
+    visitor = CpomVisitor(is_component, is_test, is_fixture, source.splitlines())
     visitor.visit(tree)
     for lineno, rule, message in visitor.violations:
         violations_out.append((rel_path, lineno, rule, message))
