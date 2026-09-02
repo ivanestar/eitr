@@ -310,7 +310,10 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // disable-model-invocation (real side effects: live network crawl, file writes).
     const claudeMapSkill = files.find((f) => f.path === '.claude/skills/map-site/SKILL.md');
     expect(claudeMapSkill?.source.text).toContain('arguments: [mode]');
-    expect(claudeMapSkill?.source.text).toContain('argument-hint: [create|update]');
+    // Must be YAML-double-quoted - an unquoted value starting with "[" parses as a flow-sequence
+    // (array), not a string, which is exactly the "'argument-hint' attribute must be a string"
+    // validation error a real generated project hit before this was fixed.
+    expect(claudeMapSkill?.source.text).toContain('argument-hint: "[create|update]"');
     expect(claudeMapSkill?.source.text).toContain('disable-model-invocation: true');
     // A skill without disableModelInvocation set must not get the line at all.
     const claudeHealSkill = files.find((f) => f.path === '.claude/skills/heal-test/SKILL.md');

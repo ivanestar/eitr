@@ -25,7 +25,12 @@ function argumentFrontmatter(skill: SkillDefinition): string {
     lines.push(`arguments: [${skill.arguments.join(', ')}]`);
   }
   if (skill.argumentHint) {
-    lines.push(`argument-hint: ${skill.argumentHint}`);
+    // Always YAML-double-quoted: the hint's own documented example values ('[issue-number]',
+    // '[create|update]') start with '[', which an unquoted YAML scalar parses as a flow sequence
+    // (an array) instead of a string - exactly the "must be a string" validation error this
+    // guards against. Escape backslashes first, then quotes, so any future hint value stays safe.
+    const escaped = skill.argumentHint.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    lines.push(`argument-hint: "${escaped}"`);
   }
   return lines.length > 0 ? '\n' + lines.join('\n') : '';
 }
