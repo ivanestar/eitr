@@ -193,7 +193,7 @@ describe('apply() (runnable project)', () => {
       expect(existsSync(join(cwd, 'components/base/base_page.py'))).toBe(true);
       expect(result.written.length).toBeGreaterThan(0);
 
-      execSync('python -m compileall -q .', { cwd, stdio: 'ignore' });
+      execSync('python -m compileall -q -x "[/\\\\\\\\]node_modules" .', { cwd, stdio: 'ignore' });
     },
   );
 });
