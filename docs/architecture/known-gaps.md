@@ -33,7 +33,11 @@ is for gaps significant enough to shape future architecture, not routine finding
   again.
 - **Requirements → test-case generation:** an agent that derives test cases from live application
   analysis or existing requirements documentation, rather than from an already-written TMS ticket,
-  is a considered future extension (see the README's Introduction) but not yet built.
+  is a considered future extension (see the README's Introduction) but not yet built. The shape a
+  future implementation must take - a staged, mechanically-gated pipeline in the assistant layer,
+  subsuming `/legacy-audit` and the Requirements-Diff Agent backlog items as entry points rather than
+  separate features - is settled in
+  [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md).
 - **CI test sharding for Java/C# on GitHub Actions:** resolved (Track 8, maintainer-authorized
   reversal of the original position below, 2026-09-02). Neither Maven Surefire/Gradle nor NUnit
   ships a free, official automatic-balanced-split mechanism (only manual tag/category filtering
