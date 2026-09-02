@@ -8,6 +8,29 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.15.0] - 2026-09-02
+
+### Added
+
+- **Deterministic FNV-1a hash-based CI sharding for C# and Java on GitHub Actions**, closing a
+  documented known gap by explicit maintainer authorization (reversed on CI-execution-time grounds,
+  not tooling availability). TS/JS and Python already sharded 4-way (`--shard`/`pytest-split`); C#
+  (NUnit) and Java (Maven Surefire/Gradle) now do too, via a deterministic hash partitioner over
+  discovered test-class names (partitions by class **count**, not measured execution time - the
+  same class of limitation `pytest-split`/`--shard` accept by default).
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test/cicd-content.test.ts` (49 passed), `packages/engine/test/e2e-scaffold.test.ts
+packages/engine/test/plan.matrix.test.ts` (106 passed), `npm run eval` (183 passed). The plan's own
+example PowerShell code was actually executed - not just read - against 3 real generated projects
+(C#, Java+Maven, Java+Gradle), surfacing and fixing 4 real bugs inherited from the plan itself
+before this shipped: a PowerShell hex-literal masking bug that crashed the hash function after a
+few iterations; a test-discovery path/filename mismatch that would have silently run zero tests in
+every C# shard forever; a broken `dotnet test` response-file mechanism; and an unquoted Maven
+property argument corrupted by PowerShell's argument marshaling on Windows. `docs/architecture/known-gaps.md`
+updated accordingly. GitHub Actions only - GitLab CI, Jenkins, and TeamCity remain unsharded for
+these two languages, matching this track's own acceptance criterion.
+
 ## [0.14.0] - 2026-09-02
 
 ### Added

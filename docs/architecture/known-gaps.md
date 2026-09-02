@@ -34,10 +34,16 @@ is for gaps significant enough to shape future architecture, not routine finding
 - **Requirements → test-case generation:** an agent that derives test cases from live application
   analysis or existing requirements documentation, rather than from an already-written TMS ticket,
   is a considered future extension (see the README's Introduction) but not yet built.
-- **No CI test sharding for Java or C#:** TS/JS (Playwright's native `--shard`) and Python
-  (`pytest-split`) shard 4-way across all 4 generated CI systems. Java (Maven Surefire/Gradle +
-  JUnit 5) and C# (NUnit) deliberately do not, and won't gain a hand-rolled EITR-authored splitter
-  either - neither ecosystem ships a free, official automatic-balanced-split mechanism (only manual
-  tag/category filtering with no auto-balancing; the one real automatic option, Gradle Develocity
-  Test Distribution, is a paid product, out of place in a free/OSS scaffolder). Re-open only if one
-  of these ecosystems ships a free official equivalent to `pytest-split`/`--shard`.
+- **CI test sharding for Java/C# on GitHub Actions:** resolved (Track 8, maintainer-authorized
+  reversal of the original position below, 2026-09-02). Neither Maven Surefire/Gradle nor NUnit
+  ships a free, official automatic-balanced-split mechanism (only manual tag/category filtering
+  with no auto-balancing; the one real automatic option, Gradle Develocity Test Distribution, is a
+  paid product), so the original decision was to accept the gap rather than hand-roll a splitter.
+  The maintainer authorized reversing that decision on different grounds (CI execution time on
+  large projects, not tooling availability), so a deterministic FNV-1a hash-based class-count
+  partitioner now 4-way shards C# and Java the same way TS/JS (`--shard`) and Python
+  (`pytest-split`) already did - GitHub Actions only, matching Track 8's own acceptance criterion;
+  GitLab CI/Jenkins/TeamCity remain unsharded for these two languages. Partitions by test-class
+  **count**, not measured execution time (same class of limitation `pytest-split`/`--shard` accept
+  by default). Re-open only on a new, explicit maintainer decision (e.g. to extend sharding to the
+  other 3 CI providers) - not on a future audit finding this gap again.
