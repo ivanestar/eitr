@@ -7,6 +7,21 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.24.0] - 2026-09-03
+
+- **Fixed**: business-intent analysis (`/map-site` Step 6) now runs automatically as part of every
+  `create`/`update` pass instead of needing a separate, undiscoverable explicit request - closes the
+  gap where a user had no way to know Step 6 existed short of reading skill source.
+- **Fixed**: internal architecture-decision references ("ADR 0012" and its dev-repo-only file path)
+  no longer leak into generated scripts, type-contract files, or skill text - they described a
+  document that doesn't exist in a generated project at all.
+- **Changed**: `site-map.schema.json`, `business-intent.types.ts`, and `test-conditions.types.ts`
+  moved from `docs/` to `.scaffold/schemas/` - `docs/` is reserved for the filled-in artifacts
+  themselves (useful context on their own), not tooling/schema files.
+- **Changed**: the Human Sign-Off Gateway tables in `/map-site` and `/derive-test-conditions` now
+  resolve each `routeId` to its human-readable path/title before printing, and cap long tables to
+  the most actionable rows instead of listing every route.
+
 ## [0.23.0] - 2026-09-03
 
 - **Added**: ADR 0012 Stage 2 - test-condition derivation. A new `/derive-test-conditions` skill

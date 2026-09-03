@@ -75,7 +75,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       source: { kind: 'inline', text: renderEditorConfig() },
     },
     {
-      path: 'docs/site-map/site-map.schema.json',
+      path: '.scaffold/schemas/site-map.schema.json',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderSiteMapSchema() },
@@ -97,7 +97,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             source: { kind: 'inline', text: renderSwarmDispatcher() },
           },
           {
-            path: 'docs/analysis/business-intent.types.ts',
+            path: '.scaffold/schemas/business-intent.types.ts',
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderBusinessIntentTypes() },
@@ -115,7 +115,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             source: { kind: 'inline', text: renderSiteMapValidator() },
           },
           {
-            path: 'docs/analysis/test-conditions.types.ts',
+            path: '.scaffold/schemas/test-conditions.types.ts',
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderTestConditionsTypes() },

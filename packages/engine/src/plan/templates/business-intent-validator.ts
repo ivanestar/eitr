@@ -10,7 +10,7 @@ export function renderBusinessIntentValidator(): string {
   return `#!/usr/bin/env node
 
 /**
- * Mechanical shape gate for docs/analysis/business-intent.json (ADR 0012 Stage 1).
+ * Mechanical shape gate for docs/analysis/business-intent.json.
  * Zero model involvement - pure structural checks, run by /map-site's Step 6 before presenting
  * results at the Human Sign-Off Gateway.
  *

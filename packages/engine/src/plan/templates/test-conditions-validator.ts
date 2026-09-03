@@ -9,7 +9,7 @@ export function renderTestConditionsValidator(): string {
   return `#!/usr/bin/env node
 
 /**
- * Mechanical shape gate for docs/analysis/test-conditions.json (ADR 0012 Stage 2).
+ * Mechanical shape gate for docs/analysis/test-conditions.json.
  * Zero model involvement - pure structural checks, run by /derive-test-conditions before Gate 1
  * (parameters shape, via --stage=parameters) and again in full (Gate 2) before the Human Sign-Off
  * Gateway.

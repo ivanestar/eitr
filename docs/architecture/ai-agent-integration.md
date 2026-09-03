@@ -82,12 +82,12 @@ verifying actual business logic:
 
 ## Business-intent analysis (`/map-site` Step 6, ADR 0012 Stage 1)
 
-An opt-in, strictly read-only `/map-site` step infers per-route business intent
-(`businessFeature`) and criticality (`criticalityTier`) into a typed artifact,
-`docs/analysis/business-intent.json` (`docs/analysis/business-intent.types.ts` documents its
-shape - `schemaVersion: 1`, `Field<T>`-wrapped values, keyed by `routeId`). It never runs
-automatically and never performs a mutating Playwright call of any kind, not even a `trial: true`
-dry-run - inference draws only from already-rendered page title, heading text, form field labels,
+A strictly read-only `/map-site` step, run automatically as part of every `create`/`update` pass
+(unless the user explicitly asks to skip it), infers per-route business intent (`businessFeature`)
+and criticality (`criticalityTier`) into a typed artifact, `docs/analysis/business-intent.json`
+(`.scaffold/schemas/business-intent.types.ts` documents its shape - `schemaVersion: 1`,
+`Field<T>`-wrapped values, keyed by `routeId`). It never performs a mutating Playwright call of any
+kind, not even a `trial: true` dry-run - inference draws only from already-rendered page title, heading text, form field labels,
 button/link text, and ARIA roles reached by a single navigation per route. A zero-dependency
 validator (`scripts/validate-business-intent.mjs`) mechanically checks the artifact's shape before
 a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
@@ -103,9 +103,9 @@ for the design decision this implements and what remains out of scope for this f
 
 ## Test-condition derivation (`/derive-test-conditions`, ADR 0012 Stage 2)
 
-A second, also opt-in and strictly read-only skill consumes `business-intent.json`'s
+A second, explicit-request-only, strictly read-only skill consumes `business-intent.json`'s
 `reviewed: true` entries plus `site-map.json` and derives typed test conditions per route into
-`docs/analysis/test-conditions.json` (`docs/analysis/test-conditions.types.ts` documents its
+`docs/analysis/test-conditions.json` (`.scaffold/schemas/test-conditions.types.ts` documents its
 shape). An LLM step infers form parameters and their equivalence partitions from markup only
 (tag, `type`, label text, HTML5 constraint attributes, `<select>` option text, static ARIA
 relationships) - never a field's current `value`/`checked`/`selected` state, never a mutating

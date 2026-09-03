@@ -1,5 +1,9 @@
-// Template for generating docs/site-map/site-map.schema.json, the JSON Schema for
-// docs/site-map/site-map.json. create-if-absent. A real, separate JSON Schema file (rather than
+// Template for generating .scaffold/schemas/site-map.schema.json, the JSON Schema for
+// docs/site-map/site-map.json. create-if-absent. Lives under .scaffold/ (engine-owned machinery),
+// not docs/ - docs/ is reserved for the actual filled-in artifacts (site-map.json,
+// business-intent.json, test-conditions.json), which are useful context on their own; a schema
+// file or a type-contract .ts file is tooling, not something a human reads for context. A real,
+// separate JSON Schema file (rather than
 // folding the shape into the /map-site skill's own prose) lets any tooling - a lint script, an
 // editor's file-association settings, ajv in a test - check site-map.json's shape mechanically,
 // instead of relying on an agent remembering the contract correctly every time it writes the file.

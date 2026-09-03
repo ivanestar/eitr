@@ -1,7 +1,7 @@
-// Template for generating docs/analysis/business-intent.types.ts, the typed contract for
-// docs/analysis/business-intent.json (Stage 1 of the app-analysis pipeline settled by ADR 0012,
-// docs/architecture/decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md).
-// create-if-absent.
+// Template for generating .scaffold/schemas/business-intent.types.ts, the typed contract for
+// docs/analysis/business-intent.json (Stage 1 of the app-analysis pipeline). create-if-absent.
+// Lives under .scaffold/ (engine-owned machinery), not docs/ - see site-map-schema.ts's header
+// comment for why.
 //
 // Deliberately a plain TypeScript interface file, not a JSON Schema document: this repo's own
 // deterministic core already settled on "typed interface + schemaVersion literal, checked only by

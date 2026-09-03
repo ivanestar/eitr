@@ -1,7 +1,7 @@
-// Template for generating docs/analysis/test-conditions.types.ts, the typed contract for
-// docs/analysis/test-conditions.json (Stage 2 of the app-analysis pipeline settled by ADR 0012,
-// docs/architecture/decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md).
-// create-if-absent.
+// Template for generating .scaffold/schemas/test-conditions.types.ts, the typed contract for
+// docs/analysis/test-conditions.json (Stage 2 of the app-analysis pipeline). create-if-absent.
+// Lives under .scaffold/ (engine-owned machinery), not docs/ - see site-map-schema.ts's header
+// comment for why.
 //
 // Same "documentation-as-code, not imported at runtime" convention as business-intent-types.ts -
 // real mechanical enforcement comes from scripts/validate-test-conditions.mjs instead.
@@ -58,8 +58,8 @@ export interface ConstraintRule {
 }
 
 // Deliberately empty ({}) on every generated condition - auto-synthesizing this from live network
-// responses would require actually submitting the form, which ADR 0012 Rule 3's read-only default
-// forbids. A human fills this in at sign-off.
+// responses would require actually submitting the form, which this pipeline's read-only-by-default
+// safety rule forbids. A human fills this in at sign-off.
 export interface VerificationContract {
   ui?: string;
   state?: string;

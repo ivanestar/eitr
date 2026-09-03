@@ -19,7 +19,7 @@ export function renderTestConditionsEngine(): string {
   return `#!/usr/bin/env node
 
 /**
- * Deterministic test-condition generator for docs/analysis/test-conditions.json (ADR 0012 Stage 2).
+ * Deterministic test-condition generator for docs/analysis/test-conditions.json.
  * Zero model involvement - reads parameters[]/constraints[] already extracted per route and
  * mechanically computes 2-way combinatorial coverage plus 3-value boundary-value conditions.
  *
