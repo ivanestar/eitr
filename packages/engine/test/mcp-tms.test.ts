@@ -205,12 +205,12 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(files.length).toBe(50);
     const paths = files.map((f) => f.path);
 
-    expect(paths).toContain('.agents/skills/auth-setup.md');
-    expect(paths).toContain('.agents/skills/scan-and-generate-pom.md');
-    expect(paths).toContain('.agents/skills/automate-ticket.md');
-    expect(paths).toContain('.agents/skills/heal-test.md');
-    expect(paths).toContain('.agents/skills/bulk-rescan.md');
-    expect(paths).toContain('.agents/skills/map-site.md');
+    expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
+    expect(paths).toContain('.agents/skills/scan-and-generate-pom/SKILL.md');
+    expect(paths).toContain('.agents/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.agents/skills/heal-test/SKILL.md');
+    expect(paths).toContain('.agents/skills/bulk-rescan/SKILL.md');
+    expect(paths).toContain('.agents/skills/map-site/SKILL.md');
 
     expect(paths).toContain('.claude/skills/auth-setup/SKILL.md');
     expect(paths).toContain('.cursor/skills/automate-ticket/SKILL.md');
@@ -229,7 +229,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     const windsurfUpdate = files.find((f) => f.path === '.windsurf/workflows/map-site-update.md');
     expect(windsurfUpdate?.source.text).toContain('UPDATE mode');
 
-    const mapSkill = files.find((f) => f.path === '.agents/skills/map-site.md');
+    const mapSkill = files.find((f) => f.path === '.agents/skills/map-site/SKILL.md');
     expect(mapSkill?.source.text).toContain('docs/site-map/site-map.json');
     expect(mapSkill?.source.text).toContain('Shared Widget Mining');
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
@@ -301,7 +301,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     // AC7: Step 6's marker text renders identically into all 8 map-site-bearing generated paths.
     const mapSiteBearingPaths = [
-      '.agents/skills/map-site.md',
+      '.agents/skills/map-site/SKILL.md',
       '.claude/skills/map-site/SKILL.md',
       '.cursor/skills/map-site/SKILL.md',
       '.windsurf/workflows/map-site.md',
@@ -332,19 +332,19 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     const claudeHealSkill = files.find((f) => f.path === '.claude/skills/heal-test/SKILL.md');
     expect(claudeHealSkill?.source.text).not.toContain('disable-model-invocation');
 
-    const pomSkill = files.find((f) => f.path === '.agents/skills/scan-and-generate-pom.md');
+    const pomSkill = files.find((f) => f.path === '.agents/skills/scan-and-generate-pom/SKILL.md');
     expect(pomSkill?.source.text).not.toContain('tests/pom-sanity');
     expect(pomSkill?.source.text).toContain('Tier 1 (Actionable Visibility');
     expect(pomSkill?.source.text).toContain('locator.click({ trial: true })');
     expect(pomSkill?.source.text).toContain('Mandatory Execution & Self-Healing Loop');
     expect(pomSkill?.source.text).toContain('Mandatory Handoff Report');
 
-    const automateSkill = files.find((f) => f.path === '.agents/skills/automate-ticket.md');
+    const automateSkill = files.find((f) => f.path === '.agents/skills/automate-ticket/SKILL.md');
     expect(automateSkill?.source.text).toContain('tms-validator');
     expect(automateSkill?.source.text).toContain('Human Sign-Off Gateway');
     expect(automateSkill?.source.text).toContain('tests/TC-');
 
-    const healSkill = files.find((f) => f.path === '.agents/skills/heal-test.md');
+    const healSkill = files.find((f) => f.path === '.agents/skills/heal-test/SKILL.md');
     expect(healSkill?.source.text).toContain('Fail-Fast Real Bug Detection');
     expect(healSkill?.source.text).toContain('Isolated Execution');
     expect(healSkill?.source.text).toContain('Two-Strike Rule');
@@ -410,17 +410,17 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).toContain('.github/agents/sdet-orchestrator.agent.md');
 
     // Skills
-    expect(paths).toContain('.agents/skills/auth-setup.md');
-    expect(paths).toContain('.agents/skills/scan-and-generate-pom.md');
-    expect(paths).toContain('.agents/skills/automate-ticket.md');
-    expect(paths).toContain('.agents/skills/heal-test.md');
-    expect(paths).toContain('.agents/skills/bulk-rescan.md');
+    expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
+    expect(paths).toContain('.agents/skills/scan-and-generate-pom/SKILL.md');
+    expect(paths).toContain('.agents/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.agents/skills/heal-test/SKILL.md');
+    expect(paths).toContain('.agents/skills/bulk-rescan/SKILL.md');
 
     // Negative assertions: ensure NO legacy duplicate skills are emitted
     expect(paths).not.toContain('.claude/skills/framework-harmonizer/SKILL.md');
     expect(paths).not.toContain('.cursor/skills/harmonize/SKILL.md');
     expect(paths).not.toContain('.windsurf/rules/harmonize.md');
-    expect(paths).not.toContain('.agents/skills/framework-harmonizer.md');
+    expect(paths).not.toContain('.agents/skills/framework-harmonizer/SKILL.md');
     expect(paths).not.toContain('.codex/skills/framework-harmonizer/SKILL.md');
   });
 
@@ -441,7 +441,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).not.toContain('.codex/config.toml');
     expect(paths).not.toContain('.vscode/mcp.json');
     expect(paths).toContain('.agents/agents/sdet-orchestrator/agent.md');
-    expect(paths).toContain('.agents/skills/auth-setup.md');
+    expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
     expect(paths).toContain('.cursor/skills/test-automator/SKILL.md');
     expect(paths).toContain('.claude/agents/assertion-auditor.md');
   });

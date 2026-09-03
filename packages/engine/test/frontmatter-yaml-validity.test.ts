@@ -50,7 +50,7 @@ describe('every generated agent/skill frontmatter block is valid YAML', () => {
 
   it('regression: map-site (a description containing "Two modes: create...") parses as a plain string, not a nested mapping', () => {
     const files = planAiOperationalSkills(['antigravity'], 'playwright', 'typescript');
-    const mapSite = files.find((f) => f.path === '.agents/skills/map-site.md');
+    const mapSite = files.find((f) => f.path === '.agents/skills/map-site/SKILL.md');
     expect(mapSite).toBeDefined();
     const frontmatter = extractFrontmatter(mapSite!.source.text);
     const parsed = parseYaml(frontmatter!);

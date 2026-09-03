@@ -403,7 +403,14 @@ export function planAiOperationalSkills(
     if (assistant === 'antigravity') {
       for (const skill of skills) {
         descriptors.push({
-          path: `.agents/skills/${skill.name}.md`,
+          // Folder-per-skill with a SKILL.md file, not a flat <name>.md file - live-verified
+          // 2026-09-03 against the exact installed Antigravity CLI's own bundled documentation
+          // (`agy --print`, its built-in `agy-customizations` skill): "A skill cannot be a single
+          // standalone file placed directly in .agents/skills/. It must be placed inside its own
+          // subfolder and named SKILL.md." A flat file is silently never discovered at all - not
+          // a parsing error, just invisible - which is a stricter failure than the YAML-escaping
+          // bug already fixed for this same block (that fix was necessary but not sufficient).
+          path: `.agents/skills/${skill.name}/SKILL.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {

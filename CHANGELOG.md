@@ -8,6 +8,38 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.19.0] - 2026-09-03
+
+### Fixed
+
+- **Antigravity CLI custom skills were structurally invisible - a flat file was never discovered
+  at all, regardless of the YAML fix in `[0.18.0]`.** The previous fix made every generated skill's
+  frontmatter valid YAML, but `map-site` still did not appear in Antigravity's skill list -
+  investigated end to end rather than assumed fixed. Third-party docs and a live web fetch of
+  `antigravity.google/docs/cli/plugins` claimed a flat `.agents/skills/<name>.md` file was correct
+  (this is what `[0.16.0]`'s "RESOLVED 2026-08-31" DEFINITION-OF-DONE entry was itself based on and
+  had gotten backwards); an official Google codelab and a GitHub issue both pointed the opposite
+  way. Resolved decisively by asking the actually-installed `agy` CLI (v1.1.24) directly, in
+  non-interactive `--print` mode, to quote its own bundled `agy-customizations` skill: _"A skill
+  cannot be a single standalone file placed directly in `.agents/skills/`. It must be placed inside
+  its own subfolder and named `SKILL.md`."_ Fixed: `.agents/skills/${skill.name}.md` ->
+  `.agents/skills/${skill.name}/SKILL.md` in `ai-operational-skills.ts`. Also confirmed directly
+  from the same source: Antigravity skills are not slash commands at all - they are
+  autonomously activated by the agent based on the `description` field ("Progressive
+  Disclosure"), or explicitly requested by name in chat; the built-in `/goal`, `/plan`, `/boost`,
+  etc. are a small, fixed, non-extensible set.
+- Confirmed end to end with the real tool, not just theory: after rebuilding and rewriting the
+  fix into a real generated project, `agy --add-dir <absolute-path> --print "list every skill"`
+  listed `map-site` first among 14 discovered skills, resolved at the exact expected path.
+  (`agy --print` alone, or with a relative `--add-dir .`, does not bind a workspace at all in
+  non-interactive mode - a testing-methodology trap, not a product bug, worth remembering for any
+  future non-interactive `agy` verification.)
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test` (29 files, 434 passed + 3 skipped), `npm run eval` (182 passed), a real
+`agy --print` run against a freshly-regenerated project confirming `map-site` is discovered and
+listed, `npx prettier --check` on every touched file.
+
 ## [0.18.0] - 2026-09-03
 
 ### Fixed
