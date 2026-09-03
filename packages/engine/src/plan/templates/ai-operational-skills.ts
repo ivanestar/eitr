@@ -35,6 +35,21 @@ function argumentFrontmatter(skill: SkillDefinition): string {
   return lines.length > 0 ? '\n' + lines.join('\n') : '';
 }
 
+// Antigravity has no slash-command argument-substitution mechanism at all - live-verified
+// 2026-09-03 via the installed Antigravity CLI's own bundled documentation: skills are
+// autonomously activated by the agent from their `description`, or explicitly requested by name
+// in chat, never invoked as `/name arg`. A skill whose shared `content` body talks about "the
+// argument this skill was invoked with" (map-site's create/update mode selection) is therefore
+// describing a mechanism that does not exist on this assistant - mirrors the same real gap
+// Windsurf's map-site split already works around with its own inline caveat, generalized here for
+// any current or future skill that declares `arguments` rather than special-cased per skill name.
+function antigravityInvocationNote(skill: SkillDefinition): string {
+  if (!skill.arguments) return '';
+  return `> **Antigravity note:** this assistant has no slash-command argument mechanism - skills are activated autonomously from their description, or by explicitly asking for them in chat. Wherever the text below refers to "the argument this skill was invoked with," state the mode directly instead (e.g. "run ${skill.name} in create mode").
+
+`;
+}
+
 function buildOperationalSkills(tool: string, language: string): SkillDefinition[] {
   const isCypress = tool.toLowerCase().includes('cypress');
   const frameworkName = isCypress ? 'Cypress' : 'Playwright';
@@ -420,7 +435,7 @@ name: ${skill.name}
 description: ${yamlSafeScalar(skill.description)}
 ---
 
-${skill.content}`,
+${antigravityInvocationNote(skill)}${skill.content}`,
           },
         });
       }

@@ -235,6 +235,12 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
     expect(mapSkill?.source.text).not.toContain('APP_GRAPH.md');
 
+    // map-site declares `arguments: ['mode']`, so its Antigravity rendering must explain that
+    // Antigravity has no slash-command argument mechanism - live-verified 2026-09-03 (skills are
+    // activated autonomously from description, or requested by name in chat).
+    expect(mapSkill?.source.text).toContain('Antigravity note:');
+    expect(mapSkill?.source.text).toContain('no slash-command argument mechanism');
+
     // skill-reviewer pass (2026-09-02): description discloses the two optional steps, crawl
     // bounds are concrete numbers (not just "maximum depth and page count"), the PII-masking rule
     // is mechanically defined, and the businessFeature label has a checkable bound.
@@ -333,6 +339,9 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(claudeHealSkill?.source.text).not.toContain('disable-model-invocation');
 
     const pomSkill = files.find((f) => f.path === '.agents/skills/scan-and-generate-pom/SKILL.md');
+    // scan-and-generate-pom declares no `arguments`, so it must NOT get the Antigravity
+    // invocation-mechanism note - only skills with real argument-based mode selection need it.
+    expect(pomSkill?.source.text).not.toContain('Antigravity note:');
     expect(pomSkill?.source.text).not.toContain('tests/pom-sanity');
     expect(pomSkill?.source.text).toContain('Tier 1 (Actionable Visibility');
     expect(pomSkill?.source.text).toContain('locator.click({ trial: true })');

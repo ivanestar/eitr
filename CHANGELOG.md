@@ -8,6 +8,33 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.20.0] - 2026-09-03
+
+### Added
+
+- **Cross-assistant functional parity: skills whose mode selection depends on a slash-command
+  argument now explain themselves correctly on assistants that have no such mechanism.**
+  `map-site`'s shared body text describes "the argument this skill was invoked with" - accurate
+  for Claude Code/Cursor/Codex CLI's real `/name arg` support, but live-verified false for
+  Antigravity (skills are activated autonomously from their `description`, or requested by name in
+  chat - confirmed directly from the installed `agy` CLI itself in `[0.19.0]`). A new
+  `antigravityInvocationNote()` helper prepends a short, generic clarification - "state the mode
+  directly instead of relying on an argument" - to any skill that declares `arguments`, generated
+  automatically rather than special-cased per skill name (currently only `map-site`, but any future
+  argument-based skill gets the same treatment for free). Mirrors the same real gap Windsurf's
+  `map-site`/`map-site-update` split already worked around with its own inline caveat - this
+  generalizes that pattern instead of leaving Antigravity as the one assistant whose users are
+  quietly told to do something that does not work.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), `npx vitest run
+packages/engine/test` (29 files, 434 passed + 3 skipped, including new assertions confirming the
+note appears only for `map-site` - the one skill with `arguments` - and not for argument-less
+skills like `scan-and-generate-pom`), `npm run eval` (182 passed), a real `agy --print` run asking
+the installed CLI to read the regenerated skill and confirm the invocation guidance reads clearly
+
+- it did, unprompted, citing the note and the Mode Resolution section by name, `npx prettier
+--check` on every touched file.
+
 ## [0.19.0] - 2026-09-03
 
 ### Fixed
