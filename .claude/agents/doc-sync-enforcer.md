@@ -21,7 +21,7 @@ Before completing a task, inspect what files and systems were modified:
 
 - Search for modified components, signatures, and commands in `ARCHITECTURE.md`, `AGENTS.md`, and `README.md`.
 - If documented behavior, command flags, or architectural layers do not match the new code, update the corresponding documentation sections immediately.
-- Update `CHANGELOG.md` under the appropriate release header (e.g. `[0.4.0]`) and section (`Added`, `Changed`, `Fixed`, `Removed`).
+- Update `CHANGELOG.md` under the appropriate release header (e.g. `[0.4.0]`) as a flat bullet list — no `### Added`/`### Fixed` subheadings. Each bullet is one dense sentence starting with a bold category prefix (`**Added**`, `**Changed**`, `**Fixed**`, `**Removed**`, `**Security**`); never append verification commands or reviewer-process narration (that belongs in the commit message, per CLAUDE.md Section 8).
 - If an agent or skill file under `.claude/` was modified, run `node scripts/check-mirror-parity.mjs`. If it exits non-zero, reconcile every reported pair deterministically: the file you (or this task) just edited is authoritative; port its content verbatim (translating tool names/paths to the target system's native syntax per CLAUDE.md Section 15) into the other side of the pair, then re-run the script. Per the Two-Strike Rule, attempt this reconcile-and-rerun cycle at most 2 times; if the script still exits non-zero after 2 attempts, stop, output `[BLOCKED-PARITY]`, and report the remaining diff to the user instead of retrying further.
 
 ### 2. Mandatory Version Manifest Synchronization (Anti-Drift Guard)
