@@ -25,8 +25,10 @@ Generated Test Repository
 │   ├── /automate-ticket      -- End-to-end flow: TMS ticket -> DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
 │   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
-│   └── /map-site             -- Route graph crawler, site topology, shared widget mining &
-│                                 optional read-only business-intent analysis (ADR 0012 Stage 1)
+│   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
+│   │                             optional read-only business-intent analysis (ADR 0012 Stage 1)
+│   └── /derive-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
+│                                 combinatorial/boundary-value condition generation (ADR 0012 Stage 2)
 │
 ├── 3. Model Context Protocol (MCP) Layer (.mcp.json, .cursor/mcp.json, .claude/mcp.json, etc.)
 │   ├── Playwright MCP        -- Live DOM querying, selector evaluation, visual feedback
@@ -97,7 +99,31 @@ code than by asking a model to notice it, the same reasoning ADR 0012 applies at
 boundary. See
 [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
 for the design decision this implements and what remains out of scope for this first stage
-(transport choice, cross-route journey synthesis, test-condition derivation).
+(transport choice, cross-route journey synthesis).
+
+## Test-condition derivation (`/derive-test-conditions`, ADR 0012 Stage 2)
+
+A second, also opt-in and strictly read-only skill consumes `business-intent.json`'s
+`reviewed: true` entries plus `site-map.json` and derives typed test conditions per route into
+`docs/analysis/test-conditions.json` (`docs/analysis/test-conditions.types.ts` documents its
+shape). An LLM step infers form parameters and their equivalence partitions from markup only
+(tag, `type`, label text, HTML5 constraint attributes, `<select>` option text, static ARIA
+relationships) - never a field's current `value`/`checked`/`selected` state, never a mutating
+call. A deterministic, zero-dependency generator (`scripts/generate-test-conditions.mjs`) then
+mechanically expands those partitions into 2-way combinatorial coverage and 3-value
+boundary-value conditions: it seeds one candidate vector per still-uncovered parameter pair and
+greedily fills every other column around it, backtracking within that fill - a pair only lands in
+`unsatisfiedPairs` (with the exact constraint that blocks it) when completing a vector around it
+is genuinely impossible, never merely because an earlier, unrelated greedy attempt stalled. The
+same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
+deterministic redaction backstop - independent of what the LLM step already did - masking
+digit-run and majority-digit PII shapes in every evidence excerpt and sample value before the
+artifact is ever written. Every generated condition starts `isSpeculative: true`/`reviewed: false`
+with an empty verification contract; a human fills in expected UI/state/network behavior at the
+same kind of Human Sign-Off Gateway Stage 1 already established. See
+[`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
+for what remains out of scope for this stage (domain classification, journey/test-level placement,
+spec synthesis, combinatorial strength beyond 2-way, general boolean-predicate constraints).
 
 ## Self-healing (Two-Strike Rule & 4-point trace triage)
 

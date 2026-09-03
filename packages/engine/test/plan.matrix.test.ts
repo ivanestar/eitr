@@ -156,4 +156,27 @@ describe('plan() framework & CI/CD matrix integration', () => {
     expect(noAssistantPaths).not.toContain('scripts/validate-business-intent.mjs');
     expect(noAssistantPaths).not.toContain('scripts/validate-site-map.mjs');
   });
+
+  // AC6 (ADR 0012 Stage 2) - the three test-conditions files follow the exact same AI-assistant
+  // gating as Stage 1's own files above.
+  it('emits docs/analysis/test-conditions.types.ts, scripts/generate-test-conditions.mjs, and scripts/validate-test-conditions.mjs only when at least one AI assistant is configured', () => {
+    const withDefaultAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+    });
+    const defaultPaths = withDefaultAssistants.files.map((f) => f.path);
+    expect(defaultPaths).toContain('docs/analysis/test-conditions.types.ts');
+    expect(defaultPaths).toContain('scripts/generate-test-conditions.mjs');
+    expect(defaultPaths).toContain('scripts/validate-test-conditions.mjs');
+
+    const withNoAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+      aiAssistants: [],
+    });
+    const noAssistantPaths = withNoAssistants.files.map((f) => f.path);
+    expect(noAssistantPaths).not.toContain('docs/analysis/test-conditions.types.ts');
+    expect(noAssistantPaths).not.toContain('scripts/generate-test-conditions.mjs');
+    expect(noAssistantPaths).not.toContain('scripts/validate-test-conditions.mjs');
+  });
 });

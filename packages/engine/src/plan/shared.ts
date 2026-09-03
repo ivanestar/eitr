@@ -35,6 +35,9 @@ import { renderSwarmDispatcher } from './templates/swarm-dispatcher.js';
 import { renderBusinessIntentTypes } from './templates/business-intent-types.js';
 import { renderBusinessIntentValidator } from './templates/business-intent-validator.js';
 import { renderSiteMapValidator } from './templates/site-map-validator.js';
+import { renderTestConditionsTypes } from './templates/test-conditions-types.js';
+import { renderTestConditionsEngine } from './templates/test-conditions-engine.js';
+import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
 
 /**
  * Emits project infrastructure files that are fully independent of the language and automation
@@ -110,6 +113,24 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderSiteMapValidator() },
+          },
+          {
+            path: 'docs/analysis/test-conditions.types.ts',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderTestConditionsTypes() },
+          },
+          {
+            path: 'scripts/generate-test-conditions.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderTestConditionsEngine() },
+          },
+          {
+            path: 'scripts/validate-test-conditions.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderTestConditionsValidator() },
           },
         ] as FileDescriptor[])
       : []),

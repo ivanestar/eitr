@@ -1,6 +1,6 @@
 {
   "name": "@eitr/evals",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Evaluation and benchmark suite for EITR",
   "license": "Apache-2.0",
   "private": true,

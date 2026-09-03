@@ -7,6 +7,18 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.23.0] - 2026-09-03
+
+- **Added**: ADR 0012 Stage 2 - test-condition derivation. A new `/derive-test-conditions` skill
+  consumes `business-intent.json` + `site-map.json` and derives `docs/analysis/test-conditions.json`:
+  read-only DOM inspection of form parameters/equivalence partitions, a deterministic zero-dependency
+  generator (`scripts/generate-test-conditions.mjs`) that mechanically expands them into 2-way
+  combinatorial coverage and 3-value boundary-value conditions, a mechanical redaction backstop
+  (masks digit-run/majority-digit PII shapes regardless of separators), and a mechanical shape gate
+  (`scripts/validate-test-conditions.mjs`) before the same Human Sign-Off Gateway pattern Stage 1
+  already established. Unsatisfiable parameter-pair combinations are surfaced with their exact
+  conflicting constraint rather than silently dropped or crashing generation.
+
 ## [0.22.0] - 2026-09-03
 
 - **Added**: a mechanical shape gate for `docs/site-map/site-map.json` itself

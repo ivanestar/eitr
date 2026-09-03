@@ -399,6 +399,37 @@ Playwright browser access for this crawl comes from this project's MCP configura
 
 `,
     },
+    {
+      name: 'derive-test-conditions',
+      description:
+        'Derives typed test conditions (parameter equivalence partitions, 2-way combinatorial coverage, 3-value boundary conditions) per route from docs/analysis/business-intent.json, gated by mechanical validation and human sign-off.',
+      disableModelInvocation: true,
+      content: `# Skill: Test-Condition Derivation (/derive-test-conditions)
+
+## Purpose
+Second stage of ADR 0012's app-analysis pipeline (\`docs/architecture/decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md\`). Consumes \`docs/analysis/business-intent.json\` (produced by \`/map-site\` Step 6) and \`docs/site-map/site-map.json\`, derives typed test conditions per route - equivalence-partitioned parameters, 2-way combinatorial coverage, 3-value boundary conditions - into \`docs/analysis/test-conditions.json\` per \`docs/analysis/test-conditions.types.ts\`, gated by a mechanical validator and a Human Sign-Off Gateway before any downstream stage may treat it as ground truth. This skill performs live read-only DOM reads and writes an analysis artifact - the same risk profile as \`/map-site\` - so it never runs from autonomous model judgment, only an explicit user command.
+
+## Workflow
+1. **Preconditions:**
+   * Default scope: every route in \`docs/analysis/business-intent.json\` with \`reviewed: true\`. If none exist, refuse and print exactly: "No reviewed business-intent entries found. Run /map-site Step 6 and complete its Human Sign-Off Gateway before deriving test conditions." Do not proceed.
+2. **Parameter & Partition Extraction (Strictly Read-Only):**
+   * Compute the target route set: Step 1's default, or the routes named by an explicit \`--routes=<a,b,c>\` argument intersected with \`reviewed:true\` entries.
+   * Run \`node scripts/orchestrate-swarm.mjs --phase=plan --routes=<the computed comma-separated routeId list>\` and dispatch one read-only worker per route from its Level 2 worker list - do not enumerate routes/workers yourself. The dispatcher itself has no knowledge of \`business-intent.json\`'s \`reviewed\` flag; this skill computes the reviewed-route subset itself before invoking it.
+   * **Allowlist, not denylist**, same posture as \`/map-site\` Step 6: after a single navigation to the route's \`sampleUrls[0]\`, each worker may read ONLY element tag name, the \`type\` attribute, associated \`<label>\` text, the HTML5 constraint attributes \`required\`/\`min\`/\`max\`/\`maxlength\`/\`minlength\`/\`pattern\`/\`step\`, \`<select>\` option text, and static ARIA relationship attributes (\`aria-controls\`, \`aria-expanded\`) already present on initial page load. Never \`.click()\`/\`.fill()\`/\`.check()\`/\`.selectOption()\`, not even \`trial: true\`. Never read or write the \`value\`, \`checked\`, or \`selected\` attribute of any element, under any method - this is the same "never read a live field's current value" rule \`/map-site\` Step 6 already enforces, extended explicitly to attribute-level reads.
+   * **PII/session-data guard**, identical thresholds to \`/map-site\` Step 6's rule, applied to every \`evidence[].excerpt\` AND every \`EquivalencePartition.sampleValues[]\` entry: mask any run of 6+ consecutive digits or any 8+-character token where digits are the majority as \`[REDACTED]\`. Treat a \`<select>\`'s option-text list as live-data-sourced (not static markup) whenever its options are not a small closed enum an evidence excerpt can name individually (e.g. "choose your saved address") - redact the same way. \`scripts/generate-test-conditions.mjs\` also applies this same redaction mechanically as a backstop before writing output, regardless of what this step wrote.
+   * \`sampleValues\` MUST be synthesized illustrative examples (e.g. \`"user@example.com"\`, \`""\`, \`"123"\`) - never copied from any attribute, placeholder, or content observed on the live page.
+   * Infer \`parameters[]\` (per \`Parameter\`'s shape in \`docs/analysis/test-conditions.types.ts\` - \`kind\` from the closed \`ParameterKind\` set, \`partitions[]\` each with >=1 \`evidence\` entry, \`boundaries[]\` only for numeric/length-constrained fields with >=1 \`'valid'\`-kind partition already present) and \`constraints[]\` (only a directly-visible static ARIA relationship - never inferred from behavior you didn't observe).
+   * Write \`docs/analysis/test-conditions.json\` (\`schemaVersion: 1\`) with \`conditions: []\` and \`unsatisfiedPairs: []\` left empty for every new/changed entry.
+3. **Mechanical Gate 1 (parameters shape, zero model involvement):**
+   * Run \`node scripts/validate-test-conditions.mjs --stage=parameters\`. If it reports \`FAILED\`, fix the reported errors and re-run before proceeding to Step 4. Do not present unvalidated output to the human.
+4. **Deterministic Condition Generation (zero model involvement):**
+   * Run \`node scripts/generate-test-conditions.mjs\`. For every route whose \`parameters\`/\`constraints\` changed since the last run (tracked via \`sourceParamsHash\`), this deterministically computes 2-way combinatorial coverage plus 3-value boundary conditions and writes them into \`conditions[]\`, recording any parameter-pair the constraint set made impossible to cover into \`unsatisfiedPairs[]\` rather than failing. Every generated condition gets \`isSpeculative: true\`, \`reviewed: false\`, an empty \`verification\` contract.
+5. **Mechanical Gate 2 (full shape, zero model involvement):**
+   * Run \`node scripts/validate-test-conditions.mjs\` (no flag). If it reports \`FAILED\`, fix the reported errors and re-run before proceeding to Step 6. Do not present unvalidated output to the human.
+6. **Human Sign-Off Gateway:**
+   * Present a Test-Conditions Review Artifact table (Route, Parameter, Technique, Condition Count, Speculative Count, Unsatisfied-Pair Count) for every new/changed entry. State explicitly: this file is NOT authoritative until a human has reviewed it; every condition's \`verification\` contract is an empty stub a human must fill in, and any \`unsatisfiedPairs\` entries mean the constraint set made full 2-way coverage impossible for that route - a human should confirm whether that's expected (mutually exclusive fields) or a sign the extracted constraints themselves are wrong.
+`,
+    },
   ];
 }
 
