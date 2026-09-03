@@ -153,6 +153,9 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(orchestrator?.source.text).toContain('Mandatory Execution Quality Gate');
     expect(orchestrator?.source.text).not.toContain('test:sanity');
     expect(orchestrator?.source.text).toContain('tms-validator');
+    // ADR 0012 Stage 2 (/derive-test-conditions) shipped without this Workflow Execution
+    // Steps entry ever being updated - regression guard against that same gap recurring.
+    expect(orchestrator?.source.text).toContain('/derive-test-conditions');
 
     const architect = files.find((f) => f.path === '.agents/agents/sdet-architect/agent.md');
     expect(architect?.source.text).toContain('Dependency Injection');
