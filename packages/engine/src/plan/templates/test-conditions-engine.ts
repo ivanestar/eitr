@@ -5,7 +5,11 @@
 // 3-value boundary-value conditions, falling back to one condition per partition
 // (equivalence-partition technique) for a route with fewer than 2 parameters, where pairwise
 // coverage has nothing to pair against - zero model involvement, same zero-dependency style as
-// scripts/orchestrate-swarm.mjs and the two validate-*.mjs scripts.
+// scripts/orchestrate-swarm.mjs and the two validate-*.mjs scripts. The checklist-based technique
+// additionally cross-references docs/analysis/business-intent.json's criticalityTier - reviewed
+// entries only, per that file's own Human Sign-Off Gateway rule - to scale down on medium/low-
+// criticality routes rather than firing the same fixed checklist everywhere regardless of the
+// route's own importance.
 //
 // The combinatorial phase seeds one vector per remaining needed pair (in the pair's own build
 // order) and greedily fills every other column around that seed, backtracking within the fill.
@@ -36,6 +40,7 @@ import crypto from 'node:crypto';
 
 const CWD = process.cwd();
 const REPORT_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
+const BUSINESS_INTENT_PATH = path.join(CWD, 'docs', 'analysis', 'business-intent.json');
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -418,7 +423,40 @@ const CHECKLIST_VALUES = {
   date: ['0000-00-00', '9999-12-31', 'not-a-date'],
 };
 
-function buildChecklistConditions(routeId, parameters) {
+// Reads docs/analysis/business-intent.json fresh on every run (a separate artifact from a
+// different skill's stage - it can change or be re-reviewed between when /derive-test-conditions
+// Step 1 last checked it and when this script runs) and returns a routeId -> criticalityTier.value
+// map, using ONLY entries with reviewed:true - an unreviewed entry is never ground truth for any
+// other skill or agent (the same rule /map-site Step 6's own Human Sign-Off Gateway states), so an
+// unreviewed route falls through to "unknown" exactly like a route missing from the file entirely.
+// Missing file, malformed content, or a route absent/unreviewed all resolve to "unknown" rather
+// than an error - this generator's own job is condition synthesis, not re-validating an artifact
+// Gate 1/Gate 2 of a DIFFERENT skill already gates. "unknown" defaults to the safe (full-checklist)
+// side below, never the reduced side.
+function loadCriticalityMap() {
+  const map = {};
+  const loaded = loadJson(BUSINESS_INTENT_PATH, 'docs/analysis/business-intent.json');
+  if (loaded.error || !loaded.value || typeof loaded.value.routes !== 'object') return map;
+  for (const [routeId, entry] of Object.entries(loaded.value.routes)) {
+    if (!entry || entry.reviewed !== true) continue;
+    const tier = entry.criticalityTier && entry.criticalityTier.value;
+    if (typeof tier === 'string') map[routeId] = tier;
+  }
+  return map;
+}
+
+// Checklist-based probing is real signal for a critical/high route and mostly noise for a
+// low-value one - reduce volume on medium/low criticality routes rather than firing the same
+// fixed checklist everywhere regardless of the route's own importance. Unknown criticality (no
+// business-intent.json, this route missing from it, or its entry not yet reviewed) stays on the
+// safe side: run the full
+// checklist rather than silently under-testing because Stage 1 wasn't run.
+function shouldRunChecklist(criticalityTier) {
+  return criticalityTier !== 'medium' && criticalityTier !== 'low';
+}
+
+function buildChecklistConditions(routeId, parameters, criticalityTier) {
+  if (!shouldRunChecklist(criticalityTier)) return [];
   const conditions = [];
   for (const target of parameters) {
     const values = CHECKLIST_VALUES[target.kind];
@@ -450,7 +488,7 @@ function buildChecklistConditions(routeId, parameters) {
   return conditions;
 }
 
-function generateForRoute(routeId, entry) {
+function generateForRoute(routeId, entry, criticalityTier) {
   redactEntry(entry);
   const currentHash = hashParams(entry);
   if (entry.conditions && entry.conditions.length > 0 && entry.sourceParamsHash === currentHash) {
@@ -472,7 +510,7 @@ function generateForRoute(routeId, entry) {
     routeId,
     entry.parameters,
   );
-  const checklistConditions = buildChecklistConditions(routeId, entry.parameters);
+  const checklistConditions = buildChecklistConditions(routeId, entry.parameters, criticalityTier);
   const seen = new Set();
   const deduped = [];
   for (const c of combinatorialConditions.concat(
@@ -530,8 +568,9 @@ function generate() {
     process.stdout.write(JSON.stringify({ status: 'FAILED', errors: shapeErrors }, null, 2) + '\\n');
     process.exit(1);
   }
+  const criticalityByRoute = loadCriticalityMap();
   for (const [routeId, entry] of Object.entries(data.routes)) {
-    generateForRoute(routeId, entry);
+    generateForRoute(routeId, entry, criticalityByRoute[routeId]);
   }
   fs.writeFileSync(REPORT_PATH, JSON.stringify(data, null, 2) + '\\n', 'utf8');
   process.stdout.write(

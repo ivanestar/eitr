@@ -35,6 +35,11 @@ audit trail; this file is release notes.
   exception - live verification found Windsurf and Copilot have no such mechanism either, and
   Cursor/Codex both have open 2026 reliability bugs in the mechanism itself. Reworded to name all
   three assistants with no mechanism and treat the other three as a hint, not a guarantee.
+- **Added**: `checklist-based` condition generation now scales with the route's own
+  `business-intent.json` criticality - full checklist on `critical`/`high` routes or when
+  criticality is unknown, skipped on `medium`/`low` routes to avoid drowning low-value pages in
+  noise. Only reviewed business-intent entries count; an unreviewed entry is never treated as
+  ground truth, matching the same rule its own Human Sign-Off Gateway already states.
 
 ## [0.23.0] - 2026-09-03
 

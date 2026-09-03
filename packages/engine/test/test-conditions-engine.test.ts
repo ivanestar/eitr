@@ -112,6 +112,64 @@ function run(dir: string) {
   return spawnSync('node', ['generate-test-conditions.mjs'], { cwd: dir, encoding: 'utf8' });
 }
 
+function writeBusinessIntent(dir: string, routeId: string, tier: string, reviewed = true) {
+  writeFileSync(
+    join(dir, 'docs', 'analysis', 'business-intent.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-09-03T11:00:00.000Z',
+      routes: {
+        [routeId]: {
+          routeId,
+          businessFeature: {
+            value: 'Contact',
+            confidence: 'high',
+            source: 'heading-text',
+            evidence: [],
+          },
+          criticalityTier: {
+            value: tier,
+            confidence: 'high',
+            source: 'heading-text',
+            evidence: [],
+          },
+          sourceContentHash: 'abc123',
+          analyzedAt: '2026-09-03T11:00:00.000Z',
+          reviewed,
+        },
+      },
+    }),
+    'utf8',
+  );
+}
+
+function singleTextParamRoute(routeId: string) {
+  return {
+    schemaVersion: 1,
+    generatedAt: '2026-09-03T11:00:00.000Z',
+    routes: {
+      [routeId]: {
+        routeId,
+        parameters: [
+          {
+            name: 'name',
+            kind: 'text',
+            partitions: [{ id: 'valid-name', kind: 'valid', sampleValues: ['Ann'] }],
+            boundaries: [],
+            evidence: [{ signal: 'form-label', excerpt: 'Name' }],
+          },
+        ],
+        constraints: [],
+        conditions: [],
+        unsatisfiedPairs: [],
+        sourceContentHash: 'abc123',
+        sourceParamsHash: '',
+        analyzedAt: '2026-09-03T11:00:00.000Z',
+      },
+    },
+  };
+}
+
 function readReport(dir: string): { routes: Record<string, RouteEntry> } {
   return JSON.parse(readFileSync(join(dir, 'docs', 'analysis', 'test-conditions.json'), 'utf8'));
 }
@@ -668,6 +726,96 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       }
       const ids = checklist.map((c) => c.conditionId);
       expect(new Set(ids).size).toBe(ids.length);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Checklist-based probing scales with the route's own business-intent.json criticality rather
+  // than firing uniformly everywhere.
+  it('runs the checklist on a critical route', () => {
+    const dir = setupProject(singleTextParamRoute('route-checkout'));
+    writeBusinessIntent(dir, 'route-checkout', 'critical');
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const report = readReport(dir);
+      const checklist = report.routes['route-checkout'].conditions.filter(
+        (c) => c.technique === 'checklist-based',
+      );
+      expect(checklist.length).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('skips the checklist on a low-criticality route', () => {
+    const dir = setupProject(singleTextParamRoute('route-about'));
+    writeBusinessIntent(dir, 'route-about', 'low');
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const report = readReport(dir);
+      const checklist = report.routes['route-about'].conditions.filter(
+        (c) => c.technique === 'checklist-based',
+      );
+      expect(checklist.length).toBe(0);
+      // Other techniques are unaffected by criticality - equivalence-partition still fires.
+      const equivalencePartition = report.routes['route-about'].conditions.filter(
+        (c) => c.technique === 'equivalence-partition',
+      );
+      expect(equivalencePartition.length).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('defaults to running the checklist when business-intent.json is absent (unknown criticality)', () => {
+    const dir = setupProject(singleTextParamRoute('route-orphan'));
+    // Deliberately not calling writeBusinessIntent - no docs/analysis/business-intent.json at all.
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const report = readReport(dir);
+      const checklist = report.routes['route-orphan'].conditions.filter(
+        (c) => c.technique === 'checklist-based',
+      );
+      expect(checklist.length).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('skips the checklist on a medium-criticality route', () => {
+    const dir = setupProject(singleTextParamRoute('route-faq'));
+    writeBusinessIntent(dir, 'route-faq', 'medium');
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const report = readReport(dir);
+      const checklist = report.routes['route-faq'].conditions.filter(
+        (c) => c.technique === 'checklist-based',
+      );
+      expect(checklist.length).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // An unreviewed business-intent entry is never ground truth for another skill (the same rule
+  // /map-site Step 6's own Human Sign-Off Gateway states) - a low-tier value that hasn't been
+  // signed off must not silently reduce this generator's coverage.
+  it('ignores criticalityTier from an unreviewed business-intent entry, running the full checklist', () => {
+    const dir = setupProject(singleTextParamRoute('route-unreviewed'));
+    writeBusinessIntent(dir, 'route-unreviewed', 'low', false);
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const report = readReport(dir);
+      const checklist = report.routes['route-unreviewed'].conditions.filter(
+        (c) => c.technique === 'checklist-based',
+      );
+      expect(checklist.length).toBeGreaterThan(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
