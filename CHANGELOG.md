@@ -8,6 +8,36 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Where the re
 is worth knowing, the entry says why (closes a known gap, follows an architecture decision, fixes a
 real bug) - not just what changed.
 
+## [0.18.0] - 2026-09-03
+
+### Fixed
+
+- **Generated agent/skill frontmatter could silently fail to parse, hiding skills from an
+  assistant's slash-command list.** Found via a direct user report ("Antigravity custom skills
+  don't show up") - live-verified against Antigravity's own current docs
+  (antigravity.google/docs/cli/plugins) that `.agents/skills/<name>.md` is the correct path/format
+  EITR already generates, then reproduced the real failure with an actual YAML parser: `/map-site`'s
+  `description` ("Two modes: create (fresh crawl)...") was interpolated into the `description:`
+  frontmatter line unquoted, and a colon+space inside an unquoted YAML scalar is read as a nested
+  mapping - the file fails to parse at all, so Antigravity silently skips it. The same unescaped-
+  interpolation pattern (already the root cause of the `argument-hint: [create|update]` bug fixed
+  two commits ago) was present at 13 more call sites across `ai-agents.ts` (5, all 5 non-Codex
+  assistants) and `ai-operational-skills.ts` (8, across all 6 assistants) - every one of them a
+  latent version of the same failure, waiting for a future description to contain a colon, quote,
+  or leading bracket. Fixed once with a shared `yamlSafeScalar()` helper
+  (`packages/engine/src/plan/templates/yaml-frontmatter.ts`), applied at every site instead of
+  patching field-by-field as each one breaks in practice, and the existing `argument-hint` fix
+  refactored to use the same helper rather than its own local copy of the same logic.
+
+Verified via: `npx tsc -b packages/engine --force` (clean compile), a real YAML parser
+(`yaml` v2) run against all 90 generated agent+skill frontmatter blocks across all 6 assistants -
+0 parse failures (was 1 confirmed failure - `map-site`'s Antigravity frontmatter - before this
+fix), `npx vitest run packages/engine/test` (29 files, 434 passed + 3 skipped, including a new
+`frontmatter-yaml-validity.test.ts` that YAML-parses every generated block rather than asserting
+on the raw text - a content-string check would not catch either bug this fixes, since the
+offending text is still present, it just breaks the document it's embedded in), `npm run eval`
+(182 passed), `npx prettier --check` on every touched file.
+
 ## [0.17.0] - 2026-09-02
 
 ### Fixed

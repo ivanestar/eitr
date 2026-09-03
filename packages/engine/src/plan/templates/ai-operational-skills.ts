@@ -1,4 +1,5 @@
 import type { FileDescriptor } from '../../types/generation-plan.js';
+import { yamlSafeScalar } from './yaml-frontmatter.js';
 
 interface SkillDefinition {
   name: string;
@@ -28,9 +29,8 @@ function argumentFrontmatter(skill: SkillDefinition): string {
     // Always YAML-double-quoted: the hint's own documented example values ('[issue-number]',
     // '[create|update]') start with '[', which an unquoted YAML scalar parses as a flow sequence
     // (an array) instead of a string - exactly the "must be a string" validation error this
-    // guards against. Escape backslashes first, then quotes, so any future hint value stays safe.
-    const escaped = skill.argumentHint.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    lines.push(`argument-hint: "${escaped}"`);
+    // guards against.
+    lines.push(`argument-hint: ${yamlSafeScalar(skill.argumentHint)}`);
   }
   return lines.length > 0 ? '\n' + lines.join('\n') : '';
 }
@@ -410,7 +410,7 @@ export function planAiOperationalSkills(
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 ${skill.content}`,
@@ -427,7 +427,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
+description: ${yamlSafeScalar(skill.description)}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
 ---
 
 ${skill.content}`,
@@ -444,7 +444,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}${argumentFrontmatter(skill)}
+description: ${yamlSafeScalar(skill.description)}${argumentFrontmatter(skill)}
 disable-model-invocation: true
 ---
 
@@ -466,7 +466,7 @@ ${skill.content}`,
               kind: 'inline',
               text: `---
 name: map-site
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 # Workflow: map-site (create mode)
@@ -484,7 +484,7 @@ ${skill.content}`,
               kind: 'inline',
               text: `---
 name: map-site-update
-description: Incremental update of an existing docs/site-map/site-map.json using content-hash comparison - cheaper than a full re-crawl.
+description: ${yamlSafeScalar('Incremental update of an existing docs/site-map/site-map.json using content-hash comparison - cheaper than a full re-crawl.')}
 ---
 
 # Workflow: map-site-update (update mode)
@@ -504,7 +504,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 # Workflow: ${skill.name}
@@ -523,7 +523,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
+description: ${yamlSafeScalar(skill.description)}${argumentFrontmatter(skill)}${skill.disableModelInvocation ? '\ndisable-model-invocation: true' : ''}
 ---
 
 ${skill.content}`,
@@ -539,7 +539,7 @@ ${skill.content}`,
           source: {
             kind: 'inline',
             text: `---
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 ${skill.content}`,
@@ -553,7 +553,7 @@ ${skill.content}`,
             kind: 'inline',
             text: `---
 name: ${skill.name}
-description: ${skill.description}
+description: ${yamlSafeScalar(skill.description)}
 ---
 
 ${skill.content}`,
