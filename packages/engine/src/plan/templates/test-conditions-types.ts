@@ -72,10 +72,7 @@ export interface VerificationContract {
 // well-known malformed-format/injection-class values per parameter kind - complementary to
 // boundary-value, not a replacement for it.
 export type TestConditionTechnique =
-  | 'combinatorial'
-  | 'boundary-value'
-  | 'equivalence-partition'
-  | 'checklist-based';
+  'combinatorial' | 'boundary-value' | 'equivalence-partition' | 'checklist-based';
 
 export interface TestCondition {
   // sha256(routeId + '|' + JSON.stringify(sorted [paramName, value] tuples)).slice(0, 16)
