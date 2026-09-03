@@ -153,6 +153,9 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(orchestrator?.source.text).toContain('Mandatory Execution Quality Gate');
     expect(orchestrator?.source.text).not.toContain('test:sanity');
     expect(orchestrator?.source.text).toContain('tms-validator');
+    // ADR 0012 Stage 2 (/derive-test-conditions) shipped without this Workflow Execution
+    // Steps entry ever being updated - regression guard against that same gap recurring.
+    expect(orchestrator?.source.text).toContain('/derive-test-conditions');
 
     const architect = files.find((f) => f.path === '.agents/agents/sdet-architect/agent.md');
     expect(architect?.source.text).toContain('Dependency Injection');
@@ -189,7 +192,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(traceDebugger?.source.text).toContain('[FLAKY / TIMING]');
   });
 
-  it('generates 6 operational skills for all supported AI assistants', () => {
+  it('generates one file per operational skill per assistant', () => {
     const files = planAiOperationalSkills([
       'antigravity',
       'claude',
@@ -198,11 +201,12 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
       'codex',
       'copilot',
     ]);
-    // 7 skills * 4 assistants with 1 file each (antigravity, claude, cursor, codex) = 28
-    // + windsurf: 6 skills * 1 file + map-site split into 2 files (map-site.md, map-site-update.md) = 8
-    // + copilot: 7 skills * 2 files (prompt + skill) = 14
-    // = 50
-    expect(files.length).toBe(50);
+    // 9 skills * 4 assistants with 1 file each (antigravity, claude, cursor, codex) = 36
+    // + windsurf: 8 non-map-site skills * 1 file + map-site split into 2 files (map-site.md,
+    //   map-site-update.md) = 10
+    // + copilot: 9 skills * 2 files (prompt + skill) = 18
+    // = 64
+    expect(files.length).toBe(64);
     const paths = files.map((f) => f.path);
 
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
@@ -246,11 +250,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Antigravity note:');
     expect(mapSkill?.source.text).toContain('no slash-command argument mechanism');
 
-    // skill-reviewer pass (2026-09-02): description discloses the two optional steps, crawl
-    // bounds are concrete numbers (not just "maximum depth and page count"), the PII-masking rule
-    // is mechanically defined, and the businessFeature label has a checkable bound.
+    // skill-reviewer pass (2026-09-02): description discloses the optional step and the automatic
+    // one, crawl bounds are concrete numbers (not just "maximum depth and page count"), the
+    // PII-masking rule is mechanically defined, and the businessFeature label has a checkable bound.
     expect(mapSkill?.source.text).toContain(
-      'Also supports two further optional, explicit-request-only steps',
+      'automatically performs read-only business-intent/criticality inference',
     );
     expect(mapSkill?.source.text).toContain('maximum crawl depth of 6 hops');
     expect(mapSkill?.source.text).toContain('maximum of 500 pages visited');
@@ -401,7 +405,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // under file://, the viewer had already drifted behind the schema (no coverage/routeId/
     // business-intent.json awareness), and an AI-assistant-driven SDET has a strictly better
     // interface to the same data already (ask the assistant) - see known-gaps.md.
-    expect(paths).toContain('docs/site-map/site-map.schema.json');
+    expect(paths).toContain('.scaffold/schemas/site-map.schema.json');
     expect(paths).not.toContain('docs/site-map.schema.json');
     expect(paths).not.toContain('docs/app-graph.html');
     expect(paths).not.toContain('docs/site-map/site-map.html');

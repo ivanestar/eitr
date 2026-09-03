@@ -1,5 +1,7 @@
 /**
- * Golden Dataset for evaluating all 6 EITR Operational Skills.
+ * Golden Dataset for evaluating EITR Operational Skills against their documented workflow.
+ * Not full coverage of every generated skill - protocol-123 has its own dedicated eval suite
+ * (protocol-123-*.test.ts), and /derive-test-conditions has no case here yet (pre-existing gap).
  */
 
 export interface GoldenSkillCase {
@@ -9,7 +11,8 @@ export interface GoldenSkillCase {
     | '/automate-ticket'
     | '/heal-test'
     | '/map-site'
-    | '/bulk-rescan';
+    | '/bulk-rescan'
+    | '/ground-zero-setup';
   description: string;
   inputScenario: string;
   expectedWorkflow: {
@@ -132,6 +135,29 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'Live-DOM liveness verification gate',
       ],
       forbiddenPatterns: ['delete custom methods', 'break signature', 'test:sanity', 'pom-sanity'],
+    },
+  },
+  // 7. /ground-zero-setup
+  {
+    skillName: '/ground-zero-setup',
+    description:
+      'Guided orchestrator chaining the app-analysis pipeline end-to-end with human sign-off gates per stage, or auto-pilot',
+    inputScenario: 'Run the full greenfield setup for a brand-new application from scratch',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'Pre-Flight Confirmation',
+        'pipeline-status.mjs',
+        'Guided',
+        'Auto-pilot',
+        "reviewedBy: 'human'",
+        'Human Sign-Off Gateway',
+        'ready-to-automate',
+      ],
+      contractGuarantees: [
+        'never silently default to Auto-pilot',
+        "reviewedBy: 'auto-pilot' on every entry auto-approved",
+      ],
+      forbiddenPatterns: ['EITR', 'Eitr'],
     },
   },
 ];

@@ -43,7 +43,7 @@ is for gaps significant enough to shape future architecture, not routine finding
   an AI coding assistant - already has a strictly better interface to the same data (asking the
   assistant to read/query `site-map.json` directly, which is faster and more flexible than a
   static text-substring filter). `docs/site-map/site-map.json` and
-  `docs/site-map/site-map.schema.json` are unaffected and remain the source of truth for every
+  `.scaffold/schemas/site-map.schema.json` are unaffected and remain the source of truth for every
   consumer (`pom-engineer`, `/scan-and-generate-pom`, `/automate-ticket`, the business-intent
   Step 6). Re-open only on a new, explicit maintainer decision to build a human-facing view again -
   not on a future audit finding the gap again.
@@ -55,8 +55,10 @@ is for gaps significant enough to shape future architecture, not routine finding
   separate features - is settled in
   [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md).
   Stage 1 (per-route business-intent/criticality analysis, `/map-site` Step 6 - see
-  [`ai-agent-integration.md`](ai-agent-integration.md)) is implemented. Stage 2+ (test-condition
-  derivation, journey placement, spec synthesis, human sign-off before code generation) remains not
+  [`ai-agent-integration.md`](ai-agent-integration.md)) is implemented. Stage 2 (test-condition
+  derivation - 2-way combinatorial coverage, 3-value boundary-value analysis, a mechanical
+  redaction backstop, human sign-off - the new `/derive-test-conditions` skill) is implemented.
+  Stage 3+ (journey placement, spec synthesis, human sign-off before code generation) remains not
   yet built, each requiring its own bounded SDD plan per the ADR's own Consequences section.
 - **CI test sharding for Java/C# on GitHub Actions:** resolved (Track 8, maintainer-authorized
   reversal of the original position below, 2026-09-02). Neither Maven Surefire/Gradle nor NUnit

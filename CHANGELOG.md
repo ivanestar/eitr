@@ -7,6 +7,68 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.25.0] - 2026-09-03
+
+- **Added**: `/ground-zero-setup` - a guided orchestrator for a brand-new application that chains
+  `/map-site create` and `/derive-test-conditions` end-to-end, pausing at each stage's own Human
+  Sign-Off Gateway by default, or running fully unattended in auto-pilot mode (still recording
+  `reviewedBy: 'auto-pilot'` on every entry it approves, never silently defaulting to that mode).
+  Stops honestly once test conditions are reviewed - journey placement and spec synthesis are not
+  built yet, so it points the user at `/automate-ticket` for the manual next step.
+- **Added**: `scripts/pipeline-status.mjs` - a deterministic, zero-dependency script computing the
+  current app-analysis pipeline stage from real artifact state on disk, consulted by
+  `/ground-zero-setup` and by `/map-site`'s own end-of-run hint instead of a hardcoded "run X next"
+  string that would go stale as new stages get added.
+- **Added**: `reviewedBy: 'human' | 'auto-pilot'` alongside the existing `reviewed` field on both
+  `business-intent.json` and `test-conditions.json` entries, mechanically required whenever
+  `reviewed: true` - records who actually approved an entry.
+
+## [0.24.0] - 2026-09-03
+
+- **Fixed**: business-intent analysis (`/map-site` Step 6) now runs automatically as part of every
+  `create`/`update` pass instead of needing a separate, undiscoverable explicit request - closes the
+  gap where a user had no way to know Step 6 existed short of reading skill source.
+- **Fixed**: internal architecture-decision references ("ADR 0012" and its dev-repo-only file path)
+  no longer leak into generated scripts, type-contract files, or skill text - they described a
+  document that doesn't exist in a generated project at all.
+- **Changed**: `site-map.schema.json`, `business-intent.types.ts`, and `test-conditions.types.ts`
+  moved from `docs/` to `.scaffold/schemas/` - `docs/` is reserved for the filled-in artifacts
+  themselves (useful context on their own), not tooling/schema files.
+- **Changed**: the Human Sign-Off Gateway tables in `/map-site` and `/derive-test-conditions` now
+  resolve each `routeId` to its human-readable path/title and print as one labeled block per route
+  instead of a Markdown table, which renders unreadably in a plain terminal.
+- **Fixed**: test-condition generation no longer produces zero output for a route with fewer than
+  2 parameters (the common case - a single search box or one-field form) - pairwise coverage has
+  nothing to pair against there, so it now falls back to one condition per partition
+  (`technique: 'equivalence-partition'`). The mechanical validator's technique allowlist was
+  updated in lockstep so these conditions actually pass Gate 2.
+- **Added**: a fourth test-condition technique, `checklist-based` (ISTQB experience-based testing)
+  - a closed, deterministic list of well-known problematic values per parameter kind
+    (XSS/SQL-injection markers, malformed emails, numeric overflow, invalid dates), complementary to
+    boundary-value rather than a replacement for it.
+- **Fixed**: the invocation-control claim in `/derive-test-conditions` named only Claude Code,
+  Cursor, and Codex as enforcing "explicit command only," implying Antigravity was the sole
+  exception - live verification found Windsurf and Copilot have no such mechanism either, and
+  Cursor/Codex both have open 2026 reliability bugs in the mechanism itself. Reworded to name all
+  three assistants with no mechanism and treat the other three as a hint, not a guarantee.
+- **Added**: `checklist-based` condition generation now scales with the route's own
+  `business-intent.json` criticality - full checklist on `critical`/`high` routes or when
+  criticality is unknown, skipped on `medium`/`low` routes to avoid drowning low-value pages in
+  noise. Only reviewed business-intent entries count; an unreviewed entry is never treated as
+  ground truth, matching the same rule its own Human Sign-Off Gateway already states.
+
+## [0.23.0] - 2026-09-03
+
+- **Added**: ADR 0012 Stage 2 - test-condition derivation. A new `/derive-test-conditions` skill
+  consumes `business-intent.json` + `site-map.json` and derives `docs/analysis/test-conditions.json`:
+  read-only DOM inspection of form parameters/equivalence partitions, a deterministic zero-dependency
+  generator (`scripts/generate-test-conditions.mjs`) that mechanically expands them into 2-way
+  combinatorial coverage and 3-value boundary-value conditions, a mechanical redaction backstop
+  (masks digit-run/majority-digit PII shapes regardless of separators), and a mechanical shape gate
+  (`scripts/validate-test-conditions.mjs`) before the same Human Sign-Off Gateway pattern Stage 1
+  already established. Unsatisfiable parameter-pair combinations are surfaced with their exact
+  conflicting constraint rather than silently dropped or crashing generation.
+
 ## [0.22.0] - 2026-09-03
 
 - **Added**: a mechanical shape gate for `docs/site-map/site-map.json` itself

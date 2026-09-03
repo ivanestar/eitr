@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { GOLDEN_SKILLS_DATASET } from '../src/datasets/skills-dataset.js';
 import { gradeSkillCompliance } from '../src/graders/skills-grader.js';
 
-describe('All 6 Operational Skills Evaluation Benchmark', () => {
+describe('All 7 Operational Skills Evaluation Benchmark', () => {
   // Skill 1: /auth-setup
   it('1. Evaluates /auth-setup workflow and session serialization', () => {
     const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/auth-setup')!;
@@ -101,6 +101,25 @@ describe('All 6 Operational Skills Evaluation Benchmark', () => {
 1. Update Page Object locators across components/pages/.
 2. Update DOM locators using 3-Tier Locator Priority while strictly preserving public method signatures.
 3. Verify zero regressions via npm test.
+`;
+    const grade = gradeSkillCompliance(
+      simulatedOutput,
+      skillCase.expectedWorkflow.mustContainKeySteps,
+      skillCase.expectedWorkflow.forbiddenPatterns,
+    );
+    expect(grade.passed).toBe(true);
+    expect(grade.score).toBe(100);
+  });
+
+  // Skill 7: /ground-zero-setup
+  it('7. Evaluates /ground-zero-setup pre-flight confirmation and human sign-off chaining', () => {
+    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/ground-zero-setup')!;
+    const simulatedOutput = `
+# Skill: Greenfield Guided Setup (/ground-zero-setup)
+1. Pre-Flight Confirmation: run scripts/pipeline-status.mjs, present stages and cost warning, ask Guided vs Auto-pilot.
+2. Guided mode: run each stage, present its own Human Sign-Off Gateway, on approval set reviewedBy: 'human'.
+3. Consult scripts/pipeline-status.mjs after every stage to decide what runs next.
+4. Stop honestly once the stage reaches ready-to-automate - later stages are not built yet.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

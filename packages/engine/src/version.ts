@@ -1,1 +1,1 @@
-export const ENGINE_VERSION = '0.22.0';
+export const ENGINE_VERSION = '0.25.0';

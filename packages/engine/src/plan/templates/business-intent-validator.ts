@@ -10,7 +10,7 @@ export function renderBusinessIntentValidator(): string {
   return `#!/usr/bin/env node
 
 /**
- * Mechanical shape gate for docs/analysis/business-intent.json (ADR 0012 Stage 1).
+ * Mechanical shape gate for docs/analysis/business-intent.json.
  * Zero model involvement - pure structural checks, run by /map-site's Step 6 before presenting
  * results at the Human Sign-Off Gateway.
  *
@@ -147,6 +147,9 @@ function validate() {
     }
     if (typeof entry.reviewed !== 'boolean') {
       errors.push(label + '.reviewed must be a boolean.');
+    }
+    if (entry.reviewed === true && entry.reviewedBy !== 'human' && entry.reviewedBy !== 'auto-pilot') {
+      errors.push(label + '.reviewedBy must be "human" or "auto-pilot" when reviewed is true.');
     }
     isField(entry.businessFeature, label + '.businessFeature', errors);
     isField(entry.criticalityTier, label + '.criticalityTier', errors);

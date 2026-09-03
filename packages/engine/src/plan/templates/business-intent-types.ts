@@ -1,7 +1,7 @@
-// Template for generating docs/analysis/business-intent.types.ts, the typed contract for
-// docs/analysis/business-intent.json (Stage 1 of the app-analysis pipeline settled by ADR 0012,
-// docs/architecture/decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md).
-// create-if-absent.
+// Template for generating .scaffold/schemas/business-intent.types.ts, the typed contract for
+// docs/analysis/business-intent.json (Stage 1 of the app-analysis pipeline). create-if-absent.
+// Lives under .scaffold/ (engine-owned machinery), not docs/ - see site-map-schema.ts's header
+// comment for why.
 //
 // Deliberately a plain TypeScript interface file, not a JSON Schema document: this repo's own
 // deterministic core already settled on "typed interface + schemaVersion literal, checked only by
@@ -61,6 +61,11 @@ export interface BusinessIntentEntry {
   // False until a human has reviewed this entry per /map-site's Human Sign-Off Gateway. No other
   // skill or agent should treat an entry with reviewed: false as ground truth.
   reviewed: boolean;
+  // Who set reviewed:true - 'human' for an actual conversational approval, 'auto-pilot' only when
+  // /ground-zero-setup's auto-pilot mode set it on the user's own explicit pre-authorization.
+  // Required once reviewed is true (mechanically enforced); expected but not mechanically
+  // enforced to be absent while reviewed is false.
+  reviewedBy?: 'human' | 'auto-pilot';
 }
 
 export interface BusinessIntentReport {

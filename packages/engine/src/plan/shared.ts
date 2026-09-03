@@ -35,6 +35,10 @@ import { renderSwarmDispatcher } from './templates/swarm-dispatcher.js';
 import { renderBusinessIntentTypes } from './templates/business-intent-types.js';
 import { renderBusinessIntentValidator } from './templates/business-intent-validator.js';
 import { renderSiteMapValidator } from './templates/site-map-validator.js';
+import { renderTestConditionsTypes } from './templates/test-conditions-types.js';
+import { renderTestConditionsEngine } from './templates/test-conditions-engine.js';
+import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
+import { renderPipelineStatus } from './templates/pipeline-status.js';
 
 /**
  * Emits project infrastructure files that are fully independent of the language and automation
@@ -72,7 +76,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       source: { kind: 'inline', text: renderEditorConfig() },
     },
     {
-      path: 'docs/site-map/site-map.schema.json',
+      path: '.scaffold/schemas/site-map.schema.json',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderSiteMapSchema() },
@@ -94,7 +98,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             source: { kind: 'inline', text: renderSwarmDispatcher() },
           },
           {
-            path: 'docs/analysis/business-intent.types.ts',
+            path: '.scaffold/schemas/business-intent.types.ts',
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderBusinessIntentTypes() },
@@ -110,6 +114,30 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderSiteMapValidator() },
+          },
+          {
+            path: '.scaffold/schemas/test-conditions.types.ts',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderTestConditionsTypes() },
+          },
+          {
+            path: 'scripts/generate-test-conditions.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderTestConditionsEngine() },
+          },
+          {
+            path: 'scripts/validate-test-conditions.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderTestConditionsValidator() },
+          },
+          {
+            path: 'scripts/pipeline-status.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderPipelineStatus() },
           },
         ] as FileDescriptor[])
       : []),

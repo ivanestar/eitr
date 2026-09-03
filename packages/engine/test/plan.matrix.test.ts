@@ -136,13 +136,13 @@ describe('plan() framework & CI/CD matrix integration', () => {
   // AC1 (ADR 0012 Stage 1) - the two static business-intent files follow the exact same
   // AI-assistant gating as orchestrate-swarm.mjs above; Step 6's own runtime behavior is a
   // separate, opt-in question these two files are unaffected by (see plan D5).
-  it('emits docs/analysis/business-intent.types.ts, scripts/validate-business-intent.mjs, and scripts/validate-site-map.mjs only when at least one AI assistant is configured', () => {
+  it('emits .scaffold/schemas/business-intent.types.ts, scripts/validate-business-intent.mjs, and scripts/validate-site-map.mjs only when at least one AI assistant is configured', () => {
     const withDefaultAssistants = plan(muiProfile(), {
       language: 'typescript',
       automationTool: 'playwright',
     });
     const defaultPaths = withDefaultAssistants.files.map((f) => f.path);
-    expect(defaultPaths).toContain('docs/analysis/business-intent.types.ts');
+    expect(defaultPaths).toContain('.scaffold/schemas/business-intent.types.ts');
     expect(defaultPaths).toContain('scripts/validate-business-intent.mjs');
     expect(defaultPaths).toContain('scripts/validate-site-map.mjs');
 
@@ -152,8 +152,48 @@ describe('plan() framework & CI/CD matrix integration', () => {
       aiAssistants: [],
     });
     const noAssistantPaths = withNoAssistants.files.map((f) => f.path);
-    expect(noAssistantPaths).not.toContain('docs/analysis/business-intent.types.ts');
+    expect(noAssistantPaths).not.toContain('.scaffold/schemas/business-intent.types.ts');
     expect(noAssistantPaths).not.toContain('scripts/validate-business-intent.mjs');
     expect(noAssistantPaths).not.toContain('scripts/validate-site-map.mjs');
+  });
+
+  // AC6 (ADR 0012 Stage 2) - the three test-conditions files follow the exact same AI-assistant
+  // gating as Stage 1's own files above.
+  it('emits .scaffold/schemas/test-conditions.types.ts, scripts/generate-test-conditions.mjs, and scripts/validate-test-conditions.mjs only when at least one AI assistant is configured', () => {
+    const withDefaultAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+    });
+    const defaultPaths = withDefaultAssistants.files.map((f) => f.path);
+    expect(defaultPaths).toContain('.scaffold/schemas/test-conditions.types.ts');
+    expect(defaultPaths).toContain('scripts/generate-test-conditions.mjs');
+    expect(defaultPaths).toContain('scripts/validate-test-conditions.mjs');
+
+    const withNoAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+      aiAssistants: [],
+    });
+    const noAssistantPaths = withNoAssistants.files.map((f) => f.path);
+    expect(noAssistantPaths).not.toContain('.scaffold/schemas/test-conditions.types.ts');
+    expect(noAssistantPaths).not.toContain('scripts/generate-test-conditions.mjs');
+    expect(noAssistantPaths).not.toContain('scripts/validate-test-conditions.mjs');
+  });
+
+  it('emits scripts/pipeline-status.mjs only when at least one AI assistant is configured', () => {
+    const withDefaultAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+    });
+    const defaultPaths = withDefaultAssistants.files.map((f) => f.path);
+    expect(defaultPaths).toContain('scripts/pipeline-status.mjs');
+
+    const withNoAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+      aiAssistants: [],
+    });
+    const noAssistantPaths = withNoAssistants.files.map((f) => f.path);
+    expect(noAssistantPaths).not.toContain('scripts/pipeline-status.mjs');
   });
 });
