@@ -52,7 +52,12 @@ const SOURCE_VALUES = new Set([
 ]);
 const PARTITION_KIND_VALUES = new Set(['valid', 'invalid']);
 const BOUNDARY_VALUES = new Set(['min', 'max']);
-const TECHNIQUE_VALUES = new Set(['combinatorial', 'boundary-value', 'equivalence-partition']);
+const TECHNIQUE_VALUES = new Set([
+  'combinatorial',
+  'boundary-value',
+  'equivalence-partition',
+  'checklist-based',
+]);
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -201,7 +206,10 @@ function isCondition(value, label, errors) {
     errors.push(label + '.parameters must be an object.');
   }
   if (!TECHNIQUE_VALUES.has(value.technique)) {
-    errors.push(label + '.technique must be one of combinatorial|boundary-value|equivalence-partition.');
+    errors.push(
+      label +
+        '.technique must be one of combinatorial|boundary-value|equivalence-partition|checklist-based.',
+    );
   }
   isVerificationContract(value.verification, label + '.verification', errors);
   if (typeof value.isSpeculative !== 'boolean') {

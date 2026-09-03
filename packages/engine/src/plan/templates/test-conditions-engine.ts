@@ -406,6 +406,50 @@ function buildEquivalencePartitionConditions(routeId, parameters) {
   return conditions;
 }
 
+// Closed, deterministic checklist of well-known problematic values per ParameterKind (ISTQB
+// experience-based "checklist-based testing" - a fixed, repeatable list, not ad hoc "error
+// guessing"). Complementary to boundary-value, not redundant with it: these probe malformed-format
+// and injection-class failures a numeric/length boundary never touches. Values are synthesized
+// test data written to the artifact, never submitted to a live page by this generator.
+const CHECKLIST_VALUES = {
+  text: ['<script>alert(1)</script>', "' OR '1'='1", 'A'.repeat(1000), '  leading-trailing-space  '],
+  email: ['plainaddress', '@missinglocal.com', 'user@', 'user@.com'],
+  number: ['-1', '0', '1e309'],
+  date: ['0000-00-00', '9999-12-31', 'not-a-date'],
+};
+
+function buildChecklistConditions(routeId, parameters) {
+  const conditions = [];
+  for (const target of parameters) {
+    const values = CHECKLIST_VALUES[target.kind];
+    if (!values) continue;
+    for (const value of values) {
+      const vector = {};
+      for (const other of parameters) {
+        if (other.name === target.name) {
+          vector[other.name] = value;
+          continue;
+        }
+        const otherValid =
+          other.partitions.find(function (p) {
+            return p.kind === 'valid';
+          }) || other.partitions[0];
+        if (!otherValid) continue;
+        vector[other.name] = otherValid.id;
+      }
+      conditions.push({
+        conditionId: conditionId(routeId, vector),
+        parameters: vector,
+        technique: 'checklist-based',
+        verification: {},
+        isSpeculative: true,
+        reviewed: false,
+      });
+    }
+  }
+  return conditions;
+}
+
 function generateForRoute(routeId, entry) {
   redactEntry(entry);
   const currentHash = hashParams(entry);
@@ -428,9 +472,14 @@ function generateForRoute(routeId, entry) {
     routeId,
     entry.parameters,
   );
+  const checklistConditions = buildChecklistConditions(routeId, entry.parameters);
   const seen = new Set();
   const deduped = [];
-  for (const c of combinatorialConditions.concat(boundaryConditions, equivalencePartitionConditions)) {
+  for (const c of combinatorialConditions.concat(
+    boundaryConditions,
+    equivalencePartitionConditions,
+    checklistConditions,
+  )) {
     if (seen.has(c.conditionId)) continue;
     seen.add(c.conditionId);
     deduped.push(c);

@@ -562,11 +562,10 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       const result = run(dir);
       expect(result.status).toBe(0);
       const report = readReport(dir);
-      const conditions = report.routes['route-search'].conditions;
+      const conditions = report.routes['route-search'].conditions.filter(
+        (c) => c.technique === 'equivalence-partition',
+      );
       expect(conditions.length).toBe(3);
-      for (const c of conditions) {
-        expect(c.technique).toBe('equivalence-partition');
-      }
       const coveredPartitions = new Set(conditions.map((c) => c.parameters.s));
       expect(coveredPartitions).toEqual(
         new Set(['valid-search-term', 'empty-search-term', 'special-characters']),
@@ -575,13 +574,100 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       expect(new Set(ids).size).toBe(ids.length);
 
       // Idempotency: unchanged parameters -> re-run is a no-op, same guarantee combinatorial
-      // routes already have (AC13).
-      const firstConditions = JSON.stringify(conditions);
+      // routes already have (AC13). Compares the full (unfiltered) condition list, not just the
+      // equivalence-partition subset checked above.
+      const firstConditions = JSON.stringify(report.routes['route-search'].conditions);
       const firstHash = report.routes['route-search'].sourceParamsHash;
       run(dir);
       const second = readReport(dir);
       expect(JSON.stringify(second.routes['route-search'].conditions)).toBe(firstConditions);
       expect(second.routes['route-search'].sourceParamsHash).toBe(firstHash);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Checklist-based technique: a closed, deterministic list of well-known malformed-format/
+  // injection-class values per parameter kind, independent of parameter count or boundaries.
+  it('probes the closed checklist for text/email/number/date parameters, holding other parameters at their valid partition', () => {
+    const dir = setupProject({
+      schemaVersion: 1,
+      generatedAt: '2026-09-03T11:00:00.000Z',
+      routes: {
+        'route-contact': {
+          routeId: 'route-contact',
+          parameters: [
+            {
+              name: 'name',
+              kind: 'text',
+              partitions: [{ id: 'valid-name', kind: 'valid', sampleValues: ['Ann'] }],
+              boundaries: [],
+              evidence: [{ signal: 'form-label', excerpt: 'Name' }],
+            },
+            {
+              name: 'email',
+              kind: 'email',
+              partitions: [{ id: 'valid-email', kind: 'valid', sampleValues: ['ann@example.com'] }],
+              boundaries: [],
+              evidence: [{ signal: 'form-label', excerpt: 'Email' }],
+            },
+            {
+              name: 'age',
+              kind: 'number',
+              partitions: [{ id: 'valid-age', kind: 'valid', sampleValues: ['30'] }],
+              boundaries: [],
+              evidence: [{ signal: 'form-label', excerpt: 'Age' }],
+            },
+            {
+              name: 'birthdate',
+              kind: 'date',
+              partitions: [{ id: 'valid-birthdate', kind: 'valid', sampleValues: ['1996-05-01'] }],
+              boundaries: [],
+              evidence: [{ signal: 'form-label', excerpt: 'Birthdate' }],
+            },
+          ],
+          constraints: [],
+          conditions: [],
+          unsatisfiedPairs: [],
+          sourceContentHash: 'abc123',
+          sourceParamsHash: '',
+          analyzedAt: '2026-09-03T11:00:00.000Z',
+        },
+      },
+    });
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const report = readReport(dir);
+      const checklist = report.routes['route-contact'].conditions.filter(
+        (c) => c.technique === 'checklist-based',
+      );
+      // 4 text + 4 email + 3 number + 3 date checklist values = 14 conditions.
+      expect(checklist.length).toBe(14);
+      const nameProbes = checklist.filter((c) => c.parameters.name !== 'valid-name');
+      expect(nameProbes.length).toBe(4);
+      for (const c of nameProbes) {
+        expect(c.parameters.email).toBe('valid-email');
+        expect(c.parameters.age).toBe('valid-age');
+        expect(c.parameters.birthdate).toBe('valid-birthdate');
+      }
+      const emailProbes = checklist.filter((c) => c.parameters.email !== 'valid-email');
+      expect(emailProbes.length).toBe(4);
+      for (const c of emailProbes) {
+        expect(c.parameters.name).toBe('valid-name');
+      }
+      const ageProbes = checklist.filter((c) => c.parameters.age !== 'valid-age');
+      expect(ageProbes.length).toBe(3);
+      for (const c of ageProbes) {
+        expect(c.parameters.name).toBe('valid-name');
+      }
+      const birthdateProbes = checklist.filter((c) => c.parameters.birthdate !== 'valid-birthdate');
+      expect(birthdateProbes.length).toBe(3);
+      for (const c of birthdateProbes) {
+        expect(c.parameters.name).toBe('valid-name');
+      }
+      const ids = checklist.map((c) => c.conditionId);
+      expect(new Set(ids).size).toBe(ids.length);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

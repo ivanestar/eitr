@@ -26,6 +26,15 @@ audit trail; this file is release notes.
   nothing to pair against there, so it now falls back to one condition per partition
   (`technique: 'equivalence-partition'`). The mechanical validator's technique allowlist was
   updated in lockstep so these conditions actually pass Gate 2.
+- **Added**: a fourth test-condition technique, `checklist-based` (ISTQB experience-based testing)
+  - a closed, deterministic list of well-known problematic values per parameter kind
+    (XSS/SQL-injection markers, malformed emails, numeric overflow, invalid dates), complementary to
+    boundary-value rather than a replacement for it.
+- **Fixed**: the invocation-control claim in `/derive-test-conditions` named only Claude Code,
+  Cursor, and Codex as enforcing "explicit command only," implying Antigravity was the sole
+  exception - live verification found Windsurf and Copilot have no such mechanism either, and
+  Cursor/Codex both have open 2026 reliability bugs in the mechanism itself. Reworded to name all
+  three assistants with no mechanism and treat the other three as a hint, not a guarantee.
 
 ## [0.23.0] - 2026-09-03
 

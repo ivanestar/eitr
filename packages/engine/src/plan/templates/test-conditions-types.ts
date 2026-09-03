@@ -68,15 +68,22 @@ export interface VerificationContract {
 
 // 'equivalence-partition' covers a route with fewer than 2 parameters, where pairwise coverage
 // has no second parameter to pair against and would otherwise silently produce zero conditions.
-export type TestConditionTechnique = 'combinatorial' | 'boundary-value' | 'equivalence-partition';
+// 'checklist-based' (ISTQB experience-based technique) probes a closed, deterministic list of
+// well-known malformed-format/injection-class values per parameter kind - complementary to
+// boundary-value, not a replacement for it.
+export type TestConditionTechnique =
+  | 'combinatorial'
+  | 'boundary-value'
+  | 'equivalence-partition'
+  | 'checklist-based';
 
 export interface TestCondition {
   // sha256(routeId + '|' + JSON.stringify(sorted [paramName, value] tuples)).slice(0, 16)
   conditionId: string;
   // paramName -> partitionId for technique: 'combinatorial' and 'equivalence-partition'. For
-  // technique: 'boundary-value', the boundary parameter's own entry holds the literal probe value
-  // from BoundarySet.values instead of a partitionId - every other (held-constant) parameter's
-  // entry is still a partitionId.
+  // technique: 'boundary-value' or 'checklist-based', the target parameter's own entry holds the
+  // literal probe/checklist value instead of a partitionId - every other (held-constant)
+  // parameter's entry is still a partitionId.
   parameters: Record<string, string>;
   technique: TestConditionTechnique;
   verification: VerificationContract;
