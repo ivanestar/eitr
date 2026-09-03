@@ -138,6 +138,27 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     }
   });
 
+  // The equivalence-partition fallback (single-parameter routes) must pass the same gate as
+  // combinatorial/boundary-value - the allowlist here has to move in lockstep with
+  // TestConditionTechnique in test-conditions-types.ts and what the generator actually emits.
+  it('passes full validation for a condition tagged technique: equivalence-partition', () => {
+    const dir = setupProject();
+    try {
+      const report = structuredClone(wellFormedWithConditions()) as {
+        routes: Record<string, { conditions: Array<{ technique: string }> }>;
+      };
+      report.routes['route-checkout'].conditions[0].technique = 'equivalence-partition';
+      writeReport(dir, report);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
+      expect(result.status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // AC5, case 1/2
   it('fails on a routeId with no matching entry in site-map.json', () => {
     const dir = setupProject();

@@ -66,14 +66,17 @@ export interface VerificationContract {
   network?: { status: number; bodyShape?: string };
 }
 
-export type TestConditionTechnique = 'combinatorial' | 'boundary-value';
+// 'equivalence-partition' covers a route with fewer than 2 parameters, where pairwise coverage
+// has no second parameter to pair against and would otherwise silently produce zero conditions.
+export type TestConditionTechnique = 'combinatorial' | 'boundary-value' | 'equivalence-partition';
 
 export interface TestCondition {
   // sha256(routeId + '|' + JSON.stringify(sorted [paramName, value] tuples)).slice(0, 16)
   conditionId: string;
-  // paramName -> partitionId for technique: 'combinatorial'. For technique: 'boundary-value', the
-  // boundary parameter's own entry holds the literal probe value from BoundarySet.values instead
-  // of a partitionId - every other (held-constant) parameter's entry is still a partitionId.
+  // paramName -> partitionId for technique: 'combinatorial' and 'equivalence-partition'. For
+  // technique: 'boundary-value', the boundary parameter's own entry holds the literal probe value
+  // from BoundarySet.values instead of a partitionId - every other (held-constant) parameter's
+  // entry is still a partitionId.
   parameters: Record<string, string>;
   technique: TestConditionTechnique;
   verification: VerificationContract;

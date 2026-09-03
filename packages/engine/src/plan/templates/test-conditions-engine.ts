@@ -2,7 +2,9 @@
 // The deterministic half of ADR 0012 Stage 2's "Hybrid Two-Phase Engine": an LLM (via the
 // /derive-test-conditions skill's Step 2) infers parameters[]/constraints[] from read-only DOM
 // inspection; this script mechanically expands that into 2-way combinatorial coverage plus
-// 3-value boundary-value conditions - zero model involvement, same zero-dependency style as
+// 3-value boundary-value conditions, falling back to one condition per partition
+// (equivalence-partition technique) for a route with fewer than 2 parameters, where pairwise
+// coverage has nothing to pair against - zero model involvement, same zero-dependency style as
 // scripts/orchestrate-swarm.mjs and the two validate-*.mjs scripts.
 //
 // The combinatorial phase seeds one vector per remaining needed pair (in the pair's own build
@@ -380,6 +382,30 @@ function buildBoundaryConditions(routeId, parameters) {
   return conditions;
 }
 
+// A route with fewer than 2 parameters has no pair to combine at all - buildVectors's needed set
+// stays permanently empty regardless of how many partitions that sole parameter has, so pairwise
+// coverage alone silently produces zero conditions. Common case (a single search box, a one-field
+// subscribe form), not a rare edge case - cover each of the sole parameter's partitions directly.
+function buildEquivalencePartitionConditions(routeId, parameters) {
+  if (parameters.length >= 2) return [];
+  const conditions = [];
+  for (const param of parameters) {
+    for (const partition of param.partitions) {
+      const vector = {};
+      vector[param.name] = partition.id;
+      conditions.push({
+        conditionId: conditionId(routeId, vector),
+        parameters: vector,
+        technique: 'equivalence-partition',
+        verification: {},
+        isSpeculative: true,
+        reviewed: false,
+      });
+    }
+  }
+  return conditions;
+}
+
 function generateForRoute(routeId, entry) {
   redactEntry(entry);
   const currentHash = hashParams(entry);
@@ -398,9 +424,13 @@ function generateForRoute(routeId, entry) {
     };
   });
   const boundaryConditions = buildBoundaryConditions(routeId, entry.parameters);
+  const equivalencePartitionConditions = buildEquivalencePartitionConditions(
+    routeId,
+    entry.parameters,
+  );
   const seen = new Set();
   const deduped = [];
-  for (const c of combinatorialConditions.concat(boundaryConditions)) {
+  for (const c of combinatorialConditions.concat(boundaryConditions, equivalencePartitionConditions)) {
     if (seen.has(c.conditionId)) continue;
     seen.add(c.conditionId);
     deduped.push(c);

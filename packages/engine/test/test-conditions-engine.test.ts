@@ -525,4 +525,65 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // Equivalence-partition fallback: a route with a single parameter (a search box, a one-field
+  // subscribe form) has nothing to pair - pairwise coverage alone produces zero conditions here,
+  // which is the common case on a simple real site, not a rare edge case.
+  it('covers a single-parameter route with one condition per partition instead of zero', () => {
+    const dir = setupProject({
+      schemaVersion: 1,
+      generatedAt: '2026-09-03T11:00:00.000Z',
+      routes: {
+        'route-search': {
+          routeId: 'route-search',
+          parameters: [
+            {
+              name: 's',
+              kind: 'text',
+              partitions: [
+                { id: 'valid-search-term', kind: 'valid', sampleValues: ['widgets'] },
+                { id: 'empty-search-term', kind: 'invalid', sampleValues: [''] },
+                { id: 'special-characters', kind: 'valid', sampleValues: ['A&B!'] },
+              ],
+              boundaries: [],
+              evidence: [{ signal: 'form-label', excerpt: 'Search' }],
+            },
+          ],
+          constraints: [],
+          conditions: [],
+          unsatisfiedPairs: [],
+          sourceContentHash: 'abc123',
+          sourceParamsHash: '',
+          analyzedAt: '2026-09-03T11:00:00.000Z',
+        },
+      },
+    });
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const report = readReport(dir);
+      const conditions = report.routes['route-search'].conditions;
+      expect(conditions.length).toBe(3);
+      for (const c of conditions) {
+        expect(c.technique).toBe('equivalence-partition');
+      }
+      const coveredPartitions = new Set(conditions.map((c) => c.parameters.s));
+      expect(coveredPartitions).toEqual(
+        new Set(['valid-search-term', 'empty-search-term', 'special-characters']),
+      );
+      const ids = conditions.map((c) => c.conditionId);
+      expect(new Set(ids).size).toBe(ids.length);
+
+      // Idempotency: unchanged parameters -> re-run is a no-op, same guarantee combinatorial
+      // routes already have (AC13).
+      const firstConditions = JSON.stringify(conditions);
+      const firstHash = report.routes['route-search'].sourceParamsHash;
+      run(dir);
+      const second = readReport(dir);
+      expect(JSON.stringify(second.routes['route-search'].conditions)).toBe(firstConditions);
+      expect(second.routes['route-search'].sourceParamsHash).toBe(firstHash);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

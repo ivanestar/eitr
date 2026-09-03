@@ -19,8 +19,13 @@ audit trail; this file is release notes.
   moved from `docs/` to `.scaffold/schemas/` - `docs/` is reserved for the filled-in artifacts
   themselves (useful context on their own), not tooling/schema files.
 - **Changed**: the Human Sign-Off Gateway tables in `/map-site` and `/derive-test-conditions` now
-  resolve each `routeId` to its human-readable path/title before printing, and cap long tables to
-  the most actionable rows instead of listing every route.
+  resolve each `routeId` to its human-readable path/title and print as one labeled block per route
+  instead of a Markdown table, which renders unreadably in a plain terminal.
+- **Fixed**: test-condition generation no longer produces zero output for a route with fewer than
+  2 parameters (the common case - a single search box or one-field form) - pairwise coverage has
+  nothing to pair against there, so it now falls back to one condition per partition
+  (`technique: 'equivalence-partition'`). The mechanical validator's technique allowlist was
+  updated in lockstep so these conditions actually pass Gate 2.
 
 ## [0.23.0] - 2026-09-03
 
