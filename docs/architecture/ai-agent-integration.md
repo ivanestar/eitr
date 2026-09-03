@@ -85,7 +85,12 @@ dry-run - inference draws only from already-rendered page title, heading text, f
 button/link text, and ARIA roles reached by a single navigation per route. A zero-dependency
 validator (`scripts/validate-business-intent.mjs`) mechanically checks the artifact's shape before
 a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
-`reviewed: false` as ground truth. See
+`reviewed: false` as ground truth. `docs/site-map/site-map.json` itself gets the same mechanical
+gate one level down (`scripts/validate-site-map.mjs`, run immediately after every `create`/`update`
+pass, before shared-widget mining, the swarm dispatcher, or this step read it) - the shape defect
+this catches (a malformed route entry, a duplicate `routeId`) is cheaper and more reliably caught by
+code than by asking a model to notice it, the same reasoning ADR 0012 applies at every stage
+boundary. See
 [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
 for the design decision this implements and what remains out of scope for this first stage
 (transport choice, cross-route journey synthesis, test-condition derivation).

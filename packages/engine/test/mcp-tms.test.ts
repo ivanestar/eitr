@@ -235,6 +235,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
     expect(mapSkill?.source.text).not.toContain('APP_GRAPH.md');
 
+    // Mechanical Shape Gate (site-map.json's own equivalent of business-intent's validator) runs
+    // right after either create/update mode writes the file, before shared-widget mining reads it.
+    expect(mapSkill?.source.text).toContain('validate-site-map.mjs');
+    expect(mapSkill?.source.text).toContain('Mechanical Shape Gate');
+
     // map-site declares `arguments: ['mode']`, so its Antigravity rendering must explain that
     // Antigravity has no slash-command argument mechanism - live-verified 2026-09-03 (skills are
     // activated autonomously from description, or requested by name in chat).

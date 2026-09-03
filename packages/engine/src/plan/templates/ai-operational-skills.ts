@@ -374,6 +374,8 @@ Playwright browser access for this crawl comes from this project's MCP configura
    - Any link discovered during this pass that isn't already a known route -> add as a new entry with \`status: "active"\` and a freshly generated \`routeId\` per Step 3a's rule, same as a fresh \`create\` would.
    - Update the top-level \`coverage\` field the same way Step 3a does (set it if this pass hit a bound, omit it if this pass's crawl was exhaustive), rather than leaving a stale value from a prior run.
    - Set the file-level \`lastUpdatedAt\` to now. Leave \`generatedAt\` untouched - it's the original creation timestamp.
+3c. **Mechanical Shape Gate:**
+   - Run \`node scripts/validate-site-map.mjs\` immediately after writing \`docs/site-map/site-map.json\` (either mode). If it exits non-zero, fix the reported errors before proceeding to Step 4 - never hand off a malformed site map to shared-widget mining, the swarm dispatcher, or \`docs/analysis/business-intent.json\`'s Step 6, all of which key off it.
 4. **Shared Widget Mining (Deduplication Engine):**
    - Identify recurring component structures appearing across >= 2 \`active\` routes (exclude \`removed\` routes from this analysis).
    - Synthesize reusable widgets in \`components/widgets/<name>.widget.ts\`.
