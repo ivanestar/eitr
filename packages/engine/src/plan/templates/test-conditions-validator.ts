@@ -224,6 +224,11 @@ function isCondition(value, label, errors) {
   if (value.isSpeculative === true && value.reviewed === true) {
     errors.push(label + ' cannot have isSpeculative:true and reviewed:true at the same time.');
   }
+  // Independent of the rule above: whenever reviewed is true (by whatever means it got there),
+  // reviewedBy must say who/what actually set it.
+  if (value.reviewed === true && value.reviewedBy !== 'human' && value.reviewedBy !== 'auto-pilot') {
+    errors.push(label + '.reviewedBy must be "human" or "auto-pilot" when reviewed is true.');
+  }
 }
 
 function isUnsatisfiedPair(value, label, errors) {

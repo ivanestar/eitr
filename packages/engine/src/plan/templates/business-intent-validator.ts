@@ -148,6 +148,9 @@ function validate() {
     if (typeof entry.reviewed !== 'boolean') {
       errors.push(label + '.reviewed must be a boolean.');
     }
+    if (entry.reviewed === true && entry.reviewedBy !== 'human' && entry.reviewedBy !== 'auto-pilot') {
+      errors.push(label + '.reviewedBy must be "human" or "auto-pilot" when reviewed is true.');
+    }
     isField(entry.businessFeature, label + '.businessFeature', errors);
     isField(entry.criticalityTier, label + '.criticalityTier', errors);
     if (entry.businessFeature && typeof entry.businessFeature === 'object') {

@@ -138,6 +138,51 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     }
   });
 
+  it('fails when a condition has reviewed:true with no reviewedBy', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedWithConditions()) as {
+        routes: Record<
+          string,
+          { conditions: Array<{ isSpeculative: boolean; reviewed: boolean }> }
+        >;
+      };
+      bad.routes['route-checkout'].conditions[0].isSpeculative = false;
+      bad.routes['route-checkout'].conditions[0].reviewed = true;
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('reviewedBy must be "human" or "auto-pilot"')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('passes when a condition has reviewed:true and reviewedBy:"human"', () => {
+    const dir = setupProject();
+    try {
+      const good = structuredClone(wellFormedWithConditions()) as {
+        routes: Record<
+          string,
+          { conditions: Array<{ isSpeculative: boolean; reviewed: boolean; reviewedBy?: string }> }
+        >;
+      };
+      good.routes['route-checkout'].conditions[0].isSpeculative = false;
+      good.routes['route-checkout'].conditions[0].reviewed = true;
+      good.routes['route-checkout'].conditions[0].reviewedBy = 'human';
+      writeReport(dir, good);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // The equivalence-partition fallback (single-parameter routes) must pass the same gate as
   // combinatorial/boundary-value - the allowlist here has to move in lockstep with
   // TestConditionTechnique in test-conditions-types.ts and what the generator actually emits.
@@ -304,6 +349,7 @@ describe('renderTestConditionsTypes (real standalone tsc check)', () => {
     expect(text).toContain('TestConditionsEntry');
     expect(text).toContain('UnsatisfiedPair');
     expect(text).toContain('schemaVersion: 1');
+    expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot';");
 
     const dir = mkdtempSync(join(tmpdir(), 'eitr-test-conditions-types-'));
     try {

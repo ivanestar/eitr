@@ -38,6 +38,7 @@ import { renderSiteMapValidator } from './templates/site-map-validator.js';
 import { renderTestConditionsTypes } from './templates/test-conditions-types.js';
 import { renderTestConditionsEngine } from './templates/test-conditions-engine.js';
 import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
+import { renderPipelineStatus } from './templates/pipeline-status.js';
 
 /**
  * Emits project infrastructure files that are fully independent of the language and automation
@@ -131,6 +132,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderTestConditionsValidator() },
+          },
+          {
+            path: 'scripts/pipeline-status.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderPipelineStatus() },
           },
         ] as FileDescriptor[])
       : []),

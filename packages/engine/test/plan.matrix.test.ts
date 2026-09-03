@@ -179,4 +179,21 @@ describe('plan() framework & CI/CD matrix integration', () => {
     expect(noAssistantPaths).not.toContain('scripts/generate-test-conditions.mjs');
     expect(noAssistantPaths).not.toContain('scripts/validate-test-conditions.mjs');
   });
+
+  it('emits scripts/pipeline-status.mjs only when at least one AI assistant is configured', () => {
+    const withDefaultAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+    });
+    const defaultPaths = withDefaultAssistants.files.map((f) => f.path);
+    expect(defaultPaths).toContain('scripts/pipeline-status.mjs');
+
+    const withNoAssistants = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+      aiAssistants: [],
+    });
+    const noAssistantPaths = withNoAssistants.files.map((f) => f.path);
+    expect(noAssistantPaths).not.toContain('scripts/pipeline-status.mjs');
+  });
 });

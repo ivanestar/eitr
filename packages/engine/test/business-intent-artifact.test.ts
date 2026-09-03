@@ -185,6 +185,43 @@ describe('scripts/validate-business-intent.mjs (real execution)', () => {
     }
   });
 
+  it('fails when reviewed:true has no reviewedBy', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedReport()) as {
+        routes: Record<string, { reviewed: boolean; reviewedBy?: string }>;
+      };
+      bad.routes['route-checkout'].reviewed = true;
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('reviewedBy must be "human" or "auto-pilot"')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('passes when reviewed:true and reviewedBy:"human" are both set', () => {
+    const dir = setupProject();
+    try {
+      const good = structuredClone(wellFormedReport()) as {
+        routes: Record<string, { reviewed: boolean; reviewedBy?: string }>;
+      };
+      good.routes['route-checkout'].reviewed = true;
+      good.routes['route-checkout'].reviewedBy = 'human';
+      writeReport(dir, good);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // AC4, case 5/6
   it('fails on an invalid criticalityTier enum value', () => {
     const dir = setupProject();
@@ -308,6 +345,7 @@ describe('renderBusinessIntentTypes (real standalone tsc check)', () => {
     expect(text).toContain('Field<T>');
     expect(text).toContain('schemaVersion: 1');
     expect(text).toContain('Keyed by routeId');
+    expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot';");
 
     const dir = mkdtempSync(join(tmpdir(), 'eitr-business-intent-types-'));
     try {

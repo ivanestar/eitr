@@ -89,6 +89,11 @@ export interface TestCondition {
   verification: VerificationContract;
   isSpeculative: boolean;
   reviewed: boolean;
+  // Who set reviewed:true - 'human' for an actual conversational approval, 'auto-pilot' only when
+  // /ground-zero-setup's auto-pilot mode set it on the user's own explicit pre-authorization.
+  // Required once reviewed is true (mechanically enforced); expected but not mechanically
+  // enforced to be absent while reviewed is false.
+  reviewedBy?: 'human' | 'auto-pilot';
 }
 
 // A parameter pair the generator could not cover because every remaining candidate conflicted

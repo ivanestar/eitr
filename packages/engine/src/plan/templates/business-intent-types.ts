@@ -61,6 +61,11 @@ export interface BusinessIntentEntry {
   // False until a human has reviewed this entry per /map-site's Human Sign-Off Gateway. No other
   // skill or agent should treat an entry with reviewed: false as ground truth.
   reviewed: boolean;
+  // Who set reviewed:true - 'human' for an actual conversational approval, 'auto-pilot' only when
+  // /ground-zero-setup's auto-pilot mode set it on the user's own explicit pre-authorization.
+  // Required once reviewed is true (mechanically enforced); expected but not mechanically
+  // enforced to be absent while reviewed is false.
+  reviewedBy?: 'human' | 'auto-pilot';
 }
 
 export interface BusinessIntentReport {
