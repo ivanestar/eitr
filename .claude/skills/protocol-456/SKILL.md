@@ -1,9 +1,9 @@
 ---
 name: protocol-456
-description: 5-phase engineering pipeline triggered by '456' or 'по 456' for executing ONE track from an already-approved plan (e.g. an SDD remediation spec) - core-developer implements, tests prove the fix, one independent reviewer checks code+tests together, doc-sync closes it out. Skips Protocol 123's research/plan-formulation/plan-review-swarm/user-approval-gate phases because the plan already went through its own review before this protocol starts. Trigger only on the literal keyword '456'/'по 456' - never self-invoke.
+description: 5-phase engineering pipeline triggered by '456' or 'по 456' for executing ONE track from an already-approved plan (e.g. an SDD remediation spec) - core-developer implements, tests prove the fix, one independent reviewer checks code+tests together, doc-sync closes it out. Skips Protocol 123's research/plan-formulation/plan-review-swarm/user-approval-gate phases because the plan already went through its own review before this protocol starts. Once every track in the current batch has landed, a Batch Completion Gate mirrors CI's own full-suite check locally before the branch is reported ready. Trigger only on the literal keyword '456'/'по 456' - never self-invoke.
 ---
 
-# The 456 Protocol Skill (v1.1)
+# The 456 Protocol Skill (v1.2)
 
 ## Purpose
 
@@ -61,3 +61,12 @@ A sibling of Protocol 123 with 5 phases instead of 9: for the specific case wher
 - Mark the plan document itself with a status note at the top of the track, no more than 5 lines: `Status: DONE`, the actual commit hash(es), the exact verification command(s) run and their result, and what was found in review but deliberately not actioned, with the reason in one clause. No rationale narrative or restated background beyond that.
 - Route any deferred or lower-priority findings from Phase 3 into `TODO.md` per its existing conventions; nothing found in review is allowed to simply evaporate unrecorded.
 - No Telemetry Summary table - that reporting ceremony belongs to Protocol 123.
+
+## Batch Completion Gate (once per batch, before reporting the branch ready)
+
+A track's own Phase 2 verification command only proves that track in isolation - it cannot catch a cross-cutting check that spans the whole generated output regardless of which track touched it (e.g. `packages/engine/test/format.test.ts`, which asserts every emitted file across the entire plan is already Prettier-formatted - a real failure discovered in production use of this protocol, on a PR that had cleanly passed every individual track's own Phase 2). CI's `Build & Verify` job runs the full local suite before merge is even considered; discovering a failure there instead of locally means a push -> wait for CI -> diagnose from CI logs -> fix -> push -> wait again round trip, which costs strictly more time and tokens than running the same check once, locally, before the push - directly against 456's own purpose of conserving both.
+
+- After the LAST track in the current batch has finished Phase 4 - not after every individual track, since running this per-track would reintroduce the cost 456 exists to avoid - and before telling the user the branch is ready for a PR, run the exact command the `Build & Verify` job's `Run Full Test Suite` step actually runs. Read `.github/workflows/ci.yml` fresh to get that exact command rather than trusting a memorized one - the workflow can change independently of this skill, and a stale cached command would silently stop mirroring CI (at the time of writing: `npx vitest run packages/engine/test packages/cli/test`).
+- This is a narrow, protocol-scoped exception to Section 8's "No Full Test Suite Execution Without Approval": the batch of tracks just executed under this same 456 invocation already carries the user's consent for this one specific check, since it runs nothing CI was not already about to run against the same commits regardless. It is not blanket permission to run full suites for any other purpose.
+- If this surfaces a failure, treat it exactly like a Phase 2 verification failure - root-cause it, fix it as its own small commit (attributed to whichever track actually caused it, or its own standalone `fix` commit if the cause predates this batch), and re-run this same gate command until clean, under the same Two-Strike Rule as Phase 2.
+- Only once this gate is clean does the batch's branch get reported to the user as ready for a PR.
