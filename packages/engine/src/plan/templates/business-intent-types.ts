@@ -19,6 +19,8 @@ export function renderBusinessIntentTypes(): string {
 
 export type Confidence = 'high' | 'medium' | 'low';
 
+// Four levels rather than the usual three (high/medium/low): a payment or auth route deserves its
+// own tier above a generic "high," not lumped in with it.
 export type CriticalityTier = 'critical' | 'high' | 'medium' | 'low';
 
 // Which already-rendered, read-only signal grounded a Field<T>'s value. This analysis step
