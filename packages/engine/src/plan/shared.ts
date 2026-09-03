@@ -34,6 +34,7 @@ import { renderOverridesReadme } from './templates/overrides-readme.js';
 import { renderSwarmDispatcher } from './templates/swarm-dispatcher.js';
 import { renderBusinessIntentTypes } from './templates/business-intent-types.js';
 import { renderBusinessIntentValidator } from './templates/business-intent-validator.js';
+import { renderSiteMapValidator } from './templates/site-map-validator.js';
 
 /**
  * Emits project infrastructure files that are fully independent of the language and automation
@@ -103,6 +104,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderBusinessIntentValidator() },
+          },
+          {
+            path: 'scripts/validate-site-map.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderSiteMapValidator() },
           },
         ] as FileDescriptor[])
       : []),

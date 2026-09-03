@@ -7,6 +7,23 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.22.0] - 2026-09-03
+
+- **Added**: a mechanical shape gate for `docs/site-map/site-map.json` itself
+  (`scripts/validate-site-map.mjs`, mirroring `business-intent.json`'s existing validator), run by
+  `/map-site`'s new Step 3c right after every `create`/`update` pass and before shared-widget
+  mining, the swarm dispatcher, or business-intent analysis read the file - catches malformed
+  route entries and duplicate `routeId`s (the join key `business-intent.json` relies on) before an
+  LLM or a human ever sees them.
+
+## [0.21.0] - 2026-09-03
+
+- **Added**: `pom-engineer`'s Tier 3 liveness check now covers the whole class of
+  conditionally-rendered UI (dialogs/drawers, dropdown/select menus, tooltips, expandable
+  disclosure sections, date pickers, context menus), not just tabs/accordions, and treats a
+  `dialog`/similar entry in `site-map.json`'s per-route `regions`/`components` as an active
+  discovery lead rather than a passive confirmation.
+
 ## [0.20.0] - 2026-09-03
 
 - **Added**: Antigravity skills that depend on a slash-command argument (currently `map-site`) now

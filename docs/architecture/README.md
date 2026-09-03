@@ -101,8 +101,12 @@ contract behind this diagram.
   (`BasePage`/`Component`/`Container`/`Collection` + primitives + widgets).
 - **Adapter** - a per-role locator strategy for a specific UI library (MUI, Ant Design, Radix, ...),
   registered against the `Adapter` interface.
+- **SUT** - System Under Test: the application EITR points at (crawls, detects a stack for,
+  generates a framework against).
+- **TAS** - Test Automation Solution: the generated framework itself - the CPOM, CI/CD config, MCP
+  bridge, and AI-agent layer working together as one deployed instrument for testing a given SUT.
 - **StackProfile** - the detect↔generate contract: the structured record of what framework/UI
-  library/conventions were detected for a target app.
+  library/conventions were detected for the SUT.
 - **GenerationPlan** - the pure, in-memory, ordered list of `FileDescriptor`s a `plan()` call
   produces; `apply()` is the only step that touches disk.
 - **TMS** - Test Management System (Jira Xray, Azure DevOps, TestRail, Zephyr) - where test

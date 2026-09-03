@@ -61,7 +61,11 @@ than one shared format every assistant has to interpret:
 
 ## Anti-fake-green assertion engine
 
-To prevent automated tests from passing without verifying actual business logic:
+A generated test has no single, self-evident correct answer to compare against - the same oracle
+problem any test author faces when there's no ground truth to check output against directly. EITR's
+answer is a pseudo-oracle: cross-checking the UI against the backend response that produced it,
+rather than trusting either signal alone. Concretely, to prevent automated tests from passing without
+verifying actual business logic:
 
 - **Expected-results mapping:** every TMS test case's Expected Result becomes a strict, auto-retrying
   web assertion (`toHaveText()`/`toBeVisible()`/`toBeEnabled()`), not a loose truthy check.
@@ -85,7 +89,12 @@ dry-run - inference draws only from already-rendered page title, heading text, f
 button/link text, and ARIA roles reached by a single navigation per route. A zero-dependency
 validator (`scripts/validate-business-intent.mjs`) mechanically checks the artifact's shape before
 a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
-`reviewed: false` as ground truth. See
+`reviewed: false` as ground truth. `docs/site-map/site-map.json` itself gets the same mechanical
+gate one level down (`scripts/validate-site-map.mjs`, run immediately after every `create`/`update`
+pass, before shared-widget mining, the swarm dispatcher, or this step read it) - the shape defect
+this catches (a malformed route entry, a duplicate `routeId`) is cheaper and more reliably caught by
+code than by asking a model to notice it, the same reasoning ADR 0012 applies at every stage
+boundary. See
 [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
 for the design decision this implements and what remains out of scope for this first stage
 (transport choice, cross-route journey synthesis, test-condition derivation).

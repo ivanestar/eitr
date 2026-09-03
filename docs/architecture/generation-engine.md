@@ -38,6 +38,17 @@ Descriptor | null` (per-role; `null` ⇒ fall back to a universal primitive), so
 Adapters currently resolved: MUI, Ant Design, Radix, plus universal primitives as the fallback for
 any role no adapter claims.
 
+## Polyglot registry (language & tool adapters)
+
+`LanguageAdapter` (`id` matches `PlanOptions.language`: `typescript`/`python`/`csharp`/`java`) and
+`ToolAdapter` (`id` matches `PlanOptions.automationTool`: `playwright`/`cypress`/`pytest`/`maven`/
+`gradle`) each expose one method, `planFiles(profile, opts) → FileDescriptor[]`, and are looked up by
+`id` rather than switched on inline - adding a language or tool means implementing one of these two
+interfaces and registering it, not touching `plan()`'s own logic. This is the layer that keeps a
+generated test's own code independent of which language/runner combination produced it: the same
+separation a test automation architecture generally draws between defining a test and adapting it to
+a specific technology stack, just applied to code generation rather than execution.
+
 ## Idempotency & re-run (path authority)
 
 - **Edited an owned file** → overwritten on regen; a diff of the loss is printed (the per-file hash
