@@ -7,6 +7,14 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.21.0] - 2026-09-03
+
+- **Added**: `pom-engineer`'s Tier 3 liveness check now covers the whole class of
+  conditionally-rendered UI (dialogs/drawers, dropdown/select menus, tooltips, expandable
+  disclosure sections, date pickers, context menus), not just tabs/accordions, and treats a
+  `dialog`/similar entry in `site-map.json`'s per-route `regions`/`components` as an active
+  discovery lead rather than a passive confirmation.
+
 ## [0.20.0] - 2026-09-03
 
 - **Added**: Antigravity skills that depend on a slash-command argument (currently `map-site`) now

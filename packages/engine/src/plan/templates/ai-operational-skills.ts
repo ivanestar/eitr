@@ -217,7 +217,12 @@ Inspects live application DOM, extracts semantic elements, groups them into CPOM
    - Verify every generated Page Object directly against the live application with Web-First assertions before treating it as complete. A raw DOM/accessibility-tree match found during extraction (Step 2) is NEVER sufficient evidence by itself that a real user can see or reach the element - an element present in the markup but hidden (\`display: none\`, off-screen, zero-size, \`opacity: 0\`, or covered by another element) MUST NOT become a CPOM property or method:
      * Tier 1 (Actionable Visibility, checked per element, not per page): (a) \`await locator.count() === 1\`; (b) \`await expect(locator).toBeVisible()\` (non-empty bounding box, not \`visibility:hidden\`/\`display:none\` - this alone does NOT catch \`opacity: 0\`); (c) \`await locator.evaluate(el => getComputedStyle(el).opacity !== '0')\`; (d) \`await locator.click({ trial: true })\` (or \`.fill({ trial: true })\` for text inputs) to run Playwright's full actionability pipeline (stable, receives pointer events i.e. not obscured, enabled) without performing the action - safe even for destructive controls. Any element failing (a)-(d) is a phantom: do not scaffold it, and remove it if an earlier pass already did.
      * Tier 2: State readers (\`valueNow()\`, \`optionsNow()\`, \`rowCountNow()\`).
-     * Tier 3: Non-destructive triggers (tabs, accordions) without clicking mutating actions.
+     * Tier 3: Trigger conditionally-rendered UI non-destructively - not just tabs/accordions, but
+       dialogs/drawers (\`Dialog\`), dropdown/select menus, tooltips/popovers, expandable "show more"
+       sections, date pickers, and context/overflow menus. If \`site-map.json\` flagged this route's
+       \`regions\`/\`components\` with one of these, treat it as a lead to actively trigger, not just
+       confirm if already visible. Revealed content still goes through Tier 1 before becoming a
+       CPOM property - never click a mutating action to reveal something.
 5. **Mandatory Execution & Self-Healing Loop:**
    - Immediately perform the liveness verification via the embedded Playwright MCP tools or an equivalent live check.
    - If failures occur due to locator drift or selector mismatch:
