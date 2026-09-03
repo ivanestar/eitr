@@ -431,6 +431,48 @@ Second stage of the app-analysis pipeline, run after \`/map-site\`'s automatic b
    * Present a Test-Conditions Review Artifact the same way \`/map-site\` Step 6 does - one labeled block per new/changed route, never a Markdown table (unreadable in a plain terminal against variable-length content). Resolve each \`routeId\` to its \`docs/site-map/site-map.json\` path/title first - never show the raw \`routeId\`. Per route: one heading line with the resolved path and title, then one line per parameter \`Parameter: <name> (<kind>)  Technique: <technique>  Conditions: <count>  Speculative: <count>\`, plus an \`Unsatisfied pairs: <count>\` line only when it's greater than 0. State explicitly: this file is NOT authoritative until a human has reviewed it; every condition's \`verification\` contract is an empty stub a human must fill in, and any \`unsatisfiedPairs\` entries mean the constraint set made full 2-way coverage impossible for that route - a human should confirm whether that's expected (mutually exclusive fields) or a sign the extracted constraints themselves are wrong. Once the human actually approves a condition in conversation, set that condition's \`reviewed\` to \`true\` and \`reviewedBy\` to \`'human'\` in \`docs/analysis/test-conditions.json\` before continuing - never set \`reviewed: true\` without also setting \`reviewedBy\`.
 `,
     },
+    {
+      name: 'ground-zero-setup',
+      description:
+        'Guided orchestrator for a brand-new application: runs the currently-built app-analysis pipeline (/map-site create, then /derive-test-conditions) end-to-end, pausing for human sign-off after each stage by default, or fully unattended in auto-pilot mode.',
+      disableModelInvocation: true,
+      content: `# Skill: Greenfield Guided Setup (/ground-zero-setup)
+
+## Purpose
+A thin orchestrator for a brand-new application, not a new analysis engine of its own: it sequences the currently-built stages of the app-analysis pipeline (\`/map-site create\`, including its automatic Step 6 business-intent inference, then \`/derive-test-conditions\`) so a user does not have to remember which command follows which - while never removing the human decision points those underlying skills already require. It adds zero duplicated crawling, inference, or generation logic; every actual decision about what stage comes next is read from \`scripts/pipeline-status.mjs\`, never hardcoded here, so a future pipeline stage (journey placement, spec synthesis - neither built yet) only ever requires extending that one script, not rewriting this skill's own sequencing.
+
+## Workflow
+1. **Pre-Flight Confirmation (mandatory, before anything runs):**
+   * Run \`node scripts/pipeline-status.mjs\` first and resume from whatever stage it reports - never restart a pipeline that is already partway done.
+   * Present, in conversation, and wait for an explicit response before proceeding:
+     - **What will run, in order**, starting from the current stage: \`/map-site create\` (full site crawl plus automatic business-intent inference), then \`/derive-test-conditions\` (test-condition derivation for every reviewed route).
+     - **Cost warning:** this can take anywhere from tens of minutes to multiple hours depending on application size, and consumes a meaningful share of the session's generation budget - state this plainly, do not undersell it.
+     - **Human gates disclosure:** by default there is a pause after every stage, where that stage's own review artifact is presented and the user must approve before the next stage runs.
+   * **Mode choice**, asked at the same point, with a clearly-marked recommended default:
+     - **Guided (Recommended):** pause at every stage's Human Sign-Off Gateway, exactly as described above.
+     - **Auto-pilot:** skip every pause for LOCAL artifact review only and proceed straight through, using the model's own judgment at each stage, on the user's own explicit pre-authorization given right here. Still writes \`reviewed: true\` on every new/changed entry, but as \`reviewedBy: 'auto-pilot'\` rather than \`'human'\`, so a later audit can always tell which entries a human actually looked at. Still produces the same deterministic Final Report described below.
+   * Describe this as an open question with a recommended default, not a fixed menu tied to any particular tool - this skill renders across assistants with and without a structured multiple-choice mechanism, so plain conversation must work everywhere. If the user's response does not clearly select a mode, ask again rather than guessing, and never silently default to Auto-pilot - Guided is the only safe default to fall back to.
+2. **Stage Loop (Guided mode; repeats once per pipeline stage):**
+   * Run the stage by invoking its own skill exactly as documented there (\`/map-site create\` first, then later \`/derive-test-conditions\`) - never reimplement, shortcut, or paraphrase any of that skill's own steps.
+   * Present that stage's own existing Human Sign-Off Gateway exactly as its own skill defines it (the Business-Intent Review Artifact, the Test-Conditions Review Artifact) - this skill does not invent a different review format or shorten the one that already exists.
+   * **Approve / Reject loop:** ask the user to approve, or reject with comments.
+     - On approve: follow that stage's own instruction to set \`reviewed: true\` and \`reviewedBy: 'human'\` on every entry just approved, then continue.
+     - On reject with comments: apply the requested edits to the affected entries, then re-present the updated review artifact and ask again - this is a loop, not a one-shot gate, and repeats until the human approves.
+   * **"What next?"**: run \`node scripts/pipeline-status.mjs\` again and read its \`nextCommand\`. Ask the user, with a clearly-marked recommended default:
+     - Continue to \`nextCommand\` (name it explicitly) - the recommended choice.
+     - Stop here for now - the project is left in a valid, resumable state; nothing is lost, and the user can resume later by running \`nextCommand\` themselves, or by re-invoking \`/ground-zero-setup\`, which always resumes from whatever \`pipeline-status.mjs\` currently reports rather than restarting.
+     - An explicit free-text option, for a custom instruction instead of either of the above.
+3. **Auto-pilot mode:**
+   * Skip step 2's pause-and-ask for LOCAL artifact review only - run each stage, then instead of pausing, autonomously approve every new/changed entry from that stage by setting \`reviewed: true\` and \`reviewedBy: 'auto-pilot'\` on it, then immediately continue to the next stage per \`pipeline-status.mjs\`'s \`nextCommand\`, without asking "what next?" at each stage.
+   * The blanket pre-authorization given at the Pre-Flight Confirmation screen covers only this: proceeding through this pipeline's own local file writes. It does NOT extend to any action with a real external side effect outside this project's own local files - there are none in this skill's current scope (no stage here talks to a TMS or pushes anything externally), but this boundary matters for future stages once one exists (for example, a future TMS-sync stage must still stop and ask even under auto-pilot - side-effecting actions are never covered by this pre-authorization, only local review is).
+4. **End of Chain:**
+   * Once \`pipeline-status.mjs\` reports stage \`ready-to-automate\`, this skill's job is done - stop here honestly rather than pretending to continue. Journey placement and spec synthesis (later pipeline stages) are not built yet.
+   * Tell the user plainly: test conditions are derived and reviewed; turning them into runnable, journey-organized test cases is still a manual step for now. Create a TMS ticket by hand describing the scenario to automate, then run \`/automate-ticket\` against it.
+5. **Final Report (every run, both modes, before finishing):**
+   * Print a deterministic summary: which stage(s) actually ran this session; which files were written or changed (e.g. \`docs/site-map/site-map.json\`, \`docs/analysis/business-intent.json\`, \`docs/analysis/test-conditions.json\`); each mechanical gate's result (PASSED/FAILED) for every gate that ran; how many entries were approved this session and by whom (\`reviewedBy: 'human'\` vs \`'auto-pilot'\` counts, if both occurred); elapsed wall-clock time for this run; and the current \`pipeline-status.mjs\` stage plus its \`nextCommand\`, so the user always knows exactly what to do next without re-reading this skill.
+   * Do not attempt to report token or cost usage here - that telemetry is not available to a skill's own instructions from inside a session. If the user wants that, point them at their assistant's own session-level reporting instead (for example Claude Code's \`/cost\` or \`/context\`).
+`,
+    },
   ];
 }
 

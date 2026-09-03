@@ -7,6 +7,22 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.25.0] - 2026-09-03
+
+- **Added**: `/ground-zero-setup` - a guided orchestrator for a brand-new application that chains
+  `/map-site create` and `/derive-test-conditions` end-to-end, pausing at each stage's own Human
+  Sign-Off Gateway by default, or running fully unattended in auto-pilot mode (still recording
+  `reviewedBy: 'auto-pilot'` on every entry it approves, never silently defaulting to that mode).
+  Stops honestly once test conditions are reviewed - journey placement and spec synthesis are not
+  built yet, so it points the user at `/automate-ticket` for the manual next step.
+- **Added**: `scripts/pipeline-status.mjs` - a deterministic, zero-dependency script computing the
+  current app-analysis pipeline stage from real artifact state on disk, consulted by
+  `/ground-zero-setup` and by `/map-site`'s own end-of-run hint instead of a hardcoded "run X next"
+  string that would go stale as new stages get added.
+- **Added**: `reviewedBy: 'human' | 'auto-pilot'` alongside the existing `reviewed` field on both
+  `business-intent.json` and `test-conditions.json` entries, mechanically required whenever
+  `reviewed: true` - records who actually approved an entry.
+
 ## [0.24.0] - 2026-09-03
 
 - **Fixed**: business-intent analysis (`/map-site` Step 6) now runs automatically as part of every

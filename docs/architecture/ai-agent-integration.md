@@ -25,6 +25,8 @@ Generated Test Repository
 │   ├── /automate-ticket      -- End-to-end flow: TMS ticket -> DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
 │   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
+│   ├── /ground-zero-setup    -- Guided orchestrator: chains /map-site + /derive-test-conditions
+│   │                             with a human sign-off gate per stage, or auto-pilot
 │   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
 │   │                             optional read-only business-intent analysis (ADR 0012 Stage 1)
 │   └── /derive-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
@@ -91,7 +93,10 @@ kind, not even a `trial: true` dry-run - inference draws only from already-rende
 button/link text, and ARIA roles reached by a single navigation per route. A zero-dependency
 validator (`scripts/validate-business-intent.mjs`) mechanically checks the artifact's shape before
 a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
-`reviewed: false` as ground truth. `docs/site-map/site-map.json` itself gets the same mechanical
+`reviewed: false` as ground truth. Approval also records who gave it - `reviewedBy: 'human'` for a
+real conversational approval, or `'auto-pilot'` only when `/ground-zero-setup`'s auto-pilot mode set
+it on the user's own explicit pre-authorization - so a later audit can always tell which entries a
+human actually looked at. `docs/site-map/site-map.json` itself gets the same mechanical
 gate one level down (`scripts/validate-site-map.mjs`, run immediately after every `create`/`update`
 pass, before shared-widget mining, the swarm dispatcher, or this step read it) - the shape defect
 this catches (a malformed route entry, a duplicate `routeId`) is cheaper and more reliably caught by
@@ -120,10 +125,27 @@ deterministic redaction backstop - independent of what the LLM step already did 
 digit-run and majority-digit PII shapes in every evidence excerpt and sample value before the
 artifact is ever written. Every generated condition starts `isSpeculative: true`/`reviewed: false`
 with an empty verification contract; a human fills in expected UI/state/network behavior at the
-same kind of Human Sign-Off Gateway Stage 1 already established. See
+same kind of Human Sign-Off Gateway Stage 1 already established, recording `reviewedBy` the same
+way (`'human'` or `'auto-pilot'`) once approved. See
 [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
 for what remains out of scope for this stage (domain classification, journey/test-level placement,
 spec synthesis, combinatorial strength beyond 2-way, general boolean-predicate constraints).
+
+## Guided greenfield orchestration (`/ground-zero-setup`)
+
+A thin orchestrator over Stage 1 and Stage 2 for a brand-new application, adding no analysis logic
+of its own. It sequences `/map-site create` (with its automatic Step 6) and `/derive-test-conditions`
+in order, pausing at each stage's own Human Sign-Off Gateway by default (Guided mode), or writing
+`reviewedBy: 'auto-pilot'` straight through on the user's own explicit pre-authorization (Auto-pilot
+mode). What runs next is never hardcoded in the orchestrator's own prose - both it and the two
+underlying skills' own end-of-run hints consult one deterministic script,
+`scripts/pipeline-status.mjs`, which recomputes the pipeline's current stage from real artifact state
+on disk (site map existence, reviewed business-intent entries, reviewed test conditions) every time
+it runs, never from a cached belief. This keeps the single-source-of-truth property intact as later
+stages get added - extending the script's stage list is the only change a new stage needs, not a
+rewrite of the orchestrator's own sequencing. Once the pipeline reaches `ready-to-automate`, this
+skill stops honestly: journey placement and spec synthesis (ADR 0012 Stages 3/4) are not built yet,
+so it points the user at creating a TMS ticket by hand and running `/automate-ticket` against it.
 
 ## Self-healing (Two-Strike Rule & 4-point trace triage)
 

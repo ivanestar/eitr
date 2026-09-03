@@ -192,7 +192,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(traceDebugger?.source.text).toContain('[FLAKY / TIMING]');
   });
 
-  it('generates 6 operational skills for all supported AI assistants', () => {
+  it('generates one file per operational skill per assistant', () => {
     const files = planAiOperationalSkills([
       'antigravity',
       'claude',
@@ -201,12 +201,12 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
       'codex',
       'copilot',
     ]);
-    // 8 skills * 4 assistants with 1 file each (antigravity, claude, cursor, codex) = 32
-    // + windsurf: 7 non-map-site skills * 1 file + map-site split into 2 files (map-site.md,
-    //   map-site-update.md) = 9
-    // + copilot: 8 skills * 2 files (prompt + skill) = 16
-    // = 57
-    expect(files.length).toBe(57);
+    // 9 skills * 4 assistants with 1 file each (antigravity, claude, cursor, codex) = 36
+    // + windsurf: 8 non-map-site skills * 1 file + map-site split into 2 files (map-site.md,
+    //   map-site-update.md) = 10
+    // + copilot: 9 skills * 2 files (prompt + skill) = 18
+    // = 64
+    expect(files.length).toBe(64);
     const paths = files.map((f) => f.path);
 
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
