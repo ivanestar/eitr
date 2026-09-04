@@ -1,5 +1,5 @@
 // Template for generating scripts/check-sitemap-coverage.mjs. create-if-absent.
-// Optional, best-effort completeness signal for docs/site-map/site-map.json: cross-references it
+// Optional, best-effort completeness signal for artifacts/site-map/site-map.json: cross-references it
 // against the target site's own published sitemap.xml (discovered via robots.txt's Sitemap:
 // directive, falling back to the conventional /sitemap.xml default) to surface routes the crawl's
 // own link-following may have missed - a page with no internal link pointing to it, but an explicit
@@ -12,7 +12,7 @@ export function renderSitemapCoverageChecker(): string {
   return `#!/usr/bin/env node
 
 /**
- * Optional, best-effort signal: cross-references docs/site-map/site-map.json against the target
+ * Optional, best-effort signal: cross-references artifacts/site-map/site-map.json against the target
  * site's own sitemap.xml (found via robots.txt's Sitemap: directive, or the conventional
  * /sitemap.xml default) to surface routes the crawl may have missed. Zero model involvement,
  * strictly read-only, never fails - an absent/unreachable sitemap.xml just means no signal.
@@ -32,7 +32,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const SITE_MAP_PATH = path.join(CWD, 'docs', 'site-map', 'site-map.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_SITEMAP_INDEX_DEPTH = 1;
 
@@ -131,7 +131,7 @@ async function check() {
   if (!siteMap || typeof siteMap.routes !== 'object' || typeof siteMap.baseUrl !== 'string') {
     return {
       status: 'SKIPPED',
-      reason: 'docs/site-map/site-map.json missing or has no baseUrl - run /map-site create first.',
+      reason: 'artifacts/site-map/site-map.json missing or has no baseUrl - run /map-site create first.',
     };
   }
   const baseUrl = siteMap.baseUrl;

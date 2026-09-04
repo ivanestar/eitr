@@ -1,7 +1,7 @@
 // Template for generating scripts/validate-business-intent.mjs. create-if-absent.
 // The mechanical gate ADR 0012 Decision item 2 requires at every stage boundary ("validates the
 // artifact's shape and internal consistency... with zero model involvement before an LLM or a
-// human ever reviews its content") for docs/analysis/business-intent.json (Stage 1). Zero
+// human ever reviews its content") for artifacts/analysis/business-intent.json (Stage 1). Zero
 // dependencies, mirroring scripts/orchestrate-swarm.mjs's own style, rather than introducing ajv -
 // this repo has never added a runtime schema-validation dependency (StackProfile/GenerationPlan
 // use hand-written interfaces checked only by tsc; site-map.schema.json is documentation only).
@@ -10,7 +10,7 @@ export function renderBusinessIntentValidator(): string {
   return `#!/usr/bin/env node
 
 /**
- * Mechanical shape gate for docs/analysis/business-intent.json.
+ * Mechanical shape gate for artifacts/analysis/business-intent.json.
  * Zero model involvement - pure structural checks, run by /map-site's Step 6 before presenting
  * results at the Human Sign-Off Gateway.
  *
@@ -23,8 +23,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const REPORT_PATH = path.join(CWD, 'docs', 'analysis', 'business-intent.json');
-const SITE_MAP_PATH = path.join(CWD, 'docs', 'site-map', 'site-map.json');
+const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 
 const CONFIDENCE_VALUES = new Set(['high', 'medium', 'low']);
 const CRITICALITY_VALUES = new Set(['critical', 'high', 'medium', 'low']);
@@ -190,7 +190,7 @@ function checkCorePurpose(corePurpose, errors) {
 
 function validate() {
   const errors = [];
-  const report = loadJson(REPORT_PATH, 'docs/analysis/business-intent.json');
+  const report = loadJson(REPORT_PATH, 'artifacts/analysis/business-intent.json');
   if (report.error) {
     errors.push(report.error);
     return { status: 'FAILED', errors };
@@ -198,7 +198,7 @@ function validate() {
   const data = report.value;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     errors.push(
-      'docs/analysis/business-intent.json must contain a JSON object, found ' +
+      'artifacts/analysis/business-intent.json must contain a JSON object, found ' +
         JSON.stringify(data) +
         '.',
     );
@@ -222,7 +222,7 @@ function validate() {
 
   checkCorePurpose(data.corePurpose, errors);
 
-  const siteMap = loadJson(SITE_MAP_PATH, 'docs/site-map/site-map.json');
+  const siteMap = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
   const knownRouteIds = new Set();
   if (!siteMap.error && siteMap.value && typeof siteMap.value.routes === 'object') {
     for (const route of Object.values(siteMap.value.routes)) {
@@ -270,7 +270,7 @@ function validate() {
     if (!siteMap.error && !knownRouteIds.has(key)) {
       errors.push(
         label +
-          ' has no matching routeId in docs/site-map/site-map.json - dangling reference. Re-run /map-site or remove this entry.',
+          ' has no matching routeId in artifacts/site-map/site-map.json - dangling reference. Re-run /map-site or remove this entry.',
       );
     }
   }

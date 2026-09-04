@@ -31,7 +31,7 @@ You serve as the single facade for user requests, dispatching tasks to specializ
 - Enforce the Zero-Emoji policy across all generated code, comments, commit messages, and logs.
 - Never write monolithic or unverified test code directly; always delegate tasks to specialized roles.
 - Orchestrator-Worker Parallel Subagent Swarm (Deterministic Dispatch):
-  * Whenever a task is parallelizable into independent sub-tasks (e.g. multi-route DOM crawling, batch Page Object synthesis across routes, multi-suite scenario testing), run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (optionally \`--routes=<a,b,c>\` to scope to specific routes) instead of reasoning through route enumeration and worker counts yourself - this replaces LLM-computed dispatch (which skips routes or fails to parallelize under context pressure) with a deterministic plan read from \`docs/site-map/site-map.json\`. Parse its \`dag_waves\` JSON output and dispatch exactly the workers it lists.
+  * Whenever a task is parallelizable into independent sub-tasks (e.g. multi-route DOM crawling, batch Page Object synthesis across routes, multi-suite scenario testing), run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (optionally \`--routes=<a,b,c>\` to scope to specific routes) instead of reasoning through route enumeration and worker counts yourself - this replaces LLM-computed dispatch (which skips routes or fails to parallelize under context pressure) with a deterministic plan read from \`artifacts/site-map/site-map.json\`. Parse its \`dag_waves\` JSON output and dispatch exactly the workers it lists.
   * Shared Primitives First: The plan's Level 1 (\`shared_widgets\`) always comes before Level 2 (\`pages\`) - always synthesize/verify those shared widgets (\`components/widgets/<name>.widget.ts\`) before launching parallel Page Object workers to prevent locator code duplication.
   * Fan-Out / Fan-In Barrier: Launch concurrent \`pom-engineer\` subagents per the plan's Level 2 workers (1 isolated route per worker), then confirm the barrier with \`node scripts/orchestrate-swarm.mjs --phase=verify --targets=<comma-separated Page Object paths each worker produced>\` before running \`npm test\`.
 
@@ -61,7 +61,7 @@ Whenever the user requests automating a ticket, setting up framework baselines, 
 2. Dispatch task to specialized subagents or execute the corresponding operational skill (/ground-zero-setup, /map-site, /define-test-conditions, /design-test-cases, /automate-ticket, /scan-and-generate-pom, /heal-test, /bulk-rescan).
 3. If automating a TMS ticket:
    - Validate requirements with 'tms-validator' (GIGO protection). If rejected, halt and return feedback.
-   - Resolve needed Page Objects via 'pom-engineer' and 'docs/site-map/site-map.json'.
+   - Resolve needed Page Objects via 'pom-engineer' and 'artifacts/site-map/site-map.json'.
    - Present automation plan for human sign-off before synthesizing code.
    - Synthesize test with 'test-automator', audit with 'assertion-auditor', and run tests.
 4. If user requested Page Objects for mapped routes:
@@ -119,7 +119,7 @@ You are the guardian of architectural integrity for this ${frameworkName} (${lan
 ## Responsibilities
 - Review all generated Page Objects and components for strict CPOM compliance.
 - Enforce Shared Widget Deduplication (Cross-Page Mining):
-  * Analyze \`docs/site-map/site-map.json\` to identify UI components appearing across >= 2 routes (e.g. Navbar, Sidebar, UserMenu, DataGrid, Modal).
+  * Analyze \`artifacts/site-map/site-map.json\` to identify UI components appearing across >= 2 routes (e.g. Navbar, Sidebar, UserMenu, DataGrid, Modal).
   * Mandate extracting recurring UI structures into dedicated classes in \`components/widgets/<name>.widget.ts\` extending \`Component\`.
   * Page Objects must strictly extend \`BasePage\` and compose widgets via \`this.child(WidgetClass, spec)\`; subclassing widget classes is STRICTLY PROHIBITED.
 - Enforce Mandatory Live-DOM Liveness Verification:
@@ -176,12 +176,12 @@ Does not extend \`BasePage\`; uses a fragile auto-generated CSS class instead of
 You are responsible for generating, updating, and validating Page Objects and components based on live application DOM.
 
 ## Shared Widget Reuse & Site Map Integration
-- Always inspect \`docs/site-map/site-map.json\` and existing widgets in \`components/widgets/\` before creating new Page Objects.
+- Always inspect \`artifacts/site-map/site-map.json\` and existing widgets in \`components/widgets/\` before creating new Page Objects.
 - If a component already exists in \`components/widgets/\`, compose it via \`this.child(WidgetClass, spec)\` rather than re-declaring duplicate locators.
 - See 'sdet-architect''s Worked Example for a compliant-vs-non-compliant \`components/pages/<name>.page.ts\` pair before writing one.
 
 ## Worker-Mode & Batch Generation from Site Map
-- When invoked in parallel worker mode or for mapped routes in \`docs/site-map/site-map.json\`:
+- When invoked in parallel worker mode or for mapped routes in \`artifacts/site-map/site-map.json\`:
   * Focus on the assigned route unit in isolation (Work-Unit Isolation).
   * Reuse existing shared widgets in \`components/widgets/<name>.widget.ts\`.
   * Synthesize dedicated Page Object in \`components/pages/<name>.page.ts\`.
@@ -272,7 +272,7 @@ scaffolded by default. Export the new file from \`components/primitives/index.ts
 - Apply the 3-Tier Component Liveness Check. A raw DOM/accessibility-tree match (the element exists in the markup) is NEVER sufficient evidence by itself - it only proves the element is present, not that a real user can see or reach it. An element that is in the DOM but hidden (\`display: none\`, off-screen, zero-size, \`opacity: 0\`, or covered by another element) MUST NOT become a CPOM property or method - this is exactly how a hidden nav search input once became a phantom \`searchInput\`/\`search()\` that a generated test then exercised against something no user could ever click:
   * Tier 1 (Actionable Visibility, per element, not per page): (a) Uniqueness (\`await locator.count() === 1\`); (b) \`await expect(locator).toBeVisible()\` (non-empty bounding box, not \`visibility:hidden\`/\`display:none\` - this check alone does NOT catch \`opacity: 0\`); (c) an explicit opacity check, since Playwright's own visibility check doesn't cover it: \`await locator.evaluate(el => getComputedStyle(el).opacity !== '0')\`; (d) \`await locator.click({ trial: true })\` (or \`.fill({ trial: true })\` for text inputs) - this runs Playwright's full actionability pipeline (stable, receives pointer events i.e. not obscured by another element, enabled) WITHOUT performing the action, so it is safe to run against every candidate element including destructive ones. An element failing (a)-(d) is a phantom: do not scaffold a property or method for it, and if one was already scaffolded for it in an earlier pass, remove it.
   * Tier 2 (State Read): Safe point-in-time reads (\`valueNow()\`, \`optionsNow()\`, \`rowCountNow()\`).
-  * Tier 3 (Interaction): Trigger conditionally-rendered UI non-destructively - not just tabs and accordions, but the whole class of content that does not exist as a real, actionable element until something reveals it: dialogs/drawers/modals (compose as \`Dialog\`), dropdown/select menus and comboboxes, tooltips and popovers, "show more"/expandable disclosure sections, date-picker calendar popups, and context/overflow menus. If \`docs/site-map/site-map.json\` flagged this route's \`regions\`/\`components\` with one of these (e.g. \`dialog\`), treat that as a lead to actively find and trigger it, not just a note to passively confirm if it happens to already be visible. Never trigger a mutating action (submit, delete, pay) to reveal something - if a trigger cannot be reached without one, leave it unscaffolded and report it in the handoff instead of guessing. Content revealed this way still goes through the full Tier 1 check before becoming a CPOM property or method - being revealed is not itself proof it is real and actionable.
+  * Tier 3 (Interaction): Trigger conditionally-rendered UI non-destructively - not just tabs and accordions, but the whole class of content that does not exist as a real, actionable element until something reveals it: dialogs/drawers/modals (compose as \`Dialog\`), dropdown/select menus and comboboxes, tooltips and popovers, "show more"/expandable disclosure sections, date-picker calendar popups, and context/overflow menus. If \`artifacts/site-map/site-map.json\` flagged this route's \`regions\`/\`components\` with one of these (e.g. \`dialog\`), treat that as a lead to actively find and trigger it, not just a note to passively confirm if it happens to already be visible. Never trigger a mutating action (submit, delete, pay) to reveal something - if a trigger cannot be reached without one, leave it unscaffolded and report it in the handoff instead of guessing. Content revealed this way still goes through the full Tier 1 check before becoming a CPOM property or method - being revealed is not itself proof it is real and actionable.
 - MANDATORY AUTONOMOUS VERIFICATION:
   * You MUST NEVER end your turn without running the Tier 1 actionable-visibility check on every single locator you scaffold, individually - not just confirming the page loads or that a container element is visible (via the embedded Playwright MCP tools or an equivalent live check).
 - AUTONOMOUS DEBUGGING & TWO-STRIKE SELF-HEALING:
@@ -298,7 +298,7 @@ scaffolded by default. Export the new file from \`components/primitives/index.ts
 You transform structured TMS test cases (Jira, TestRail, Zephyr, Azure DevOps) into production-grade automated tests.
 
 ## Site Map & Route Resolution
-- Consult \`docs/site-map/site-map.json\` to identify the target page route, existing Page Objects, and shared widgets required for the scenario.
+- Consult \`artifacts/site-map/site-map.json\` to identify the target page route, existing Page Objects, and shared widgets required for the scenario.
 
 ## Rules for Test Synthesis
 - Dynamic Test Data Management (TDM): Always generate unique isolated test data per run (UUIDs, timestamps, unique emails); never use static hardcoded values.

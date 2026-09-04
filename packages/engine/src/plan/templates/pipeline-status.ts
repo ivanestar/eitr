@@ -23,10 +23,10 @@ import path from 'node:path';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const SITE_MAP_PATH = path.join(CWD, 'docs', 'site-map', 'site-map.json');
-const BUSINESS_INTENT_PATH = path.join(CWD, 'docs', 'analysis', 'business-intent.json');
-const TEST_CONDITIONS_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
-const JOURNEYS_PATH = path.join(CWD, 'docs', 'test-cases', 'test-cases.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
+const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
+const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 
 function loadJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -164,7 +164,7 @@ function computeStatus() {
       stage: 'test-cases-drafted',
       nextCommand: '/automate-ticket',
       nextCommandDescription:
-        'Test cases are drafted in docs/test-cases/test-cases.json. Run /automate-ticket with no ticket ID to automate them directly - no TMS ticket required.',
+        'Test cases are drafted in artifacts/test-cases/test-cases.json. Run /automate-ticket with no ticket ID to automate them directly - no TMS ticket required.',
     };
   }
 

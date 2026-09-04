@@ -36,9 +36,9 @@ afterAll(async () => {
 function setupProject(siteMapRoutes: Record<string, unknown>): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-sitemap-coverage-'));
   writeFileSync(join(dir, 'check-sitemap-coverage.mjs'), renderSitemapCoverageChecker(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
   writeFileSync(
-    join(dir, 'docs', 'site-map', 'site-map.json'),
+    join(dir, 'artifacts', 'site-map', 'site-map.json'),
     JSON.stringify({
       schemaVersion: 2,
       generatedAt: '2026-09-04T10:00:00.000Z',
@@ -66,7 +66,7 @@ function run(dir: string): Promise<{ status: number | null; stdout: string; stde
 }
 
 describe('scripts/check-sitemap-coverage.mjs (real execution against a local HTTP server)', () => {
-  it('reports SKIPPED when docs/site-map/site-map.json does not exist', async () => {
+  it('reports SKIPPED when artifacts/site-map/site-map.json does not exist', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'eitr-sitemap-coverage-'));
     writeFileSync(join(dir, 'check-sitemap-coverage.mjs'), renderSitemapCoverageChecker(), 'utf8');
     try {

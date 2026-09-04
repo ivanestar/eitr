@@ -6,7 +6,7 @@
 // (equivalence-partition technique) for a route with fewer than 2 parameters, where pairwise
 // coverage has nothing to pair against - zero model involvement, same zero-dependency style as
 // scripts/orchestrate-swarm.mjs and the two validate-*.mjs scripts. The checklist-based technique
-// additionally cross-references docs/analysis/business-intent.json's criticalityTier - reviewed
+// additionally cross-references artifacts/analysis/business-intent.json's criticalityTier - reviewed
 // entries only, per that file's own Human Sign-Off Gateway rule - to scale down on medium/low-
 // criticality routes rather than firing the same fixed checklist everywhere regardless of the
 // route's own importance.
@@ -25,7 +25,7 @@ export function renderTestConditionsEngine(): string {
   return `#!/usr/bin/env node
 
 /**
- * Deterministic test-condition generator for docs/analysis/test-conditions.json.
+ * Deterministic test-condition generator for artifacts/analysis/test-conditions.json.
  * Zero model involvement - reads parameters[]/constraints[] already extracted per route and
  * mechanically computes 2-way combinatorial coverage plus 3-value boundary-value conditions.
  *
@@ -39,8 +39,8 @@ import process from 'node:process';
 import crypto from 'node:crypto';
 
 const CWD = process.cwd();
-const REPORT_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
-const BUSINESS_INTENT_PATH = path.join(CWD, 'docs', 'analysis', 'business-intent.json');
+const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -488,7 +488,7 @@ const CHECKLIST_VALUES = {
   date: ['0000-00-00', '9999-12-31', 'not-a-date'],
 };
 
-// Reads docs/analysis/business-intent.json fresh on every run (a separate artifact from a
+// Reads artifacts/analysis/business-intent.json fresh on every run (a separate artifact from a
 // different skill's stage - it can change or be re-reviewed between when /define-test-conditions
 // Step 1 last checked it and when this script runs) and returns a routeId -> criticalityTier.value
 // map, using ONLY entries with reviewed:true - an unreviewed entry is never ground truth for any
@@ -500,7 +500,7 @@ const CHECKLIST_VALUES = {
 // side below, never the reduced side.
 function loadCriticalityMap() {
   const map = {};
-  const loaded = loadJson(BUSINESS_INTENT_PATH, 'docs/analysis/business-intent.json');
+  const loaded = loadJson(BUSINESS_INTENT_PATH, 'artifacts/analysis/business-intent.json');
   if (loaded.error || !loaded.value || typeof loaded.value.routes !== 'object') return map;
   for (const [routeId, entry] of Object.entries(loaded.value.routes)) {
     if (!entry || entry.reviewed !== true) continue;
@@ -618,7 +618,7 @@ function checkShape(data) {
 }
 
 function generate() {
-  const report = loadJson(REPORT_PATH, 'docs/analysis/test-conditions.json');
+  const report = loadJson(REPORT_PATH, 'artifacts/analysis/test-conditions.json');
   if (report.error) {
     process.stdout.write(JSON.stringify({ status: 'FAILED', errors: [report.error] }, null, 2) + '\\n');
     process.exit(1);
@@ -627,7 +627,7 @@ function generate() {
   if (!data || typeof data !== 'object' || !data.routes || typeof data.routes !== 'object') {
     process.stdout.write(
       JSON.stringify(
-        { status: 'FAILED', errors: ['docs/analysis/test-conditions.json has no routes object.'] },
+        { status: 'FAILED', errors: ['artifacts/analysis/test-conditions.json has no routes object.'] },
         null,
         2,
       ) + '\\n',

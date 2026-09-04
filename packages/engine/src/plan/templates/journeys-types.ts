@@ -1,7 +1,7 @@
 // Template for generating .scaffold/schemas/test-cases.types.ts, the typed contract for
-// docs/test-cases/test-cases.json - the bridge from Stage 2's test-conditions.json to a drafted,
+// artifacts/test-cases/test-cases.json - the bridge from Stage 2's test-conditions.json to a drafted,
 // TMS-shaped test case. create-if-absent.
-// Lives under .scaffold/ (engine-owned machinery), not docs/ - see site-map-schema.ts's header
+// Lives under .scaffold/ (engine-owned machinery), not artifacts/ - see site-map-schema.ts's header
 // comment for why.
 //
 // Same "documentation-as-code, not imported at runtime" convention as business-intent-types.ts and
@@ -9,7 +9,7 @@
 // instead.
 
 export function renderJourneysTypes(): string {
-  return `// Typed contract for docs/test-cases/test-cases.json, produced by scripts/compose-journeys.mjs
+  return `// Typed contract for artifacts/test-cases/test-cases.json, produced by scripts/compose-journeys.mjs
 // (structural test-level classification) and the /design-test-cases skill's LLM step (drafted
 // test case). Reference this file when reading or writing that JSON - it is documentation-as-code,
 // not a compiled/imported module: nothing in this project imports it at runtime.

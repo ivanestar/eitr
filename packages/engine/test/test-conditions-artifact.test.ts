@@ -85,10 +85,10 @@ function wellFormedWithConditions() {
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-test-conditions-'));
   writeFileSync(join(dir, 'validate-test-conditions.mjs'), renderTestConditionsValidator(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
-  mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
   writeFileSync(
-    join(dir, 'docs', 'site-map', 'site-map.json'),
+    join(dir, 'artifacts', 'site-map', 'site-map.json'),
     JSON.stringify(SITE_MAP, null, 2),
     'utf8',
   );
@@ -97,7 +97,7 @@ function setupProject(): string {
 
 function writeReport(dir: string, data: unknown) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
@@ -288,7 +288,7 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeFileSync(
-        join(dir, 'docs', 'site-map', 'site-map.json'),
+        join(dir, 'artifacts', 'site-map', 'site-map.json'),
         JSON.stringify({ ...SITE_MAP, routes: {} }, null, 2),
         'utf8',
       );
@@ -367,7 +367,7 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
   it('fails cleanly (not a crash) when the report file content is the literal JSON value null', () => {
     const dir = setupProject();
     try {
-      writeFileSync(join(dir, 'docs', 'analysis', 'test-conditions.json'), 'null', 'utf8');
+      writeFileSync(join(dir, 'artifacts', 'analysis', 'test-conditions.json'), 'null', 'utf8');
       const result = run(dir);
       expect(result.status).toBe(1);
       const output = JSON.parse(result.stdout);

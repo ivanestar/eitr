@@ -47,7 +47,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 1. Pre-validation via tms-validator.
 2. Present Markdown proposal artifact for Human Sign-Off Gateway.
 3. Synthesize linear spec with await test.step and tests/fixtures.ts.
-4. With no ticket ID given, read docs/test-cases/test-cases.json for un-automated drafted test cases instead.
+4. With no ticket ID given, read artifacts/test-cases/test-cases.json for un-automated drafted test cases instead.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,
@@ -82,7 +82,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
     const simulatedOutput = `
 # Skill: Map Site (/map-site)
 1. URL Canonicalization & Pagination Normalization: strip query parameters and hashes.
-2. Write topology map to docs/site-map/site-map.json.
+2. Write topology map to artifacts/site-map/site-map.json.
 3. Extract recurring DOM patterns (frequency >= 2) into components/widgets/.
 `;
     const grade = gradeSkillCompliance(
@@ -158,7 +158,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 1. Preconditions: refuse with "No reviewed business-intent entries found" if none exist.
 2. Extract parameters read-only, redact PII as [REDACTED], synthesize sampleValues never copied from the live page.
 3. Run node scripts/validate-test-conditions.mjs, deterministically generate boundary-value + checklist-based conditions.
-4. Present a Test-Conditions Review Artifact per route - Human Sign-Off Gateway before docs/analysis/test-conditions.json is authoritative.
+4. Present a Test-Conditions Review Artifact per route - Human Sign-Off Gateway before artifacts/analysis/test-conditions.json is authoritative.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

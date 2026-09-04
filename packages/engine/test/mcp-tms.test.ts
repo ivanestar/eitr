@@ -234,7 +234,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(windsurfUpdate?.source.text).toContain('UPDATE mode');
 
     const mapSkill = files.find((f) => f.path === '.agents/skills/map-site/SKILL.md');
-    expect(mapSkill?.source.text).toContain('docs/site-map/site-map.json');
+    expect(mapSkill?.source.text).toContain('artifacts/site-map/site-map.json');
     expect(mapSkill?.source.text).toContain('Shared Widget Mining');
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
     expect(mapSkill?.source.text).not.toContain('APP_GRAPH.md');
@@ -349,7 +349,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // transparent (Fail loud, never silently guess), not silent redirects.
     expect(mapSkill?.source.text).toContain('## Mode Resolution');
     expect(mapSkill?.source.text).toContain(
-      'No existing docs/site-map/site-map.json found - running a full create pass instead.',
+      'No existing artifacts/site-map/site-map.json found - running a full create pass instead.',
     );
     expect(mapSkill?.source.text).toContain('routeId identity resets for every route');
 
@@ -415,7 +415,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(automateSkill?.source.text).toContain('tms-validator');
     expect(automateSkill?.source.text).toContain('Human Sign-Off Gateway');
     expect(automateSkill?.source.text).toContain('tests/TC-');
-    expect(automateSkill?.source.text).toContain('docs/test-cases/test-cases.json');
+    expect(automateSkill?.source.text).toContain('artifacts/test-cases/test-cases.json');
 
     const designTestCasesSkill = files.find(
       (f) => f.path === '.agents/skills/design-test-cases/SKILL.md',
@@ -459,11 +459,9 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     const files = planSharedScaffold({});
     const paths = files.map((f) => f.path);
 
-    // Overrides seed (create-if-absent, wired into planSharedScaffold by default)
-    expect(paths).toContain('overrides/README.md');
-    const overridesFile = files.find((f) => f.path === 'overrides/README.md');
-    expect(overridesFile?.writePolicy).toBe('create-if-absent');
-    expect(overridesFile?.provenance.origin).toBe('seed');
+    // No overrides/ seed - a deliberately removed extension point, never re-added (users extend
+    // the generated component library directly from their own Page Objects instead).
+    expect(paths).not.toContain('overrides/README.md');
 
     // MCP
     expect(paths).toContain('.agents/mcp_config.json');
@@ -475,7 +473,8 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).not.toContain('.windsurf/mcp.json');
     expect(paths).not.toContain('.codex/mcp.json');
 
-    // Site map (docs/site-map/ subfolder, not the old flat docs/ paths). No HTML viewer - removed
+    // Site map (artifacts/site-map/ subfolder, not the old flat docs/ paths from before either
+    // the .scaffold/ schema move or the docs->artifacts rename). No HTML viewer - removed
     // deliberately (maintainer decision, 2026-09-02): fetch() to a sibling local file is blocked
     // under file://, the viewer had already drifted behind the schema (no coverage/routeId/
     // business-intent.json awareness), and an AI-assistant-driven SDET has a strictly better

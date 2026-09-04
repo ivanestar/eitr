@@ -1,13 +1,13 @@
 // Template for generating .scaffold/schemas/test-conditions.types.ts, the typed contract for
-// docs/analysis/test-conditions.json (Stage 2 of the app-analysis pipeline). create-if-absent.
-// Lives under .scaffold/ (engine-owned machinery), not docs/ - see site-map-schema.ts's header
+// artifacts/analysis/test-conditions.json (Stage 2 of the app-analysis pipeline). create-if-absent.
+// Lives under .scaffold/ (engine-owned machinery), not artifacts/ - see site-map-schema.ts's header
 // comment for why.
 //
 // Same "documentation-as-code, not imported at runtime" convention as business-intent-types.ts -
 // real mechanical enforcement comes from scripts/validate-test-conditions.mjs instead.
 
 export function renderTestConditionsTypes(): string {
-  return `// Typed contract for docs/analysis/test-conditions.json, produced by the /define-test-conditions
+  return `// Typed contract for artifacts/analysis/test-conditions.json, produced by the /define-test-conditions
 // skill. Reference this file when reading or writing that JSON - it is documentation-as-code, not
 // a compiled/imported module: nothing in this project imports it at runtime.
 // scripts/validate-test-conditions.mjs enforces its shape mechanically.
@@ -118,7 +118,7 @@ export interface UnsatisfiedPair {
 }
 
 export interface TestConditionsEntry {
-  // Joins against docs/site-map/site-map.json's routes[*].routeId, same convention as
+  // Joins against artifacts/site-map/site-map.json's routes[*].routeId, same convention as
   // business-intent.json.
   routeId: string;
   parameters: Parameter[];

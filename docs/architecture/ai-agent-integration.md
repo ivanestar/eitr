@@ -89,7 +89,7 @@ verifying actual business logic:
 
 A strictly read-only `/map-site` step, run automatically as part of every `create`/`update` pass
 (unless the user explicitly asks to skip it), infers per-route business intent (`businessFeature`)
-and criticality (`criticalityTier`) into a typed artifact, `docs/analysis/business-intent.json`
+and criticality (`criticalityTier`) into a typed artifact, `artifacts/analysis/business-intent.json`
 (`.scaffold/schemas/business-intent.types.ts` documents its shape - `schemaVersion: 1`,
 `Field<T>`-wrapped values, keyed by `routeId`). It never performs a mutating Playwright call of any
 kind, not even a `trial: true` dry-run - inference draws only from already-rendered page title, heading text, form field labels,
@@ -118,7 +118,7 @@ confirmed purpose, numbers each route for easy reference, and offers a bulk-corr
 (`high: 1, 4, 5-8; critical: 2-3`) alongside free-form correction. Approval also records who gave it - `reviewedBy: 'human'` for a
 real conversational approval, or `'auto-pilot'` only when `/ground-zero-setup`'s auto-pilot mode set
 it on the user's own explicit pre-authorization - so a later audit can always tell which entries a
-human actually looked at. `docs/site-map/site-map.json` itself gets the same mechanical
+human actually looked at. `artifacts/site-map/site-map.json` itself gets the same mechanical
 gate one level down (`scripts/validate-site-map.mjs`, run immediately after every `create`/`update`
 pass, before shared-widget mining, the swarm dispatcher, or this step read it) - the shape defect
 this catches (a malformed route entry, a duplicate `routeId`) is cheaper and more reliably caught by
@@ -139,7 +139,7 @@ designs test cases from them) from the ISTQB Foundation Level syllabus's fundame
 
 A second, explicit-request-only, strictly read-only skill consumes `business-intent.json`'s
 `reviewed: true` entries plus `site-map.json` and derives typed test conditions per route into
-`docs/analysis/test-conditions.json` (`.scaffold/schemas/test-conditions.types.ts` documents its
+`artifacts/analysis/test-conditions.json` (`.scaffold/schemas/test-conditions.types.ts` documents its
 shape). An LLM step infers form parameters and their equivalence partitions from markup only
 (tag, `type`, label text, HTML5 constraint attributes, `<select>` option text, static ARIA
 relationships) - never a field's current `value`/`checked`/`selected` state, never a mutating
@@ -167,7 +167,7 @@ spec synthesis, combinatorial strength beyond 2-way, general boolean-predicate c
 ## Test design (`/design-test-cases`, ADR 0012 Stage 3)
 
 Bridges `test-conditions.json`'s reviewed conditions to a drafted, TMS-shaped test case, keyed by
-`docs/test-cases/test-cases.json` (`.scaffold/schemas/test-cases.types.ts` documents its shape).
+`artifacts/test-cases/test-cases.json` (`.scaffold/schemas/test-cases.types.ts` documents its shape).
 `scripts/compose-journeys.mjs` deterministically classifies every condition onto a test level
 (`e2e`/`api`/`ui-only`) and groups them into one journey per route - zero model involvement, zero
 dependency on `criticalityTier` or any other LLM-derived signal, which is too unstable to gate a
@@ -197,7 +197,7 @@ Once the pipeline reaches `test-cases-drafted` (or `complete`, once every drafte
 automated), this skill stops honestly on purpose: `/automate-ticket` synthesizes and executes real
 code, a materially different action than approving a JSON review artifact, so triggering it stays an
 explicit, separate human command in every mode, including auto-pilot. `/automate-ticket` itself now
-reads `docs/test-cases/test-cases.json` directly when invoked with no ticket ID - no TMS ticket required
+reads `artifacts/test-cases/test-cases.json` directly when invoked with no ticket ID - no TMS ticket required
 to close the loop from a from-nothing greenfield project.
 
 ## Self-healing (Two-Strike Rule & 4-point trace triage)
@@ -240,7 +240,7 @@ rather than generating a flaky test from an underspecified one.
 ## Deterministic generation & human sign-off
 
 - **Component registry indexing:** Page Objects and shared widgets are indexed from
-  `docs/site-map/site-map.json` and `components/` to match scenario steps to existing CPOM classes
+  `artifacts/site-map/site-map.json` and `components/` to match scenario steps to existing CPOM classes
   instead of regenerating duplicates.
 - **Human sign-off gateway** (`/automate-ticket`): before writing test files, the agent presents a
   structured proposal (summary, steps, preconditions, Page Objects used, TDM strategy) for explicit

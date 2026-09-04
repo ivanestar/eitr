@@ -8,15 +8,15 @@ import { renderPipelineStatus } from '../src/plan/templates/pipeline-status.js';
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-pipeline-status-'));
   writeFileSync(join(dir, 'pipeline-status.mjs'), renderPipelineStatus(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
-  mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
-  mkdirSync(join(dir, 'docs', 'test-cases'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'test-cases'), { recursive: true });
   return dir;
 }
 
 function writeSiteMap(dir: string) {
   writeFileSync(
-    join(dir, 'docs', 'site-map', 'site-map.json'),
+    join(dir, 'artifacts', 'site-map', 'site-map.json'),
     JSON.stringify({ schemaVersion: 2, generatedAt: '2026-09-03T10:00:00.000Z', routes: {} }),
     'utf8',
   );
@@ -24,7 +24,7 @@ function writeSiteMap(dir: string) {
 
 function writeBusinessIntent(dir: string, reviewed: boolean) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'business-intent.json'),
+    join(dir, 'artifacts', 'analysis', 'business-intent.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-03T10:00:00.000Z',
@@ -56,7 +56,7 @@ function writeBusinessIntent(dir: string, reviewed: boolean) {
 
 function writeTestConditions(dir: string, reviewed: boolean) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-03T11:00:00.000Z',
@@ -89,7 +89,7 @@ function writeTestConditions(dir: string, reviewed: boolean) {
 
 function writeJourneys(dir: string, opts: { withTestCase: boolean; reviewed: boolean }) {
   writeFileSync(
-    join(dir, 'docs', 'test-cases', 'test-cases.json'),
+    join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-04T09:00:00.000Z',
@@ -133,7 +133,7 @@ function writeJourneys(dir: string, opts: { withTestCase: boolean; reviewed: boo
 
 function writeTestConditionsTwoRoutes(dir: string) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-03T11:00:00.000Z',
@@ -230,7 +230,7 @@ function writeJourneysCheckoutOnly(dir: string, opts: { cartHasJourneyWithoutTes
     };
   }
   writeFileSync(
-    join(dir, 'docs', 'test-cases', 'test-cases.json'),
+    join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
     JSON.stringify({ schemaVersion: 1, generatedAt: '2026-09-04T09:00:00.000Z', routes }),
     'utf8',
   );
@@ -283,7 +283,11 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('does not crash on a malformed business-intent.json - degrades to business-intent-pending-review', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeFileSync(join(dir, 'docs', 'analysis', 'business-intent.json'), 'not valid json', 'utf8');
+    writeFileSync(
+      join(dir, 'artifacts', 'analysis', 'business-intent.json'),
+      'not valid json',
+      'utf8',
+    );
     try {
       const result = run(dir);
       expect(result.status).toBe(0);
@@ -359,7 +363,11 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
     writeTestConditions(dir, true);
-    writeFileSync(join(dir, 'docs', 'test-cases', 'test-cases.json'), 'not valid json', 'utf8');
+    writeFileSync(
+      join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
+      'not valid json',
+      'utf8',
+    );
     try {
       const result = run(dir);
       expect(result.status).toBe(0);

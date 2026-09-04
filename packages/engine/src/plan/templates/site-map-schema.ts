@@ -1,6 +1,6 @@
 // Template for generating .scaffold/schemas/site-map.schema.json, the JSON Schema for
-// docs/site-map/site-map.json. create-if-absent. Lives under .scaffold/ (engine-owned machinery),
-// not docs/ - docs/ is reserved for the actual filled-in artifacts (site-map.json,
+// artifacts/site-map/site-map.json. create-if-absent. Lives under .scaffold/ (engine-owned machinery),
+// not artifacts/ - artifacts/ is reserved for the actual filled-in artifacts (site-map.json,
 // business-intent.json, test-conditions.json), which are useful context on their own; a schema
 // file or a type-contract .ts file is tooling, not something a human reads for context. A real,
 // separate JSON Schema file (rather than

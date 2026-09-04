@@ -1,6 +1,6 @@
 // Template for generating .scaffold/schemas/business-intent.types.ts, the typed contract for
-// docs/analysis/business-intent.json (Stage 1 of the app-analysis pipeline). create-if-absent.
-// Lives under .scaffold/ (engine-owned machinery), not docs/ - see site-map-schema.ts's header
+// artifacts/analysis/business-intent.json (Stage 1 of the app-analysis pipeline). create-if-absent.
+// Lives under .scaffold/ (engine-owned machinery), not artifacts/ - see site-map-schema.ts's header
 // comment for why.
 //
 // Deliberately a plain TypeScript interface file, not a JSON Schema document: this repo's own
@@ -12,7 +12,7 @@
 // scripts/validate-business-intent.mjs instead (see business-intent-validator.ts).
 
 export function renderBusinessIntentTypes(): string {
-  return `// Typed contract for docs/analysis/business-intent.json, produced by the /map-site skill's
+  return `// Typed contract for artifacts/analysis/business-intent.json, produced by the /map-site skill's
 // optional business-intent analysis step (Step 6). Reference this file when reading or writing
 // that JSON - it is documentation-as-code, not a compiled/imported module: nothing in this project
 // imports it at runtime. scripts/validate-business-intent.mjs enforces its shape mechanically.
@@ -80,7 +80,7 @@ export interface CorePurpose {
 }
 
 export interface BusinessIntentEntry {
-  // Joins against docs/site-map/site-map.json's routes[*].routeId - routeId, not the path
+  // Joins against artifacts/site-map/site-map.json's routes[*].routeId - routeId, not the path
   // template key, because routeId is documented there as stable across a URL restructure, and
   // this artifact is a separate file with its own lifecycle.
   routeId: string;

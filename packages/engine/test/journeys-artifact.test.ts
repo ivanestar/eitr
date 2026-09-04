@@ -84,10 +84,10 @@ function wellFormedJourneysWithTestCase() {
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-journeys-'));
   writeFileSync(join(dir, 'validate-journeys.mjs'), renderJourneysValidator(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
-  mkdirSync(join(dir, 'docs', 'test-cases'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'test-cases'), { recursive: true });
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify(testConditionsFixture(), null, 2),
     'utf8',
   );
@@ -96,7 +96,7 @@ function setupProject(): string {
 
 function writeJourneys(dir: string, data: unknown) {
   writeFileSync(
-    join(dir, 'docs', 'test-cases', 'test-cases.json'),
+    join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
@@ -172,7 +172,7 @@ describe('scripts/validate-journeys.mjs (real execution)', () => {
       expect(output.status).toBe('FAILED');
       expect(
         output.errors.some((e: string) =>
-          e.includes('does not exist in docs/analysis/test-conditions.json'),
+          e.includes('does not exist in artifacts/analysis/test-conditions.json'),
         ),
       ).toBe(true);
     } finally {

@@ -14,9 +14,21 @@ audit trail; this file is release notes.
   from them). Prose throughout both skills, `/ground-zero-setup`, `pipeline-status.mjs`'s
   `nextCommand`, and the `sdet-orchestrator` agent updated to match.
 - **Changed**: the drafted-test-case artifact moved from `docs/analysis/journeys.json` to its own
-  `docs/test-cases/test-cases.json` - `docs/analysis/` now holds only Stage 1/2's business-intent
-  and test-conditions artifacts, the final output of the test analysis phase. `docs/site-map/`
-  is unaffected. `scripts/compose-journeys.mjs` now creates its output directory itself.
+  `artifacts/test-cases/test-cases.json` - `artifacts/analysis/` now holds only Stage 1/2's
+  business-intent and test-conditions artifacts, the final output of the test analysis phase.
+  `scripts/compose-journeys.mjs` now creates its output directory itself.
+- **Changed**: the whole app-analysis pipeline's output root renamed from `docs/` to `artifacts/`
+  (`artifacts/site-map/`, `artifacts/analysis/`, `artifacts/test-cases/`) - `artifact` was already
+  the term used throughout every review gateway's own name (Business-Intent Review Artifact,
+  Test-Conditions Review Artifact); the folder now matches. Frees `docs/` for a generated project's
+  own real documentation, which nothing previously claimed.
+- **Removed**: the `overrides/` seed directory and its `README.md` - real customization already
+  happens by building on top of the owned tree (a Page Object importing from `components/`, a test
+  importing from `shared/`), and the dedicated directory added a step nothing actually used.
+  `tsconfig.json`'s `include` and the generated README's component-library section updated to
+  match; `docs/architecture/decisions/0004-path-authority-regeneration.md` updated to drop the
+  now-false "exactly one correct home" claim while keeping its still-valid core decision (path
+  authority by write-policy, not content hash).
 - **Changed**: `/design-test-cases` now requires one atomic action per drafted step, each with its
   own concrete expected result drawn from the underlying condition's `description`/`scenario`,
   instead of steps that bundled several actions behind one blanket result at the end - drafted

@@ -99,9 +99,9 @@ function threeParamRoute(): {
 function setupProject(report: unknown): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-tc-engine-'));
   writeFileSync(join(dir, 'generate-test-conditions.mjs'), renderTestConditionsEngine(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify(report, null, 2),
     'utf8',
   );
@@ -114,7 +114,7 @@ function run(dir: string) {
 
 function writeBusinessIntent(dir: string, routeId: string, tier: string, reviewed = true) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'business-intent.json'),
+    join(dir, 'artifacts', 'analysis', 'business-intent.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-03T11:00:00.000Z',
@@ -171,7 +171,9 @@ function singleTextParamRoute(routeId: string) {
 }
 
 function readReport(dir: string): { routes: Record<string, RouteEntry> } {
-  return JSON.parse(readFileSync(join(dir, 'docs', 'analysis', 'test-conditions.json'), 'utf8'));
+  return JSON.parse(
+    readFileSync(join(dir, 'artifacts', 'analysis', 'test-conditions.json'), 'utf8'),
+  );
 }
 
 describe('scripts/generate-test-conditions.mjs (real execution)', () => {
@@ -790,7 +792,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
 
   it('defaults to running the checklist when business-intent.json is absent (unknown criticality)', () => {
     const dir = setupProject(singleTextParamRoute('route-orphan'));
-    // Deliberately not calling writeBusinessIntent - no docs/analysis/business-intent.json at all.
+    // Deliberately not calling writeBusinessIntent - no artifacts/analysis/business-intent.json at all.
     try {
       const result = run(dir);
       expect(result.status).toBe(0);

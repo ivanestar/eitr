@@ -73,7 +73,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'Markdown proposal artifact',
         'await test.step',
         'tests/fixtures.ts',
-        'docs/test-cases/test-cases.json',
+        'artifacts/test-cases/test-cases.json',
       ],
       contractGuarantees: ['Zero Branching (no if/else/loops)', 'Fixture Dependency Injection'],
       forbiddenPatterns: ['new LoginPage(page)', 'try/catch around assertions'],
@@ -108,7 +108,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
       mustContainKeySteps: [
         'URL Canonicalization',
         'Pagination Normalization',
-        'docs/site-map/site-map.json',
+        'artifacts/site-map/site-map.json',
         'frequency >= 2',
         'components/widgets/',
       ],
@@ -192,10 +192,10 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
     description:
       'Test Analysis: defines typed test conditions (equivalence partitions, 2-way combinatorial coverage, 3-value boundary conditions) per route, gated by mechanical validation and human sign-off',
     inputScenario:
-      'Define test conditions for reviewed routes in docs/analysis/business-intent.json',
+      'Define test conditions for reviewed routes in artifacts/analysis/business-intent.json',
     expectedWorkflow: {
       mustContainKeySteps: [
-        'docs/analysis/test-conditions.json',
+        'artifacts/analysis/test-conditions.json',
         'validate-test-conditions.mjs',
         'Human Sign-Off Gateway',
         'No reviewed business-intent entries found',

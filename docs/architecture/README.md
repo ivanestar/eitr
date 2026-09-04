@@ -54,8 +54,6 @@ explicit step - `eitr auth` - never part of `eitr new`'s questionnaire).
 ```
                  test repo
    ┌─────────────────────────────────────────────┐
-   │  overrides/         (user-owned)             │  extends ↓, yours to customize
-   ├─────────────────────────────────────────────┤
    │  components/        (tool-owned scaffold, create-if-absent: generated once, never rewritten)
    │    base/            BasePage, Component, Container, Collection
    │    primitives/      Button, TextInput, Checkbox, Select, Link, ... (role/test-id driven)
@@ -89,8 +87,8 @@ contract behind this diagram.
 2. **Fail loud, never silently guess.** Unresolved detection, unverifiable locators, and ambiguous
    stack signals become explicit stubs or confidence-scored data, never a silent best-effort default.
 3. **Path authority is absolute for tool-owned files.** Regeneration overwrites `regenerate`-policy
-   paths unconditionally (with a printed diff of anything clobbered); `overrides/` and user config
-   are never touched. See [`decisions/0004-path-authority-regeneration.md`](decisions/0004-path-authority-regeneration.md).
+   paths unconditionally (with a printed diff of anything clobbered); `create-if-absent` and user
+   config are never touched. See [`decisions/0004-path-authority-regeneration.md`](decisions/0004-path-authority-regeneration.md).
 4. **Zero lock-in.** Generated projects are 100% standalone - no runtime dependency on `@eitr/engine`,
    no reference to EITR itself anywhere in generated output. See
    [`decisions/0006-zero-lock-in.md`](decisions/0006-zero-lock-in.md).

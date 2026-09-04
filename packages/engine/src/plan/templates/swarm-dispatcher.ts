@@ -1,7 +1,7 @@
 // Template for generating scripts/orchestrate-swarm.mjs in scaffolded projects. create-if-absent.
 // Zero-dependency, deterministic replacement for natural-language "dispatch N parallel workers"
 // instructions in sdet-orchestrator and the /scan-and-generate-pom, /bulk-rescan, and /map-site
-// operational skills. Computes a machine-readable work plan from docs/site-map/site-map.json
+// operational skills. Computes a machine-readable work plan from artifacts/site-map/site-map.json
 // instead of relying on an AI agent to reason through route enumeration, worker counting, and
 // concurrency limits under context pressure - exactly the failure mode (skipped routes, no
 // parallelization, token exhaustion) this replaces. Host-environment script (see the Host
@@ -22,7 +22,7 @@ export function renderSwarmDispatcher(): string {
  *   node scripts/orchestrate-swarm.mjs --phase=verify-worker --target=<path>
  *   node scripts/orchestrate-swarm.mjs --phase=reindex
  *
- * --phase=plan reads docs/site-map/site-map.json and outputs a 4-tier DAG: Level 0 (base
+ * --phase=plan reads artifacts/site-map/site-map.json and outputs a 4-tier DAG: Level 0 (base
  * primitives, always empty - pre-existing seed content), Level 1 (shared widgets, from the site
  * map's own sharedWidgets list), Level 2 (pages - one worker per active route, optionally scoped
  * via --routes/--routes-file), Level 3 (journeys, reserved for future cross-route scenario
@@ -37,7 +37,7 @@ import os from 'node:os';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const SITE_MAP_PATH = path.join(CWD, 'docs', 'site-map', 'site-map.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 
 function argValue(name) {
   const prefix = '--' + name + '=';

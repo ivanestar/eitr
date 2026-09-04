@@ -1,5 +1,5 @@
 // Template for generating scripts/compose-journeys.mjs. create-if-absent.
-// Deterministic bridge from Stage 2's test-conditions.json to docs/test-cases/test-cases.json: groups
+// Deterministic bridge from Stage 2's test-conditions.json to artifacts/test-cases/test-cases.json: groups
 // each route's reviewed conditions into one journey and classifies every condition onto a test
 // level (e2e/api/ui-only). Zero model involvement, zero dependency on criticalityTier or any other
 // LLM-derived signal - that judgment is too unstable to gate a structural decision on, even with
@@ -24,8 +24,8 @@ export function renderJourneysEngine(): string {
   return `#!/usr/bin/env node
 
 /**
- * Deterministic test-level classifier for docs/test-cases/test-cases.json.
- * Zero model involvement - reads docs/analysis/test-conditions.json's reviewed conditions and
+ * Deterministic test-level classifier for artifacts/test-cases/test-cases.json.
+ * Zero model involvement - reads artifacts/analysis/test-conditions.json's reviewed conditions and
  * classifies each onto a test level, grouping them into one journey per route. Never reads
  * criticalityTier or any other LLM-derived signal.
  *
@@ -39,8 +39,8 @@ import process from 'node:process';
 import crypto from 'node:crypto';
 
 const CWD = process.cwd();
-const TEST_CONDITIONS_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
-const JOURNEYS_PATH = path.join(CWD, 'docs', 'test-cases', 'test-cases.json');
+const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -235,13 +235,13 @@ function composeForRoute(routeId, entry, existingJourney) {
 function checkShape(data) {
   const errors = [];
   if (!data || typeof data !== 'object' || !data.routes || typeof data.routes !== 'object') {
-    errors.push('docs/analysis/test-conditions.json has no routes object.');
+    errors.push('artifacts/analysis/test-conditions.json has no routes object.');
   }
   return errors;
 }
 
 function compose() {
-  const loaded = loadJson(TEST_CONDITIONS_PATH, 'docs/analysis/test-conditions.json');
+  const loaded = loadJson(TEST_CONDITIONS_PATH, 'artifacts/analysis/test-conditions.json');
   if (loaded.error) {
     process.stdout.write(JSON.stringify({ status: 'FAILED', errors: [loaded.error] }, null, 2) + '\\n');
     process.exit(1);
@@ -253,7 +253,7 @@ function compose() {
     process.exit(1);
   }
 
-  const existingLoaded = loadJson(JOURNEYS_PATH, 'docs/test-cases/test-cases.json');
+  const existingLoaded = loadJson(JOURNEYS_PATH, 'artifacts/test-cases/test-cases.json');
   const existingRoutes =
     !existingLoaded.error && existingLoaded.value && typeof existingLoaded.value.routes === 'object'
       ? existingLoaded.value.routes
