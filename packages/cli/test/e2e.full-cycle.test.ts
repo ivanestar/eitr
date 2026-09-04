@@ -87,17 +87,18 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
   // 2. TypeScript + Playwright
   it(
     '2/7: E2E Full Cycle — TypeScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
-    // TEMPORARY diagnostic budget (raised from 180000, which itself timed out at ~180092ms on a
-    // real GitHub Actions run - PR #63, run 33861467588 - not just locally) - wide enough to let
-    // this run actually finish so the console.time markers below reveal which real step is slow,
-    // instead of vitest killing it before any evidence is captured. Tighten once the breakdown is
-    // read from that run's log; remove the console.time/timeEnd calls at the same time (Trace-Based
-    // Debugging rule - temporary instrumentation, not meant to ship).
-    { timeout: 300000 },
+    // Real measured breakdown from a diagnostic GitHub Actions run (PR #63, run 33863150532,
+    // console.time instrumentation since removed): runNew (generate + npm install + playwright
+    // install chromium) took 3:42.806 on a cold CI cache; tsc --noEmit and the playwright test run
+    // itself took 1.676s and 2.130s respectively - negligible. Not a hang: npm install for this
+    // fixture's React+MUI+Playwright+TypeScript dependency tree, plus the chromium binary download,
+    // is genuinely ~223s of real work on a fresh runner. 360000 (6 min) gives ~1.6x headroom over
+    // that measurement for run-to-run network/runner variance, well above the 90000/180000 budgets
+    // that both measurably failed in real CI (runs 33818647135, 33861467588).
+    { timeout: 360000 },
     async () => {
       const cwd = makeTempCwd();
 
-      console.time('DIAG runNew (generate + npm install + playwright install chromium)');
       const exitCode = await runNew([
         '--yes',
         '--cwd',
@@ -117,7 +118,6 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
         '--ci-cd',
         'github',
       ]);
-      console.timeEnd('DIAG runNew (generate + npm install + playwright install chromium)');
 
       expect(exitCode).toBe(0);
       expect(existsSync(join(cwd, 'playwright.config.ts'))).toBe(true);
@@ -125,20 +125,16 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
       expect(existsSync(join(cwd, 'components', 'base', 'base-page.ts'))).toBe(true);
       expect(existsSync(join(cwd, 'tests', 'smoke.spec.ts'))).toBe(true);
 
-      console.time('DIAG npx tsc --noEmit');
       execSync('npx tsc --noEmit', { cwd, stdio: 'inherit' });
-      console.timeEnd('DIAG npx tsc --noEmit');
 
       // runNew() (no --no-install passed) already ran `npm install` + `playwright install
       // chromium` as a side effect - this actually launches a real browser and runs the
       // generated `tests/smoke.spec.ts`'s network-free 'harness boots' test (page.setContent +
       // a real assertion), not just a compile/typecheck check.
-      console.time('DIAG npx playwright test --project=chromium');
       const output = execSync('npx playwright test --project=chromium', {
         cwd,
         encoding: 'utf8',
       });
-      console.timeEnd('DIAG npx playwright test --project=chromium');
       expect(output).toMatch(/1 passed/);
     },
   );
