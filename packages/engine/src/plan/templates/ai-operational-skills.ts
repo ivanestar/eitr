@@ -245,8 +245,9 @@ Transforms an issue or test case from Jira, TestRail, Zephyr, or Azure DevOps in
 
 ## Workflow
 1. **Ingestion & DLP Masking:**
-   - Fetch ticket details via \`mcp__tms__get_test_case({ caseId })\`.
-   - Mask any PII, credentials, or proprietary tokens before processing.
+   - **TMS ticket** (an explicit case ID is named, e.g. "automate AZURE-789"): fetch ticket details via \`mcp__tms__get_test_case({ caseId })\`.
+   - **Locally-drafted journey** (no case ID named, or explicitly asked to automate drafted test cases): read \`docs/analysis/journeys.json\`. Default scope: every journey with a \`testCase\` and \`reviewed: false\`. If none exist, refuse and print exactly: "No un-automated drafted test cases found. Run /compose-test-cases first, or name a specific TMS ticket ID to automate instead." Do not proceed. Treat each selected journey's \`testCase\` (\`title\`/\`preconditions\`/\`steps\`) as this ticket's content for every step below - Steps 2-8 apply identically regardless of source, except where a step below says otherwise.
+   - Mask any PII, credentials, or proprietary tokens before processing, regardless of source.
 2. **TMS Quality Validation (GIGO Protection):**
    - Delegate test case to 'tms-validator' to audit atomicity (steps <= 10), expected results verifiability, and TDM prerequisites.
    - If Quality Score < 80%, halt execution and present a structured Rejection Report with remediation recommendations for the test author.
@@ -258,7 +259,7 @@ Transforms an issue or test case from Jira, TestRail, Zephyr, or Azure DevOps in
    - Batch Mode: When automating multiple tickets, synthesize a unified **Batch Proposal Matrix** table enabling **1-Click Batch Approval** across all scenarios at once without chat fatigue.
    - BLOCKING GATE: Wait for explicit user confirmation before synthesizing test code.
 5. **Linear Test Code Synthesis (SOTA 2026):**
-   - Synthesize strictly linear ${frameworkName} (${language}) test code with ZERO branching (\`if/else\`, loops) in \`tests/TC-{id}-{feature}.spec.ts\`.
+   - Synthesize strictly linear ${frameworkName} (${language}) test code with ZERO branching (\`if/else\`, loops) in \`tests/TC-{id}-{feature}.spec.ts\` for a TMS-sourced ticket, or \`tests/JR-{journeyId}-{feature}.spec.ts\` (first 12 characters of \`journeyId\`) for a locally-sourced journey - never the \`TC-\` prefix for a journey with no TMS case ID.
    - Use Fixture Dependency Injection via \`test.extend<{ ... }>()\` to supply Page Objects and ApiClient instances.
    - Embed metadata tags: \`test('TC-{id}: {title}', { tag: ['@TC-{id}', '@smoke'] }, async ({ ... }) => ...)\`.
    - Wrap every step in ${isCypress ? '`cy.step("Step N: ...")`' : '`await test.step("Step N: ...", async () => { ... })`'}.
@@ -270,9 +271,11 @@ Transforms an issue or test case from Jira, TestRail, Zephyr, or Azure DevOps in
 7. **Execution & Self-Healing:**
    - Run the newly synthesized test via terminal.
    - If failure occurs, automatically trigger \`/heal-test\` under the Two-Strike Rule.
-   - Publish execution results back to TMS via \`mcp__tms__post_test_result\`.
+   - **TMS-sourced ticket:** publish execution results back to TMS via \`mcp__tms__post_test_result\`.
+   - **Locally-sourced journey:** once the test passes, set that journey's \`reviewed: true\` and \`reviewedBy: 'human'\` in \`docs/analysis/journeys.json\` - this skill's own Step 4 confirmation already is the human sign-off; there is no TMS entry to publish results to.
 8. **Final Report:**
    - Present the resulting test diff, execution logs, and verification status to the user.
+   - For a locally-sourced batch, also state how many \`docs/analysis/journeys.json\` entries were marked \`reviewed: true\` this run.
 `,
     },
 
@@ -459,18 +462,18 @@ Bridges Stage 2's test-condition derivation to a drafted, TMS-shaped test case. 
     {
       name: 'ground-zero-setup',
       description:
-        'Guided orchestrator for a brand-new application: runs the currently-built app-analysis pipeline (/map-site create, then /derive-test-conditions) end-to-end, pausing for human sign-off after each stage by default, or fully unattended in auto-pilot mode.',
+        'Guided orchestrator for a brand-new application: runs the currently-built app-analysis pipeline (/map-site create, then /derive-test-conditions, then /compose-test-cases) end-to-end, pausing for human sign-off after each stage by default (except /compose-test-cases, which has no blocking gate of its own), or fully unattended in auto-pilot mode.',
       disableModelInvocation: true,
       content: `# Skill: Greenfield Guided Setup (/ground-zero-setup)
 
 ## Purpose
-A thin orchestrator for a brand-new application, not a new analysis engine of its own: it sequences the currently-built stages of the app-analysis pipeline (\`/map-site create\`, including its automatic Step 6 business-intent inference, then \`/derive-test-conditions\`) so a user does not have to remember which command follows which - while never removing the human decision points those underlying skills already require. It adds zero duplicated crawling, inference, or generation logic; every actual decision about what stage comes next is read from \`scripts/pipeline-status.mjs\`, never hardcoded here, so a future pipeline stage (journey placement, spec synthesis - neither built yet) only ever requires extending that one script, not rewriting this skill's own sequencing.
+A thin orchestrator for a brand-new application, not a new analysis engine of its own: it sequences the currently-built stages of the app-analysis pipeline (\`/map-site create\`, including its automatic Step 6 business-intent inference, then \`/derive-test-conditions\`, then \`/compose-test-cases\`) so a user does not have to remember which command follows which - while never removing the human decision points those underlying skills already require. It adds zero duplicated crawling, inference, or generation logic; every actual decision about what stage comes next is read from \`scripts/pipeline-status.mjs\`, never hardcoded here, so a future pipeline stage only ever requires extending that one script, not rewriting this skill's own sequencing. This orchestrator stops short of \`/automate-ticket\` on purpose - unlike the three analysis/drafting stages above, it synthesizes and executes real code, so triggering it is left to the user's own explicit command, never chained automatically even in auto-pilot mode.
 
 ## Workflow
 1. **Pre-Flight Confirmation (mandatory, before anything runs):**
    * Run \`node scripts/pipeline-status.mjs\` first and resume from whatever stage it reports - never restart a pipeline that is already partway done.
    * Present, in conversation, and wait for an explicit response before proceeding:
-     - **What will run, in order**, starting from the current stage: \`/map-site create\` (full site crawl plus automatic business-intent inference), then \`/derive-test-conditions\` (test-condition derivation for every reviewed route).
+     - **What will run, in order**, starting from the current stage: \`/map-site create\` (full site crawl plus automatic business-intent inference), then \`/derive-test-conditions\` (test-condition derivation for every reviewed route), then \`/compose-test-cases\` (test-level classification and a drafted test case per journey).
      - **Cost warning:** this can take anywhere from tens of minutes to multiple hours depending on application size, and consumes a meaningful share of the session's generation budget - state this plainly, do not undersell it.
      - **Human gates disclosure:** by default there is a pause after every stage, where that stage's own review artifact is presented and the user must approve before the next stage runs.
    * **Mode choice**, asked at the same point, with a clearly-marked recommended default:
@@ -480,6 +483,7 @@ A thin orchestrator for a brand-new application, not a new analysis engine of it
 2. **Stage Loop (Guided mode; repeats once per pipeline stage):**
    * Run the stage by invoking its own skill exactly as documented there (\`/map-site create\` first, then later \`/derive-test-conditions\`) - never reimplement, shortcut, or paraphrase any of that skill's own steps.
    * Present that stage's own existing Human Sign-Off Gateway exactly as its own skill defines it (the Business-Intent Review Artifact, the Test-Conditions Review Artifact) - this skill does not invent a different review format or shorten the one that already exists.
+   * **Exception for \`/compose-test-cases\`:** it has no blocking Human Sign-Off Gateway of its own - it writes \`docs/analysis/journeys.json\` and moves on. For this stage only, skip the Approve/Reject loop entirely and go straight to "What next?" below.
    * **Approve / Reject loop:** ask the user to approve, or reject with comments.
      - On approve: follow that stage's own instruction to set \`reviewed: true\` and \`reviewedBy: 'human'\` on every entry just approved, then continue.
      - On reject with comments: apply the requested edits to the affected entries, then re-present the updated review artifact and ask again - this is a loop, not a one-shot gate, and repeats until the human approves.
@@ -491,10 +495,11 @@ A thin orchestrator for a brand-new application, not a new analysis engine of it
    * Skip step 2's pause-and-ask for LOCAL artifact review only - run each stage, then instead of pausing, autonomously approve every new/changed entry from that stage by setting \`reviewed: true\` and \`reviewedBy: 'auto-pilot'\` on it, then immediately continue to the next stage per \`pipeline-status.mjs\`'s \`nextCommand\`, without asking "what next?" at each stage.
    * The blanket pre-authorization given at the Pre-Flight Confirmation screen covers only this: proceeding through this pipeline's own local file writes. It does NOT extend to any action with a real external side effect outside this project's own local files - there are none in this skill's current scope (no stage here talks to a TMS or pushes anything externally), but this boundary matters for future stages once one exists (for example, a future TMS-sync stage must still stop and ask even under auto-pilot - side-effecting actions are never covered by this pre-authorization, only local review is).
 4. **End of Chain:**
-   * Once \`pipeline-status.mjs\` reports stage \`ready-to-automate\`, this skill's job is done - stop here honestly rather than pretending to continue. Journey placement and spec synthesis (later pipeline stages) are not built yet.
-   * Tell the user plainly: test conditions are derived and reviewed; turning them into runnable, journey-organized test cases is still a manual step for now. Create a TMS ticket by hand describing the scenario to automate, then run \`/automate-ticket\` against it.
+   * Once \`pipeline-status.mjs\` reports stage \`test-cases-drafted\` or \`complete\`, this skill's job is done - stop here honestly rather than continuing into code generation, which this orchestrator deliberately never triggers itself (see Purpose).
+   * If the stage is \`test-cases-drafted\`: tell the user plainly that test cases are drafted in \`docs/analysis/journeys.json\`, and that running \`/automate-ticket\` with no ticket ID will automate them directly - no TMS ticket required.
+   * If the stage is \`complete\`: tell the user every drafted test case has already been automated; nothing is left to hand off from this pipeline.
 5. **Final Report (every run, both modes, before finishing):**
-   * Print a deterministic summary: which stage(s) actually ran this session; which files were written or changed (e.g. \`docs/site-map/site-map.json\`, \`docs/analysis/business-intent.json\`, \`docs/analysis/test-conditions.json\`); each mechanical gate's result (PASSED/FAILED) for every gate that ran; how many entries were approved this session and by whom (\`reviewedBy: 'human'\` vs \`'auto-pilot'\` counts, if both occurred); elapsed wall-clock time for this run; and the current \`pipeline-status.mjs\` stage plus its \`nextCommand\`, so the user always knows exactly what to do next without re-reading this skill.
+   * Print a deterministic summary: which stage(s) actually ran this session; which files were written or changed (e.g. \`docs/site-map/site-map.json\`, \`docs/analysis/business-intent.json\`, \`docs/analysis/test-conditions.json\`, \`docs/analysis/journeys.json\`); each mechanical gate's result (PASSED/FAILED) for every gate that ran; how many entries were approved this session and by whom (\`reviewedBy: 'human'\` vs \`'auto-pilot'\` counts, if both occurred); elapsed wall-clock time for this run; and the current \`pipeline-status.mjs\` stage plus its \`nextCommand\`, so the user always knows exactly what to do next without re-reading this skill.
    * Do not attempt to report token or cost usage here - that telemetry is not available to a skill's own instructions from inside a session. If the user wants that, point them at their assistant's own session-level reporting instead (for example Claude Code's \`/cost\` or \`/context\`).
 `,
     },

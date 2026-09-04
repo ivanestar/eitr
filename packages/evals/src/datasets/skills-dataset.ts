@@ -73,6 +73,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'Markdown proposal artifact',
         'await test.step',
         'tests/fixtures.ts',
+        'docs/analysis/journeys.json',
       ],
       contractGuarantees: ['Zero Branching (no if/else/loops)', 'Fixture Dependency Injection'],
       forbiddenPatterns: ['new LoginPage(page)', 'try/catch around assertions'],
@@ -153,7 +154,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'Auto-pilot',
         "reviewedBy: 'human'",
         'Human Sign-Off Gateway',
-        'ready-to-automate',
+        'test-cases-drafted',
       ],
       contractGuarantees: [
         'never silently default to Auto-pilot',

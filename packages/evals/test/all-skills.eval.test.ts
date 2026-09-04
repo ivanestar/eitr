@@ -47,6 +47,7 @@ describe('All 8 Operational Skills Evaluation Benchmark', () => {
 1. Pre-validation via tms-validator.
 2. Present Markdown proposal artifact for Human Sign-Off Gateway.
 3. Synthesize linear spec with await test.step and tests/fixtures.ts.
+4. With no ticket ID given, read docs/analysis/journeys.json for un-automated drafted test cases instead.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,
@@ -119,7 +120,7 @@ describe('All 8 Operational Skills Evaluation Benchmark', () => {
 1. Pre-Flight Confirmation: run scripts/pipeline-status.mjs, present stages and cost warning, ask Guided vs Auto-pilot.
 2. Guided mode: run each stage, present its own Human Sign-Off Gateway, on approval set reviewedBy: 'human'.
 3. Consult scripts/pipeline-status.mjs after every stage to decide what runs next.
-4. Stop honestly once the stage reaches ready-to-automate - later stages are not built yet.
+4. Stop honestly once the stage reaches test-cases-drafted - never chain into /automate-ticket automatically.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

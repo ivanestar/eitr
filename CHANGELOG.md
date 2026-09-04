@@ -7,6 +7,17 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.26.0] - 2026-09-04
+
+- **Added**: `/automate-ticket` now reads `docs/analysis/journeys.json` directly when invoked with
+  no TMS ticket ID, automating every un-automated drafted test case through its own existing
+  Human Sign-Off Gateway and quality gate - no TMS ticket required to close the greenfield loop.
+- **Changed**: `scripts/pipeline-status.mjs` and `/ground-zero-setup` now recognize Stage 3/4
+  (`/compose-test-cases` and the local-journey automation bridge above), replacing the old
+  `ready-to-automate` terminal stage with `test-conditions-reviewed` -> `test-cases-drafted` ->
+  `complete`. `/ground-zero-setup`'s chain now includes `/compose-test-cases`, but still stops
+  before `/automate-ticket` in every mode - code synthesis stays an explicit human command.
+
 ## [0.25.0] - 2026-09-03
 
 - **Added**: `/ground-zero-setup` - a guided orchestrator for a brand-new application that chains

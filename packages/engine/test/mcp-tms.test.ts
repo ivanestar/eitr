@@ -361,6 +361,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(automateSkill?.source.text).toContain('tms-validator');
     expect(automateSkill?.source.text).toContain('Human Sign-Off Gateway');
     expect(automateSkill?.source.text).toContain('tests/TC-');
+    expect(automateSkill?.source.text).toContain('docs/analysis/journeys.json');
 
     const composeTestCasesSkill = files.find(
       (f) => f.path === '.agents/skills/compose-test-cases/SKILL.md',

@@ -86,6 +86,50 @@ function writeTestConditions(dir: string, reviewed: boolean) {
   );
 }
 
+function writeJourneys(dir: string, opts: { withTestCase: boolean; reviewed: boolean }) {
+  writeFileSync(
+    join(dir, 'docs', 'analysis', 'journeys.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-09-04T09:00:00.000Z',
+      routes: {
+        'route-checkout': {
+          routeId: 'route-checkout',
+          journeys: [
+            {
+              journeyId: 'abc123def456abcd',
+              routeId: 'route-checkout',
+              conditionAssignments: [
+                {
+                  conditionId: 'a1b2c3d4e5f6a1b2',
+                  testLevel: 'e2e',
+                  reason: 'baseline-valid-vector',
+                },
+              ],
+              ...(opts.withTestCase
+                ? {
+                    testCase: {
+                      title: 'Checkout happy path',
+                      preconditions: [],
+                      steps: [
+                        { description: 'Submit checkout', expectedResult: 'Order confirmed' },
+                      ],
+                    },
+                  }
+                : {}),
+              reviewed: opts.reviewed,
+              ...(opts.reviewed ? { reviewedBy: 'human' } : {}),
+              sourceConditionsHash: 'hash123',
+              analyzedAt: '2026-09-04T09:00:00.000Z',
+            },
+          ],
+        },
+      },
+    }),
+    'utf8',
+  );
+}
+
 function run(dir: string) {
   return spawnSync('node', ['pipeline-status.mjs'], { cwd: dir, encoding: 'utf8' });
 }
@@ -173,7 +217,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports ready-to-automate once at least one condition is reviewed', () => {
+  it('reports test-conditions-reviewed (next: /compose-test-cases) once test conditions are reviewed, before journeys.json exists', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -181,8 +225,72 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     try {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
-      expect(output.stage).toBe('ready-to-automate');
+      expect(output.stage).toBe('test-conditions-reviewed');
+      expect(output.nextCommand).toBe('/compose-test-cases');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports test-conditions-reviewed (next: /compose-test-cases) when journeys.json exists but no journey has a drafted testCase yet', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeBusinessIntent(dir, true);
+    writeTestConditions(dir, true);
+    writeJourneys(dir, { withTestCase: false, reviewed: false });
+    try {
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.stage).toBe('test-conditions-reviewed');
+      expect(output.nextCommand).toBe('/compose-test-cases');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not crash on a malformed journeys.json - degrades to test-conditions-reviewed', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeBusinessIntent(dir, true);
+    writeTestConditions(dir, true);
+    writeFileSync(join(dir, 'docs', 'analysis', 'journeys.json'), 'not valid json', 'utf8');
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const output = JSON.parse(result.stdout);
+      expect(output.stage).toBe('test-conditions-reviewed');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports test-cases-drafted (next: /automate-ticket) once a journey has a drafted, unreviewed testCase', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeBusinessIntent(dir, true);
+    writeTestConditions(dir, true);
+    writeJourneys(dir, { withTestCase: true, reviewed: false });
+    try {
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.stage).toBe('test-cases-drafted');
       expect(output.nextCommand).toBe('/automate-ticket');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports complete (nextCommand null) once every drafted testCase is reviewed:true', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeBusinessIntent(dir, true);
+    writeTestConditions(dir, true);
+    writeJourneys(dir, { withTestCase: true, reviewed: true });
+    try {
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.stage).toBe('complete');
+      expect(output.nextCommand).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
