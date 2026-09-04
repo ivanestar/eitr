@@ -9,7 +9,12 @@ audit trail; this file is release notes.
 
 ## [0.31.0] - 2026-09-04
 
-- **Fixed**: `/derive-test-conditions`'s Test-Conditions Review Artifact printed only per-parameter
+- **Changed**: `/derive-test-conditions` and `/compose-test-cases` renamed to `/define-test-conditions`
+  and `/design-test-cases` (Test Analysis defines test conditions; Test Design designs test cases
+  from them). Prose throughout both skills, `/ground-zero-setup`, `pipeline-status.mjs`'s
+  `nextCommand`, and the `sdet-orchestrator` agent updated to match; no schema or artifact-file
+  changes.
+- **Fixed**: `/define-test-conditions`'s Test-Conditions Review Artifact printed only per-parameter
   statistics (`Parameter: ... Technique: ... Conditions: <count> Speculative: <count>`), never the
   actual conditions - a human could not review or correct what they never saw, reported from live
   use. Every condition now carries a `description` (one plain sentence, e.g. `Verify the page

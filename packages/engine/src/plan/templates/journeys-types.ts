@@ -10,7 +10,7 @@
 
 export function renderJourneysTypes(): string {
   return `// Typed contract for docs/analysis/journeys.json, produced by scripts/compose-journeys.mjs
-// (structural test-level classification) and the /compose-test-cases skill's LLM step (drafted
+// (structural test-level classification) and the /design-test-cases skill's LLM step (drafted
 // test case). Reference this file when reading or writing that JSON - it is documentation-as-code,
 // not a compiled/imported module: nothing in this project imports it at runtime.
 // scripts/validate-journeys.mjs enforces its shape mechanically.
@@ -35,7 +35,7 @@ export interface DraftTestCaseStep {
   expectedResult: string;
 }
 
-// Written by the /compose-test-cases skill's LLM step, not scripts/compose-journeys.mjs - absent
+// Written by the /design-test-cases skill's LLM step, not scripts/compose-journeys.mjs - absent
 // until that step runs. 'api'-level steps describe the mechanism generically ("call the project's
 // API client") rather than naming a language-specific class - actual code generation stays
 // /automate-ticket's job.
@@ -51,10 +51,10 @@ export interface JourneyEntry {
   journeyId: string;
   routeId: string;
   conditionAssignments: ConditionAssignment[];
-  // Absent until the /compose-test-cases skill's LLM step drafts it.
+  // Absent until the /design-test-cases skill's LLM step drafts it.
   testCase?: DraftTestCase;
   // False until a human reviews it. Unlike every earlier stage in this pipeline, this is NOT a
-  // blocking gate - /compose-test-cases writes the draft and moves on; nothing downstream refuses
+  // blocking gate - /design-test-cases writes the draft and moves on; nothing downstream refuses
   // to proceed on reviewed:false here. Kept for future auditability, not enforcement.
   reviewed: boolean;
   // Who set reviewed:true - 'human' for an actual conversational approval, 'auto-pilot' only when

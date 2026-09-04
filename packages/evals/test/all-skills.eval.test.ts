@@ -131,11 +131,11 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
     expect(grade.score).toBe(100);
   });
 
-  // Skill 8: /compose-test-cases
-  it('8. Evaluates /compose-test-cases deterministic classification and no-blocking-gate departure', () => {
-    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/compose-test-cases')!;
+  // Skill 8: /design-test-cases
+  it('8. Evaluates /design-test-cases deterministic classification and no-blocking-gate departure', () => {
+    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/design-test-cases')!;
     const simulatedOutput = `
-# Skill: Compose Test Cases (/compose-test-cases)
+# Skill: Test Design (/design-test-cases)
 1. Preconditions: if no reviewed conditions exist, refuse with "No reviewed test conditions found."
 2. Run scripts/compose-journeys.mjs to deterministically assign each condition a testLevel.
 3. Run scripts/validate-journeys.mjs --stage=structural, then draft each testCase, then validate again.
@@ -150,11 +150,11 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
     expect(grade.score).toBe(100);
   });
 
-  // Skill 9: /derive-test-conditions
-  it('9. Evaluates /derive-test-conditions read-only extraction and human sign-off gate', () => {
-    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/derive-test-conditions')!;
+  // Skill 9: /define-test-conditions
+  it('9. Evaluates /define-test-conditions read-only extraction and human sign-off gate', () => {
+    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/define-test-conditions')!;
     const simulatedOutput = `
-# Skill: Test-Condition Derivation (/derive-test-conditions)
+# Skill: Test Analysis (/define-test-conditions)
 1. Preconditions: refuse with "No reviewed business-intent entries found" if none exist.
 2. Extract parameters read-only, redact PII as [REDACTED], synthesize sampleValues never copied from the live page.
 3. Run node scripts/validate-test-conditions.mjs, deterministically generate boundary-value + checklist-based conditions.

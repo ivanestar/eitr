@@ -2,7 +2,7 @@
 // The mechanical gate ADR 0012 Decision item 2 requires at every stage boundary for
 // docs/analysis/test-conditions.json (Stage 2). Zero dependencies, same style as
 // business-intent-validator.ts and site-map-validator.ts. Supports --stage=parameters to run only
-// the pre-generation subset of checks (Gate 1 in /derive-test-conditions), or the full check set
+// the pre-generation subset of checks (Gate 1 in /define-test-conditions), or the full check set
 // with no flag (Gate 2).
 
 export function renderTestConditionsValidator(): string {
@@ -10,7 +10,7 @@ export function renderTestConditionsValidator(): string {
 
 /**
  * Mechanical shape gate for docs/analysis/test-conditions.json.
- * Zero model involvement - pure structural checks, run by /derive-test-conditions before Gate 1
+ * Zero model involvement - pure structural checks, run by /define-test-conditions before Gate 1
  * (parameters shape, via --stage=parameters) and again in full (Gate 2) before the Human Sign-Off
  * Gateway.
  *
@@ -273,7 +273,7 @@ function validate() {
     errors.push(
       'schemaVersion must be exactly 1 (found ' +
         JSON.stringify(data.schemaVersion) +
-        '). Treat as absent and re-run /derive-test-conditions rather than migrating in place.',
+        '). Treat as absent and re-run /define-test-conditions rather than migrating in place.',
     );
   }
   if (typeof data.generatedAt !== 'string' || data.generatedAt.length === 0) {

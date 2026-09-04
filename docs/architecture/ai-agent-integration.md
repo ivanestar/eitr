@@ -26,13 +26,13 @@ Generated Test Repository
 │   │                             DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
 │   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
-│   ├── /ground-zero-setup    -- Guided orchestrator: chains /map-site + /derive-test-conditions +
-│   │                             /compose-test-cases, with a human sign-off gate per stage, or auto-pilot
+│   ├── /ground-zero-setup    -- Guided orchestrator: chains /map-site + /define-test-conditions +
+│   │                             /design-test-cases, with a human sign-off gate per stage, or auto-pilot
 │   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
 │   │                             optional read-only business-intent analysis (ADR 0012 Stage 1)
-│   ├── /derive-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
+│   ├── /define-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
 │   │                             combinatorial/boundary-value condition generation (ADR 0012 Stage 2)
-│   └── /compose-test-cases   -- Deterministic test-level classification + drafted test case per
+│   └── /design-test-cases    -- Deterministic test-level classification + drafted test case per
 │                                 journey (ADR 0012 Stage 3/4)
 │
 ├── 3. Model Context Protocol (MCP) Layer (.mcp.json, .cursor/mcp.json, .claude/mcp.json, etc.)
@@ -103,7 +103,7 @@ it stays an internal signal, never shown in the review artifact itself, since a 
 `businessFeature.confidence` and `criticalityTier.confidence` are independently computed and
 routinely disagree. `criticalityTier` follows a written, evidence-anchored checklist rather than
 free inference, is labeled "draft" in the review artifact (it drives real downstream automation -
-`/derive-test-conditions`'s checklist volume - once approved, so it earns its own reminder beyond
+`/define-test-conditions`'s checklist volume - once approved, so it earns its own reminder beyond
 the block-level notice), and every `Field<T>` carries a `reasoning` string that reads as a plain
 explanation for a human (what was found, why it matters for this kind of application), never a
 trace of which internal rule fired. Evidence is deduplicated once per route rather than repeated
@@ -132,7 +132,10 @@ normal outcome, not an error. See
 for the design decision this implements and what remains out of scope for this first stage
 (transport choice, cross-route journey synthesis).
 
-## Test-condition derivation (`/derive-test-conditions`, ADR 0012 Stage 2)
+## Test analysis (`/define-test-conditions`, ADR 0012 Stage 2)
+
+Stage 2 and Stage 3 below take their names (test analysis defines test conditions, test design
+designs test cases from them) from the ISTQB Foundation Level syllabus's fundamental test process.
 
 A second, explicit-request-only, strictly read-only skill consumes `business-intent.json`'s
 `reviewed: true` entries plus `site-map.json` and derives typed test conditions per route into
@@ -165,8 +168,8 @@ spec synthesis, combinatorial strength beyond 2-way, general boolean-predicate c
 
 A thin orchestrator over Stage 1, Stage 2, and Stage 3 for a brand-new application, adding no
 analysis logic of its own. It sequences `/map-site create` (with its automatic Step 6),
-`/derive-test-conditions`, and `/compose-test-cases` in order, pausing at each stage's own Human
-Sign-Off Gateway by default (Guided mode) - except `/compose-test-cases`, which has no blocking gate
+`/define-test-conditions`, and `/design-test-cases` in order, pausing at each stage's own Human
+Sign-Off Gateway by default (Guided mode) - except `/design-test-cases`, which has no blocking gate
 of its own and is simply run and moved past - or writing `reviewedBy: 'auto-pilot'` straight through
 on the user's own explicit pre-authorization (Auto-pilot mode). What runs next is never hardcoded in
 the orchestrator's own prose - both it and the underlying skills' own end-of-run hints consult one

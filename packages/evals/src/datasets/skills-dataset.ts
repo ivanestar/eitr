@@ -13,8 +13,8 @@ export interface GoldenSkillCase {
     | '/map-site'
     | '/bulk-rescan'
     | '/ground-zero-setup'
-    | '/compose-test-cases'
-    | '/derive-test-conditions';
+    | '/design-test-cases'
+    | '/define-test-conditions';
   description: string;
   inputScenario: string;
   expectedWorkflow: {
@@ -163,12 +163,12 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
       forbiddenPatterns: ['EITR', 'Eitr'],
     },
   },
-  // 8. /compose-test-cases
+  // 8. /design-test-cases
   {
-    skillName: '/compose-test-cases',
+    skillName: '/design-test-cases',
     description:
-      'Deterministically classifies test conditions onto a test level (e2e/api/ui-only) and drafts a TMS-shaped test case, no blocking gate',
-    inputScenario: 'Compose test cases from a route with reviewed test conditions',
+      'Test Design: deterministically classifies test conditions onto a test level (e2e/api/ui-only) and drafts a TMS-shaped test case, no blocking gate',
+    inputScenario: 'Design test cases from a route with reviewed test conditions',
     expectedWorkflow: {
       mustContainKeySteps: [
         'compose-journeys.mjs',
@@ -184,13 +184,13 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
       forbiddenPatterns: ['EITR', 'Eitr', 'BLOCKING GATE'],
     },
   },
-  // 9. /derive-test-conditions
+  // 9. /define-test-conditions
   {
-    skillName: '/derive-test-conditions',
+    skillName: '/define-test-conditions',
     description:
-      'Derives typed test conditions (equivalence partitions, 2-way combinatorial coverage, 3-value boundary conditions) per route, gated by mechanical validation and human sign-off',
+      'Test Analysis: defines typed test conditions (equivalence partitions, 2-way combinatorial coverage, 3-value boundary conditions) per route, gated by mechanical validation and human sign-off',
     inputScenario:
-      'Derive test conditions for reviewed routes in docs/analysis/business-intent.json',
+      'Define test conditions for reviewed routes in docs/analysis/business-intent.json',
     expectedWorkflow: {
       mustContainKeySteps: [
         'docs/analysis/test-conditions.json',

@@ -57,8 +57,8 @@ is for gaps significant enough to shape future architecture, not routine finding
   Stage 1 (per-route business-intent/criticality analysis, `/map-site` Step 6 - see
   [`ai-agent-integration.md`](ai-agent-integration.md)) is implemented. Stage 2 (test-condition
   derivation - 2-way combinatorial coverage, 3-value boundary-value analysis, a mechanical
-  redaction backstop, human sign-off - the new `/derive-test-conditions` skill) is implemented.
-  Stage 3 (test-level/journey placement - the deterministic `/compose-test-cases` classifier,
+  redaction backstop, human sign-off - the new `/define-test-conditions` skill) is implemented.
+  Stage 3 (test-level/journey placement - the deterministic `/design-test-cases` classifier,
   ADR 0012 Track 5) is implemented, v0: journeys are single-route only, no cross-route flow
   detection yet. Stage 4 (spec synthesis) is implemented as a bridge rather than a new gate:
   `/automate-ticket` now reads `docs/analysis/journeys.json` directly when invoked with no TMS

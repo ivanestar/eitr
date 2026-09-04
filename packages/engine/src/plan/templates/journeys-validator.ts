@@ -2,14 +2,14 @@
 // Mechanical shape gate for docs/analysis/journeys.json, zero dependencies, same style as
 // test-conditions-validator.ts. Supports --stage=structural to run only the pre-drafting subset of
 // checks (Gate 1, right after scripts/compose-journeys.mjs runs), or the full check set with no
-// flag (Gate 2, after the /compose-test-cases skill's LLM step drafts testCase).
+// flag (Gate 2, after the /design-test-cases skill's LLM step drafts testCase).
 
 export function renderJourneysValidator(): string {
   return `#!/usr/bin/env node
 
 /**
  * Mechanical shape gate for docs/analysis/journeys.json.
- * Zero model involvement - pure structural checks, run by /compose-test-cases before Gate 1
+ * Zero model involvement - pure structural checks, run by /design-test-cases before Gate 1
  * (--stage=structural) and again in full (Gate 2) after the test case is drafted.
  *
  * Usage:

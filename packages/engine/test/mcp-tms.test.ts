@@ -153,9 +153,9 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(orchestrator?.source.text).toContain('Mandatory Execution Quality Gate');
     expect(orchestrator?.source.text).not.toContain('test:sanity');
     expect(orchestrator?.source.text).toContain('tms-validator');
-    // ADR 0012 Stage 2 (/derive-test-conditions) shipped without this Workflow Execution
+    // ADR 0012 Stage 2 (/define-test-conditions) shipped without this Workflow Execution
     // Steps entry ever being updated - regression guard against that same gap recurring.
-    expect(orchestrator?.source.text).toContain('/derive-test-conditions');
+    expect(orchestrator?.source.text).toContain('/define-test-conditions');
 
     const architect = files.find((f) => f.path === '.agents/agents/sdet-architect/agent.md');
     expect(architect?.source.text).toContain('Dependency Injection');
@@ -310,7 +310,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // either one invited the exact same "which value is this?" confusion the earlier per-field-
     // Confidence-line fix was meant to solve. criticality is explicitly labeled "draft" since it's
     // unapproved until the Human Sign-Off Gateway, and drives real downstream automation
-    // (/derive-test-conditions's checklist volume) once approved. Evidence is deduplicated once per
+    // (/define-test-conditions's checklist volume) once approved. Evidence is deduplicated once per
     // route rather than repeated under both businessFeature and criticalityTier.
     expect(mapSkill?.source.text).toContain('do not print a `Confidence:` line at all');
     expect(mapSkill?.source.text).toContain('Feature: <businessFeature.value>');
@@ -417,19 +417,17 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(automateSkill?.source.text).toContain('tests/TC-');
     expect(automateSkill?.source.text).toContain('docs/analysis/journeys.json');
 
-    const composeTestCasesSkill = files.find(
-      (f) => f.path === '.agents/skills/compose-test-cases/SKILL.md',
+    const designTestCasesSkill = files.find(
+      (f) => f.path === '.agents/skills/design-test-cases/SKILL.md',
     );
-    expect(composeTestCasesSkill?.source.text).toContain(
-      'No reviewed test conditions found. Run /derive-test-conditions and complete its Human Sign-Off Gateway before composing test cases.',
+    expect(designTestCasesSkill?.source.text).toContain(
+      'No reviewed test conditions found. Run /define-test-conditions and complete its Human Sign-Off Gateway before designing test cases.',
     );
-    expect(composeTestCasesSkill?.source.text).toContain('scripts/compose-journeys.mjs');
+    expect(designTestCasesSkill?.source.text).toContain('scripts/compose-journeys.mjs');
     // Deliberate departure from every earlier stage's blocking gate - never a "BLOCKING GATE"
     // phrase (used by /automate-ticket's own Step 4) here.
-    expect(composeTestCasesSkill?.source.text).not.toContain('BLOCKING GATE');
-    expect(composeTestCasesSkill?.source.text).toContain(
-      'Do not ask for approval before finishing',
-    );
+    expect(designTestCasesSkill?.source.text).not.toContain('BLOCKING GATE');
+    expect(designTestCasesSkill?.source.text).toContain('Do not ask for approval before finishing');
 
     const healSkill = files.find((f) => f.path === '.agents/skills/heal-test/SKILL.md');
     expect(healSkill?.source.text).toContain('Fail-Fast Real Bug Detection');

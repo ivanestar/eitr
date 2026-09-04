@@ -7,7 +7,7 @@
 // real mechanical enforcement comes from scripts/validate-test-conditions.mjs instead.
 
 export function renderTestConditionsTypes(): string {
-  return `// Typed contract for docs/analysis/test-conditions.json, produced by the /derive-test-conditions
+  return `// Typed contract for docs/analysis/test-conditions.json, produced by the /define-test-conditions
 // skill. Reference this file when reading or writing that JSON - it is documentation-as-code, not
 // a compiled/imported module: nothing in this project imports it at runtime.
 // scripts/validate-test-conditions.mjs enforces its shape mechanically.

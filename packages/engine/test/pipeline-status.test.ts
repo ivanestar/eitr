@@ -185,7 +185,7 @@ function writeTestConditionsTwoRoutes(dir: string) {
 
 // route-checkout is always fully drafted+automated; route-cart is either entirely absent from
 // journeys.json (compose-journeys.mjs never ran since its conditions were reviewed) or present with
-// a journey but no testCase yet (the /compose-test-cases drafting step was interrupted) - the two
+// a journey but no testCase yet (the /design-test-cases drafting step was interrupted) - the two
 // distinct ways a reviewed route can be invisible to a "does any journey have a testCase" check.
 function writeJourneysCheckoutOnly(dir: string, opts: { cartHasJourneyWithoutTestCase: boolean }) {
   const routes: Record<string, unknown> = {
@@ -293,7 +293,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports business-intent-reviewed (next: /derive-test-conditions) once reviewed, before test-conditions.json exists', () => {
+  it('reports business-intent-reviewed (next: /define-test-conditions) once reviewed, before test-conditions.json exists', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -301,7 +301,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('business-intent-reviewed');
-      expect(output.nextCommand).toBe('/derive-test-conditions');
+      expect(output.nextCommand).toBe('/define-test-conditions');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -322,7 +322,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports test-conditions-reviewed (next: /compose-test-cases) once test conditions are reviewed, before journeys.json exists', () => {
+  it('reports test-conditions-reviewed (next: /design-test-cases) once test conditions are reviewed, before journeys.json exists', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -331,13 +331,13 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-conditions-reviewed');
-      expect(output.nextCommand).toBe('/compose-test-cases');
+      expect(output.nextCommand).toBe('/design-test-cases');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('reports test-conditions-reviewed (next: /compose-test-cases) when journeys.json exists but no journey has a drafted testCase yet', () => {
+  it('reports test-conditions-reviewed (next: /design-test-cases) when journeys.json exists but no journey has a drafted testCase yet', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -347,7 +347,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-conditions-reviewed');
-      expect(output.nextCommand).toBe('/compose-test-cases');
+      expect(output.nextCommand).toBe('/design-test-cases');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -411,7 +411,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-conditions-reviewed');
-      expect(output.nextCommand).toBe('/compose-test-cases');
+      expect(output.nextCommand).toBe('/design-test-cases');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -427,7 +427,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-conditions-reviewed');
-      expect(output.nextCommand).toBe('/compose-test-cases');
+      expect(output.nextCommand).toBe('/design-test-cases');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

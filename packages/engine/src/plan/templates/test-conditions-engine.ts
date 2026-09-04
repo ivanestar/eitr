@@ -1,6 +1,6 @@
 // Template for generating scripts/generate-test-conditions.mjs. create-if-absent.
 // The deterministic half of ADR 0012 Stage 2's "Hybrid Two-Phase Engine": an LLM (via the
-// /derive-test-conditions skill's Step 2) infers parameters[]/constraints[] from read-only DOM
+// /define-test-conditions skill's Step 2) infers parameters[]/constraints[] from read-only DOM
 // inspection; this script mechanically expands that into 2-way combinatorial coverage plus
 // 3-value boundary-value conditions, falling back to one condition per partition
 // (equivalence-partition technique) for a route with fewer than 2 parameters, where pairwise
@@ -489,7 +489,7 @@ const CHECKLIST_VALUES = {
 };
 
 // Reads docs/analysis/business-intent.json fresh on every run (a separate artifact from a
-// different skill's stage - it can change or be re-reviewed between when /derive-test-conditions
+// different skill's stage - it can change or be re-reviewed between when /define-test-conditions
 // Step 1 last checked it and when this script runs) and returns a routeId -> criticalityTier.value
 // map, using ONLY entries with reviewed:true - an unreviewed entry is never ground truth for any
 // other skill or agent (the same rule /map-site Step 6's own Human Sign-Off Gateway states), so an

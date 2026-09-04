@@ -58,7 +58,7 @@ Whenever the user requests automating a ticket, setting up framework baselines, 
 
 ## Workflow Execution Steps
 1. Parse user intent (e.g. automate ticket, map site routes, generate page objects, debug failing test).
-2. Dispatch task to specialized subagents or execute the corresponding operational skill (/ground-zero-setup, /map-site, /derive-test-conditions, /automate-ticket, /scan-and-generate-pom, /heal-test, /bulk-rescan).
+2. Dispatch task to specialized subagents or execute the corresponding operational skill (/ground-zero-setup, /map-site, /define-test-conditions, /design-test-cases, /automate-ticket, /scan-and-generate-pom, /heal-test, /bulk-rescan).
 3. If automating a TMS ticket:
    - Validate requirements with 'tms-validator' (GIGO protection). If rejected, halt and return feedback.
    - Resolve needed Page Objects via 'pom-engineer' and 'docs/site-map/site-map.json'.
