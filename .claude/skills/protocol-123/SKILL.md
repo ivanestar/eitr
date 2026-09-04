@@ -45,18 +45,23 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 
 ### Phase 2: Architectural Plan Formulation (Spec-Driven Architecture / SDD)
 
-- **Agent**: `architect`.
-- **Goal**: Synthesize findings into a formal, deterministic Markdown specification artifact.
-- **Executive Summary & AC Matrix requirements**:
+- **Agents**:
+  - `architect`: Synthesize findings into a formal, deterministic Markdown specification artifact.
+  - `req-coverage-designer` & `negative-coverage-designer` (Test Conditions Design Swarm): Run immediately after plan formulation to synthesize the complete Test Conditions Matrix before Phase 3 review.
+- **Executive Summary & Specification requirements**:
   1. **Executive Summary Table**: Target files list, breaking changes flag (`Yes` / `No`), test impact, risk assessment.
   2. **Acceptance Criteria (AC) $\rightarrow$ Test Matrix**:
      | Requirement / Bug Scenario | Target Test File                 | Assertion Type          |
      | -------------------------- | -------------------------------- | ----------------------- |
      | `AC-1: <Description>`      | `packages/*/test/<name>.test.ts` | `<Deterministic Check>` |
   3. **Exact Code Blocks**: Complete `before/after` chunks and line numbers.
+  4. **Formal Test Conditions & Invariant Matrix (ISTQB Stage 2 Contract)**:
+     - `req-coverage-designer`: Positive and alt-flow atomic conditions covering 100% of AC, BR, NFR with mandatory `"Verify "` prefix.
+     - `negative-coverage-designer`: 3–5 negative conditions per positive requirement across the 9 closed taxonomy categories (`invalid_input`, `boundary`, `missing_precondition`, `concurrent_conflict`, `state_violation`, `permission_denied`, `external_failure`, `data_integrity`, `error_path`) with defensive oracle polarity.
 
 ### Phase 3: Independent Plan Review Swarm & Arbiter Adjudication
 
+- **Review Scope**: Audits both the implementation tasks and the Test Conditions Matrix for edge cases, invariants, and false assumptions before presentation to the user.
 - **Subagents**: Swarm of 2–3 independent reviewers selected from the modular pool:
   1. `code-reviewer`: Code correctness, type safety, missing imports.
   2. `skill-reviewer` / `DX Reviewer`: Elimination of ambiguous instructions (no "search for", "apply equivalent").
@@ -79,7 +84,7 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 ### Phase 5: Test-Driven Execution (TDD: Red $\rightarrow$ Green $\rightarrow$ Refactor)
 
 - **Phase 5a (RED Phase - `test-writer` & `eval-engineer`)**:
-  - `test-writer`: Synthesize targeted unit/integration tests covering 100% of the Phase 2 AC Matrix.
+  - `test-writer`: Synthesize targeted unit/integration tests covering 100% of the Phase 2 AC Matrix and Test Conditions Matrix (both positive paths and negative boundary vectors).
   - `eval-engineer` (Mandatory Eval Parity): Whenever creating or modifying an AI agent, operational skill, or rule generator, synthesize dedicated eval tests in `packages/evals/test/` to verify prompt fidelity and negative constraint adherence.
   - Run the test to verify that it fails (Red) on the existing baseline, confirming non-vacuous assertions.
 - **Phase 5b (GREEN Phase - `core-developer`)**:

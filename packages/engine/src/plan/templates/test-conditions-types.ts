@@ -57,9 +57,25 @@ export interface ConstraintRule {
   thenExcludesPartition: string;
 }
 
+// Closed 9-category taxonomy of negative testing concerns (ISTQB Stage 2).
+export type NegativeCategory =
+  | 'invalid_input'
+  | 'boundary'
+  | 'missing_precondition'
+  | 'concurrent_conflict'
+  | 'state_violation'
+  | 'permission_denied'
+  | 'external_failure'
+  | 'data_integrity'
+  | 'error_path';
+
 // Deliberately empty ({}) on every generated condition - auto-synthesizing this from live network
 // responses would require actually submitting the form, which this pipeline's read-only-by-default
 // safety rule forbids. A human fills this in at sign-off.
+//
+// Defensive Oracle Polarity Invariant: A negative condition's verification contract MUST assert
+// system self-defense and state preservation (ui: validation message/redirection; state: draft
+// preserved, no ghost entity created; network: 4xx response, NEVER an unhandled crash or 500 error).
 export interface VerificationContract {
   ui?: string;
   state?: string;
@@ -71,8 +87,14 @@ export interface VerificationContract {
 // 'checklist-based' (ISTQB experience-based technique) probes a closed, deterministic list of
 // well-known malformed-format/injection-class values per parameter kind - complementary to
 // boundary-value, not a replacement for it.
+// 'architectural-invariant' covers systemic, route-level conditions (e.g. missing_precondition,
+// permission_denied, state_violation) not bound to form parameter inputs.
 export type TestConditionTechnique =
-  'combinatorial' | 'boundary-value' | 'equivalence-partition' | 'checklist-based';
+  | 'combinatorial'
+  | 'boundary-value'
+  | 'equivalence-partition'
+  | 'checklist-based'
+  | 'architectural-invariant';
 
 // Whether every parameter value in a TestCondition's vector is drawn from a 'valid' partition (or
 // the inclusive/still-inside side of a boundary) - 'negative' when at least one is an
@@ -81,20 +103,23 @@ export type TestConditionTechnique =
 export type TestConditionScenario = 'positive' | 'negative';
 
 export interface TestCondition {
-  // sha256(routeId + '|' + JSON.stringify(sorted [paramName, value] tuples)).slice(0, 16)
+  // sha256(routeId + '|' + (technique === 'architectural-invariant' ? (negativeCategory || '') + '|' + description : JSON.stringify(sorted [paramName, value] tuples))).slice(0, 16)
   conditionId: string;
   // paramName -> partitionId for technique: 'combinatorial' and 'equivalence-partition'. For
   // technique: 'boundary-value' or 'checklist-based', the target parameter's own entry holds the
-  // literal probe/checklist value instead of a partitionId - every other (held-constant)
-  // parameter's entry is still a partitionId.
+  // literal probe/checklist value instead of a partitionId. For technique: 'architectural-invariant',
+  // parameters is empty ({}) or holds relevant route context.
   parameters: Record<string, string>;
   technique: TestConditionTechnique;
   // One human-readable sentence synthesized deterministically from the vector's own resolved
-  // values (partition sampleValues, or the literal boundary/checklist probe) - never free model
-  // inference, so it stays reproducible run to run. This is what a human actually reviews at
+  // values (partition sampleValues, or the literal boundary/checklist probe) or authored by the
+  // agent for architectural invariants. This is what a human actually reviews at
   // sign-off; parameters/technique above remain the machine-consumable form.
   description: string;
   scenario: TestConditionScenario;
+  // Closed taxonomy category for negative scenarios. Applicable strictly when scenario === 'negative';
+  // required when technique === 'architectural-invariant'.
+  negativeCategory?: NegativeCategory;
   verification: VerificationContract;
   isSpeculative: boolean;
   reviewed: boolean;

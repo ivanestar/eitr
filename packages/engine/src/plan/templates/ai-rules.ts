@@ -49,6 +49,19 @@ You are modifying a ${toolName} CPOM framework setup.
 `;
 }
 
+function resolveHydrationSnippet(language: string): string {
+  if (language === 'python') {
+    return 'From `shared/utils/react.py`, use `wait_for_react_hydration(page)` before interacting with hydration-dependent elements.';
+  }
+  if (language === 'java') {
+    return 'From `shared.utils.ReactHelpers`, call `ReactHelpers.waitForReactHydration(page)` before interacting with hydration-dependent elements.';
+  }
+  if (language === 'csharp') {
+    return 'From `Shared.Utils.ReactHelpers`, call `await ReactHelpers.WaitForReactHydrationAsync(page)` before interacting with hydration-dependent elements.';
+  }
+  return 'From `shared/utils/react.ts`, use `await waitForReactHydration(page)` before interacting with hydration-dependent elements.';
+}
+
 export function renderAiGenerateText(
   tool: string = 'playwright',
   language: string = 'typescript',
@@ -158,6 +171,10 @@ Whenever tasked with automating tickets, establishing baselines, or refactoring 
 - **Phase 6 (Code Review & Arbiter):** Reviewers inspect diff; 'review-arbiter' evaluates comments and approves.
 - **Phase 7 (Two-Strike Self-Healing):** Isolated test run (\`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`); max 2 attempts, automatic rollback via \`git checkout -- <files>\` if red.
 - **Phase 8 (Quality Gate & Handoff):** Run linters and the test suite, present Final Handoff Report with Protocol 123 Telemetry Summary table (Phase, Duration, Est. Tokens In/Out, Est. Cost, Status).
+
+### 11. Frontend Framework Hydration Helpers
+- When testing applications built with React, Next.js, or hydration-dependent SPA frameworks, wait for hydration before interacting with elements to eliminate synthetic click misses and state resets.
+- ${resolveHydrationSnippet(language)}
 
 ## Authenticated Pages Edge Cases
 - If \`.auth/user.json\` exists, you MUST NOT automate the login flow.
@@ -646,6 +663,10 @@ ${s8AsyncSync}
   * Phase 6: Code Review Swarm & review-arbiter Adjudication
   * Phase 7: Two-Strike Self-Healing (4-Point Trace Triage with Visual Diff & Screenshot Overlay + Rollback)
   * Phase 8: Quality Gate & Final Handoff Report with Telemetry Summary table
+
+### 10. Frontend Framework Hydration Helpers
+- When testing applications built with React, Next.js, or hydration-dependent SPA frameworks, wait for hydration before interacting with elements to eliminate synthetic click misses and state resets.
+- ${resolveHydrationSnippet(language)}
 `;
 }
 

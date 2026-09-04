@@ -127,15 +127,16 @@ function hashParams(entry) {
 // Same delimiter-collision-free convention as pairKey below (an ordered JSON tuple, not raw
 // '='/'&'-joined concatenation) - a parameter name or partition id containing those characters
 // could otherwise produce a colliding conditionId.
-function conditionId(routeId, vector) {
-  const sortedEntries = Object.keys(vector)
+function conditionId(routeId, vector, extra) {
+  const sortedEntries = Object.keys(vector || {})
     .sort()
     .map(function (k) {
       return [k, vector[k]];
     });
+  const salt = extra ? '|' + extra : '';
   return crypto
     .createHash('sha256')
-    .update(routeId + '|' + JSON.stringify(sortedEntries))
+    .update(routeId + '|' + JSON.stringify(sortedEntries) + salt)
     .digest('hex')
     .slice(0, 16);
 }
@@ -451,7 +452,7 @@ function buildBoundaryConditions(routeId, parameters) {
         }
         const isValid = boundaryProbeIsValid(boundarySet.boundary, index);
         const described = describeCondition(parameters, vector, param.name, isValid, 'boundary-value');
-        conditions.push({
+        const cond = {
           conditionId: conditionId(routeId, vector),
           parameters: vector,
           technique: 'boundary-value',
@@ -460,7 +461,11 @@ function buildBoundaryConditions(routeId, parameters) {
           verification: {},
           isSpeculative: true,
           reviewed: false,
-        });
+        };
+        if (described.scenario === 'negative') {
+          cond.negativeCategory = 'boundary';
+        }
+        conditions.push(cond);
       });
     }
   }
@@ -485,7 +490,7 @@ function buildEquivalencePartitionConditions(routeId, parameters) {
         undefined,
         'equivalence-partition',
       );
-      conditions.push({
+      const cond = {
         conditionId: conditionId(routeId, vector),
         parameters: vector,
         technique: 'equivalence-partition',
@@ -494,7 +499,11 @@ function buildEquivalencePartitionConditions(routeId, parameters) {
         verification: {},
         isSpeculative: true,
         reviewed: false,
-      });
+      };
+      if (described.scenario === 'negative') {
+        cond.negativeCategory = 'invalid_input';
+      }
+      conditions.push(cond);
     }
   }
   return conditions;
@@ -571,6 +580,7 @@ function buildChecklistConditions(routeId, parameters, criticalityTier) {
         technique: 'checklist-based',
         description: described.description,
         scenario: described.scenario,
+        negativeCategory: 'invalid_input',
         verification: {},
         isSpeculative: true,
         reviewed: false,
@@ -595,7 +605,7 @@ function generateForRoute(routeId, entry, criticalityTier) {
       undefined,
       'combinatorial',
     );
-    return {
+    const cond = {
       conditionId: conditionId(routeId, vector),
       parameters: vector,
       technique: 'combinatorial',
@@ -605,6 +615,10 @@ function generateForRoute(routeId, entry, criticalityTier) {
       isSpeculative: true,
       reviewed: false,
     };
+    if (described.scenario === 'negative') {
+      cond.negativeCategory = 'invalid_input';
+    }
+    return cond;
   });
   const boundaryConditions = buildBoundaryConditions(routeId, entry.parameters);
   const equivalencePartitionConditions = buildEquivalencePartitionConditions(
@@ -612,12 +626,27 @@ function generateForRoute(routeId, entry, criticalityTier) {
     entry.parameters,
   );
   const checklistConditions = buildChecklistConditions(routeId, entry.parameters, criticalityTier);
+  const invariantConditions = (entry.conditions || [])
+    .filter(function (c) {
+      return c.technique === 'architectural-invariant';
+    })
+    .map(function (c) {
+      if (!c.conditionId) {
+        c.conditionId = conditionId(
+          routeId,
+          c.parameters || {},
+          (c.negativeCategory || '') + '|' + (c.description || ''),
+        );
+      }
+      return c;
+    });
   const seen = new Set();
   const deduped = [];
   for (const c of combinatorialConditions.concat(
     boundaryConditions,
     equivalencePartitionConditions,
     checklistConditions,
+    invariantConditions,
   )) {
     if (seen.has(c.conditionId)) continue;
     seen.add(c.conditionId);

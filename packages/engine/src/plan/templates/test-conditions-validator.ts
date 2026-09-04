@@ -57,6 +57,18 @@ const TECHNIQUE_VALUES = new Set([
   'boundary-value',
   'equivalence-partition',
   'checklist-based',
+  'architectural-invariant',
+]);
+const NEGATIVE_CATEGORY_VALUES = new Set([
+  'invalid_input',
+  'boundary',
+  'missing_precondition',
+  'concurrent_conflict',
+  'state_violation',
+  'permission_denied',
+  'external_failure',
+  'data_integrity',
+  'error_path',
 ]);
 const SCENARIO_VALUES = new Set(['positive', 'negative']);
 
@@ -191,6 +203,11 @@ function isVerificationContract(value, label, errors) {
   if (value.network !== undefined) {
     if (!value.network || typeof value.network.status !== 'number') {
       errors.push(label + '.network.status must be a number when network is present.');
+    } else if (value.network.status >= 500) {
+      errors.push(
+        label +
+          '.network.status must not assert unhandled crash (status >= 500) under Defensive Oracle Polarity.',
+      );
     }
   }
 }
@@ -209,7 +226,7 @@ function isCondition(value, label, errors) {
   if (!TECHNIQUE_VALUES.has(value.technique)) {
     errors.push(
       label +
-        '.technique must be one of combinatorial|boundary-value|equivalence-partition|checklist-based.',
+        '.technique must be one of combinatorial|boundary-value|equivalence-partition|checklist-based|architectural-invariant.',
     );
   }
   if (typeof value.description !== 'string' || value.description.length === 0) {
@@ -219,6 +236,33 @@ function isCondition(value, label, errors) {
   }
   if (!SCENARIO_VALUES.has(value.scenario)) {
     errors.push(label + '.scenario must be one of positive|negative.');
+  }
+  if (value.negativeCategory !== undefined) {
+    if (
+      typeof value.negativeCategory !== 'string' ||
+      !NEGATIVE_CATEGORY_VALUES.has(value.negativeCategory)
+    ) {
+      errors.push(
+        label +
+          '.negativeCategory must be one of ' +
+          Array.from(NEGATIVE_CATEGORY_VALUES).join('|') +
+          '.',
+      );
+    }
+    if (value.scenario === 'positive') {
+      errors.push(label + '.negativeCategory cannot be set when scenario is "positive".');
+    }
+  }
+  if (value.technique === 'architectural-invariant') {
+    if (
+      typeof value.negativeCategory !== 'string' ||
+      !NEGATIVE_CATEGORY_VALUES.has(value.negativeCategory)
+    ) {
+      errors.push(
+        label +
+          '.negativeCategory is required and must be a valid NegativeCategory when technique is "architectural-invariant".',
+      );
+    }
   }
   isVerificationContract(value.verification, label + '.verification', errors);
   if (typeof value.isSpeculative !== 'boolean') {

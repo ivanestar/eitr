@@ -36,6 +36,8 @@ export class PytestAdapter implements ToolAdapter {
       cia('test.sh', renderPythonTestSh()),
       cia('tests/test_smoke.py', renderPythonExampleTest({ baseUrl })),
       cia('tests/test_auth_setup.py', renderPythonAuthSetup()),
+      cia('shared/__init__.py', '"""Shared package."""\n'),
+      cia('shared/utils/__init__.py', '"""Shared utilities package."""\n'),
       cia('shared/utils/api_client.py', renderPythonApiClient({ baseUrl })),
       cia('README.md', renderPythonProjectReadme({ projectName, baseUrl })),
     ];
