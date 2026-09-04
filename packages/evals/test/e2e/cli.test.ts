@@ -110,10 +110,17 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
   for (const combo of TEST_COMBINATIONS) {
     it(
       `E2E Combination [${combo.id}]: ${combo.language} + ${combo.automationTool} (${combo.framework} / ${combo.uiLibrary} / ${combo.ciCd})`,
-      // Python combos create a real venv and pip-install pytest-playwright over the network,
-      // which routinely exceeds vitest's 5s/60s defaults on this environment (matches the same
-      // real-install latency e2e.full-cycle.test.ts's Python case already budgets 180000ms for).
-      { timeout: 180000 },
+      // One shared budget across every combo in TEST_COMBINATIONS, so it must cover the heaviest
+      // one: a TypeScript + React + MUI combo does a real `npm install` (React/MUI's dependency
+      // tree, now with --no-audit --no-fund --prefer-offline - see
+      // packages/cli/src/commands/install.ts) plus a real `playwright install chromium` browser
+      // download via the actually-spawned CLI binary, same as e2e.full-cycle.test.ts's own 2/7 case
+      // - measured there at ~223s on a cold CI cache, but real CI network/registry variance can
+      // exceed even a generous 360000 ceiling on a bad run (e2e.full-cycle.test.ts's own history:
+      // runs 33818647135/33861467588/33867086542). `retry` gives a genuinely fresh attempt instead
+      // of an ever-larger single window - same principle as pytest-rerunfailures, already relied on
+      // for this project's own generated Python tests.
+      { timeout: 360000, retry: 2 },
       async () => {
         const hash = Math.random().toString(36).substring(2, 8);
         const sandboxDir = resolve(__dirname, 'sandbox', `run-${hash}-${combo.id}`);
