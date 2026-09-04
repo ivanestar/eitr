@@ -244,6 +244,12 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('validate-site-map.mjs');
     expect(mapSkill?.source.text).toContain('Mechanical Shape Gate');
 
+    // Coverage Cross-Check (sitemap.xml/robots.txt, optional signal) - never a blocking gate, a
+    // SKIPPED result is the normal outcome for the many sites that publish no sitemap.xml at all.
+    expect(mapSkill?.source.text).toContain('check-sitemap-coverage.mjs');
+    expect(mapSkill?.source.text).toContain('Coverage Cross-Check');
+    expect(mapSkill?.source.text).toContain('Optional Signal');
+
     // map-site declares `arguments: ['mode']`, so its Antigravity rendering must explain that
     // Antigravity has no slash-command argument mechanism - live-verified 2026-09-03 (skills are
     // activated autonomously from description, or requested by name in chat).
@@ -298,17 +304,28 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).not.toContain(
       'Tier: <criticalityTier.value>  Confidence: <confidence>',
     );
-    // Review-phase regression (code-reviewer, Protocol 456 Phase 3): businessFeature.confidence and
-    // criticalityTier.confidence are independently computed and routinely disagree - a single shared
-    // `Confidence:` slot on one combined summary line is a real bug, not a style nit, since it makes
-    // one of the two values invisible to the human reviewer. Each Field<T> must get its own summary
-    // line naming its own Confidence, never one line carrying both Feature and Route criticality.
-    expect(mapSkill?.source.text).toContain('Feature: <value>  Confidence: <confidence>');
-    expect(mapSkill?.source.text).toContain('Route criticality: <value>  Confidence: <confidence>');
-    expect(mapSkill?.source.text).not.toContain(
-      'Feature: <value>  Route criticality: <value>  Confidence: <confidence>',
+    // DX pass (raised from a live /map-site run against a real site, 2026-09-04): confidence is
+    // an internal signal only - never shown to the human, since businessFeature.confidence and
+    // criticalityTier.confidence are independently computed and routinely disagree, and showing
+    // either one invited the exact same "which value is this?" confusion the earlier per-field-
+    // Confidence-line fix was meant to solve. criticality is explicitly labeled "draft" since it's
+    // unapproved until the Human Sign-Off Gateway, and drives real downstream automation
+    // (/derive-test-conditions's checklist volume) once approved. Evidence is deduplicated once per
+    // route rather than repeated under both businessFeature and criticalityTier.
+    expect(mapSkill?.source.text).toContain('do not print a `Confidence:` line at all');
+    expect(mapSkill?.source.text).toContain('Feature: <businessFeature.value>');
+    expect(mapSkill?.source.text).toContain('Route criticality (draft): <criticalityTier.value>');
+    expect(mapSkill?.source.text).toContain('Evidence is deduplicated across both fields');
+    expect(mapSkill?.source.text).not.toContain('Confidence: <confidence>');
+    // Reasoning must read as a human explanation, not a mechanism trace naming the rule by name.
+    expect(mapSkill?.source.text).toContain('not a mechanism trace');
+    expect(mapSkill?.source.text).toContain(
+      'never reference the checklist or confidence rule by name',
     );
-    expect(mapSkill?.source.text).toContain('never share one `Confidence:` slot between them');
+    // No internal-mechanics narration to the end user (routine gate success is implementation
+    // detail, not user-facing signal).
+    expect(mapSkill?.source.text).toContain('## Reporting to the User');
+    expect(mapSkill?.source.text).toContain('never name an internal script file');
 
     // AC9: reuses the existing Level-2 fan-out - no bespoke dispatch mechanism for Step 6.
     expect(mapSkill?.source.text).toContain('orchestrate-swarm.mjs --phase=plan');

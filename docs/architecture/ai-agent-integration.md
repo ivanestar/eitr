@@ -98,9 +98,16 @@ validator (`scripts/validate-business-intent.mjs`) mechanically checks the artif
 a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
 `reviewed: false` as ground truth. `confidence` is computed from evidence-signal strength (a
 heading/ARIA/manual signal implies `high`, form-labels/button-link-text implies `medium`,
-route-path alone implies `low`) and mechanically checked against that rule, never chosen freely;
-`criticalityTier` follows a written, evidence-anchored checklist rather than free inference, and
-every `Field<T>` carries a `reasoning` string naming which checklist criterion it matched. Approval also records who gave it - `reviewedBy: 'human'` for a
+route-path alone implies `low`) and mechanically checked against that rule, never chosen freely -
+it stays an internal signal, never shown in the review artifact itself, since a route's
+`businessFeature.confidence` and `criticalityTier.confidence` are independently computed and
+routinely disagree. `criticalityTier` follows a written, evidence-anchored checklist rather than
+free inference, is labeled "draft" in the review artifact (it drives real downstream automation -
+`/derive-test-conditions`'s checklist volume - once approved, so it earns its own reminder beyond
+the block-level notice), and every `Field<T>` carries a `reasoning` string that reads as a plain
+explanation for a human (what was found, why it matters for this kind of application), never a
+trace of which internal rule fired. Evidence is deduplicated once per route rather than repeated
+under both fields. Approval also records who gave it - `reviewedBy: 'human'` for a
 real conversational approval, or `'auto-pilot'` only when `/ground-zero-setup`'s auto-pilot mode set
 it on the user's own explicit pre-authorization - so a later audit can always tell which entries a
 human actually looked at. `docs/site-map/site-map.json` itself gets the same mechanical
@@ -108,7 +115,11 @@ gate one level down (`scripts/validate-site-map.mjs`, run immediately after ever
 pass, before shared-widget mining, the swarm dispatcher, or this step read it) - the shape defect
 this catches (a malformed route entry, a duplicate `routeId`) is cheaper and more reliably caught by
 code than by asking a model to notice it, the same reasoning ADR 0012 applies at every stage
-boundary. See
+boundary. Immediately after that gate, an optional, never-blocking Coverage Cross-Check
+(`scripts/check-sitemap-coverage.mjs`) looks for the target site's own `sitemap.xml` (via
+`robots.txt`'s `Sitemap:` directive or the conventional default path) and flags any route it lists
+that the crawl didn't reach - most sites publish no sitemap.xml at all, so a `SKIPPED` result is the
+normal outcome, not an error. See
 [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
 for the design decision this implements and what remains out of scope for this first stage
 (transport choice, cross-route journey synthesis).

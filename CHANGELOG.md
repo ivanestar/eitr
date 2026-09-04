@@ -7,6 +7,22 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.28.0] - 2026-09-04
+
+- **Changed**: `/map-site`'s Business-Intent Review Artifact no longer shows `confidence` (it stays
+  an internal, mechanically-checked signal only), labels `criticalityTier` as draft/unapproved, and
+  deduplicates evidence that both `businessFeature` and `criticalityTier` cite instead of printing
+  it twice - raised directly from a live run against a real site. `reasoning` must now read as a
+  plain explanation for a human (what was found, why it matters for this kind of application), never
+  a trace naming the checklist or confidence rule by name. The skill also stops narrating routine
+  mechanical-gate success (script names, "passed validation") in its summary to the user - that's
+  implementation detail, not user-facing signal.
+- **Added**: an optional, never-blocking Coverage Cross-Check (`scripts/check-sitemap-coverage.mjs`,
+  `/map-site` Step 3d) - looks for the target site's own `sitemap.xml` (via `robots.txt`'s
+  `Sitemap:` directive or the conventional default path, following one level of a sitemap index) and
+  flags a route it lists that the crawl didn't reach. Most sites publish no sitemap.xml at all, so a
+  `SKIPPED` result is the normal outcome, not an error.
+
 ## [0.27.0] - 2026-09-04
 
 - **Changed**: `/map-site` Step 6 (business-intent analysis) no longer lets `confidence` be chosen
