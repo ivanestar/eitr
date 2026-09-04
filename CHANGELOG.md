@@ -7,6 +7,13 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.32.0] - 2026-09-04
+
+- **Fixed**: `/map-site` Step 6's Core-Purpose Inference could draft 2-4 candidates that were just
+  reworded restatements of the same underlying interpretation instead of genuinely distinct ones,
+  found in live use. Now writes one candidate per interpretation actually distinct enough to change
+  a route's criticality, including exactly one when the evidence only supports one reading.
+
 ## [0.31.0] - 2026-09-04
 
 - **Changed**: `/derive-test-conditions` and `/compose-test-cases` renamed to `/define-test-conditions`
