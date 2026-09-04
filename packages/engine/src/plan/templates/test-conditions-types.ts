@@ -74,6 +74,12 @@ export interface VerificationContract {
 export type TestConditionTechnique =
   'combinatorial' | 'boundary-value' | 'equivalence-partition' | 'checklist-based';
 
+// Whether every parameter value in a TestCondition's vector is drawn from a 'valid' partition (or
+// the inclusive/still-inside side of a boundary) - 'negative' when at least one is an
+// 'invalid'-kind partition, the value one step past a boundary, or a checklist probe (checklist
+// values are malformed/injection-class by construction, always 'negative').
+export type TestConditionScenario = 'positive' | 'negative';
+
 export interface TestCondition {
   // sha256(routeId + '|' + JSON.stringify(sorted [paramName, value] tuples)).slice(0, 16)
   conditionId: string;
@@ -83,6 +89,12 @@ export interface TestCondition {
   // parameter's entry is still a partitionId.
   parameters: Record<string, string>;
   technique: TestConditionTechnique;
+  // One human-readable sentence synthesized deterministically from the vector's own resolved
+  // values (partition sampleValues, or the literal boundary/checklist probe) - never free model
+  // inference, so it stays reproducible run to run. This is what a human actually reviews at
+  // sign-off; parameters/technique above remain the machine-consumable form.
+  description: string;
+  scenario: TestConditionScenario;
   verification: VerificationContract;
   isSpeculative: boolean;
   reviewed: boolean;

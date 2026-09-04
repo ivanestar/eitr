@@ -149,7 +149,11 @@ is genuinely impossible, never merely because an earlier, unrelated greedy attem
 same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
 deterministic redaction backstop - independent of what the LLM step already did - masking
 digit-run and majority-digit PII shapes in every evidence excerpt and sample value before the
-artifact is ever written. Every generated condition starts `isSpeculative: true`/`reviewed: false`
+artifact is ever written. Every generated condition also carries a `description` (one plain sentence, e.g. `Verify the page
+accepts language="en" (positive)`) and a `scenario` (`positive`/`negative`), both synthesized
+deterministically from the vector's own resolved partition sample values or literal boundary/
+checklist probe - what a human actually reviews at sign-off, never a bare parameter/technique/count
+summary. Every generated condition starts `isSpeculative: true`/`reviewed: false`
 with an empty verification contract; a human fills in expected UI/state/network behavior at the
 same kind of Human Sign-Off Gateway Stage 1 already established, recording `reviewedBy` the same
 way (`'human'` or `'auto-pilot'`) once approved. See

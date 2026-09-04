@@ -350,6 +350,64 @@ function buildVectors(parameters, constraints) {
   return { vectors, unsatisfied };
 }
 
+function paramByName(parameters, name) {
+  return parameters.find(function (p) {
+    return p.name === name;
+  });
+}
+
+// HTML5 min/max are inclusive per spec - the boundary value itself is valid, the value one step
+// inside it is valid, and only the value one step past it is invalid. The 3-value BVA order is
+// always [boundary-1, boundary, boundary+1] regardless of which side (min/max) is being probed.
+function boundaryProbeIsValid(boundary, index) {
+  return boundary === 'min' ? index !== 0 : index !== 2;
+}
+
+// Synthesizes a human-readable sentence for one condition's vector, deterministically from data
+// already present - never free model inference. targetName/targetIsValid apply only to
+// boundary-value/checklist-based conditions, where that one parameter's vector entry is a literal
+// probe value rather than a partitionId; every other technique resolves every vector entry as a
+// partitionId lookup against that parameter's own partitions.
+function describeCondition(parameters, vector, targetName, targetIsValid) {
+  const orderedNames = parameters
+    .map(function (p) {
+      return p.name;
+    })
+    .filter(function (name) {
+      return Object.prototype.hasOwnProperty.call(vector, name);
+    });
+  let allValid = true;
+  const clauses = orderedNames.map(function (name) {
+    const rawValue = vector[name];
+    let text;
+    let isValid;
+    if (name === targetName) {
+      text = rawValue;
+      isValid = targetIsValid;
+    } else {
+      const param = paramByName(parameters, name);
+      const partition =
+        param &&
+        param.partitions.find(function (p) {
+          return p.id === rawValue;
+        });
+      text =
+        partition && partition.sampleValues && partition.sampleValues[0] !== undefined
+          ? partition.sampleValues[0]
+          : rawValue;
+      isValid = !partition || partition.kind === 'valid';
+    }
+    if (!isValid) allValid = false;
+    return name + '=' + JSON.stringify(text);
+  });
+  const scenario = allValid ? 'positive' : 'negative';
+  const verb = allValid ? 'accepts' : 'correctly handles';
+  return {
+    description: 'Verify the page ' + verb + ' ' + clauses.join(', ') + ' (' + scenario + ')',
+    scenario: scenario,
+  };
+}
+
 function buildBoundaryConditions(routeId, parameters) {
   const conditions = [];
   for (const param of parameters) {
@@ -360,7 +418,7 @@ function buildBoundaryConditions(routeId, parameters) {
       }) || param.partitions[0];
     if (!validPartition) continue;
     for (const boundarySet of param.boundaries) {
-      for (const value of boundarySet.values) {
+      boundarySet.values.forEach(function (value, index) {
         const vector = {};
         for (const other of parameters) {
           if (other.name === param.name) {
@@ -373,15 +431,19 @@ function buildBoundaryConditions(routeId, parameters) {
             }) || other.partitions[0];
           vector[other.name] = otherValid.id;
         }
+        const isValid = boundaryProbeIsValid(boundarySet.boundary, index);
+        const described = describeCondition(parameters, vector, param.name, isValid);
         conditions.push({
           conditionId: conditionId(routeId, vector),
           parameters: vector,
           technique: 'boundary-value',
+          description: described.description,
+          scenario: described.scenario,
           verification: {},
           isSpeculative: true,
           reviewed: false,
         });
-      }
+      });
     }
   }
   return conditions;
@@ -398,10 +460,13 @@ function buildEquivalencePartitionConditions(routeId, parameters) {
     for (const partition of param.partitions) {
       const vector = {};
       vector[param.name] = partition.id;
+      const described = describeCondition(parameters, vector, undefined, undefined);
       conditions.push({
         conditionId: conditionId(routeId, vector),
         parameters: vector,
         technique: 'equivalence-partition',
+        description: described.description,
+        scenario: described.scenario,
         verification: {},
         isSpeculative: true,
         reviewed: false,
@@ -475,10 +540,13 @@ function buildChecklistConditions(routeId, parameters, criticalityTier) {
         if (!otherValid) continue;
         vector[other.name] = otherValid.id;
       }
+      const described = describeCondition(parameters, vector, target.name, false);
       conditions.push({
         conditionId: conditionId(routeId, vector),
         parameters: vector,
         technique: 'checklist-based',
+        description: described.description,
+        scenario: described.scenario,
         verification: {},
         isSpeculative: true,
         reviewed: false,
@@ -496,10 +564,13 @@ function generateForRoute(routeId, entry, criticalityTier) {
   }
   const { vectors, unsatisfied } = buildVectors(entry.parameters, entry.constraints || []);
   const combinatorialConditions = vectors.map(function (vector) {
+    const described = describeCondition(entry.parameters, vector, undefined, undefined);
     return {
       conditionId: conditionId(routeId, vector),
       parameters: vector,
       technique: 'combinatorial',
+      description: described.description,
+      scenario: described.scenario,
       verification: {},
       isSpeculative: true,
       reviewed: false,

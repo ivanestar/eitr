@@ -58,6 +58,7 @@ const TECHNIQUE_VALUES = new Set([
   'equivalence-partition',
   'checklist-based',
 ]);
+const SCENARIO_VALUES = new Set(['positive', 'negative']);
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -210,6 +211,14 @@ function isCondition(value, label, errors) {
       label +
         '.technique must be one of combinatorial|boundary-value|equivalence-partition|checklist-based.',
     );
+  }
+  if (typeof value.description !== 'string' || value.description.length === 0) {
+    errors.push(
+      label + '.description must be a non-empty string - what a human actually reviews at sign-off.',
+    );
+  }
+  if (!SCENARIO_VALUES.has(value.scenario)) {
+    errors.push(label + '.scenario must be one of positive|negative.');
   }
   isVerificationContract(value.verification, label + '.verification', errors);
   if (typeof value.isSpeculative !== 'boolean') {

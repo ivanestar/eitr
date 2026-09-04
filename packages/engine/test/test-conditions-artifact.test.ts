@@ -72,6 +72,8 @@ function wellFormedWithConditions() {
       conditionId: 'a1b2c3d4e5f6a1b2',
       parameters: { email: 'valid', quantity: 'valid' },
       technique: 'combinatorial',
+      description: 'Verify the page accepts email="user@example.com", quantity="5" (positive)',
+      scenario: 'positive',
       verification: {},
       isSpeculative: true,
       reviewed: false,
@@ -217,6 +219,44 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
       expect(output.status).toBe('PASSED');
       expect(output.errors).toEqual([]);
       expect(result.status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when a condition has no description - a human cannot review what they cannot see', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedWithConditions()) as {
+        routes: Record<string, { conditions: Array<{ description?: string }> }>;
+      };
+      delete bad.routes['route-checkout'].conditions[0].description;
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('.description must be a non-empty string')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when a condition has an out-of-taxonomy scenario value', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedWithConditions()) as {
+        routes: Record<string, { conditions: Array<{ scenario: string }> }>;
+      };
+      bad.routes['route-checkout'].conditions[0].scenario = 'maybe';
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('.scenario must be one of positive|negative')),
+      ).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

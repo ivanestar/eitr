@@ -245,6 +245,14 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
         expect(c.reviewed).toBe(false);
         expect(c.verification).toEqual({});
       }
+      // HTML5 max is inclusive: max-1 and max itself are still valid, only max+1 is invalid.
+      const byValue = Object.fromEntries(boundary.map((c) => [c.parameters.quantity, c]));
+      expect(byValue['9'].scenario).toBe('positive');
+      expect(byValue['10'].scenario).toBe('positive');
+      expect(byValue['11'].scenario).toBe('negative');
+      expect(byValue['11'].description).toContain('quantity="11"');
+      expect(byValue['11'].description).toContain('(negative)');
+      expect(byValue['9'].description).toContain('(positive)');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -631,6 +639,12 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       const ids = conditions.map((c) => c.conditionId);
       expect(new Set(ids).size).toBe(ids.length);
 
+      const byPartition = Object.fromEntries(conditions.map((c) => [c.parameters.s, c]));
+      expect(byPartition['valid-search-term'].scenario).toBe('positive');
+      expect(byPartition['valid-search-term'].description).toContain('s="widgets"');
+      expect(byPartition['empty-search-term'].scenario).toBe('negative');
+      expect(byPartition['empty-search-term'].description).toContain('(negative)');
+
       // Idempotency: unchanged parameters -> re-run is a no-op, same guarantee combinatorial
       // routes already have (AC13). Compares the full (unfiltered) condition list, not just the
       // equivalence-partition subset checked above.
@@ -708,6 +722,10 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
         expect(c.parameters.email).toBe('valid-email');
         expect(c.parameters.age).toBe('valid-age');
         expect(c.parameters.birthdate).toBe('valid-birthdate');
+        // Checklist probes are malformed/injection-class by construction - always negative.
+        expect(c.scenario).toBe('negative');
+        expect(c.description).toContain('(negative)');
+        expect(c.description).toContain('name=' + JSON.stringify(c.parameters.name));
       }
       const emailProbes = checklist.filter((c) => c.parameters.email !== 'valid-email');
       expect(emailProbes.length).toBe(4);

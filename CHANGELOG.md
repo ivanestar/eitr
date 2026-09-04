@@ -7,6 +7,19 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.31.0] - 2026-09-04
+
+- **Fixed**: `/derive-test-conditions`'s Test-Conditions Review Artifact printed only per-parameter
+  statistics (`Parameter: ... Technique: ... Conditions: <count> Speculative: <count>`), never the
+  actual conditions - a human could not review or correct what they never saw, reported from live
+  use. Every condition now carries a `description` (one plain sentence, e.g. `Verify the page
+accepts language="en" (positive)`) and a `scenario` (`positive`/`negative`), synthesized
+  deterministically from the vector's own resolved partition sample values or literal
+  boundary/checklist probe - zero model involvement, same as the rest of condition generation. The
+  artifact now lists every condition by its description instead of an aggregate count, and surfaces
+  within-route parameter constraints in plain language when present (cross-route/cross-feature
+  dependencies remain untracked and out of scope for this stage).
+
 ## [0.30.0] - 2026-09-04
 
 - **Fixed**: Java's Playwright dependency pin (Gradle and Maven templates) and its Docker image tag
