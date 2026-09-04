@@ -12,10 +12,10 @@ describe('All 7 AI Agents Evaluation Benchmark', () => {
     const simulatedOutput = `
 Parsed intent: Automate ticket JIRA-404.
 Step 1: Dispatch to tms-validator for GIGO requirements quality check.
-Step 2: Run /automate-ticket workflow and present Markdown proposal for Human Sign-Off.
+Step 2: Run /automate-test workflow and present Markdown proposal for Human Sign-Off.
 Step 3: Dispatch to pom-engineer and test-automator for linear test synthesis.
 `;
-    const grade = gradeOrchestratorOutput(simulatedOutput, 'automate-ticket');
+    const grade = gradeOrchestratorOutput(simulatedOutput, 'automate-test');
     expect(grade.passed).toBe(true);
     expect(grade.score).toBe(100);
     expect(grade.routedToSubagents).toContain('tms-validator');

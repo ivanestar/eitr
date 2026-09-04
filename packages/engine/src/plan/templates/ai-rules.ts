@@ -134,10 +134,10 @@ ${componentSyntax}
 - **Metadata Tagging:** For every TMS scenario test, attach the ticket metadata tag: \`test('TC-{id}: {title}', { tag: ['@TC-{id}'] }, async ({ ... }) => ...)\`.
 - **Test Runner Execution Command:** Run tests using \`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`.
 
-### 8. Test Data Management (TDM) & Dual-Layer Validation
+### 8. Test Data Management (TDM) & Multi-Source Verification
 - **Dynamic TDM:** Never hardcode user emails, phone numbers, or entity IDs. Use zero-dependency generators from \`apiClient\`: \`createUniqueId()\`, \`createTestEmail()\`, \`createTestPhone()\`, \`createTestPassword()\`, \`createTestUuid()\`, \`createTestName()\`, \`createTestAmount()\`, \`createTestDate()\` for collision-free data isolation.
 - **Teardown Lifecycle:** Register created backend resources via \`apiClient.registerTeardown(async () => { ... })\`. The \`apiClient\` fixture automatically cleans up all resources post-test.
-- **Dual-Layer Assertions:** Validate UI DOM changes AND verify backend response codes (HTTP 200/201) via \`apiClient\` or \`page.waitForResponse()\`.
+- **Multi-Source Corroboration:** Validate UI DOM changes AND verify backend response codes/data (HTTP 200/201, matched against the actual submitted values) via \`apiClient\` or \`page.waitForResponse()\` - this pair is the floor, not the ceiling. When a state-changing action has another independently observable signal (a success toast, a related list/detail endpoint, an unambiguous page-state change), assert that too rather than stopping at the first two.
 - **Web-First Auto-Retrying Assertions:** All assertions MUST use Web-First auto-retrying matchers: \`await expect(locator).toBeVisible()\`. Point-in-time snapshot readers (\`*Now()\` suffix) MUST NOT be used inside \`expect()\`.
 - **Race-Free Event Synchronization:** Whenever handling asynchronous dialogs, downloads, or popup windows, ALWAYS set up the listener before the triggering action: \`await Promise.all([page.waitForEvent('dialog'), button.click()])\`.
 

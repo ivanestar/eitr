@@ -552,7 +552,7 @@ Orchestrate automation for Jira ticket AZURE-505 ("User Checkout Flow") and upda
 `;
 
       const result = await runEvalPrompt(userPrompt, systemInstruction);
-      const grade = gradeOrchestratorOutput(result.responseRaw, 'automate-ticket');
+      const grade = gradeOrchestratorOutput(result.responseRaw, 'automate-test');
 
       sessionBenchmarkItems.push({
         id: 'EVAL-11-ORCHESTRATOR-ROUTING',

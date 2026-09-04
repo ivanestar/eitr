@@ -255,6 +255,12 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       expect(byValue['11'].description).toContain('quantity="11"');
       expect(byValue['11'].description).toContain('(negative)');
       expect(byValue['9'].description).toContain('(positive)');
+      // Boundary-value phrasing is distinct from the generic accepts/handles verb - grounded in
+      // this being an edge-value verdict, not cosmetic rotation.
+      expect(byValue['11'].description).toContain('boundary value');
+      expect(byValue['11'].description).toContain('is rejected');
+      expect(byValue['9'].description).toContain('boundary value');
+      expect(byValue['9'].description).toContain('is accepted');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -724,9 +730,11 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
         expect(c.parameters.email).toBe('valid-email');
         expect(c.parameters.age).toBe('valid-age');
         expect(c.parameters.birthdate).toBe('valid-birthdate');
-        // Checklist probes are malformed/injection-class by construction - always negative.
+        // Checklist probes are malformed/injection-class by construction - always negative, with
+        // a safety-claim phrasing distinct from the generic accepts/handles verb.
         expect(c.scenario).toBe('negative');
         expect(c.description).toContain('(negative)');
+        expect(c.description).toContain('safely rejects the malformed input');
         expect(c.description).toContain('name=' + JSON.stringify(c.parameters.name));
       }
       const emailProbes = checklist.filter((c) => c.parameters.email !== 'valid-email');

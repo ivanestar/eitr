@@ -363,12 +363,31 @@ function boundaryProbeIsValid(boundary, index) {
   return boundary === 'min' ? index !== 0 : index !== 2;
 }
 
+// Phrasing varies by technique - grounded in a real distinction (what kind of probe this is), not
+// cosmetic rotation: a boundary-value condition reads as an accept/reject verdict on an edge value,
+// a checklist-based condition (always negative by construction) reads as a safety claim about a
+// malformed input, and combinatorial/equivalence-partition conditions read as a general
+// accept/handle claim about a value combination. All three stay fully deterministic.
+function describeText(technique, joinedClauses, scenario) {
+  if (technique === 'boundary-value') {
+    const verdict = scenario === 'positive' ? 'accepted' : 'rejected';
+    return 'Verify the boundary value ' + joinedClauses + ' is ' + verdict + ' (' + scenario + ')';
+  }
+  if (technique === 'checklist-based') {
+    return (
+      'Verify the page safely rejects the malformed input ' + joinedClauses + ' (' + scenario + ')'
+    );
+  }
+  const verb = scenario === 'positive' ? 'accepts' : 'correctly handles';
+  return 'Verify the page ' + verb + ' ' + joinedClauses + ' (' + scenario + ')';
+}
+
 // Synthesizes a human-readable sentence for one condition's vector, deterministically from data
 // already present - never free model inference. targetName/targetIsValid apply only to
 // boundary-value/checklist-based conditions, where that one parameter's vector entry is a literal
 // probe value rather than a partitionId; every other technique resolves every vector entry as a
 // partitionId lookup against that parameter's own partitions.
-function describeCondition(parameters, vector, targetName, targetIsValid) {
+function describeCondition(parameters, vector, targetName, targetIsValid, technique) {
   const orderedNames = parameters
     .map(function (p) {
       return p.name;
@@ -401,9 +420,8 @@ function describeCondition(parameters, vector, targetName, targetIsValid) {
     return name + '=' + JSON.stringify(text);
   });
   const scenario = allValid ? 'positive' : 'negative';
-  const verb = allValid ? 'accepts' : 'correctly handles';
   return {
-    description: 'Verify the page ' + verb + ' ' + clauses.join(', ') + ' (' + scenario + ')',
+    description: describeText(technique, clauses.join(', '), scenario),
     scenario: scenario,
   };
 }
@@ -432,7 +450,7 @@ function buildBoundaryConditions(routeId, parameters) {
           vector[other.name] = otherValid.id;
         }
         const isValid = boundaryProbeIsValid(boundarySet.boundary, index);
-        const described = describeCondition(parameters, vector, param.name, isValid);
+        const described = describeCondition(parameters, vector, param.name, isValid, 'boundary-value');
         conditions.push({
           conditionId: conditionId(routeId, vector),
           parameters: vector,
@@ -460,7 +478,13 @@ function buildEquivalencePartitionConditions(routeId, parameters) {
     for (const partition of param.partitions) {
       const vector = {};
       vector[param.name] = partition.id;
-      const described = describeCondition(parameters, vector, undefined, undefined);
+      const described = describeCondition(
+        parameters,
+        vector,
+        undefined,
+        undefined,
+        'equivalence-partition',
+      );
       conditions.push({
         conditionId: conditionId(routeId, vector),
         parameters: vector,
@@ -540,7 +564,7 @@ function buildChecklistConditions(routeId, parameters, criticalityTier) {
         if (!otherValid) continue;
         vector[other.name] = otherValid.id;
       }
-      const described = describeCondition(parameters, vector, target.name, false);
+      const described = describeCondition(parameters, vector, target.name, false, 'checklist-based');
       conditions.push({
         conditionId: conditionId(routeId, vector),
         parameters: vector,
@@ -564,7 +588,13 @@ function generateForRoute(routeId, entry, criticalityTier) {
   }
   const { vectors, unsatisfied } = buildVectors(entry.parameters, entry.constraints || []);
   const combinatorialConditions = vectors.map(function (vector) {
-    const described = describeCondition(entry.parameters, vector, undefined, undefined);
+    const described = describeCondition(
+      entry.parameters,
+      vector,
+      undefined,
+      undefined,
+      'combinatorial',
+    );
     return {
       conditionId: conditionId(routeId, vector),
       parameters: vector,

@@ -38,7 +38,7 @@ export interface DraftTestCaseStep {
 // Written by the /design-test-cases skill's LLM step, not scripts/compose-journeys.mjs - absent
 // until that step runs. 'api'-level steps describe the mechanism generically ("call the project's
 // API client") rather than naming a language-specific class - actual code generation stays
-// /automate-ticket's job.
+// /automate-test's job.
 export interface DraftTestCase {
   title: string;
   preconditions: string[];

@@ -8,7 +8,7 @@ export interface GoldenSkillCase {
   skillName:
     | '/auth-setup'
     | '/scan-and-generate-pom'
-    | '/automate-ticket'
+    | '/automate-test'
     | '/heal-test'
     | '/map-site'
     | '/bulk-rescan'
@@ -61,9 +61,9 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
       forbiddenPatterns: ['page.waitForTimeout', 'sleep(', 'test:sanity', 'pom-sanity'],
     },
   },
-  // 3. /automate-ticket
+  // 3. /automate-test
   {
-    skillName: '/automate-ticket',
+    skillName: '/automate-test',
     description: 'Full automation workflow with Human Sign-Off Gateway and linear test synthesis',
     inputScenario: 'Automate ticket AZURE-789 (User Profile Update) from Azure DevOps',
     expectedWorkflow: {
@@ -75,7 +75,12 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'tests/fixtures.ts',
         'artifacts/test-cases/test-cases.json',
       ],
-      contractGuarantees: ['Zero Branching (no if/else/loops)', 'Fixture Dependency Injection'],
+      contractGuarantees: [
+        'Zero Branching (no if/else/loops)',
+        'Fixture Dependency Injection',
+        "a bracketed step name grounds the locator's accessible name, never a paraphrase",
+        'a state-changing step corroborates with every genuinely available independent signal, not just UI+API',
+      ],
       forbiddenPatterns: ['new LoginPage(page)', 'try/catch around assertions'],
     },
   },
@@ -177,11 +182,13 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'No reviewed test conditions found',
         'reviewed: false',
         'One atomic action per step',
+        'Bracket every literal on-screen name',
       ],
       contractGuarantees: [
         'zero dependency on criticalityTier for test-level assignment',
         'no blocking approval pause before finishing',
         'each step carries its own concrete expected result, never a blanket result at the end',
+        'any literal button/page/checkbox/dropdown/toast name a step references is wrapped in square brackets',
       ],
       forbiddenPatterns: ['EITR', 'Eitr', 'BLOCKING GATE'],
     },
@@ -203,7 +210,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
       ],
       contractGuarantees: [
         'sampleValues never copied from the live page - always synthesized',
-        'zero mutating DOM calls, not even trial:true',
+        'the only allowed non-read actions (check/uncheck, selectOption, fill with synthesized data) exist solely to reveal progressively-disclosed fields, are always reset before the next probe, and never reach a submit-shaped button',
       ],
       forbiddenPatterns: ['EITR', 'Eitr'],
     },

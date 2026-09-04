@@ -46,7 +46,7 @@ core, and follows three structural rules that already govern the rest of EITR's 
    reason: a shape defect is cheaper and more reliably caught by code than by asking a model to
    notice it.
 3. **Human sign-off before code, live-app safety by default.** Test-file generation from a synthesized
-   spec goes through the same kind of explicit human sign-off gateway `/automate-ticket` already
+   spec goes through the same kind of explicit human sign-off gateway `/automate-test` already
    uses - no code is written until a human approves the proposed scenario. Any stage that interacts
    with a live application inherits `/map-site`'s read-only default and additionally treats
    destructive-looking actions (account deletion, payment, logout, irreversible state changes) as
@@ -67,7 +67,7 @@ not a commitment to build it on any particular timeline.
   writes tests end-to-end in a single autonomous pass). Rejected: non-reproducible, no natural point
   to deduplicate against existing `components/`/`artifacts/site-map/site-map.json` state, and no artifact exists
   for a human to review before code is written - directly at odds with the human sign-off gateway
-  `/automate-ticket` already established as this project's norm for AI-authored tests.
+  `/automate-test` already established as this project's norm for AI-authored tests.
 - **Fold app/requirements analysis into the deterministic `plan()`/`apply()` core** so it runs as part
   of `eitr new`. Rejected: this is exactly what [0002](0002-no-llm-in-core.md) already excludes -
   deep app/requirements analysis is inherently a judgment task (inferring business intent, resolving

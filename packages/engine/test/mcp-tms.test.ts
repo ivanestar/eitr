@@ -170,6 +170,18 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(pomEngineer?.source.text).toContain('MANDATORY AUTONOMOUS VERIFICATION');
     expect(pomEngineer?.source.text).toContain('AUTONOMOUS DEBUGGING & TWO-STRIKE SELF-HEALING');
     expect(pomEngineer?.source.text).toContain('MANDATORY HANDOFF REPORT');
+    // Component reuse: an existing scaffolded primitive/widget must be composed, never
+    // re-implemented inline - found missing (only widget reuse was covered) from a live Page
+    // Object review, then found scoped too narrowly to "primitives" alone on a second review.
+    expect(pomEngineer?.source.text).toContain('Component Reuse Order');
+    expect(pomEngineer?.source.text).toContain('Never hand-roll an ad hoc locator');
+    // Completeness: a Page Object missing real interactive elements (only generic landmarks) is a
+    // real gap, not a minimal result - found in the exact same live review (a route's own
+    // extracted test-condition parameter had no matching Page Object child at all).
+    expect(pomEngineer?.source.text).toContain(
+      'Every Known Interactive Element Must Be Represented',
+    );
+    expect(pomEngineer?.source.text).toContain('test-conditions.json');
     expect(pomEngineer?.source.text).not.toContain('test:sanity');
 
     const automator = files.find((f) => f.path === '.agents/agents/test-automator/agent.md');
@@ -180,7 +192,10 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(auditor?.source.text).toContain('Anti-Fake-Green Check');
     expect(auditor?.source.text).toContain('Web-First Auto-Retrying Assertions');
     expect(auditor?.source.text).toContain('Unawaited Promise Guard');
-    expect(auditor?.source.text).toContain('Dual-Layer Assertions & Network Interception');
+    expect(auditor?.source.text).toContain('Multi-Source Corroboration & Network Interception');
+    // Extended from a fixed UI+API pair after live use kept every corroborating check capped at
+    // exactly 2 layers even when a toast or a secondary list endpoint was genuinely available.
+    expect(auditor?.source.text).toContain('floor, not the ceiling');
     expect(auditor?.source.text).toContain('Mutation Analysis Protocol');
     expect(auditor?.source.text).toContain('Zero-Emoji Compliance');
 
@@ -211,13 +226,13 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
     expect(paths).toContain('.agents/skills/scan-and-generate-pom/SKILL.md');
-    expect(paths).toContain('.agents/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.agents/skills/automate-test/SKILL.md');
     expect(paths).toContain('.agents/skills/heal-test/SKILL.md');
     expect(paths).toContain('.agents/skills/bulk-rescan/SKILL.md');
     expect(paths).toContain('.agents/skills/map-site/SKILL.md');
 
     expect(paths).toContain('.claude/skills/auth-setup/SKILL.md');
-    expect(paths).toContain('.cursor/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.cursor/skills/automate-test/SKILL.md');
     expect(paths).toContain('.windsurf/workflows/heal-test.md');
     expect(paths).toContain('.codex/skills/bulk-rescan/SKILL.md');
     expect(paths).toContain('.github/prompts/map-site.prompt.md');
@@ -414,11 +429,40 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(pomSkill?.source.text).toContain('Mandatory Execution & Self-Healing Loop');
     expect(pomSkill?.source.text).toContain('Mandatory Handoff Report');
 
-    const automateSkill = files.find((f) => f.path === '.agents/skills/automate-ticket/SKILL.md');
+    const defineTestConditionsSkill = files.find(
+      (f) => f.path === '.agents/skills/define-test-conditions/SKILL.md',
+    );
+    // Progressive-disclosure reveal exception: reported from live use as under-extracting
+    // parameters on forms where a checkbox/select/field reveals more fields. Allowed strictly
+    // bounded (one probe at a time, always reset) and never a submit-shaped button.
+    expect(defineTestConditionsSkill?.source.text).toContain(
+      '.check()`/`.uncheck()` on checkboxes and radio buttons',
+    );
+    expect(defineTestConditionsSkill?.source.text).toContain('Absolute ban, no exception, ever');
+    expect(defineTestConditionsSkill?.source.text).toContain(
+      'submit/create/delete/send-shaped ARIA role',
+    );
+    expect(defineTestConditionsSkill?.source.text).toContain('Bounded and reset');
+
+    const automateSkill = files.find((f) => f.path === '.agents/skills/automate-test/SKILL.md');
     expect(automateSkill?.source.text).toContain('tms-validator');
     expect(automateSkill?.source.text).toContain('Human Sign-Off Gateway');
     expect(automateSkill?.source.text).toContain('tests/TC-');
     expect(automateSkill?.source.text).toContain('artifacts/test-cases/test-cases.json');
+    // Content fidelity: structurally-compliant-but-semantically-empty code (correct test.step()/
+    // fixture DI but an assertion unrelated to what the step claims) was reported from live use.
+    expect(automateSkill?.source.text).toContain('Content fidelity is mandatory');
+    expect(automateSkill?.source.text).toContain('never a content-free assertion');
+    // Bracketed step text grounds the synthesized locator's accessible name - direct link from
+    // /design-test-cases' bracket vocabulary to /automate-test's own locator code.
+    expect(automateSkill?.source.text).toContain("locator's name, verbatim");
+    // Multi-source corroboration: UI+API is the floor, not the ceiling, when a toast or a
+    // secondary list/detail endpoint is genuinely available for a state-changing step.
+    expect(automateSkill?.source.text).toContain('every genuinely available independent signal');
+    // Self-referential compliance narration ("CPOM contract strictly honored: ...") was reported
+    // from a live final report - global rule, checked here since automate-test's own report step
+    // is exactly where it appeared.
+    expect(automateSkill?.source.text).toContain('never recite which internal rule');
 
     const designTestCasesSkill = files.find(
       (f) => f.path === '.agents/skills/design-test-cases/SKILL.md',
@@ -428,16 +472,31 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     );
     expect(designTestCasesSkill?.source.text).toContain('scripts/compose-journeys.mjs');
     // Deliberate departure from every earlier stage's blocking gate - never a "BLOCKING GATE"
-    // phrase (used by /automate-ticket's own Step 4) here.
+    // phrase (used by /automate-test's own Step 4) here.
     expect(designTestCasesSkill?.source.text).not.toContain('BLOCKING GATE');
-    expect(designTestCasesSkill?.source.text).toContain('Do not ask for approval before finishing');
+    expect(designTestCasesSkill?.source.text).toContain(
+      'Do not ask for approval of the drafts themselves before finishing',
+    );
     // Test-case quality: atomic per-step verification, not a blanket result at the end - raised
     // from a live-use complaint that drafted test cases read too generically.
     expect(designTestCasesSkill?.source.text).toContain('One atomic action per step');
     expect(designTestCasesSkill?.source.text).toContain('Good example');
     expect(designTestCasesSkill?.source.text).toContain('Bad example');
+    // Bracketed-literal-name vocabulary: any specific on-screen name in a step must be bracketed,
+    // so /automate-test can ground its locators directly in that text.
+    expect(designTestCasesSkill?.source.text).toContain('Bracket every literal on-screen name');
+    expect(designTestCasesSkill?.source.text).toContain('Click the [X] button');
+    expect(designTestCasesSkill?.source.text).toContain('Select the [X] dropdown > [Y] option');
+    expect(designTestCasesSkill?.source.text).toContain('Select the [Standard] shipping method');
+    // Test-Cases Review Artifact: the drafted content itself is shown, not just a count - and the
+    // optional TMS-recording question, only when a provider is configured.
+    expect(designTestCasesSkill?.source.text).toContain('Test-Cases Review Artifact');
     expect(designTestCasesSkill?.source.text).toContain(
-      'gives `/automate-ticket` nothing to assert on',
+      'a stage that drafts real content and reports only a count defeats the point',
+    );
+    expect(designTestCasesSkill?.source.text).toContain('also recorded there as test cases');
+    expect(designTestCasesSkill?.source.text).toContain(
+      'gives `/automate-test` nothing to assert on',
     );
 
     const healSkill = files.find((f) => f.path === '.agents/skills/heal-test/SKILL.md');
@@ -507,7 +566,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // Skills
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
     expect(paths).toContain('.agents/skills/scan-and-generate-pom/SKILL.md');
-    expect(paths).toContain('.agents/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.agents/skills/automate-test/SKILL.md');
     expect(paths).toContain('.agents/skills/heal-test/SKILL.md');
     expect(paths).toContain('.agents/skills/bulk-rescan/SKILL.md');
 
