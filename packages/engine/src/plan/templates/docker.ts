@@ -64,7 +64,7 @@ CMD ["dotnet", "test", "--no-build", "-c", "Release"]
 
   if (lang === 'java') {
     return `# Hermetic container configuration for Java Playwright test automation.
-FROM mcr.microsoft.com/playwright/java:v1.52.0-jammy
+FROM mcr.microsoft.com/playwright/java:v1.62.0-jammy
 
 # Non-root user, matching Microsoft's own documented convention for Playwright Docker images
 # (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser

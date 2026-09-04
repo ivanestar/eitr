@@ -7,6 +7,24 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.30.0] - 2026-09-04
+
+- **Fixed**: Java's Playwright dependency pin (Gradle and Maven templates) and its Docker image tag
+  were stale at 1.52.0 while Python, C#, and TypeScript had already moved to 1.62.x; bumped to
+  1.62.0 to match, confirmed against Maven Central and the upstream GitHub release.
+- **Fixed**: `renderCypressConfig` hardcoded `baseUrl` instead of respecting `E2E_BASE_URL`, unlike
+  the Playwright config's equivalent.
+- **Fixed**: `/ground-zero-setup`'s Auto-pilot mode wording was ambiguous about whether it covered
+  `/automate-ticket`; it now explicitly carves that stage out.
+- **Added**: `security-auditor`'s five pillars now name the concrete risk class each one guards
+  against (credential exposure, unauthorized access, data exposure, supply-chain risk).
+- **Changed**: `docs/architecture/quality-gates.md` frames the CI/CD gate tiers as continuous
+  testing in practice.
+- **Added**: `/derive-test-conditions` golden eval case - the skills benchmark now covers all 9
+  operational skills.
+- **Removed**: `packages/evals`'s redundant local `test` script, already provided at the workspace
+  root.
+
 ## [0.29.0] - 2026-09-04
 
 - **Added**: `/map-site` Step 6 now drafts an app-level `corePurpose` (2-4 plausible one-sentence

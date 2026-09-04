@@ -27,7 +27,7 @@ export default defineConfig({
   e2e: {
     specPattern: 'cypress/e2e/**/*.cy.ts',
     supportFile: false as const,
-    baseUrl: '${baseUrl.replace(/'/g, "\\'")}',
+    baseUrl: process.env.E2E_BASE_URL ?? '${baseUrl.replace(/'/g, "\\'")}',
   },
   retries: {
     runMode: 2,

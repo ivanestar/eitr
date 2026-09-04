@@ -1,8 +1,7 @@
 /**
  * Golden Dataset for evaluating EITR Operational Skills against their documented workflow.
  * Not full coverage of every generated skill - protocol-123 has its own dedicated eval suite
- * (protocol-123-*.test.ts), and /derive-test-conditions has no case here yet (pre-existing gap,
- * logged in TODO.md).
+ * (protocol-123-*.test.ts).
  */
 
 export interface GoldenSkillCase {
@@ -14,7 +13,8 @@ export interface GoldenSkillCase {
     | '/map-site'
     | '/bulk-rescan'
     | '/ground-zero-setup'
-    | '/compose-test-cases';
+    | '/compose-test-cases'
+    | '/derive-test-conditions';
   description: string;
   inputScenario: string;
   expectedWorkflow: {
@@ -182,6 +182,28 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'no blocking approval pause before finishing',
       ],
       forbiddenPatterns: ['EITR', 'Eitr', 'BLOCKING GATE'],
+    },
+  },
+  // 9. /derive-test-conditions
+  {
+    skillName: '/derive-test-conditions',
+    description:
+      'Derives typed test conditions (equivalence partitions, 2-way combinatorial coverage, 3-value boundary conditions) per route, gated by mechanical validation and human sign-off',
+    inputScenario:
+      'Derive test conditions for reviewed routes in docs/analysis/business-intent.json',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'docs/analysis/test-conditions.json',
+        'validate-test-conditions.mjs',
+        'Human Sign-Off Gateway',
+        'No reviewed business-intent entries found',
+        'checklist-based',
+      ],
+      contractGuarantees: [
+        'sampleValues never copied from the live page - always synthesized',
+        'zero mutating DOM calls, not even trial:true',
+      ],
+      forbiddenPatterns: ['EITR', 'Eitr'],
     },
   },
 ];
