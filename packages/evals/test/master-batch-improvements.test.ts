@@ -40,9 +40,9 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
     expect(authSetupCode).toContain('TOTP_SECRET');
   });
 
-  it('AC-5: Batch Proposal Matrix in /automate-ticket', () => {
+  it('AC-5: Batch Proposal Matrix in /automate-test', () => {
     const skills = planAiOperationalSkills(assistants, 'playwright', 'typescript');
-    const automateSkill = skills.find((s) => s.path.includes('automate-ticket'));
+    const automateSkill = skills.find((s) => s.path.includes('automate-test'));
     expect(automateSkill).toBeDefined();
 
     const automateContent = (automateSkill?.source as { text: string }).text;

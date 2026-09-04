@@ -58,7 +58,7 @@ describe('AC-1 to AC-5: EITR Quality, Reliability & CPOM Primitives Hardening', 
 
   it('AC-3: ai-operational-skills.ts mandates Race-Free Event Synchronization', () => {
     const skillsFiles = planAiOperationalSkills(['antigravity'], 'playwright', 'typescript');
-    const automateTicket = skillsFiles.find((f) => f.path.includes('automate-ticket'));
+    const automateTicket = skillsFiles.find((f) => f.path.includes('automate-test'));
     const scanPom = skillsFiles.find((f) => f.path.includes('scan-and-generate-pom'));
 
     expect(automateTicket).toBeDefined();

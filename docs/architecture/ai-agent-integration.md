@@ -22,7 +22,7 @@ Generated Test Repository
 ├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/skills/, .windsurf/workflows/, .codex/skills/, .github/)
 │   ├── /auth-setup           -- Session capture (auth.json) and state re-use with SSO fallback
 │   ├── /scan-and-generate-pom-- Live DOM exploration + live-DOM Page Object verification
-│   ├── /automate-ticket      -- End-to-end flow: TMS ticket OR a locally-drafted journey ->
+│   ├── /automate-test        -- End-to-end flow: TMS ticket OR a locally-drafted journey ->
 │   │                             DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
 │   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
@@ -177,15 +177,23 @@ dependency on `criticalityTier` or any other LLM-derived signal, which is too un
 structural decision on. An LLM step then drafts each journey's `testCase` (title, preconditions,
 ordered steps): every step is one atomic action with its own concrete expected result, never a
 step bundling several actions behind one blanket result - drawn directly from each condition's own
-`description`/`scenario` rather than invented prose, since `/automate-ticket` wraps each drafted
+`description`/`scenario` rather than invented prose, since `/automate-test` wraps each drafted
 step in its own `test.step()` block and needs something concrete to assert on. Unlike every earlier
-stage in this pipeline, this one does not pause for a blocking Human Sign-Off Gateway - it writes
-the draft and moves on, reviewable at any later point rather than gating the pipeline on it.
+stage in this pipeline, this one does not pause for a blocking Human Sign-Off Gateway - every
+drafted `testCase` is still presented as its own labeled block (title, preconditions, numbered
+steps) immediately, alongside the current pipeline roadmap and, when a TMS/task-tracker is
+configured, a short optional question about recording these test cases there too; the draft is
+simply never gated on approval before the skill finishes, reviewable at any later point rather than
+blocking the pipeline on it.
 
 ## Guided greenfield orchestration (`/ground-zero-setup`)
 
 A thin orchestrator over Stage 1, Stage 2, and Stage 3 for a brand-new application, adding no
-analysis logic of its own. It sequences `/map-site create` (with its automatic Step 6),
+analysis logic of its own. `pipeline-status.mjs` also computes a fixed roadmap string (all four
+stages plus their review points, current position bracketed) that this skill and every stage it
+sequences print at each human-facing stop, so Stage 4 (`/automate-test`) is always visible as the
+pipeline's own next step - informational only, never run by this orchestrator itself. It sequences
+`/map-site create` (with its automatic Step 6),
 `/define-test-conditions`, and `/design-test-cases` in order, pausing at each stage's own Human
 Sign-Off Gateway by default (Guided mode) - except `/design-test-cases`, which has no blocking gate
 of its own and is simply run and moved past - or writing `reviewedBy: 'auto-pilot'` straight through
@@ -197,9 +205,9 @@ test conditions, drafted/automated journeys) every time it runs, never from a ca
 keeps the single-source-of-truth property intact as later stages get added - extending the script's
 stage list is the only change a new stage needs, not a rewrite of the orchestrator's own sequencing.
 Once the pipeline reaches `test-cases-drafted` (or `complete`, once every drafted case has been
-automated), this skill stops honestly on purpose: `/automate-ticket` synthesizes and executes real
+automated), this skill stops honestly on purpose: `/automate-test` synthesizes and executes real
 code, a materially different action than approving a JSON review artifact, so triggering it stays an
-explicit, separate human command in every mode, including auto-pilot. `/automate-ticket` itself now
+explicit, separate human command in every mode, including auto-pilot. `/automate-test` itself now
 reads `artifacts/test-cases/test-cases.json` directly when invoked with no ticket ID - no TMS ticket required
 to close the loop from a from-nothing greenfield project.
 
@@ -245,7 +253,7 @@ rather than generating a flaky test from an underspecified one.
 - **Component registry indexing:** Page Objects and shared widgets are indexed from
   `artifacts/site-map/site-map.json` and `components/` to match scenario steps to existing CPOM classes
   instead of regenerating duplicates.
-- **Human sign-off gateway** (`/automate-ticket`): before writing test files, the agent presents a
+- **Human sign-off gateway** (`/automate-test`): before writing test files, the agent presents a
   structured proposal (summary, steps, preconditions, Page Objects used, TDM strategy) for explicit
   review - zero code is written until approved.
 - **Strict AST linearity:** synthesized tests ban `if`/`else`, loops, and `try/catch` wrapping

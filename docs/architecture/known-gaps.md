@@ -44,7 +44,7 @@ is for gaps significant enough to shape future architecture, not routine finding
   assistant to read/query `site-map.json` directly, which is faster and more flexible than a
   static text-substring filter). `artifacts/site-map/site-map.json` and
   `.scaffold/schemas/site-map.schema.json` are unaffected and remain the source of truth for every
-  consumer (`pom-engineer`, `/scan-and-generate-pom`, `/automate-ticket`, the business-intent
+  consumer (`pom-engineer`, `/scan-and-generate-pom`, `/automate-test`, the business-intent
   Step 6). Re-open only on a new, explicit maintainer decision to build a human-facing view again -
   not on a future audit finding the gap again.
 - **Requirements → test-case generation:** an agent that derives test cases from live application
@@ -61,7 +61,7 @@ is for gaps significant enough to shape future architecture, not routine finding
   Stage 3 (test-level/journey placement - the deterministic `/design-test-cases` classifier,
   ADR 0012 Track 5) is implemented, v0: journeys are single-route only, no cross-route flow
   detection yet. Stage 4 (spec synthesis) is implemented as a bridge rather than a new gate:
-  `/automate-ticket` now reads `artifacts/test-cases/test-cases.json` directly when invoked with no TMS
+  `/automate-test` now reads `artifacts/test-cases/test-cases.json` directly when invoked with no TMS
   ticket ID, so its own existing Human Sign-Off Gateway (unchanged) is the human sign-off before
   code generation for a locally-drafted test case too - closing the greenfield "from nothing" flow
   end-to-end without a hand-written TMS ticket.

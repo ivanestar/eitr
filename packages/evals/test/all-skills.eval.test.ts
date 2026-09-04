@@ -39,11 +39,11 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
     expect(grade.score).toBe(100);
   });
 
-  // Skill 3: /automate-ticket
-  it('3. Evaluates /automate-ticket Human Sign-Off Gateway and linear synthesis', () => {
-    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/automate-ticket')!;
+  // Skill 3: /automate-test
+  it('3. Evaluates /automate-test Human Sign-Off Gateway and linear synthesis', () => {
+    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/automate-test')!;
     const simulatedOutput = `
-# Skill: Automate Ticket (/automate-ticket)
+# Skill: Automate Ticket (/automate-test)
 1. Pre-validation via tms-validator.
 2. Present Markdown proposal artifact for Human Sign-Off Gateway.
 3. Synthesize linear spec with await test.step and tests/fixtures.ts.
@@ -120,7 +120,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 1. Pre-Flight Confirmation: run scripts/pipeline-status.mjs, present stages and cost warning, ask Guided vs Auto-pilot.
 2. Guided mode: run each stage, present its own Human Sign-Off Gateway, on approval set reviewedBy: 'human'.
 3. Consult scripts/pipeline-status.mjs after every stage to decide what runs next.
-4. Stop honestly once the stage reaches test-cases-drafted - never chain into /automate-ticket automatically.
+4. Stop honestly once the stage reaches test-cases-drafted - never chain into /automate-test automatically.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

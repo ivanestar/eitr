@@ -28,7 +28,7 @@ export const GOLDEN_AGENTS_DATASET: GoldenAgentCase[] = [
       'Dispatches user request to automate Jira ticket to tms-validator and test-automator',
     inputPrompt: 'User wants to automate ticket JIRA-404: "User Reset Password Flow"',
     expectedOutputs: {
-      mustContainPatterns: ['tms-validator', 'GIGO', '/automate-ticket', 'Human Sign-Off'],
+      mustContainPatterns: ['tms-validator', 'GIGO', '/automate-test', 'Human Sign-Off'],
       forbiddenPatterns: ['new LoginPage(page)', 'sleep('],
     },
   },

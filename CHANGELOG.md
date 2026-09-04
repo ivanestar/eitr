@@ -7,6 +7,51 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.33.0] - 2026-09-04
+
+- **Fixed**: a fresh `/ground-zero-setup` run opened in Russian with no Russian anywhere in the
+  user's own request - a model defaults to mirroring ambient context rather than genuinely
+  defaulting. Every operational skill now opens with an explicit "default to English, switch only
+  on the user's own signal" note.
+- **Fixed**: the structured interactive-choice-tool convention (use AskUserQuestion or equivalent
+  when available) had drifted out of sync between skills - present in `/map-site`'s Core-Purpose
+  Confirmation, but `/ground-zero-setup`'s own mode-choice question argued the opposite ("not a
+  fixed menu tied to any particular tool"). Unified into one shared instruction, applied at every
+  point across the pipeline where the human is asked to choose among options.
+- **Added**: `pipeline-status.mjs` now computes a fixed roadmap string (all four stages plus their
+  review points, current position bracketed) alongside its existing stage/nextCommand fields -
+  printed by every skill at every human-facing stop, so the pipeline's shape and position are
+  always visible without re-deriving them.
+- **Changed**: `/design-test-cases` now presents every newly-drafted test case as its own labeled
+  block (title, preconditions, numbered steps) immediately, instead of only a count summary - a
+  stage that drafts real content and reports only a number defeated the point of drafting it. When
+  a TMS/task-tracker is configured, it also asks one short, skippable question about recording
+  these test cases there too. Still never a blocking gate - reviewable content shown immediately is
+  not the same as gating on approval of it.
+- **Changed**: `/ground-zero-setup` now names Stage 4 (`/automate-test`) explicitly in its Pre-Flight
+  disclosure and prints the pipeline roadmap throughout, instead of only mentioning it in a closing
+  aside easy to read as "pipeline complete" with nothing left. The orchestrator still never runs
+  `/automate-test` itself in any mode - only the ambiguity between "stop here" (End of Chain) and
+  "ask what's next" (the Stage Loop's own question) is resolved: the latter now explicitly defers
+  to End of Chain the moment `nextCommand` becomes `/automate-test`, rather than the two silently
+  disagreeing.
+- **Changed**: renamed `/automate-ticket` to `/automate-test`, and redesigned its intake logic: an
+  explicit ticket ID now gets a brief confirmation naming the TMS provider before fetching; with no
+  ID, it checks for un-automated local drafts and configured TMS providers and asks only when at
+  least two genuinely different sources are actually possible - proceeding directly the moment
+  there is only one real answer, and skipping the question altogether when arriving straight from
+  `/ground-zero-setup`'s own chain.
+- **Changed**: test-condition descriptions no longer use one uniform "Verify the page
+  accepts/handles..." template regardless of technique - boundary-value conditions now read as an
+  edge-value accept/reject verdict, checklist-based conditions (always negative by construction)
+  read as a malformed-input safety claim, keeping the general accepts/handles phrasing only for
+  combinatorial/equivalence-partition conditions. Still fully deterministic - the variation is
+  grounded in which technique produced the condition, not cosmetic rotation.
+- **Added**: `pom-engineer` now has an explicit Primitive Selection Order - compose an already-
+  scaffolded `components/primitives/` primitive first, synthesize a new reusable primitive/widget
+  second, and only register an element directly on the Page Object as the residual case. Found
+  missing (only `components/widgets/` reuse was covered) from a live Page Object review.
+
 ## [0.32.0] - 2026-09-04
 
 - **Fixed**: `/map-site` Step 6's Core-Purpose Inference could draft 2-4 candidates that were just

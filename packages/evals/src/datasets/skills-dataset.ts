@@ -8,7 +8,7 @@ export interface GoldenSkillCase {
   skillName:
     | '/auth-setup'
     | '/scan-and-generate-pom'
-    | '/automate-ticket'
+    | '/automate-test'
     | '/heal-test'
     | '/map-site'
     | '/bulk-rescan'
@@ -61,9 +61,9 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
       forbiddenPatterns: ['page.waitForTimeout', 'sleep(', 'test:sanity', 'pom-sanity'],
     },
   },
-  // 3. /automate-ticket
+  // 3. /automate-test
   {
-    skillName: '/automate-ticket',
+    skillName: '/automate-test',
     description: 'Full automation workflow with Human Sign-Off Gateway and linear test synthesis',
     inputScenario: 'Automate ticket AZURE-789 (User Profile Update) from Azure DevOps',
     expectedWorkflow: {

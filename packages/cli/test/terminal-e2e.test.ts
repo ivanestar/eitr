@@ -136,7 +136,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       expect(existsSync(path.join(cwd, '.agents', 'agents', 'sdet-orchestrator', 'agent.md'))).toBe(
         true,
       );
-      expect(existsSync(path.join(cwd, '.agents', 'skills', 'automate-ticket', 'SKILL.md'))).toBe(
+      expect(existsSync(path.join(cwd, '.agents', 'skills', 'automate-test', 'SKILL.md'))).toBe(
         true,
       );
 

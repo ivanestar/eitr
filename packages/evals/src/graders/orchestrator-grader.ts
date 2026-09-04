@@ -15,7 +15,7 @@ export interface OrchestratorGradeResult {
  */
 export function gradeOrchestratorOutput(
   output: string,
-  taskType: 'automate-ticket' | 'batch-pom' | 'debug-test',
+  taskType: 'automate-test' | 'batch-pom' | 'debug-test',
 ): OrchestratorGradeResult {
   const violations: string[] = [];
   const deductions: ScoreDeduction[] = [];
@@ -31,7 +31,7 @@ export function gradeOrchestratorOutput(
 
   let enforcedSharedPrimitivesFirst = true;
 
-  if (taskType === 'automate-ticket') {
+  if (taskType === 'automate-test') {
     if (!routedToSubagents.includes('tms-validator')) {
       const pointsLost = 3.5;
       score10 -= pointsLost;

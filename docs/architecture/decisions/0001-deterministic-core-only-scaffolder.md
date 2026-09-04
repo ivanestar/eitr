@@ -34,7 +34,7 @@ opt-in step - never bundled into `eitr new`.
 ## Consequences
 
 - A freshly generated project has no app-specific tests yet - the AI-assistant skills
-  (`/scan-and-generate-pom`, `/automate-ticket`, `/map-site`) are what add them, not the generator
+  (`/scan-and-generate-pom`, `/automate-test`, `/map-site`) are what add them, not the generator
   itself. This is a deliberate scope boundary, not a missing feature.
 - Verification of "does this locator actually work" moved from a dedicated `verify` CLI command to
   AI-agent-driven live-DOM checks (`pom-engineer`, the anti-fake-green assertion engine - see

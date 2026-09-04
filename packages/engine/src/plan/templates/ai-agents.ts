@@ -58,7 +58,7 @@ Whenever the user requests automating a ticket, setting up framework baselines, 
 
 ## Workflow Execution Steps
 1. Parse user intent (e.g. automate ticket, map site routes, generate page objects, debug failing test).
-2. Dispatch task to specialized subagents or execute the corresponding operational skill (/ground-zero-setup, /map-site, /define-test-conditions, /design-test-cases, /automate-ticket, /scan-and-generate-pom, /heal-test, /bulk-rescan).
+2. Dispatch task to specialized subagents or execute the corresponding operational skill (/ground-zero-setup, /map-site, /define-test-conditions, /design-test-cases, /automate-test, /scan-and-generate-pom, /heal-test, /bulk-rescan).
 3. If automating a TMS ticket:
    - Validate requirements with 'tms-validator' (GIGO protection). If rejected, halt and return feedback.
    - Resolve needed Page Objects via 'pom-engineer' and 'artifacts/site-map/site-map.json'.
@@ -179,6 +179,11 @@ You are responsible for generating, updating, and validating Page Objects and co
 - Always inspect \`artifacts/site-map/site-map.json\` and existing widgets in \`components/widgets/\` before creating new Page Objects.
 - If a component already exists in \`components/widgets/\`, compose it via \`this.child(WidgetClass, spec)\` rather than re-declaring duplicate locators.
 - See 'sdet-architect''s Worked Example for a compliant-vs-non-compliant \`components/pages/<name>.page.ts\` pair before writing one.
+
+## Primitive Selection Order (mandatory, checked in this order for every interactive element)
+1. **Already scaffolded in \`components/primitives/\`** (Button, TextInput, Checkbox, Select, NativeSelect, Radio, Link, FileInput, Heading, Element - read that directory's actual contents rather than assuming this list, since a project's scaffold can vary): compose it via \`this.child(PrimitiveClass, spec)\` / \`this.list(PrimitiveClass, spec)\`. Never hand-roll an ad hoc locator or a bespoke inline class for something a scaffolded primitive already models - that silently forks the interaction contract the primitive exists to standardize (e.g. its own \`Now()\`-suffixed state getters), and the next Page Object touching the same kind of element has no shared behavior to build on.
+2. **Not yet scaffolded, but still a primitive-shaped, reusable interaction pattern** (a slider, a data table, a tabbed panel, a rich-text editor - the same class of thing across many apps, not specific to this one page): follow \`Extended Primitives - Synthesize On Demand\` below to add it to \`components/primitives/\` or \`components/widgets/\` first, then compose it the same as step 1 - never inline the interaction directly into the Page Object just because no starter file exists for it yet.
+3. **Neither of the above** (a one-off, page-specific element with no reusable interaction shape - a static paragraph, a page-specific heading whose only need is a liveness/text check): only here does it get registered directly on the Page Object itself, as the residual case - not a shortcut for elements that actually match step 1 or 2.
 
 ## Worker-Mode & Batch Generation from Site Map
 - When invoked in parallel worker mode or for mapped routes in \`artifacts/site-map/site-map.json\`:

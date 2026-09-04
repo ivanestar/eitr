@@ -249,6 +249,10 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('not-started');
       expect(output.nextCommand).toBe('/map-site create');
+      // Roadmap: current stage bracketed, every other stage plain, printed in fixed order.
+      expect(output.roadmap).toBe(
+        '[Stage 1: Create a site map <- you are here] -> Review -> Stage 2: Define test conditions -> Review -> Stage 3: Design test cases -> Review -> Stage 4: Automate test cases -> Review',
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -378,7 +382,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports test-cases-drafted (next: /automate-ticket) once a journey has a drafted, unreviewed testCase', () => {
+  it('reports test-cases-drafted (next: /automate-test) once a journey has a drafted, unreviewed testCase', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -388,7 +392,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-cases-drafted');
-      expect(output.nextCommand).toBe('/automate-ticket');
+      expect(output.nextCommand).toBe('/automate-test');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -405,6 +409,9 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('complete');
       expect(output.nextCommand).toBeNull();
+      expect(output.roadmap).toBe(
+        'Stage 1: Create a site map -> Review -> Stage 2: Define test conditions -> Review -> Stage 3: Design test cases -> Review -> Stage 4: Automate test cases -> [Review <- you are here]',
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

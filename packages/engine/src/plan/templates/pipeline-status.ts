@@ -101,6 +101,42 @@ function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeysRoute
   return true;
 }
 
+// Fixed, deterministic roadmap of the whole greenfield pipeline - one string, printed by every
+// skill at every human-facing stop, so the human always sees where they are without re-deriving it
+// themselves. Position is computed from the stage value below, never guessed by the model.
+const ROADMAP_STEPS = [
+  'Stage 1: Create a site map',
+  'Review',
+  'Stage 2: Define test conditions',
+  'Review',
+  'Stage 3: Design test cases',
+  'Review',
+  'Stage 4: Automate test cases',
+  'Review',
+];
+
+const STAGE_TO_ROADMAP_INDEX = {
+  'not-started': 0,
+  'business-intent-pending-review': 1,
+  'business-intent-reviewed': 2,
+  'test-conditions-pending-review': 3,
+  'test-conditions-reviewed': 4,
+  'test-cases-drafted': 5,
+  complete: 7,
+};
+
+function formatRoadmap(stage) {
+  const currentIndex = STAGE_TO_ROADMAP_INDEX[stage];
+  if (currentIndex === undefined) return ROADMAP_STEPS.join(' -> ');
+  return ROADMAP_STEPS.map(function (step, i) {
+    return i === currentIndex ? '[' + step + ' <- you are here]' : step;
+  }).join(' -> ');
+}
+
+function withRoadmap(status) {
+  return Object.assign({ roadmap: formatRoadmap(status.stage) }, status);
+}
+
 function computeStatus() {
   if (!fs.existsSync(SITE_MAP_PATH)) {
     return {
@@ -162,9 +198,9 @@ function computeStatus() {
   if (anyJourneyNeedsAutomation(journeys)) {
     return {
       stage: 'test-cases-drafted',
-      nextCommand: '/automate-ticket',
+      nextCommand: '/automate-test',
       nextCommandDescription:
-        'Test cases are drafted in artifacts/test-cases/test-cases.json. Run /automate-ticket with no ticket ID to automate them directly - no TMS ticket required.',
+        'Test cases are drafted in artifacts/test-cases/test-cases.json. Run /automate-test with no ticket ID to automate them directly - no TMS ticket required.',
     };
   }
 
@@ -176,6 +212,6 @@ function computeStatus() {
   };
 }
 
-process.stdout.write(JSON.stringify(computeStatus(), null, 2) + '\\n');
+process.stdout.write(JSON.stringify(withRoadmap(computeStatus()), null, 2) + '\\n');
 `;
 }

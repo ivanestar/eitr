@@ -170,6 +170,10 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(pomEngineer?.source.text).toContain('MANDATORY AUTONOMOUS VERIFICATION');
     expect(pomEngineer?.source.text).toContain('AUTONOMOUS DEBUGGING & TWO-STRIKE SELF-HEALING');
     expect(pomEngineer?.source.text).toContain('MANDATORY HANDOFF REPORT');
+    // Primitive reuse: an existing scaffolded primitive must be composed, never re-implemented
+    // inline - found missing (only widget reuse was covered) from a live Page Object review.
+    expect(pomEngineer?.source.text).toContain('Primitive Selection Order');
+    expect(pomEngineer?.source.text).toContain('Never hand-roll an ad hoc locator');
     expect(pomEngineer?.source.text).not.toContain('test:sanity');
 
     const automator = files.find((f) => f.path === '.agents/agents/test-automator/agent.md');
@@ -211,13 +215,13 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
     expect(paths).toContain('.agents/skills/scan-and-generate-pom/SKILL.md');
-    expect(paths).toContain('.agents/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.agents/skills/automate-test/SKILL.md');
     expect(paths).toContain('.agents/skills/heal-test/SKILL.md');
     expect(paths).toContain('.agents/skills/bulk-rescan/SKILL.md');
     expect(paths).toContain('.agents/skills/map-site/SKILL.md');
 
     expect(paths).toContain('.claude/skills/auth-setup/SKILL.md');
-    expect(paths).toContain('.cursor/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.cursor/skills/automate-test/SKILL.md');
     expect(paths).toContain('.windsurf/workflows/heal-test.md');
     expect(paths).toContain('.codex/skills/bulk-rescan/SKILL.md');
     expect(paths).toContain('.github/prompts/map-site.prompt.md');
@@ -414,7 +418,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(pomSkill?.source.text).toContain('Mandatory Execution & Self-Healing Loop');
     expect(pomSkill?.source.text).toContain('Mandatory Handoff Report');
 
-    const automateSkill = files.find((f) => f.path === '.agents/skills/automate-ticket/SKILL.md');
+    const automateSkill = files.find((f) => f.path === '.agents/skills/automate-test/SKILL.md');
     expect(automateSkill?.source.text).toContain('tms-validator');
     expect(automateSkill?.source.text).toContain('Human Sign-Off Gateway');
     expect(automateSkill?.source.text).toContain('tests/TC-');
@@ -428,16 +432,25 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     );
     expect(designTestCasesSkill?.source.text).toContain('scripts/compose-journeys.mjs');
     // Deliberate departure from every earlier stage's blocking gate - never a "BLOCKING GATE"
-    // phrase (used by /automate-ticket's own Step 4) here.
+    // phrase (used by /automate-test's own Step 4) here.
     expect(designTestCasesSkill?.source.text).not.toContain('BLOCKING GATE');
-    expect(designTestCasesSkill?.source.text).toContain('Do not ask for approval before finishing');
+    expect(designTestCasesSkill?.source.text).toContain(
+      'Do not ask for approval of the drafts themselves before finishing',
+    );
     // Test-case quality: atomic per-step verification, not a blanket result at the end - raised
     // from a live-use complaint that drafted test cases read too generically.
     expect(designTestCasesSkill?.source.text).toContain('One atomic action per step');
     expect(designTestCasesSkill?.source.text).toContain('Good example');
     expect(designTestCasesSkill?.source.text).toContain('Bad example');
+    // Test-Cases Review Artifact: the drafted content itself is shown, not just a count - and the
+    // optional TMS-recording question, only when a provider is configured.
+    expect(designTestCasesSkill?.source.text).toContain('Test-Cases Review Artifact');
     expect(designTestCasesSkill?.source.text).toContain(
-      'gives `/automate-ticket` nothing to assert on',
+      'a stage that drafts real content and reports only a count defeats the point',
+    );
+    expect(designTestCasesSkill?.source.text).toContain('also recorded there as test cases');
+    expect(designTestCasesSkill?.source.text).toContain(
+      'gives `/automate-test` nothing to assert on',
     );
 
     const healSkill = files.find((f) => f.path === '.agents/skills/heal-test/SKILL.md');
@@ -507,7 +520,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // Skills
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
     expect(paths).toContain('.agents/skills/scan-and-generate-pom/SKILL.md');
-    expect(paths).toContain('.agents/skills/automate-ticket/SKILL.md');
+    expect(paths).toContain('.agents/skills/automate-test/SKILL.md');
     expect(paths).toContain('.agents/skills/heal-test/SKILL.md');
     expect(paths).toContain('.agents/skills/bulk-rescan/SKILL.md');
 
