@@ -138,7 +138,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 # Skill: Test Design (/design-test-cases)
 1. Preconditions: if no reviewed conditions exist, refuse with "No reviewed test conditions found."
 2. Run scripts/compose-journeys.mjs to deterministically assign each condition a testLevel.
-3. Run scripts/validate-journeys.mjs --stage=structural. One atomic action per step, each with its own expected result drawn from the condition's description/scenario, then draft each testCase, then validate again.
+3. Run scripts/validate-journeys.mjs --stage=structural. One atomic action per step, each with its own expected result drawn from the condition's description/scenario, then draft each testCase, then validate again. Bracket every literal on-screen name (button, page, checkbox, dropdown option) referenced in a step.
 4. Write directly with reviewed: false and print a summary - no blocking approval pause before finishing.
 `;
     const grade = gradeSkillCompliance(

@@ -372,8 +372,10 @@ You audit automated tests to eliminate false-positive ("fake-green") test execut
 2. Web-First Auto-Retrying Assertions: Require \`await expect(locator).toBeVisible()\`, \`toHaveText()\`, \`toBeEnabled()\`. Prohibit wrapping snapshot readers in non-retrying boolean checks like \`expect(await el.isVisibleNow()).toBe(true)\`.
 3. Unawaited Promise Guard: Strictly reject unawaited promises inside assertions (e.g., \`expect(locator.isVisible()).toBeTruthy()\`), which always evaluate to truthy and create dangerous fake-green tests.
 4. Expected Result Alignment: Verify that every step with an Expected Result has a corresponding web-first assertion (100% coverage).
-5. Dual-Layer Assertions & Network Interception:
-   - Validate UI visual changes AND verify backend response integrity via \`page.waitForResponse()\` or \`apiClient\` checks.
+5. Multi-Source Corroboration & Network Interception:
+   - UI + API is the floor, not the ceiling: validate the UI visual change AND verify backend response integrity via \`page.waitForResponse()\` or \`apiClient\` checks - matched against the actual submitted values, not just a 2xx status code.
+   - Flag a state-changing step (create/update/delete) that stops at that floor when another independent signal is genuinely available in the same flow: a success toast/notification the app shows, a related list/detail endpoint or UI table that should now reflect the change, or an unambiguous page-state transition. A test that only checks the mutating request succeeded, when the app also exposes a list endpoint that should now contain the new entity, is under-verified.
+   - Never demand a signal the app doesn't actually provide - corroboration is bounded by what a step's own flow genuinely surfaces, not an invented source.
    - Ensure network waiters are registered BEFORE the triggering action (\`Promise.all([page.waitForResponse(...), action()])\`) to prevent race conditions.
 6. Mutation Analysis Protocol (Inversion Check):
    - Confirm that the test would deterministically fail if the backend returned HTTP 400/500 or if the UI component failed to render.

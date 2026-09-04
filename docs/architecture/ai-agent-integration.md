@@ -182,7 +182,12 @@ structural decision on. An LLM step then drafts each journey's `testCase` (title
 ordered steps): every step is one atomic action with its own concrete expected result, never a
 step bundling several actions behind one blanket result - drawn directly from each condition's own
 `description`/`scenario` rather than invented prose, since `/automate-test` wraps each drafted
-step in its own `test.step()` block and needs something concrete to assert on. Unlike every earlier
+step in its own `test.step()` block and needs something concrete to assert on. Any literal on-screen
+name a step references - a button/link label, a page name, a checkbox/radio/dropdown option, a
+toast message - is wrapped in square brackets from a fixed small verb vocabulary (`Click the [X]
+button`, `Navigate to the [X] page`, `Select the [X] dropdown > [Y] option`, ...), so `/automate-test`
+can ground its locators' accessible names directly in that bracketed text instead of re-guessing or
+paraphrasing them. Unlike every earlier
 stage in this pipeline, this one does not pause for a blocking Human Sign-Off Gateway - every
 drafted `testCase` is still presented as its own labeled block (title, preconditions, numbered
 steps) immediately, alongside the current pipeline roadmap and, when a TMS/task-tracker is
@@ -264,6 +269,14 @@ rather than generating a flaky test from an underspecified one.
   assertions - every branch a test could take must be its own test.
 - Every step is wrapped in `await test.step('Step N: ...', ...)`; fixtures supply dependencies, no
   raw `new PageObject(page)` in test files.
+- **Content fidelity:** a step's body must perform the literal action its `description` names and
+  assert the literal value its `expectedResult` names - never a structurally-correct assertion on
+  an unrelated element standing in for the real one. A bracketed literal name in the drafted step
+  (`Click the [Place Order] button`) grounds the synthesized locator's accessible name verbatim.
+- **Multi-source corroboration:** for a state-changing step, UI-visible-change + API-response
+  validation (matched against the submitted values) is the floor, not the ceiling - a success toast,
+  a related list/detail endpoint, or an unambiguous page-state transition gets asserted too whenever
+  the app genuinely surfaces it, so a bug has more than one signal to slip past.
 
 ## Enterprise security & resilience
 

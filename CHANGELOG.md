@@ -74,6 +74,15 @@ audit trail; this file is release notes.
   see. `.check()`/`.uncheck()`, `.selectOption()`, and `.fill()` with synthesized values are now
   allowed, one control probed and reset at a time, never combined, and never reaching a
   submit/create/delete/send-shaped button under any circumstance.
+- **Added**: `/design-test-cases` now brackets every literal on-screen name a step references (a
+  button/link label, a page name, a checkbox/radio/dropdown option, a toast message) using a fixed
+  small verb vocabulary, e.g. `Click the [X] button`, so `/automate-test` can ground its synthesized
+  locators' accessible names directly in that text instead of re-guessing or paraphrasing them.
+- **Changed**: `assertion-auditor`'s dual-layer (UI+API) assertion check is now a floor, not a
+  ceiling - a state-changing step also gets corroborated with every other genuinely available
+  independent signal (a success toast, a related list/detail endpoint, an unambiguous page-state
+  transition) rather than stopping at exactly two layers by convention. `/automate-test`'s synthesis
+  step and the generated project's own AI rules doc carry the same principle.
 
 ## [0.32.0] - 2026-09-04
 

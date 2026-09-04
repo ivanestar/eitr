@@ -192,7 +192,10 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(auditor?.source.text).toContain('Anti-Fake-Green Check');
     expect(auditor?.source.text).toContain('Web-First Auto-Retrying Assertions');
     expect(auditor?.source.text).toContain('Unawaited Promise Guard');
-    expect(auditor?.source.text).toContain('Dual-Layer Assertions & Network Interception');
+    expect(auditor?.source.text).toContain('Multi-Source Corroboration & Network Interception');
+    // Extended from a fixed UI+API pair after live use kept every corroborating check capped at
+    // exactly 2 layers even when a toast or a secondary list endpoint was genuinely available.
+    expect(auditor?.source.text).toContain('floor, not the ceiling');
     expect(auditor?.source.text).toContain('Mutation Analysis Protocol');
     expect(auditor?.source.text).toContain('Zero-Emoji Compliance');
 
@@ -450,6 +453,12 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // fixture DI but an assertion unrelated to what the step claims) was reported from live use.
     expect(automateSkill?.source.text).toContain('Content fidelity is mandatory');
     expect(automateSkill?.source.text).toContain('never a content-free assertion');
+    // Bracketed step text grounds the synthesized locator's accessible name - direct link from
+    // /design-test-cases' bracket vocabulary to /automate-test's own locator code.
+    expect(automateSkill?.source.text).toContain("locator's name, verbatim");
+    // Multi-source corroboration: UI+API is the floor, not the ceiling, when a toast or a
+    // secondary list/detail endpoint is genuinely available for a state-changing step.
+    expect(automateSkill?.source.text).toContain('every genuinely available independent signal');
     // Self-referential compliance narration ("CPOM contract strictly honored: ...") was reported
     // from a live final report - global rule, checked here since automate-test's own report step
     // is exactly where it appeared.
@@ -473,6 +482,12 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(designTestCasesSkill?.source.text).toContain('One atomic action per step');
     expect(designTestCasesSkill?.source.text).toContain('Good example');
     expect(designTestCasesSkill?.source.text).toContain('Bad example');
+    // Bracketed-literal-name vocabulary: any specific on-screen name in a step must be bracketed,
+    // so /automate-test can ground its locators directly in that text.
+    expect(designTestCasesSkill?.source.text).toContain('Bracket every literal on-screen name');
+    expect(designTestCasesSkill?.source.text).toContain('Click the [X] button');
+    expect(designTestCasesSkill?.source.text).toContain('Select the [X] dropdown > [Y] option');
+    expect(designTestCasesSkill?.source.text).toContain('Select the [Standard] shipping method');
     // Test-Cases Review Artifact: the drafted content itself is shown, not just a count - and the
     // optional TMS-recording question, only when a provider is configured.
     expect(designTestCasesSkill?.source.text).toContain('Test-Cases Review Artifact');
