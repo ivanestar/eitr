@@ -22,15 +22,18 @@ Generated Test Repository
 ├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/skills/, .windsurf/workflows/, .codex/skills/, .github/)
 │   ├── /auth-setup           -- Session capture (auth.json) and state re-use with SSO fallback
 │   ├── /scan-and-generate-pom-- Live DOM exploration + live-DOM Page Object verification
-│   ├── /automate-ticket      -- End-to-end flow: TMS ticket -> DLP -> Intent -> AST Code -> Green run
+│   ├── /automate-ticket      -- End-to-end flow: TMS ticket OR a locally-drafted journey ->
+│   │                             DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
 │   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
-│   ├── /ground-zero-setup    -- Guided orchestrator: chains /map-site + /derive-test-conditions
-│   │                             with a human sign-off gate per stage, or auto-pilot
+│   ├── /ground-zero-setup    -- Guided orchestrator: chains /map-site + /derive-test-conditions +
+│   │                             /compose-test-cases, with a human sign-off gate per stage, or auto-pilot
 │   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
 │   │                             optional read-only business-intent analysis (ADR 0012 Stage 1)
-│   └── /derive-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
-│                                 combinatorial/boundary-value condition generation (ADR 0012 Stage 2)
+│   ├── /derive-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
+│   │                             combinatorial/boundary-value condition generation (ADR 0012 Stage 2)
+│   └── /compose-test-cases   -- Deterministic test-level classification + drafted test case per
+│                                 journey (ADR 0012 Stage 3/4)
 │
 ├── 3. Model Context Protocol (MCP) Layer (.mcp.json, .cursor/mcp.json, .claude/mcp.json, etc.)
 │   ├── Playwright MCP        -- Live DOM querying, selector evaluation, visual feedback
@@ -133,19 +136,24 @@ spec synthesis, combinatorial strength beyond 2-way, general boolean-predicate c
 
 ## Guided greenfield orchestration (`/ground-zero-setup`)
 
-A thin orchestrator over Stage 1 and Stage 2 for a brand-new application, adding no analysis logic
-of its own. It sequences `/map-site create` (with its automatic Step 6) and `/derive-test-conditions`
-in order, pausing at each stage's own Human Sign-Off Gateway by default (Guided mode), or writing
-`reviewedBy: 'auto-pilot'` straight through on the user's own explicit pre-authorization (Auto-pilot
-mode). What runs next is never hardcoded in the orchestrator's own prose - both it and the two
-underlying skills' own end-of-run hints consult one deterministic script,
-`scripts/pipeline-status.mjs`, which recomputes the pipeline's current stage from real artifact state
-on disk (site map existence, reviewed business-intent entries, reviewed test conditions) every time
-it runs, never from a cached belief. This keeps the single-source-of-truth property intact as later
-stages get added - extending the script's stage list is the only change a new stage needs, not a
-rewrite of the orchestrator's own sequencing. Once the pipeline reaches `ready-to-automate`, this
-skill stops honestly: journey placement and spec synthesis (ADR 0012 Stages 3/4) are not built yet,
-so it points the user at creating a TMS ticket by hand and running `/automate-ticket` against it.
+A thin orchestrator over Stage 1, Stage 2, and Stage 3 for a brand-new application, adding no
+analysis logic of its own. It sequences `/map-site create` (with its automatic Step 6),
+`/derive-test-conditions`, and `/compose-test-cases` in order, pausing at each stage's own Human
+Sign-Off Gateway by default (Guided mode) - except `/compose-test-cases`, which has no blocking gate
+of its own and is simply run and moved past - or writing `reviewedBy: 'auto-pilot'` straight through
+on the user's own explicit pre-authorization (Auto-pilot mode). What runs next is never hardcoded in
+the orchestrator's own prose - both it and the underlying skills' own end-of-run hints consult one
+deterministic script, `scripts/pipeline-status.mjs`, which recomputes the pipeline's current stage
+from real artifact state on disk (site map existence, reviewed business-intent entries, reviewed
+test conditions, drafted/automated journeys) every time it runs, never from a cached belief. This
+keeps the single-source-of-truth property intact as later stages get added - extending the script's
+stage list is the only change a new stage needs, not a rewrite of the orchestrator's own sequencing.
+Once the pipeline reaches `test-cases-drafted` (or `complete`, once every drafted case has been
+automated), this skill stops honestly on purpose: `/automate-ticket` synthesizes and executes real
+code, a materially different action than approving a JSON review artifact, so triggering it stays an
+explicit, separate human command in every mode, including auto-pilot. `/automate-ticket` itself now
+reads `docs/analysis/journeys.json` directly when invoked with no ticket ID - no TMS ticket required
+to close the loop from a from-nothing greenfield project.
 
 ## Self-healing (Two-Strike Rule & 4-point trace triage)
 

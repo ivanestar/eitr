@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { GOLDEN_SKILLS_DATASET } from '../src/datasets/skills-dataset.js';
 import { gradeSkillCompliance } from '../src/graders/skills-grader.js';
 
-describe('All 7 Operational Skills Evaluation Benchmark', () => {
+describe('All 8 Operational Skills Evaluation Benchmark', () => {
   // Skill 1: /auth-setup
   it('1. Evaluates /auth-setup workflow and session serialization', () => {
     const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/auth-setup')!;
@@ -47,6 +47,7 @@ describe('All 7 Operational Skills Evaluation Benchmark', () => {
 1. Pre-validation via tms-validator.
 2. Present Markdown proposal artifact for Human Sign-Off Gateway.
 3. Synthesize linear spec with await test.step and tests/fixtures.ts.
+4. With no ticket ID given, read docs/analysis/journeys.json for un-automated drafted test cases instead.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,
@@ -119,7 +120,26 @@ describe('All 7 Operational Skills Evaluation Benchmark', () => {
 1. Pre-Flight Confirmation: run scripts/pipeline-status.mjs, present stages and cost warning, ask Guided vs Auto-pilot.
 2. Guided mode: run each stage, present its own Human Sign-Off Gateway, on approval set reviewedBy: 'human'.
 3. Consult scripts/pipeline-status.mjs after every stage to decide what runs next.
-4. Stop honestly once the stage reaches ready-to-automate - later stages are not built yet.
+4. Stop honestly once the stage reaches test-cases-drafted - never chain into /automate-ticket automatically.
+`;
+    const grade = gradeSkillCompliance(
+      simulatedOutput,
+      skillCase.expectedWorkflow.mustContainKeySteps,
+      skillCase.expectedWorkflow.forbiddenPatterns,
+    );
+    expect(grade.passed).toBe(true);
+    expect(grade.score).toBe(100);
+  });
+
+  // Skill 8: /compose-test-cases
+  it('8. Evaluates /compose-test-cases deterministic classification and no-blocking-gate departure', () => {
+    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/compose-test-cases')!;
+    const simulatedOutput = `
+# Skill: Compose Test Cases (/compose-test-cases)
+1. Preconditions: if no reviewed conditions exist, refuse with "No reviewed test conditions found."
+2. Run scripts/compose-journeys.mjs to deterministically assign each condition a testLevel.
+3. Run scripts/validate-journeys.mjs --stage=structural, then draft each testCase, then validate again.
+4. Write directly with reviewed: false and print a summary - no blocking approval pause before finishing.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

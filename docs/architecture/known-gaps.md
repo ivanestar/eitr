@@ -58,8 +58,13 @@ is for gaps significant enough to shape future architecture, not routine finding
   [`ai-agent-integration.md`](ai-agent-integration.md)) is implemented. Stage 2 (test-condition
   derivation - 2-way combinatorial coverage, 3-value boundary-value analysis, a mechanical
   redaction backstop, human sign-off - the new `/derive-test-conditions` skill) is implemented.
-  Stage 3+ (journey placement, spec synthesis, human sign-off before code generation) remains not
-  yet built, each requiring its own bounded SDD plan per the ADR's own Consequences section.
+  Stage 3 (test-level/journey placement - the deterministic `/compose-test-cases` classifier,
+  ADR 0012 Track 5) is implemented, v0: journeys are single-route only, no cross-route flow
+  detection yet. Stage 4 (spec synthesis) is implemented as a bridge rather than a new gate:
+  `/automate-ticket` now reads `docs/analysis/journeys.json` directly when invoked with no TMS
+  ticket ID, so its own existing Human Sign-Off Gateway (unchanged) is the human sign-off before
+  code generation for a locally-drafted test case too - closing the greenfield "from nothing" flow
+  end-to-end without a hand-written TMS ticket.
 - **CI test sharding for Java/C# on GitHub Actions:** resolved (Track 8, maintainer-authorized
   reversal of the original position below, 2026-09-02). Neither Maven Surefire/Gradle nor NUnit
   ships a free, official automatic-balanced-split mechanism (only manual tag/category filtering

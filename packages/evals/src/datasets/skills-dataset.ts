@@ -1,7 +1,8 @@
 /**
  * Golden Dataset for evaluating EITR Operational Skills against their documented workflow.
  * Not full coverage of every generated skill - protocol-123 has its own dedicated eval suite
- * (protocol-123-*.test.ts), and /derive-test-conditions has no case here yet (pre-existing gap).
+ * (protocol-123-*.test.ts), and /derive-test-conditions has no case here yet (pre-existing gap,
+ * logged in TODO.md).
  */
 
 export interface GoldenSkillCase {
@@ -12,7 +13,8 @@ export interface GoldenSkillCase {
     | '/heal-test'
     | '/map-site'
     | '/bulk-rescan'
-    | '/ground-zero-setup';
+    | '/ground-zero-setup'
+    | '/compose-test-cases';
   description: string;
   inputScenario: string;
   expectedWorkflow: {
@@ -71,6 +73,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'Markdown proposal artifact',
         'await test.step',
         'tests/fixtures.ts',
+        'docs/analysis/journeys.json',
       ],
       contractGuarantees: ['Zero Branching (no if/else/loops)', 'Fixture Dependency Injection'],
       forbiddenPatterns: ['new LoginPage(page)', 'try/catch around assertions'],
@@ -151,13 +154,34 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'Auto-pilot',
         "reviewedBy: 'human'",
         'Human Sign-Off Gateway',
-        'ready-to-automate',
+        'test-cases-drafted',
       ],
       contractGuarantees: [
         'never silently default to Auto-pilot',
         "reviewedBy: 'auto-pilot' on every entry auto-approved",
       ],
       forbiddenPatterns: ['EITR', 'Eitr'],
+    },
+  },
+  // 8. /compose-test-cases
+  {
+    skillName: '/compose-test-cases',
+    description:
+      'Deterministically classifies test conditions onto a test level (e2e/api/ui-only) and drafts a TMS-shaped test case, no blocking gate',
+    inputScenario: 'Compose test cases from a route with reviewed test conditions',
+    expectedWorkflow: {
+      mustContainKeySteps: [
+        'compose-journeys.mjs',
+        'validate-journeys.mjs',
+        'testLevel',
+        'No reviewed test conditions found',
+        'reviewed: false',
+      ],
+      contractGuarantees: [
+        'zero dependency on criticalityTier for test-level assignment',
+        'no blocking approval pause before finishing',
+      ],
+      forbiddenPatterns: ['EITR', 'Eitr', 'BLOCKING GATE'],
     },
   },
 ];

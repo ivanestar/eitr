@@ -39,6 +39,9 @@ import { renderTestConditionsTypes } from './templates/test-conditions-types.js'
 import { renderTestConditionsEngine } from './templates/test-conditions-engine.js';
 import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
 import { renderPipelineStatus } from './templates/pipeline-status.js';
+import { renderJourneysTypes } from './templates/journeys-types.js';
+import { renderJourneysEngine } from './templates/journeys-engine.js';
+import { renderJourneysValidator } from './templates/journeys-validator.js';
 
 /**
  * Emits project infrastructure files that are fully independent of the language and automation
@@ -138,6 +141,24 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderPipelineStatus() },
+          },
+          {
+            path: '.scaffold/schemas/journeys.types.ts',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderJourneysTypes() },
+          },
+          {
+            path: 'scripts/compose-journeys.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderJourneysEngine() },
+          },
+          {
+            path: 'scripts/validate-journeys.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderJourneysValidator() },
           },
         ] as FileDescriptor[])
       : []),
