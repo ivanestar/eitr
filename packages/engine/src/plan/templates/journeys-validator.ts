@@ -1,15 +1,15 @@
 // Template for generating scripts/validate-journeys.mjs. create-if-absent.
-// Mechanical shape gate for docs/analysis/journeys.json, zero dependencies, same style as
+// Mechanical shape gate for artifacts/test-cases/test-cases.json, zero dependencies, same style as
 // test-conditions-validator.ts. Supports --stage=structural to run only the pre-drafting subset of
 // checks (Gate 1, right after scripts/compose-journeys.mjs runs), or the full check set with no
-// flag (Gate 2, after the /compose-test-cases skill's LLM step drafts testCase).
+// flag (Gate 2, after the /design-test-cases skill's LLM step drafts testCase).
 
 export function renderJourneysValidator(): string {
   return `#!/usr/bin/env node
 
 /**
- * Mechanical shape gate for docs/analysis/journeys.json.
- * Zero model involvement - pure structural checks, run by /compose-test-cases before Gate 1
+ * Mechanical shape gate for artifacts/test-cases/test-cases.json.
+ * Zero model involvement - pure structural checks, run by /design-test-cases before Gate 1
  * (--stage=structural) and again in full (Gate 2) after the test case is drafted.
  *
  * Usage:
@@ -21,8 +21,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const JOURNEYS_PATH = path.join(CWD, 'docs', 'analysis', 'journeys.json');
-const TEST_CONDITIONS_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
+const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
+const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 
 const args = process.argv.slice(2);
 const stageArg = args.find(function (a) {
@@ -73,7 +73,7 @@ function isConditionAssignment(value, label, errors, knownConditionIds) {
       label +
         '.conditionId "' +
         value.conditionId +
-        '" does not exist in docs/analysis/test-conditions.json.',
+        '" does not exist in artifacts/analysis/test-conditions.json.',
     );
   }
   if (!TEST_LEVEL_VALUES.has(value.testLevel)) {
@@ -160,7 +160,7 @@ function isJourneyEntry(value, label, errors, knownConditionIds, seenJourneyIds,
 
 function validate() {
   const errors = [];
-  const loaded = loadJson(JOURNEYS_PATH, 'docs/analysis/journeys.json');
+  const loaded = loadJson(JOURNEYS_PATH, 'artifacts/test-cases/test-cases.json');
   if (loaded.error) {
     errors.push(loaded.error);
     return { status: 'FAILED', errors };
@@ -168,7 +168,7 @@ function validate() {
   const data = loaded.value;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     errors.push(
-      'docs/analysis/journeys.json must contain a JSON object, found ' + JSON.stringify(data) + '.',
+      'artifacts/test-cases/test-cases.json must contain a JSON object, found ' + JSON.stringify(data) + '.',
     );
     return { status: 'FAILED', errors };
   }
@@ -183,7 +183,7 @@ function validate() {
     return { status: 'FAILED', errors };
   }
 
-  const testConditionsLoaded = loadJson(TEST_CONDITIONS_PATH, 'docs/analysis/test-conditions.json');
+  const testConditionsLoaded = loadJson(TEST_CONDITIONS_PATH, 'artifacts/analysis/test-conditions.json');
   const knownConditionIds = testConditionsLoaded.error
     ? null
     : collectKnownConditionIds(testConditionsLoaded.value);

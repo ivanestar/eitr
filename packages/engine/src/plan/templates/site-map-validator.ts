@@ -1,9 +1,9 @@
 // Template for generating scripts/validate-site-map.mjs. create-if-absent.
 // The same mechanical gate ADR 0012 Decision item 2 requires at every stage boundary ("validates
 // the artifact's shape and internal consistency... with zero model involvement before an LLM or a
-// human ever reviews its content"), applied to docs/site-map/site-map.json itself - the foundation
+// human ever reviews its content"), applied to artifacts/site-map/site-map.json itself - the foundation
 // every downstream consumer (shared-widget mining, scripts/orchestrate-swarm.mjs,
-// docs/analysis/business-intent.json's Step 6, pom-engineer) keys off. Mirrors
+// artifacts/analysis/business-intent.json's Step 6, pom-engineer) keys off. Mirrors
 // business-intent-validator.ts's style and zero-dependency constraint exactly; the two scripts are
 // intentionally not shared code, matching every other renderXValidator template in this project.
 
@@ -11,7 +11,7 @@ export function renderSiteMapValidator(): string {
   return `#!/usr/bin/env node
 
 /**
- * Mechanical shape gate for docs/site-map/site-map.json.
+ * Mechanical shape gate for artifacts/site-map/site-map.json.
  * Zero model involvement - pure structural checks, run by /map-site's Step 3c immediately after
  * writing the file and before any downstream consumer (shared-widget mining, the swarm dispatcher,
  * business-intent analysis) reads it.
@@ -25,7 +25,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const SITE_MAP_PATH = path.join(CWD, 'docs', 'site-map', 'site-map.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 
 const BOUNDED_BY_VALUES = new Set(['maxDepth', 'maxPages']);
 const STATUS_VALUES = new Set(['active', 'removed']);
@@ -53,7 +53,7 @@ function isStringArray(value) {
 
 function validate() {
   const errors = [];
-  const loaded = loadJson(SITE_MAP_PATH, 'docs/site-map/site-map.json');
+  const loaded = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
   if (loaded.error) {
     errors.push(loaded.error);
     return { status: 'FAILED', errors };
@@ -61,7 +61,7 @@ function validate() {
   const data = loaded.value;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     errors.push(
-      'docs/site-map/site-map.json must contain a JSON object, found ' + JSON.stringify(data) + '.',
+      'artifacts/site-map/site-map.json must contain a JSON object, found ' + JSON.stringify(data) + '.',
     );
     return { status: 'FAILED', errors };
   }

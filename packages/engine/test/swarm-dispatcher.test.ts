@@ -47,9 +47,9 @@ const SITE_MAP = {
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-swarm-'));
   writeFileSync(join(dir, 'orchestrate-swarm.mjs'), renderSwarmDispatcher(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
   writeFileSync(
-    join(dir, 'docs', 'site-map', 'site-map.json'),
+    join(dir, 'artifacts', 'site-map', 'site-map.json'),
     JSON.stringify(SITE_MAP, null, 2),
     'utf8',
   );
@@ -90,9 +90,9 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'eitr-swarm-root-'));
     try {
       writeFileSync(join(dir, 'orchestrate-swarm.mjs'), renderSwarmDispatcher(), 'utf8');
-      mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
+      mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
       writeFileSync(
-        join(dir, 'docs', 'site-map', 'site-map.json'),
+        join(dir, 'artifacts', 'site-map', 'site-map.json'),
         JSON.stringify({
           schemaVersion: 2,
           generatedAt: '2026-09-02T10:00:00.000Z',
@@ -154,7 +154,7 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
     }
   });
 
-  it('--phase=plan fails clearly when docs/site-map/site-map.json is missing', () => {
+  it('--phase=plan fails clearly when artifacts/site-map/site-map.json is missing', () => {
     const dir = mkdtempSync(join(tmpdir(), 'eitr-swarm-nomap-'));
     try {
       writeFileSync(join(dir, 'orchestrate-swarm.mjs'), renderSwarmDispatcher(), 'utf8');
@@ -170,8 +170,12 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'eitr-swarm-badjson-'));
     try {
       writeFileSync(join(dir, 'orchestrate-swarm.mjs'), renderSwarmDispatcher(), 'utf8');
-      mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
-      writeFileSync(join(dir, 'docs', 'site-map', 'site-map.json'), '{ not valid json', 'utf8');
+      mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'site-map', 'site-map.json'),
+        '{ not valid json',
+        'utf8',
+      );
       const result = run(dir, ['--phase=plan']);
       expect(result.status).toBe(1);
       expect(result.stderr).toContain('is not valid JSON');
@@ -184,9 +188,9 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'eitr-swarm-badroute-'));
     try {
       writeFileSync(join(dir, 'orchestrate-swarm.mjs'), renderSwarmDispatcher(), 'utf8');
-      mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
+      mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
       writeFileSync(
-        join(dir, 'docs', 'site-map', 'site-map.json'),
+        join(dir, 'artifacts', 'site-map', 'site-map.json'),
         JSON.stringify({
           schemaVersion: 2,
           generatedAt: '2026-09-02T10:00:00.000Z',

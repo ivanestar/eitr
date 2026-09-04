@@ -1,12 +1,12 @@
 // Template for generating scripts/generate-test-conditions.mjs. create-if-absent.
 // The deterministic half of ADR 0012 Stage 2's "Hybrid Two-Phase Engine": an LLM (via the
-// /derive-test-conditions skill's Step 2) infers parameters[]/constraints[] from read-only DOM
+// /define-test-conditions skill's Step 2) infers parameters[]/constraints[] from read-only DOM
 // inspection; this script mechanically expands that into 2-way combinatorial coverage plus
 // 3-value boundary-value conditions, falling back to one condition per partition
 // (equivalence-partition technique) for a route with fewer than 2 parameters, where pairwise
 // coverage has nothing to pair against - zero model involvement, same zero-dependency style as
 // scripts/orchestrate-swarm.mjs and the two validate-*.mjs scripts. The checklist-based technique
-// additionally cross-references docs/analysis/business-intent.json's criticalityTier - reviewed
+// additionally cross-references artifacts/analysis/business-intent.json's criticalityTier - reviewed
 // entries only, per that file's own Human Sign-Off Gateway rule - to scale down on medium/low-
 // criticality routes rather than firing the same fixed checklist everywhere regardless of the
 // route's own importance.
@@ -25,7 +25,7 @@ export function renderTestConditionsEngine(): string {
   return `#!/usr/bin/env node
 
 /**
- * Deterministic test-condition generator for docs/analysis/test-conditions.json.
+ * Deterministic test-condition generator for artifacts/analysis/test-conditions.json.
  * Zero model involvement - reads parameters[]/constraints[] already extracted per route and
  * mechanically computes 2-way combinatorial coverage plus 3-value boundary-value conditions.
  *
@@ -39,8 +39,8 @@ import process from 'node:process';
 import crypto from 'node:crypto';
 
 const CWD = process.cwd();
-const REPORT_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
-const BUSINESS_INTENT_PATH = path.join(CWD, 'docs', 'analysis', 'business-intent.json');
+const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -350,6 +350,64 @@ function buildVectors(parameters, constraints) {
   return { vectors, unsatisfied };
 }
 
+function paramByName(parameters, name) {
+  return parameters.find(function (p) {
+    return p.name === name;
+  });
+}
+
+// HTML5 min/max are inclusive per spec - the boundary value itself is valid, the value one step
+// inside it is valid, and only the value one step past it is invalid. The 3-value BVA order is
+// always [boundary-1, boundary, boundary+1] regardless of which side (min/max) is being probed.
+function boundaryProbeIsValid(boundary, index) {
+  return boundary === 'min' ? index !== 0 : index !== 2;
+}
+
+// Synthesizes a human-readable sentence for one condition's vector, deterministically from data
+// already present - never free model inference. targetName/targetIsValid apply only to
+// boundary-value/checklist-based conditions, where that one parameter's vector entry is a literal
+// probe value rather than a partitionId; every other technique resolves every vector entry as a
+// partitionId lookup against that parameter's own partitions.
+function describeCondition(parameters, vector, targetName, targetIsValid) {
+  const orderedNames = parameters
+    .map(function (p) {
+      return p.name;
+    })
+    .filter(function (name) {
+      return Object.prototype.hasOwnProperty.call(vector, name);
+    });
+  let allValid = true;
+  const clauses = orderedNames.map(function (name) {
+    const rawValue = vector[name];
+    let text;
+    let isValid;
+    if (name === targetName) {
+      text = rawValue;
+      isValid = targetIsValid;
+    } else {
+      const param = paramByName(parameters, name);
+      const partition =
+        param &&
+        param.partitions.find(function (p) {
+          return p.id === rawValue;
+        });
+      text =
+        partition && partition.sampleValues && partition.sampleValues[0] !== undefined
+          ? partition.sampleValues[0]
+          : rawValue;
+      isValid = !partition || partition.kind === 'valid';
+    }
+    if (!isValid) allValid = false;
+    return name + '=' + JSON.stringify(text);
+  });
+  const scenario = allValid ? 'positive' : 'negative';
+  const verb = allValid ? 'accepts' : 'correctly handles';
+  return {
+    description: 'Verify the page ' + verb + ' ' + clauses.join(', ') + ' (' + scenario + ')',
+    scenario: scenario,
+  };
+}
+
 function buildBoundaryConditions(routeId, parameters) {
   const conditions = [];
   for (const param of parameters) {
@@ -360,7 +418,7 @@ function buildBoundaryConditions(routeId, parameters) {
       }) || param.partitions[0];
     if (!validPartition) continue;
     for (const boundarySet of param.boundaries) {
-      for (const value of boundarySet.values) {
+      boundarySet.values.forEach(function (value, index) {
         const vector = {};
         for (const other of parameters) {
           if (other.name === param.name) {
@@ -373,15 +431,19 @@ function buildBoundaryConditions(routeId, parameters) {
             }) || other.partitions[0];
           vector[other.name] = otherValid.id;
         }
+        const isValid = boundaryProbeIsValid(boundarySet.boundary, index);
+        const described = describeCondition(parameters, vector, param.name, isValid);
         conditions.push({
           conditionId: conditionId(routeId, vector),
           parameters: vector,
           technique: 'boundary-value',
+          description: described.description,
+          scenario: described.scenario,
           verification: {},
           isSpeculative: true,
           reviewed: false,
         });
-      }
+      });
     }
   }
   return conditions;
@@ -398,10 +460,13 @@ function buildEquivalencePartitionConditions(routeId, parameters) {
     for (const partition of param.partitions) {
       const vector = {};
       vector[param.name] = partition.id;
+      const described = describeCondition(parameters, vector, undefined, undefined);
       conditions.push({
         conditionId: conditionId(routeId, vector),
         parameters: vector,
         technique: 'equivalence-partition',
+        description: described.description,
+        scenario: described.scenario,
         verification: {},
         isSpeculative: true,
         reviewed: false,
@@ -423,8 +488,8 @@ const CHECKLIST_VALUES = {
   date: ['0000-00-00', '9999-12-31', 'not-a-date'],
 };
 
-// Reads docs/analysis/business-intent.json fresh on every run (a separate artifact from a
-// different skill's stage - it can change or be re-reviewed between when /derive-test-conditions
+// Reads artifacts/analysis/business-intent.json fresh on every run (a separate artifact from a
+// different skill's stage - it can change or be re-reviewed between when /define-test-conditions
 // Step 1 last checked it and when this script runs) and returns a routeId -> criticalityTier.value
 // map, using ONLY entries with reviewed:true - an unreviewed entry is never ground truth for any
 // other skill or agent (the same rule /map-site Step 6's own Human Sign-Off Gateway states), so an
@@ -435,7 +500,7 @@ const CHECKLIST_VALUES = {
 // side below, never the reduced side.
 function loadCriticalityMap() {
   const map = {};
-  const loaded = loadJson(BUSINESS_INTENT_PATH, 'docs/analysis/business-intent.json');
+  const loaded = loadJson(BUSINESS_INTENT_PATH, 'artifacts/analysis/business-intent.json');
   if (loaded.error || !loaded.value || typeof loaded.value.routes !== 'object') return map;
   for (const [routeId, entry] of Object.entries(loaded.value.routes)) {
     if (!entry || entry.reviewed !== true) continue;
@@ -475,10 +540,13 @@ function buildChecklistConditions(routeId, parameters, criticalityTier) {
         if (!otherValid) continue;
         vector[other.name] = otherValid.id;
       }
+      const described = describeCondition(parameters, vector, target.name, false);
       conditions.push({
         conditionId: conditionId(routeId, vector),
         parameters: vector,
         technique: 'checklist-based',
+        description: described.description,
+        scenario: described.scenario,
         verification: {},
         isSpeculative: true,
         reviewed: false,
@@ -496,10 +564,13 @@ function generateForRoute(routeId, entry, criticalityTier) {
   }
   const { vectors, unsatisfied } = buildVectors(entry.parameters, entry.constraints || []);
   const combinatorialConditions = vectors.map(function (vector) {
+    const described = describeCondition(entry.parameters, vector, undefined, undefined);
     return {
       conditionId: conditionId(routeId, vector),
       parameters: vector,
       technique: 'combinatorial',
+      description: described.description,
+      scenario: described.scenario,
       verification: {},
       isSpeculative: true,
       reviewed: false,
@@ -547,7 +618,7 @@ function checkShape(data) {
 }
 
 function generate() {
-  const report = loadJson(REPORT_PATH, 'docs/analysis/test-conditions.json');
+  const report = loadJson(REPORT_PATH, 'artifacts/analysis/test-conditions.json');
   if (report.error) {
     process.stdout.write(JSON.stringify({ status: 'FAILED', errors: [report.error] }, null, 2) + '\\n');
     process.exit(1);
@@ -556,7 +627,7 @@ function generate() {
   if (!data || typeof data !== 'object' || !data.routes || typeof data.routes !== 'object') {
     process.stdout.write(
       JSON.stringify(
-        { status: 'FAILED', errors: ['docs/analysis/test-conditions.json has no routes object.'] },
+        { status: 'FAILED', errors: ['artifacts/analysis/test-conditions.json has no routes object.'] },
         null,
         2,
       ) + '\\n',

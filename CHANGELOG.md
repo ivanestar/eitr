@@ -7,6 +7,45 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.31.0] - 2026-09-04
+
+- **Changed**: `/derive-test-conditions` and `/compose-test-cases` renamed to `/define-test-conditions`
+  and `/design-test-cases` (Test Analysis defines test conditions; Test Design designs test cases
+  from them). Prose throughout both skills, `/ground-zero-setup`, `pipeline-status.mjs`'s
+  `nextCommand`, and the `sdet-orchestrator` agent updated to match.
+- **Changed**: the drafted-test-case artifact moved from `docs/analysis/journeys.json` to its own
+  `artifacts/test-cases/test-cases.json` - `artifacts/analysis/` now holds only Stage 1/2's
+  business-intent and test-conditions artifacts, the final output of the test analysis phase.
+  `scripts/compose-journeys.mjs` now creates its output directory itself.
+- **Changed**: the whole app-analysis pipeline's output root renamed from `docs/` to `artifacts/`
+  (`artifacts/site-map/`, `artifacts/analysis/`, `artifacts/test-cases/`) - `artifact` was already
+  the term used throughout every review gateway's own name (Business-Intent Review Artifact,
+  Test-Conditions Review Artifact); the folder now matches. Frees `docs/` for a generated project's
+  own real documentation, which nothing previously claimed.
+- **Removed**: the `overrides/` seed directory and its `README.md` - real customization already
+  happens by building on top of the owned tree (a Page Object importing from `components/`, a test
+  importing from `shared/`), and the dedicated directory added a step nothing actually used.
+  `tsconfig.json`'s `include` and the generated README's component-library section updated to
+  match; `docs/architecture/decisions/0004-path-authority-regeneration.md` updated to drop the
+  now-false "exactly one correct home" claim while keeping its still-valid core decision (path
+  authority by write-policy, not content hash).
+- **Changed**: `/design-test-cases` now requires one atomic action per drafted step, each with its
+  own concrete expected result drawn from the underlying condition's `description`/`scenario`,
+  instead of steps that bundled several actions behind one blanket result at the end - drafted
+  steps read too generically to review or automate meaningfully, reported from live use. Each
+  drafted step maps to its own `test.step()` block once `/automate-ticket` generates code from it,
+  so a step needs its own verifiable result to be useful.
+- **Fixed**: `/define-test-conditions`'s Test-Conditions Review Artifact printed only per-parameter
+  statistics (`Parameter: ... Technique: ... Conditions: <count> Speculative: <count>`), never the
+  actual conditions - a human could not review or correct what they never saw, reported from live
+  use. Every condition now carries a `description` (one plain sentence, e.g. `Verify the page
+accepts language="en" (positive)`) and a `scenario` (`positive`/`negative`), synthesized
+  deterministically from the vector's own resolved partition sample values or literal
+  boundary/checklist probe - zero model involvement, same as the rest of condition generation. The
+  artifact now lists every condition by its description instead of an aggregate count, and surfaces
+  within-route parameter constraints in plain language when present (cross-route/cross-feature
+  dependencies remain untracked and out of scope for this stage).
+
 ## [0.30.0] - 2026-09-04
 
 - **Fixed**: Java's Playwright dependency pin (Gradle and Maven templates) and its Docker image tag

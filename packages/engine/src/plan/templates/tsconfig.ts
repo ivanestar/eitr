@@ -25,7 +25,7 @@ export function renderTsconfig(): string {
       "@fixtures": ["./tests/fixtures.ts"]
     }
   },
-  "include": ["components", "tests", "shared", "overrides", "playwright.config.ts"]
+  "include": ["components", "tests", "shared", "playwright.config.ts"]
 }
 `;
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderJourneysEngine } from '../src/plan/templates/journeys-engine.js';
@@ -44,13 +44,15 @@ function testConditionsFixture(routes: Record<string, unknown>) {
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-journeys-engine-'));
   writeFileSync(join(dir, 'compose-journeys.mjs'), renderJourneysEngine(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
+  // Deliberately NOT pre-creating artifacts/test-cases - the script must create its own output
+  // directory, unlike artifacts/analysis, which an earlier pipeline stage already writes into.
   return dir;
 }
 
 function writeTestConditions(dir: string, data: unknown) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
@@ -58,14 +60,14 @@ function writeTestConditions(dir: string, data: unknown) {
 
 function writeJourneys(dir: string, data: unknown) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'journeys.json'),
+    join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
 }
 
 function readJourneys(dir: string) {
-  return JSON.parse(readFileSync(join(dir, 'docs', 'analysis', 'journeys.json'), 'utf8'));
+  return JSON.parse(readFileSync(join(dir, 'artifacts', 'test-cases', 'test-cases.json'), 'utf8'));
 }
 
 function run(dir: string) {
@@ -165,6 +167,19 @@ function assignmentFor(
 }
 
 describe('scripts/compose-journeys.mjs (real execution)', () => {
+  it('creates artifacts/test-cases itself - unlike artifacts/analysis, no earlier stage writes into it first', () => {
+    const dir = setupProject();
+    try {
+      expect(existsSync(join(dir, 'artifacts', 'test-cases'))).toBe(false);
+      writeTestConditions(dir, testConditionsFixture(routeAFixture()));
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      expect(existsSync(join(dir, 'artifacts', 'test-cases', 'test-cases.json'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('assigns the all-valid vector e2e, and the anchor is never downgraded by a sibling condition', () => {
     const dir = setupProject();
     try {

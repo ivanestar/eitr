@@ -23,10 +23,10 @@ import path from 'node:path';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const SITE_MAP_PATH = path.join(CWD, 'docs', 'site-map', 'site-map.json');
-const BUSINESS_INTENT_PATH = path.join(CWD, 'docs', 'analysis', 'business-intent.json');
-const TEST_CONDITIONS_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
-const JOURNEYS_PATH = path.join(CWD, 'docs', 'analysis', 'journeys.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
+const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
+const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 
 function loadJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -77,8 +77,8 @@ function anyJourneyNeedsAutomation(journeys) {
 // Checks drafting completeness per-route against test-conditions.json, not just "does at least one
 // journey somewhere have a testCase" - a route can have reviewed conditions but either no journey
 // entry yet (compose-journeys.mjs hasn't run since that route's conditions were reviewed) or a
-// journey with conditionAssignments but no testCase yet (the /compose-test-cases LLM drafting step
-// was interrupted before reaching it). Either state must route back to /compose-test-cases; treating
+// journey with conditionAssignments but no testCase yet (the /design-test-cases LLM drafting step
+// was interrupted before reaching it). Either state must route back to /design-test-cases; treating
 // it as done would silently report 'complete' while a route was never even drafted.
 function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeysRoutes) {
   if (!testConditionRoutes || typeof testConditionRoutes !== 'object') return true;
@@ -132,8 +132,8 @@ function computeStatus() {
   if (!testConditions) {
     return {
       stage: 'business-intent-reviewed',
-      nextCommand: '/derive-test-conditions',
-      nextCommandDescription: 'Business-intent is reviewed. Run /derive-test-conditions next.',
+      nextCommand: '/define-test-conditions',
+      nextCommandDescription: 'Business-intent is reviewed. Run /define-test-conditions next.',
     };
   }
 
@@ -153,9 +153,9 @@ function computeStatus() {
   if (!everyReviewedRouteHasDraftedTestCase(testConditions.routes, journeysRoutes)) {
     return {
       stage: 'test-conditions-reviewed',
-      nextCommand: '/compose-test-cases',
+      nextCommand: '/design-test-cases',
       nextCommandDescription:
-        'Test conditions are reviewed. Run /compose-test-cases to classify them onto test levels and draft a test case per journey.',
+        'Test conditions are reviewed. Run /design-test-cases to classify them onto test levels and draft a test case per journey.',
     };
   }
 
@@ -164,7 +164,7 @@ function computeStatus() {
       stage: 'test-cases-drafted',
       nextCommand: '/automate-ticket',
       nextCommandDescription:
-        'Test cases are drafted in docs/analysis/journeys.json. Run /automate-ticket with no ticket ID to automate them directly - no TMS ticket required.',
+        'Test cases are drafted in artifacts/test-cases/test-cases.json. Run /automate-ticket with no ticket ID to automate them directly - no TMS ticket required.',
     };
   }
 
@@ -172,7 +172,7 @@ function computeStatus() {
     stage: 'complete',
     nextCommand: null,
     nextCommandDescription:
-      'Every drafted test case has been automated. Run /map-site update to discover new routes, or /derive-test-conditions to cover changed ones.',
+      'Every drafted test case has been automated. Run /map-site update to discover new routes, or /define-test-conditions to cover changed ones.',
   };
 }
 

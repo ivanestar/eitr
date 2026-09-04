@@ -8,14 +8,15 @@ import { renderPipelineStatus } from '../src/plan/templates/pipeline-status.js';
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-pipeline-status-'));
   writeFileSync(join(dir, 'pipeline-status.mjs'), renderPipelineStatus(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
-  mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'test-cases'), { recursive: true });
   return dir;
 }
 
 function writeSiteMap(dir: string) {
   writeFileSync(
-    join(dir, 'docs', 'site-map', 'site-map.json'),
+    join(dir, 'artifacts', 'site-map', 'site-map.json'),
     JSON.stringify({ schemaVersion: 2, generatedAt: '2026-09-03T10:00:00.000Z', routes: {} }),
     'utf8',
   );
@@ -23,7 +24,7 @@ function writeSiteMap(dir: string) {
 
 function writeBusinessIntent(dir: string, reviewed: boolean) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'business-intent.json'),
+    join(dir, 'artifacts', 'analysis', 'business-intent.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-03T10:00:00.000Z',
@@ -55,7 +56,7 @@ function writeBusinessIntent(dir: string, reviewed: boolean) {
 
 function writeTestConditions(dir: string, reviewed: boolean) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-03T11:00:00.000Z',
@@ -88,7 +89,7 @@ function writeTestConditions(dir: string, reviewed: boolean) {
 
 function writeJourneys(dir: string, opts: { withTestCase: boolean; reviewed: boolean }) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'journeys.json'),
+    join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-04T09:00:00.000Z',
@@ -132,7 +133,7 @@ function writeJourneys(dir: string, opts: { withTestCase: boolean; reviewed: boo
 
 function writeTestConditionsTwoRoutes(dir: string) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-03T11:00:00.000Z',
@@ -184,8 +185,8 @@ function writeTestConditionsTwoRoutes(dir: string) {
 }
 
 // route-checkout is always fully drafted+automated; route-cart is either entirely absent from
-// journeys.json (compose-journeys.mjs never ran since its conditions were reviewed) or present with
-// a journey but no testCase yet (the /compose-test-cases drafting step was interrupted) - the two
+// test-cases.json (compose-journeys.mjs never ran since its conditions were reviewed) or present with
+// a journey but no testCase yet (the /design-test-cases drafting step was interrupted) - the two
 // distinct ways a reviewed route can be invisible to a "does any journey have a testCase" check.
 function writeJourneysCheckoutOnly(dir: string, opts: { cartHasJourneyWithoutTestCase: boolean }) {
   const routes: Record<string, unknown> = {
@@ -229,7 +230,7 @@ function writeJourneysCheckoutOnly(dir: string, opts: { cartHasJourneyWithoutTes
     };
   }
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'journeys.json'),
+    join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
     JSON.stringify({ schemaVersion: 1, generatedAt: '2026-09-04T09:00:00.000Z', routes }),
     'utf8',
   );
@@ -282,7 +283,11 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('does not crash on a malformed business-intent.json - degrades to business-intent-pending-review', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeFileSync(join(dir, 'docs', 'analysis', 'business-intent.json'), 'not valid json', 'utf8');
+    writeFileSync(
+      join(dir, 'artifacts', 'analysis', 'business-intent.json'),
+      'not valid json',
+      'utf8',
+    );
     try {
       const result = run(dir);
       expect(result.status).toBe(0);
@@ -293,7 +298,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports business-intent-reviewed (next: /derive-test-conditions) once reviewed, before test-conditions.json exists', () => {
+  it('reports business-intent-reviewed (next: /define-test-conditions) once reviewed, before test-conditions.json exists', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -301,7 +306,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('business-intent-reviewed');
-      expect(output.nextCommand).toBe('/derive-test-conditions');
+      expect(output.nextCommand).toBe('/define-test-conditions');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -322,7 +327,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports test-conditions-reviewed (next: /compose-test-cases) once test conditions are reviewed, before journeys.json exists', () => {
+  it('reports test-conditions-reviewed (next: /design-test-cases) once test conditions are reviewed, before test-cases.json exists', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -331,13 +336,13 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-conditions-reviewed');
-      expect(output.nextCommand).toBe('/compose-test-cases');
+      expect(output.nextCommand).toBe('/design-test-cases');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('reports test-conditions-reviewed (next: /compose-test-cases) when journeys.json exists but no journey has a drafted testCase yet', () => {
+  it('reports test-conditions-reviewed (next: /design-test-cases) when test-cases.json exists but no journey has a drafted testCase yet', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -347,18 +352,22 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-conditions-reviewed');
-      expect(output.nextCommand).toBe('/compose-test-cases');
+      expect(output.nextCommand).toBe('/design-test-cases');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('does not crash on a malformed journeys.json - degrades to test-conditions-reviewed', () => {
+  it('does not crash on a malformed test-cases.json - degrades to test-conditions-reviewed', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
     writeTestConditions(dir, true);
-    writeFileSync(join(dir, 'docs', 'analysis', 'journeys.json'), 'not valid json', 'utf8');
+    writeFileSync(
+      join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
+      'not valid json',
+      'utf8',
+    );
     try {
       const result = run(dir);
       expect(result.status).toBe(0);
@@ -411,7 +420,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-conditions-reviewed');
-      expect(output.nextCommand).toBe('/compose-test-cases');
+      expect(output.nextCommand).toBe('/design-test-cases');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -427,7 +436,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('test-conditions-reviewed');
-      expect(output.nextCommand).toBe('/compose-test-cases');
+      expect(output.nextCommand).toBe('/design-test-cases');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

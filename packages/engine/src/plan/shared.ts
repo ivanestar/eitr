@@ -30,7 +30,6 @@ import { renderEslintConfig } from './templates/eslint-config.js';
 import { renderDockerfile, renderDockerignore } from './templates/docker.js';
 import { renderSiteMapSchema } from './templates/site-map-schema.js';
 import { renderGitHooks } from './templates/git-hooks.js';
-import { renderOverridesReadme } from './templates/overrides-readme.js';
 import { renderSwarmDispatcher } from './templates/swarm-dispatcher.js';
 import { renderBusinessIntentTypes } from './templates/business-intent-types.js';
 import { renderBusinessIntentValidator } from './templates/business-intent-validator.js';
@@ -150,7 +149,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             source: { kind: 'inline', text: renderPipelineStatus() },
           },
           {
-            path: '.scaffold/schemas/journeys.types.ts',
+            path: '.scaffold/schemas/test-cases.types.ts',
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderJourneysTypes() },
@@ -169,12 +168,6 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
           },
         ] as FileDescriptor[])
       : []),
-    {
-      path: 'overrides/README.md',
-      writePolicy: 'create-if-absent',
-      provenance: { origin: 'seed' },
-      source: { kind: 'inline', text: renderOverridesReadme() },
-    },
     ...(opts.docker !== false
       ? ([
           {

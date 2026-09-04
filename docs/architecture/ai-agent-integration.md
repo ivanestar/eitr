@@ -26,13 +26,13 @@ Generated Test Repository
 │   │                             DLP -> Intent -> AST Code -> Green run
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
 │   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
-│   ├── /ground-zero-setup    -- Guided orchestrator: chains /map-site + /derive-test-conditions +
-│   │                             /compose-test-cases, with a human sign-off gate per stage, or auto-pilot
+│   ├── /ground-zero-setup    -- Guided orchestrator: chains /map-site + /define-test-conditions +
+│   │                             /design-test-cases, with a human sign-off gate per stage, or auto-pilot
 │   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
 │   │                             optional read-only business-intent analysis (ADR 0012 Stage 1)
-│   ├── /derive-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
+│   ├── /define-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
 │   │                             combinatorial/boundary-value condition generation (ADR 0012 Stage 2)
-│   └── /compose-test-cases   -- Deterministic test-level classification + drafted test case per
+│   └── /design-test-cases    -- Deterministic test-level classification + drafted test case per
 │                                 journey (ADR 0012 Stage 3/4)
 │
 ├── 3. Model Context Protocol (MCP) Layer (.mcp.json, .cursor/mcp.json, .claude/mcp.json, etc.)
@@ -89,7 +89,7 @@ verifying actual business logic:
 
 A strictly read-only `/map-site` step, run automatically as part of every `create`/`update` pass
 (unless the user explicitly asks to skip it), infers per-route business intent (`businessFeature`)
-and criticality (`criticalityTier`) into a typed artifact, `docs/analysis/business-intent.json`
+and criticality (`criticalityTier`) into a typed artifact, `artifacts/analysis/business-intent.json`
 (`.scaffold/schemas/business-intent.types.ts` documents its shape - `schemaVersion: 1`,
 `Field<T>`-wrapped values, keyed by `routeId`). It never performs a mutating Playwright call of any
 kind, not even a `trial: true` dry-run - inference draws only from already-rendered page title, heading text, form field labels,
@@ -103,7 +103,7 @@ it stays an internal signal, never shown in the review artifact itself, since a 
 `businessFeature.confidence` and `criticalityTier.confidence` are independently computed and
 routinely disagree. `criticalityTier` follows a written, evidence-anchored checklist rather than
 free inference, is labeled "draft" in the review artifact (it drives real downstream automation -
-`/derive-test-conditions`'s checklist volume - once approved, so it earns its own reminder beyond
+`/define-test-conditions`'s checklist volume - once approved, so it earns its own reminder beyond
 the block-level notice), and every `Field<T>` carries a `reasoning` string that reads as a plain
 explanation for a human (what was found, why it matters for this kind of application), never a
 trace of which internal rule fired. Evidence is deduplicated once per route rather than repeated
@@ -118,7 +118,7 @@ confirmed purpose, numbers each route for easy reference, and offers a bulk-corr
 (`high: 1, 4, 5-8; critical: 2-3`) alongside free-form correction. Approval also records who gave it - `reviewedBy: 'human'` for a
 real conversational approval, or `'auto-pilot'` only when `/ground-zero-setup`'s auto-pilot mode set
 it on the user's own explicit pre-authorization - so a later audit can always tell which entries a
-human actually looked at. `docs/site-map/site-map.json` itself gets the same mechanical
+human actually looked at. `artifacts/site-map/site-map.json` itself gets the same mechanical
 gate one level down (`scripts/validate-site-map.mjs`, run immediately after every `create`/`update`
 pass, before shared-widget mining, the swarm dispatcher, or this step read it) - the shape defect
 this catches (a malformed route entry, a duplicate `routeId`) is cheaper and more reliably caught by
@@ -132,11 +132,14 @@ normal outcome, not an error. See
 for the design decision this implements and what remains out of scope for this first stage
 (transport choice, cross-route journey synthesis).
 
-## Test-condition derivation (`/derive-test-conditions`, ADR 0012 Stage 2)
+## Test analysis (`/define-test-conditions`, ADR 0012 Stage 2)
+
+Stage 2 and Stage 3 below take their names (test analysis defines test conditions, test design
+designs test cases from them) from the ISTQB Foundation Level syllabus's fundamental test process.
 
 A second, explicit-request-only, strictly read-only skill consumes `business-intent.json`'s
 `reviewed: true` entries plus `site-map.json` and derives typed test conditions per route into
-`docs/analysis/test-conditions.json` (`.scaffold/schemas/test-conditions.types.ts` documents its
+`artifacts/analysis/test-conditions.json` (`.scaffold/schemas/test-conditions.types.ts` documents its
 shape). An LLM step infers form parameters and their equivalence partitions from markup only
 (tag, `type`, label text, HTML5 constraint attributes, `<select>` option text, static ARIA
 relationships) - never a field's current `value`/`checked`/`selected` state, never a mutating
@@ -149,7 +152,11 @@ is genuinely impossible, never merely because an earlier, unrelated greedy attem
 same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
 deterministic redaction backstop - independent of what the LLM step already did - masking
 digit-run and majority-digit PII shapes in every evidence excerpt and sample value before the
-artifact is ever written. Every generated condition starts `isSpeculative: true`/`reviewed: false`
+artifact is ever written. Every generated condition also carries a `description` (one plain sentence, e.g. `Verify the page
+accepts language="en" (positive)`) and a `scenario` (`positive`/`negative`), both synthesized
+deterministically from the vector's own resolved partition sample values or literal boundary/
+checklist probe - what a human actually reviews at sign-off, never a bare parameter/technique/count
+summary. Every generated condition starts `isSpeculative: true`/`reviewed: false`
 with an empty verification contract; a human fills in expected UI/state/network behavior at the
 same kind of Human Sign-Off Gateway Stage 1 already established, recording `reviewedBy` the same
 way (`'human'` or `'auto-pilot'`) once approved. See
@@ -157,12 +164,27 @@ way (`'human'` or `'auto-pilot'`) once approved. See
 for what remains out of scope for this stage (domain classification, journey/test-level placement,
 spec synthesis, combinatorial strength beyond 2-way, general boolean-predicate constraints).
 
+## Test design (`/design-test-cases`, ADR 0012 Stage 3)
+
+Bridges `test-conditions.json`'s reviewed conditions to a drafted, TMS-shaped test case, keyed by
+`artifacts/test-cases/test-cases.json` (`.scaffold/schemas/test-cases.types.ts` documents its shape).
+`scripts/compose-journeys.mjs` deterministically classifies every condition onto a test level
+(`e2e`/`api`/`ui-only`) and groups them into one journey per route - zero model involvement, zero
+dependency on `criticalityTier` or any other LLM-derived signal, which is too unstable to gate a
+structural decision on. An LLM step then drafts each journey's `testCase` (title, preconditions,
+ordered steps): every step is one atomic action with its own concrete expected result, never a
+step bundling several actions behind one blanket result - drawn directly from each condition's own
+`description`/`scenario` rather than invented prose, since `/automate-ticket` wraps each drafted
+step in its own `test.step()` block and needs something concrete to assert on. Unlike every earlier
+stage in this pipeline, this one does not pause for a blocking Human Sign-Off Gateway - it writes
+the draft and moves on, reviewable at any later point rather than gating the pipeline on it.
+
 ## Guided greenfield orchestration (`/ground-zero-setup`)
 
 A thin orchestrator over Stage 1, Stage 2, and Stage 3 for a brand-new application, adding no
 analysis logic of its own. It sequences `/map-site create` (with its automatic Step 6),
-`/derive-test-conditions`, and `/compose-test-cases` in order, pausing at each stage's own Human
-Sign-Off Gateway by default (Guided mode) - except `/compose-test-cases`, which has no blocking gate
+`/define-test-conditions`, and `/design-test-cases` in order, pausing at each stage's own Human
+Sign-Off Gateway by default (Guided mode) - except `/design-test-cases`, which has no blocking gate
 of its own and is simply run and moved past - or writing `reviewedBy: 'auto-pilot'` straight through
 on the user's own explicit pre-authorization (Auto-pilot mode). What runs next is never hardcoded in
 the orchestrator's own prose - both it and the underlying skills' own end-of-run hints consult one
@@ -175,7 +197,7 @@ Once the pipeline reaches `test-cases-drafted` (or `complete`, once every drafte
 automated), this skill stops honestly on purpose: `/automate-ticket` synthesizes and executes real
 code, a materially different action than approving a JSON review artifact, so triggering it stays an
 explicit, separate human command in every mode, including auto-pilot. `/automate-ticket` itself now
-reads `docs/analysis/journeys.json` directly when invoked with no ticket ID - no TMS ticket required
+reads `artifacts/test-cases/test-cases.json` directly when invoked with no ticket ID - no TMS ticket required
 to close the loop from a from-nothing greenfield project.
 
 ## Self-healing (Two-Strike Rule & 4-point trace triage)
@@ -218,7 +240,7 @@ rather than generating a flaky test from an underspecified one.
 ## Deterministic generation & human sign-off
 
 - **Component registry indexing:** Page Objects and shared widgets are indexed from
-  `docs/site-map/site-map.json` and `components/` to match scenario steps to existing CPOM classes
+  `artifacts/site-map/site-map.json` and `components/` to match scenario steps to existing CPOM classes
   instead of regenerating duplicates.
 - **Human sign-off gateway** (`/automate-ticket`): before writing test files, the agent presents a
   structured proposal (summary, steps, preconditions, Page Objects used, TDM strategy) for explicit

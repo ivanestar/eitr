@@ -35,7 +35,7 @@ core, and follows three structural rules that already govern the rest of EITR's 
 1. **Staged, typed hand-offs, not one large opaque pass.** The pipeline decomposes into discrete
    stages (e.g. feature/intent discovery, test-condition derivation, test-level/journey placement,
    spec synthesis), each stage consuming and producing a small, typed, on-disk artifact under
-   `docs/analysis/` - mirroring how `plan()`/`apply()` already hand off through a typed
+   `artifacts/` - mirroring how `plan()`/`apply()` already hand off through a typed
    `StackProfile`/`GenerationPlan` rather than one monolithic function. A stage's output is
    inspectable and resumable independent of the stages around it; nothing depends on holding the
    entire analysis in one model context window.
@@ -65,7 +65,7 @@ not a commitment to build it on any particular timeline.
 
 - **Free-form agent exploration with no staged pipeline** (one agent reads the app/requirements and
   writes tests end-to-end in a single autonomous pass). Rejected: non-reproducible, no natural point
-  to deduplicate against existing `components/`/`docs/site-map.json` state, and no artifact exists
+  to deduplicate against existing `components/`/`artifacts/site-map/site-map.json` state, and no artifact exists
   for a human to review before code is written - directly at odds with the human sign-off gateway
   `/automate-ticket` already established as this project's norm for AI-authored tests.
 - **Fold app/requirements analysis into the deterministic `plan()`/`apply()` core** so it runs as part

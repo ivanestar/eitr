@@ -16,8 +16,8 @@ The owned tree is **authority by path, not by content hash**. Every path with `w
 regenerate` is overwritten unconditionally on every `apply()`, and a diff of anything clobbered is
 printed so the user sees exactly what was lost. The per-file content hash exists for delta reporting
 and is warn-only - it never blocks a regeneration. "Never overwrite" applies strictly and only to
-`overrides/` and to `writePolicy: create-if-absent` paths (user config, seed files) - those are
-never touched by regeneration, full stop.
+`writePolicy: create-if-absent` paths (user config, seed files) - those are never touched by
+regeneration, full stop.
 
 ## Alternatives Considered
 
@@ -30,9 +30,13 @@ never touched by regeneration, full stop.
 
 ## Consequences
 
-- Real customization has exactly one correct home: `overrides/`. Editing a tool-owned file directly
-  is always a temporary, lossy override - this is a hard rule, not a soft suggestion, so it has to
-  be genuinely easy to extend via `overrides/` for every layer that matters.
+- Real customization happens by building on top of the owned tree (a Page Object importing from
+  `components/`, a test importing from `shared/`), never by editing a tool-owned file directly -
+  that edit is always temporary and lossy. An earlier version of this design routed customization
+  through a dedicated `overrides/` directory instead; removed (2026-09) as unused ceremony no
+  generated project's own conventions actually needed - the same `create-if-absent`/`writePolicy:
+regenerate` split this ADR establishes already gives every layer a real extension point without
+  a separate directory.
 - A user who forgets this rule loses hand-edits on the next regen - the printed diff is the safety
   net, not prevention. This is an accepted, deliberate trade-off for keeping the owned tree
   trustworthy rather than silently stale.

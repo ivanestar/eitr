@@ -72,6 +72,8 @@ function wellFormedWithConditions() {
       conditionId: 'a1b2c3d4e5f6a1b2',
       parameters: { email: 'valid', quantity: 'valid' },
       technique: 'combinatorial',
+      description: 'Verify the page accepts email="user@example.com", quantity="5" (positive)',
+      scenario: 'positive',
       verification: {},
       isSpeculative: true,
       reviewed: false,
@@ -83,10 +85,10 @@ function wellFormedWithConditions() {
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-test-conditions-'));
   writeFileSync(join(dir, 'validate-test-conditions.mjs'), renderTestConditionsValidator(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
-  mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
   writeFileSync(
-    join(dir, 'docs', 'site-map', 'site-map.json'),
+    join(dir, 'artifacts', 'site-map', 'site-map.json'),
     JSON.stringify(SITE_MAP, null, 2),
     'utf8',
   );
@@ -95,7 +97,7 @@ function setupProject(): string {
 
 function writeReport(dir: string, data: unknown) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'test-conditions.json'),
+    join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
@@ -222,6 +224,44 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     }
   });
 
+  it('fails when a condition has no description - a human cannot review what they cannot see', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedWithConditions()) as {
+        routes: Record<string, { conditions: Array<{ description?: string }> }>;
+      };
+      delete bad.routes['route-checkout'].conditions[0].description;
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('.description must be a non-empty string')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when a condition has an out-of-taxonomy scenario value', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedWithConditions()) as {
+        routes: Record<string, { conditions: Array<{ scenario: string }> }>;
+      };
+      bad.routes['route-checkout'].conditions[0].scenario = 'maybe';
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('.scenario must be one of positive|negative')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // AC5, case 1/2
   it('fails on a routeId with no matching entry in site-map.json', () => {
     const dir = setupProject();
@@ -248,7 +288,7 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeFileSync(
-        join(dir, 'docs', 'site-map', 'site-map.json'),
+        join(dir, 'artifacts', 'site-map', 'site-map.json'),
         JSON.stringify({ ...SITE_MAP, routes: {} }, null, 2),
         'utf8',
       );
@@ -327,7 +367,7 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
   it('fails cleanly (not a crash) when the report file content is the literal JSON value null', () => {
     const dir = setupProject();
     try {
-      writeFileSync(join(dir, 'docs', 'analysis', 'test-conditions.json'), 'null', 'utf8');
+      writeFileSync(join(dir, 'artifacts', 'analysis', 'test-conditions.json'), 'null', 'utf8');
       const result = run(dir);
       expect(result.status).toBe(1);
       const output = JSON.parse(result.stdout);

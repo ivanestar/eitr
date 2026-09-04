@@ -57,13 +57,13 @@ function minimalSiteMap() {
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-site-map-validator-'));
   writeFileSync(join(dir, 'validate-site-map.mjs'), renderSiteMapValidator(), 'utf8');
-  mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
+  mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
   return dir;
 }
 
 function writeSiteMap(dir: string, data: unknown) {
   writeFileSync(
-    join(dir, 'docs', 'site-map', 'site-map.json'),
+    join(dir, 'artifacts', 'site-map', 'site-map.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
@@ -106,7 +106,7 @@ describe('scripts/validate-site-map.mjs (real execution)', () => {
   it('fails cleanly (not a crash) when the file content is the literal JSON value null', () => {
     const dir = setupProject();
     try {
-      writeFileSync(join(dir, 'docs', 'site-map', 'site-map.json'), 'null', 'utf8');
+      writeFileSync(join(dir, 'artifacts', 'site-map', 'site-map.json'), 'null', 'utf8');
       const result = run(dir);
       expect(result.status).toBe(1);
       const output = JSON.parse(result.stdout);

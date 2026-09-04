@@ -199,13 +199,13 @@ describe('plan() framework & CI/CD matrix integration', () => {
     expect(noAssistantPaths).not.toContain('scripts/pipeline-status.mjs');
   });
 
-  it('emits journeys.types.ts, compose-journeys.mjs, and validate-journeys.mjs only when at least one AI assistant is configured', () => {
+  it('emits test-cases.types.ts, compose-journeys.mjs, and validate-journeys.mjs only when at least one AI assistant is configured', () => {
     const withDefaultAssistants = plan(muiProfile(), {
       language: 'typescript',
       automationTool: 'playwright',
     });
     const defaultPaths = withDefaultAssistants.files.map((f) => f.path);
-    expect(defaultPaths).toContain('.scaffold/schemas/journeys.types.ts');
+    expect(defaultPaths).toContain('.scaffold/schemas/test-cases.types.ts');
     expect(defaultPaths).toContain('scripts/compose-journeys.mjs');
     expect(defaultPaths).toContain('scripts/validate-journeys.mjs');
 
@@ -215,7 +215,7 @@ describe('plan() framework & CI/CD matrix integration', () => {
       aiAssistants: [],
     });
     const noAssistantPaths = withNoAssistants.files.map((f) => f.path);
-    expect(noAssistantPaths).not.toContain('.scaffold/schemas/journeys.types.ts');
+    expect(noAssistantPaths).not.toContain('.scaffold/schemas/test-cases.types.ts');
     expect(noAssistantPaths).not.toContain('scripts/compose-journeys.mjs');
     expect(noAssistantPaths).not.toContain('scripts/validate-journeys.mjs');
   });

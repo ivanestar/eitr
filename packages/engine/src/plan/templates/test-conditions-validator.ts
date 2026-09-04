@@ -1,16 +1,16 @@
 // Template for generating scripts/validate-test-conditions.mjs. create-if-absent.
 // The mechanical gate ADR 0012 Decision item 2 requires at every stage boundary for
-// docs/analysis/test-conditions.json (Stage 2). Zero dependencies, same style as
+// artifacts/analysis/test-conditions.json (Stage 2). Zero dependencies, same style as
 // business-intent-validator.ts and site-map-validator.ts. Supports --stage=parameters to run only
-// the pre-generation subset of checks (Gate 1 in /derive-test-conditions), or the full check set
+// the pre-generation subset of checks (Gate 1 in /define-test-conditions), or the full check set
 // with no flag (Gate 2).
 
 export function renderTestConditionsValidator(): string {
   return `#!/usr/bin/env node
 
 /**
- * Mechanical shape gate for docs/analysis/test-conditions.json.
- * Zero model involvement - pure structural checks, run by /derive-test-conditions before Gate 1
+ * Mechanical shape gate for artifacts/analysis/test-conditions.json.
+ * Zero model involvement - pure structural checks, run by /define-test-conditions before Gate 1
  * (parameters shape, via --stage=parameters) and again in full (Gate 2) before the Human Sign-Off
  * Gateway.
  *
@@ -23,8 +23,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const REPORT_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
-const SITE_MAP_PATH = path.join(CWD, 'docs', 'site-map', 'site-map.json');
+const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 
 const args = process.argv.slice(2);
 const stageArg = args.find(function (a) {
@@ -58,6 +58,7 @@ const TECHNIQUE_VALUES = new Set([
   'equivalence-partition',
   'checklist-based',
 ]);
+const SCENARIO_VALUES = new Set(['positive', 'negative']);
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -211,6 +212,14 @@ function isCondition(value, label, errors) {
         '.technique must be one of combinatorial|boundary-value|equivalence-partition|checklist-based.',
     );
   }
+  if (typeof value.description !== 'string' || value.description.length === 0) {
+    errors.push(
+      label + '.description must be a non-empty string - what a human actually reviews at sign-off.',
+    );
+  }
+  if (!SCENARIO_VALUES.has(value.scenario)) {
+    errors.push(label + '.scenario must be one of positive|negative.');
+  }
   isVerificationContract(value.verification, label + '.verification', errors);
   if (typeof value.isSpeculative !== 'boolean') {
     errors.push(label + '.isSpeculative must be a boolean.');
@@ -245,7 +254,7 @@ function isUnsatisfiedPair(value, label, errors) {
 
 function validate() {
   const errors = [];
-  const report = loadJson(REPORT_PATH, 'docs/analysis/test-conditions.json');
+  const report = loadJson(REPORT_PATH, 'artifacts/analysis/test-conditions.json');
   if (report.error) {
     errors.push(report.error);
     return { status: 'FAILED', errors };
@@ -253,7 +262,7 @@ function validate() {
   const data = report.value;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     errors.push(
-      'docs/analysis/test-conditions.json must contain a JSON object, found ' +
+      'artifacts/analysis/test-conditions.json must contain a JSON object, found ' +
         JSON.stringify(data) +
         '.',
     );
@@ -264,7 +273,7 @@ function validate() {
     errors.push(
       'schemaVersion must be exactly 1 (found ' +
         JSON.stringify(data.schemaVersion) +
-        '). Treat as absent and re-run /derive-test-conditions rather than migrating in place.',
+        '). Treat as absent and re-run /define-test-conditions rather than migrating in place.',
     );
   }
   if (typeof data.generatedAt !== 'string' || data.generatedAt.length === 0) {
@@ -275,7 +284,7 @@ function validate() {
     return { status: 'FAILED', errors };
   }
 
-  const siteMap = loadJson(SITE_MAP_PATH, 'docs/site-map/site-map.json');
+  const siteMap = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
   const knownRouteIds = new Set();
   if (!siteMap.error && siteMap.value && typeof siteMap.value.routes === 'object') {
     for (const route of Object.values(siteMap.value.routes)) {
@@ -315,7 +324,7 @@ function validate() {
     if (!siteMap.error && !knownRouteIds.has(key)) {
       errors.push(
         label +
-          ' has no matching routeId in docs/site-map/site-map.json - dangling reference. Re-run /map-site or remove this entry.',
+          ' has no matching routeId in artifacts/site-map/site-map.json - dangling reference. Re-run /map-site or remove this entry.',
       );
     }
 

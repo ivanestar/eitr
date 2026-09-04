@@ -31,7 +31,7 @@ is for gaps significant enough to shape future architecture, not routine finding
   capability (comparing pre/post-failure frames during self-healing triage), which stays. Re-open
   only on a new, explicit maintainer decision to build this - not on a future audit finding the gap
   again.
-- **Human-readable site-map viewer (`docs/site-map/site-map.html`):** deliberately excluded, not
+- **Human-readable site-map viewer (`artifacts/site-map/site-map.html`):** deliberately excluded, not
   planned (maintainer decision, 2026-09-02). Previously generated unconditionally alongside
   `site-map.json` - a self-contained HTML/JS table view with search/filter, fetching
   `site-map.json` client-side at view-time so it could never drift from the actual crawl. Removed
@@ -39,10 +39,10 @@ is for gaps significant enough to shape future architecture, not routine finding
   `fetch()` from a `file://`-loaded page reading a sibling local file), breaking the single most
   natural way to open the file (double-click); it had already fallen behind the schema it existed
   to visualize (no awareness of `coverage`, `routeId`, or the sibling
-  `docs/analysis/business-intent.json`); and its actual audience - an SDET already working inside
+  `artifacts/analysis/business-intent.json`); and its actual audience - an SDET already working inside
   an AI coding assistant - already has a strictly better interface to the same data (asking the
   assistant to read/query `site-map.json` directly, which is faster and more flexible than a
-  static text-substring filter). `docs/site-map/site-map.json` and
+  static text-substring filter). `artifacts/site-map/site-map.json` and
   `.scaffold/schemas/site-map.schema.json` are unaffected and remain the source of truth for every
   consumer (`pom-engineer`, `/scan-and-generate-pom`, `/automate-ticket`, the business-intent
   Step 6). Re-open only on a new, explicit maintainer decision to build a human-facing view again -
@@ -57,11 +57,11 @@ is for gaps significant enough to shape future architecture, not routine finding
   Stage 1 (per-route business-intent/criticality analysis, `/map-site` Step 6 - see
   [`ai-agent-integration.md`](ai-agent-integration.md)) is implemented. Stage 2 (test-condition
   derivation - 2-way combinatorial coverage, 3-value boundary-value analysis, a mechanical
-  redaction backstop, human sign-off - the new `/derive-test-conditions` skill) is implemented.
-  Stage 3 (test-level/journey placement - the deterministic `/compose-test-cases` classifier,
+  redaction backstop, human sign-off - the new `/define-test-conditions` skill) is implemented.
+  Stage 3 (test-level/journey placement - the deterministic `/design-test-cases` classifier,
   ADR 0012 Track 5) is implemented, v0: journeys are single-route only, no cross-route flow
   detection yet. Stage 4 (spec synthesis) is implemented as a bridge rather than a new gate:
-  `/automate-ticket` now reads `docs/analysis/journeys.json` directly when invoked with no TMS
+  `/automate-ticket` now reads `artifacts/test-cases/test-cases.json` directly when invoked with no TMS
   ticket ID, so its own existing Human Sign-Off Gateway (unchanged) is the human sign-off before
   code generation for a locally-drafted test case too - closing the greenfield "from nothing" flow
   end-to-end without a hand-written TMS ticket.
