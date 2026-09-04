@@ -413,6 +413,155 @@ describe('scripts/validate-business-intent.mjs (real execution)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // Core-purpose track (raised from a design discussion, not yet an SDD-planned batch): app-level,
+  // optional field - absent is valid (an older report predating this feature), present must be
+  // well-formed.
+  it('passes a well-formed corePurpose with candidates, a valid mostLikelyIndex, and no selection yet', () => {
+    const dir = setupProject();
+    try {
+      const good = structuredClone(wellFormedReport()) as Record<string, unknown>;
+      good.corePurpose = {
+        candidates: [
+          {
+            value: 'A hub of testing utility tools for QA professionals',
+            evidence: [{ signal: 'heading-text', excerpt: 'Welcome to OnlyTests!' }],
+          },
+          {
+            value: 'A blog/content site about software testing',
+            evidence: [{ signal: 'heading-text', excerpt: 'Welcome to OnlyTests!' }],
+          },
+        ],
+        mostLikelyIndex: 0,
+        reviewed: false,
+      };
+      writeReport(dir, good);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when corePurpose.candidates is empty', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedReport()) as Record<string, unknown>;
+      bad.corePurpose = { candidates: [], mostLikelyIndex: 0, reviewed: false };
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) =>
+          e.includes('corePurpose.candidates must be a non-empty array'),
+        ),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when corePurpose.mostLikelyIndex is out of range', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedReport()) as Record<string, unknown>;
+      bad.corePurpose = {
+        candidates: [
+          {
+            value: 'A testing-tools hub',
+            evidence: [{ signal: 'heading-text', excerpt: 'Welcome!' }],
+          },
+        ],
+        mostLikelyIndex: 5,
+        reviewed: false,
+      };
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('mostLikelyIndex must be a valid index')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when corePurpose.reviewed is true but selected is missing', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedReport()) as Record<string, unknown>;
+      bad.corePurpose = {
+        candidates: [
+          {
+            value: 'A testing-tools hub',
+            evidence: [{ signal: 'heading-text', excerpt: 'Welcome!' }],
+          },
+        ],
+        mostLikelyIndex: 0,
+        reviewed: true,
+        reviewedBy: 'human',
+      };
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) =>
+          e.includes('corePurpose.selected is required once reviewed is true'),
+        ),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('passes a fully confirmed corePurpose - candidate picked, selected Field<T> set, reviewed by human', () => {
+    const dir = setupProject();
+    try {
+      const good = structuredClone(wellFormedReport()) as Record<string, unknown>;
+      good.corePurpose = {
+        candidates: [
+          {
+            value: 'A hub of testing utility tools for QA professionals',
+            evidence: [{ signal: 'heading-text', excerpt: 'Welcome to OnlyTests!' }],
+          },
+        ],
+        mostLikelyIndex: 0,
+        selected: {
+          value: 'A hub of testing utility tools for QA professionals',
+          confidence: 'high',
+          source: 'manual',
+          reasoning: 'Human confirmed the top candidate as-is in conversation.',
+          evidence: [{ signal: 'manual', excerpt: 'Yes, that is exactly right.' }],
+        },
+        reviewed: true,
+        reviewedBy: 'human',
+      };
+      writeReport(dir, good);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is unaffected by corePurpose being entirely absent (backward compatible with older reports)', () => {
+    const dir = setupProject();
+    try {
+      writeReport(dir, wellFormedReport());
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('PASSED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('renderBusinessIntentTypes (real standalone tsc check)', () => {

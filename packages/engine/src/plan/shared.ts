@@ -35,6 +35,7 @@ import { renderSwarmDispatcher } from './templates/swarm-dispatcher.js';
 import { renderBusinessIntentTypes } from './templates/business-intent-types.js';
 import { renderBusinessIntentValidator } from './templates/business-intent-validator.js';
 import { renderSiteMapValidator } from './templates/site-map-validator.js';
+import { renderSitemapCoverageChecker } from './templates/sitemap-coverage-checker.js';
 import { renderTestConditionsTypes } from './templates/test-conditions-types.js';
 import { renderTestConditionsEngine } from './templates/test-conditions-engine.js';
 import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
@@ -117,6 +118,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderSiteMapValidator() },
+          },
+          {
+            path: 'scripts/check-sitemap-coverage.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderSitemapCoverageChecker() },
           },
           {
             path: '.scaffold/schemas/test-conditions.types.ts',
