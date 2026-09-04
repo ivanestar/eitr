@@ -92,10 +92,15 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
     // install chromium) took 3:42.806 on a cold CI cache; tsc --noEmit and the playwright test run
     // itself took 1.676s and 2.130s respectively - negligible. Not a hang: npm install for this
     // fixture's React+MUI+Playwright+TypeScript dependency tree, plus the chromium binary download,
-    // is genuinely ~223s of real work on a fresh runner. 360000 (6 min) gives ~1.6x headroom over
-    // that measurement for run-to-run network/runner variance, well above the 90000/180000 budgets
-    // that both measurably failed in real CI (runs 33818647135, 33861467588).
-    { timeout: 360000 },
+    // is genuinely ~223s of real work on a fresh runner - but real CI network/registry variance is
+    // wide enough that even 360000 (6 min, ~1.6x headroom over that measurement) measurably failed
+    // once too (run 33867086542). A single wall-clock ceiling can't absorb that much run-to-run
+    // variance without becoming absurd - `retry` gives the install a genuinely fresh attempt instead
+    // (same principle already used for this project's own generated Python tests via
+    // pytest-rerunfailures, not a new pattern). installDeps() also now passes npm --no-audit
+    // --no-fund --prefer-offline (see packages/cli/src/commands/install.ts) to cut real install
+    // latency, not just tolerate it.
+    { timeout: 360000, retry: 2 },
     async () => {
       const cwd = makeTempCwd();
 

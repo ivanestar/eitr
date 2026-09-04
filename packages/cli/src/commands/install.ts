@@ -366,11 +366,21 @@ export async function runInstall(
       };
     }
 
-    // JS-only install (skip the AV-blocked browser download that @playwright/test's postinstall triggers).
-    const deps = await run(process.execPath, [npmCli, 'install'], {
-      cwd: projectDir,
-      env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' },
-    });
+    // JS-only install (skip the AV-blocked browser download that @playwright/test's postinstall
+    // triggers). --no-audit/--no-fund drop two network round-trips npm otherwise makes to
+    // registry.npmjs.org purely for reporting (no effect on what gets installed); --prefer-offline
+    // reuses npm's local package cache instead of re-validating already-cached metadata over the
+    // network. Real, measured contributor to install latency for a heavy dependency tree
+    // (React/MUI) on a cold CI cache - not a substitute for the E2E test's own generous timeout
+    // budget, a genuine reduction in the actual work every real generated project also pays for.
+    const deps = await run(
+      process.execPath,
+      [npmCli, 'install', '--no-audit', '--no-fund', '--prefer-offline'],
+      {
+        cwd: projectDir,
+        env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' },
+      },
+    );
     if (deps.error || deps.code !== 0) {
       const message = deps.error ? deps.error.message : `npm install exited with code ${deps.code}`;
       return { installedDeps: false, installedBrowsers: false, message };

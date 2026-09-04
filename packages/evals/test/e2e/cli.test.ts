@@ -112,14 +112,15 @@ describe('E2E Pair-Wise CLI Testing Suite', () => {
       `E2E Combination [${combo.id}]: ${combo.language} + ${combo.automationTool} (${combo.framework} / ${combo.uiLibrary} / ${combo.ciCd})`,
       // One shared budget across every combo in TEST_COMBINATIONS, so it must cover the heaviest
       // one: a TypeScript + React + MUI combo does a real `npm install` (React/MUI's dependency
-      // tree) plus a real `playwright install chromium` browser download via the actually-spawned
-      // CLI binary, same as e2e.full-cycle.test.ts's own 2/7 case - measured there at ~223s on a
-      // cold CI cache (packages/cli/test/e2e.full-cycle.test.ts, run 33863150532). 180000 measurably
-      // failed here too (Nightly Full Suite run 33865112009, combo-01-ts-pw-react-mui-github, "Test
-      // timed out in 180000ms") - same root cause, same fix: match e2e.full-cycle.test.ts's 360000
-      // (~1.6x headroom over the 223s measurement). Python combos' venv+pip install over the network
-      // fits comfortably under this same budget too.
-      { timeout: 360000 },
+      // tree, now with --no-audit --no-fund --prefer-offline - see
+      // packages/cli/src/commands/install.ts) plus a real `playwright install chromium` browser
+      // download via the actually-spawned CLI binary, same as e2e.full-cycle.test.ts's own 2/7 case
+      // - measured there at ~223s on a cold CI cache, but real CI network/registry variance can
+      // exceed even a generous 360000 ceiling on a bad run (e2e.full-cycle.test.ts's own history:
+      // runs 33818647135/33861467588/33867086542). `retry` gives a genuinely fresh attempt instead
+      // of an ever-larger single window - same principle as pytest-rerunfailures, already relied on
+      // for this project's own generated Python tests.
+      { timeout: 360000, retry: 2 },
       async () => {
         const hash = Math.random().toString(36).substring(2, 8);
         const sandboxDir = resolve(__dirname, 'sandbox', `run-${hash}-${combo.id}`);
