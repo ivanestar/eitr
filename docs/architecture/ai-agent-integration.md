@@ -143,10 +143,14 @@ designs test cases from them) from the ISTQB Foundation Level syllabus's fundame
 A second, explicit-request-only, strictly read-only skill consumes `business-intent.json`'s
 `reviewed: true` entries plus `site-map.json` and derives typed test conditions per route into
 `artifacts/analysis/test-conditions.json` (`.scaffold/schemas/test-conditions.types.ts` documents its
-shape). An LLM step infers form parameters and their equivalence partitions from markup only
+shape). An LLM step infers form parameters and their equivalence partitions primarily from markup
 (tag, `type`, label text, HTML5 constraint attributes, `<select>` option text, static ARIA
-relationships) - never a field's current `value`/`checked`/`selected` state, never a mutating
-call. A deterministic, zero-dependency generator (`scripts/generate-test-conditions.mjs`) then
+relationships) - never a field's pre-existing `value`/`checked`/`selected` state. One narrow,
+bounded exception exists for progressive-disclosure forms: `.check()`/`.uncheck()`,
+`.selectOption()`, and `.fill()` with synthesized (never real) values are allowed specifically to
+observe fields a purely static read would never see, one control probed and reset at a time, never
+reaching a submit-shaped button under any circumstance. A deterministic, zero-dependency generator
+(`scripts/generate-test-conditions.mjs`) then
 mechanically expands those partitions into 2-way combinatorial coverage and 3-value
 boundary-value conditions: it seeds one candidate vector per still-uncovered parameter pair and
 greedily fills every other column around it, backtracking within that fill - a pair only lands in

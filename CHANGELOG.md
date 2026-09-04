@@ -47,10 +47,33 @@ audit trail; this file is release notes.
   read as a malformed-input safety claim, keeping the general accepts/handles phrasing only for
   combinatorial/equivalence-partition conditions. Still fully deterministic - the variation is
   grounded in which technique produced the condition, not cosmetic rotation.
-- **Added**: `pom-engineer` now has an explicit Primitive Selection Order - compose an already-
-  scaffolded `components/primitives/` primitive first, synthesize a new reusable primitive/widget
-  second, and only register an element directly on the Page Object as the residual case. Found
-  missing (only `components/widgets/` reuse was covered) from a live Page Object review.
+- **Added**: `pom-engineer` now has an explicit Component Reuse Order spanning the whole
+  `components/` tree (primitives, widgets, and the base classes every Page Object already extends)
+  - compose an already-scaffolded component first, synthesize a new reusable one second, and only
+    register an element directly on the Page Object as the residual case. Found missing (only widget
+    reuse was covered) from a live Page Object review.
+- **Fixed**: `pom-engineer` was producing Page Objects with only generic landmark children (a main
+  region, a heading, a "primary container") and no reference to real interactive elements a route's
+  own `test-conditions.json` had already extracted evidence for - making those routes impossible to
+  meaningfully automate. It must now cross-reference every named parameter in a route's
+  `test-conditions.json` entry against the Page Object's own children, and scan for every real
+  interactive element the live DOM contains rather than stopping at generic landmarks.
+- **Fixed**: `/automate-test`'s synthesized code could be structurally compliant (correct
+  `test.step()` wrapping, fixture DI, linear structure) while asserting nothing related to what a
+  step actually claimed to do - a step titled "enter language=\"en\"" whose body only checked an
+  unrelated container's visibility, reported from live use. Content fidelity is now mandatory: each
+  step's body must perform the literal action its description names and assert the literal value
+  its expected result names, with a good/bad example drawn from the exact reported failure.
+- **Fixed**: self-referential compliance narration ("CPOM architectural contract strictly honored:
+  no assertions in Page Objects, Web-First assertions used, ...") had only ever been banned in
+  `/map-site`'s own "Reporting to the User" section, not project-wide, and reappeared in
+  `/automate-test`'s final report. Now a global rule applied to every operational skill.
+- **Changed**: `/define-test-conditions`'s parameter extraction gains one narrow, bounded exception
+  to its read-only posture - progressive-disclosure forms (a checkbox, radio, dropdown, or filled
+  field that reveals more fields) were under-extracting parameters a purely static read could never
+  see. `.check()`/`.uncheck()`, `.selectOption()`, and `.fill()` with synthesized values are now
+  allowed, one control probed and reset at a time, never combined, and never reaching a
+  submit/create/delete/send-shaped button under any circumstance.
 
 ## [0.32.0] - 2026-09-04
 

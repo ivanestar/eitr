@@ -180,10 +180,30 @@ You are responsible for generating, updating, and validating Page Objects and co
 - If a component already exists in \`components/widgets/\`, compose it via \`this.child(WidgetClass, spec)\` rather than re-declaring duplicate locators.
 - See 'sdet-architect''s Worked Example for a compliant-vs-non-compliant \`components/pages/<name>.page.ts\` pair before writing one.
 
-## Primitive Selection Order (mandatory, checked in this order for every interactive element)
-1. **Already scaffolded in \`components/primitives/\`** (Button, TextInput, Checkbox, Select, NativeSelect, Radio, Link, FileInput, Heading, Element - read that directory's actual contents rather than assuming this list, since a project's scaffold can vary): compose it via \`this.child(PrimitiveClass, spec)\` / \`this.list(PrimitiveClass, spec)\`. Never hand-roll an ad hoc locator or a bespoke inline class for something a scaffolded primitive already models - that silently forks the interaction contract the primitive exists to standardize (e.g. its own \`Now()\`-suffixed state getters), and the next Page Object touching the same kind of element has no shared behavior to build on.
+## Component Reuse Order (mandatory, checked in this order for every interactive element)
+Applies to the whole \`components/\` tree this project scaffolds - primitives, widgets, and the
+\`components/base/\` classes every Page Object already extends - not primitives alone: that
+directory exists specifically so it gets reused, not admired.
+1. **Already scaffolded in \`components/primitives/\`** (Button, TextInput, Checkbox, Select, NativeSelect, Radio, Link, FileInput, Heading, Element - read that directory's actual contents rather than assuming this list, since a project's scaffold can vary) or \`components/widgets/\`: compose it via \`this.child(PrimitiveClass, spec)\` / \`this.list(PrimitiveClass, spec)\`. Never hand-roll an ad hoc locator or a bespoke inline class for something a scaffolded primitive already models - that silently forks the interaction contract the primitive exists to standardize (e.g. its own \`Now()\`-suffixed state getters), and the next Page Object touching the same kind of element has no shared behavior to build on.
 2. **Not yet scaffolded, but still a primitive-shaped, reusable interaction pattern** (a slider, a data table, a tabbed panel, a rich-text editor - the same class of thing across many apps, not specific to this one page): follow \`Extended Primitives - Synthesize On Demand\` below to add it to \`components/primitives/\` or \`components/widgets/\` first, then compose it the same as step 1 - never inline the interaction directly into the Page Object just because no starter file exists for it yet.
 3. **Neither of the above** (a one-off, page-specific element with no reusable interaction shape - a static paragraph, a page-specific heading whose only need is a liveness/text check): only here does it get registered directly on the Page Object itself, as the residual case - not a shortcut for elements that actually match step 1 or 2.
+
+## Completeness: Every Known Interactive Element Must Be Represented
+A Page Object with only generic landmark children (\`main\`, a top heading, a "primary container")
+and nothing else is incomplete, not minimal - found exactly this in live use: a route whose
+\`artifacts/analysis/test-conditions.json\` entry had already extracted a \`language\` select field
+(with real evidence: form-label "Select language") got a Page Object with zero reference to it,
+making that route's drafted test conditions impossible to actually automate.
+- Before finishing a Page Object, cross-reference that route's entry in
+  \`artifacts/analysis/test-conditions.json\` (when it exists) - every name in its \`parameters[]\`
+  array must have a corresponding named child on the Page Object, composed per the Component Reuse
+  Order above. A parameter with no matching child is a real gap: go back and add it, not a
+  discrepancy to silently ignore.
+- Even when no test-conditions.json entry exists yet for a route, scan for every real interactive
+  element the live DOM actually contains (every form field, select, checkbox, radio, button,
+  meaningful link) - never stop at a handful of generic landmark regions and call the page object
+  done. A Page Object that could not tell two different routes apart from their children alone is a
+  sign the scan stopped too early.
 
 ## Worker-Mode & Batch Generation from Site Map
 - When invoked in parallel worker mode or for mapped routes in \`artifacts/site-map/site-map.json\`:

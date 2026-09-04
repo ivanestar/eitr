@@ -170,10 +170,18 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(pomEngineer?.source.text).toContain('MANDATORY AUTONOMOUS VERIFICATION');
     expect(pomEngineer?.source.text).toContain('AUTONOMOUS DEBUGGING & TWO-STRIKE SELF-HEALING');
     expect(pomEngineer?.source.text).toContain('MANDATORY HANDOFF REPORT');
-    // Primitive reuse: an existing scaffolded primitive must be composed, never re-implemented
-    // inline - found missing (only widget reuse was covered) from a live Page Object review.
-    expect(pomEngineer?.source.text).toContain('Primitive Selection Order');
+    // Component reuse: an existing scaffolded primitive/widget must be composed, never
+    // re-implemented inline - found missing (only widget reuse was covered) from a live Page
+    // Object review, then found scoped too narrowly to "primitives" alone on a second review.
+    expect(pomEngineer?.source.text).toContain('Component Reuse Order');
     expect(pomEngineer?.source.text).toContain('Never hand-roll an ad hoc locator');
+    // Completeness: a Page Object missing real interactive elements (only generic landmarks) is a
+    // real gap, not a minimal result - found in the exact same live review (a route's own
+    // extracted test-condition parameter had no matching Page Object child at all).
+    expect(pomEngineer?.source.text).toContain(
+      'Every Known Interactive Element Must Be Represented',
+    );
+    expect(pomEngineer?.source.text).toContain('test-conditions.json');
     expect(pomEngineer?.source.text).not.toContain('test:sanity');
 
     const automator = files.find((f) => f.path === '.agents/agents/test-automator/agent.md');
@@ -418,11 +426,34 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(pomSkill?.source.text).toContain('Mandatory Execution & Self-Healing Loop');
     expect(pomSkill?.source.text).toContain('Mandatory Handoff Report');
 
+    const defineTestConditionsSkill = files.find(
+      (f) => f.path === '.agents/skills/define-test-conditions/SKILL.md',
+    );
+    // Progressive-disclosure reveal exception: reported from live use as under-extracting
+    // parameters on forms where a checkbox/select/field reveals more fields. Allowed strictly
+    // bounded (one probe at a time, always reset) and never a submit-shaped button.
+    expect(defineTestConditionsSkill?.source.text).toContain(
+      '.check()`/`.uncheck()` on checkboxes and radio buttons',
+    );
+    expect(defineTestConditionsSkill?.source.text).toContain('Absolute ban, no exception, ever');
+    expect(defineTestConditionsSkill?.source.text).toContain(
+      'submit/create/delete/send-shaped ARIA role',
+    );
+    expect(defineTestConditionsSkill?.source.text).toContain('Bounded and reset');
+
     const automateSkill = files.find((f) => f.path === '.agents/skills/automate-test/SKILL.md');
     expect(automateSkill?.source.text).toContain('tms-validator');
     expect(automateSkill?.source.text).toContain('Human Sign-Off Gateway');
     expect(automateSkill?.source.text).toContain('tests/TC-');
     expect(automateSkill?.source.text).toContain('artifacts/test-cases/test-cases.json');
+    // Content fidelity: structurally-compliant-but-semantically-empty code (correct test.step()/
+    // fixture DI but an assertion unrelated to what the step claims) was reported from live use.
+    expect(automateSkill?.source.text).toContain('Content fidelity is mandatory');
+    expect(automateSkill?.source.text).toContain('never a content-free assertion');
+    // Self-referential compliance narration ("CPOM contract strictly honored: ...") was reported
+    // from a live final report - global rule, checked here since automate-test's own report step
+    // is exactly where it appeared.
+    expect(automateSkill?.source.text).toContain('never recite which internal rule');
 
     const designTestCasesSkill = files.find(
       (f) => f.path === '.agents/skills/design-test-cases/SKILL.md',

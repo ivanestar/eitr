@@ -203,7 +203,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
       ],
       contractGuarantees: [
         'sampleValues never copied from the live page - always synthesized',
-        'zero mutating DOM calls, not even trial:true',
+        'the only allowed non-read actions (check/uncheck, selectOption, fill with synthesized data) exist solely to reveal progressively-disclosed fields, are always reset before the next probe, and never reach a submit-shaped button',
       ],
       forbiddenPatterns: ['EITR', 'Eitr'],
     },
