@@ -87,7 +87,14 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
   // 2. TypeScript + Playwright
   it(
     '2/7: E2E Full Cycle — TypeScript + Playwright (questionnaire -> generate -> real playwright test run -> cleanup)',
-    { timeout: 90000 },
+    // Same budget as 1/7 (Python, 180000) even though this case has no separate execSync-level
+    // timeout of its own - runNew() here does a real `npm install` + `playwright install chromium`
+    // (an actual browser binary download, the dominant and most network-variable cost) plus tsc
+    // plus a real browser test run, all under one wall-clock budget. 90000ms was measured hitting
+    // that ceiling in both CI (PR #63, run 33818647135) and main's own Nightly Full Suite
+    // (run 33849662261) - not a one-off flake, a structurally too-tight budget for what the test
+    // actually does relative to its sibling.
+    { timeout: 180000 },
     async () => {
       const cwd = makeTempCwd();
 
