@@ -13,6 +13,10 @@ audit trail; this file is release notes.
   reworded restatements of the same underlying interpretation instead of genuinely distinct ones,
   found in live use. Now writes one candidate per interpretation actually distinct enough to change
   a route's criticality, including exactly one when the evidence only supports one reading.
+- **Changed**: `/map-site`'s Business-Intent Review Artifact now prints each route's criticality
+  in uppercase on its own line (`Route criticality (draft): CRITICAL`), its reasoning on the line
+  below (`Reasoning: ...`), and evidence as one comma-separated `Evidences: "...", "..."` line
+  instead of one line per entry - found unreadable at a glance in live use.
 
 ## [0.31.0] - 2026-09-04
 

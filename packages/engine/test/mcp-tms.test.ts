@@ -314,8 +314,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // route rather than repeated under both businessFeature and criticalityTier.
     expect(mapSkill?.source.text).toContain('do not print a `Confidence:` line at all');
     expect(mapSkill?.source.text).toContain('Feature: <businessFeature.value>');
-    expect(mapSkill?.source.text).toContain('Route criticality (draft): <criticalityTier.value>');
+    expect(mapSkill?.source.text).toContain('Route criticality (draft): <TIER>');
+    expect(mapSkill?.source.text).toContain('tier value printed in uppercase');
+    expect(mapSkill?.source.text).toContain('Reasoning: <criticalityTier.reasoning>');
     expect(mapSkill?.source.text).toContain('Evidence is deduplicated across both fields');
+    expect(mapSkill?.source.text).toContain('Evidences: "<excerpt>", "<excerpt>", ...');
     expect(mapSkill?.source.text).not.toContain('Confidence: <confidence>');
     // Reasoning must read as a human explanation, not a mechanism trace naming the rule by name.
     expect(mapSkill?.source.text).toContain('not a mechanism trace');
