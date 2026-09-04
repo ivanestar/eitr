@@ -68,16 +68,37 @@ function collectJourneys(routes) {
   return all;
 }
 
-function anyJourneyHasTestCase(journeys) {
-  return journeys.some(function (j) {
-    return j && j.testCase;
-  });
-}
-
 function anyJourneyNeedsAutomation(journeys) {
   return journeys.some(function (j) {
     return j && j.testCase && j.reviewed !== true;
   });
+}
+
+// Checks drafting completeness per-route against test-conditions.json, not just "does at least one
+// journey somewhere have a testCase" - a route can have reviewed conditions but either no journey
+// entry yet (compose-journeys.mjs hasn't run since that route's conditions were reviewed) or a
+// journey with conditionAssignments but no testCase yet (the /compose-test-cases LLM drafting step
+// was interrupted before reaching it). Either state must route back to /compose-test-cases; treating
+// it as done would silently report 'complete' while a route was never even drafted.
+function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeysRoutes) {
+  if (!testConditionRoutes || typeof testConditionRoutes !== 'object') return true;
+  for (const [routeId, entry] of Object.entries(testConditionRoutes)) {
+    const hasReviewedCondition =
+      entry &&
+      Array.isArray(entry.conditions) &&
+      entry.conditions.some(function (c) {
+        return c && c.reviewed === true;
+      });
+    if (!hasReviewedCondition) continue;
+    const routeJourneyEntry = journeysRoutes && journeysRoutes[routeId];
+    const routeJourneys =
+      routeJourneyEntry && Array.isArray(routeJourneyEntry.journeys) ? routeJourneyEntry.journeys : [];
+    const hasDraftedTestCase = routeJourneys.some(function (j) {
+      return j && j.testCase;
+    });
+    if (!hasDraftedTestCase) return false;
+  }
+  return true;
 }
 
 function computeStatus() {
@@ -126,9 +147,10 @@ function computeStatus() {
   }
 
   const journeysData = loadJson(JOURNEYS_PATH);
-  const journeys = collectJourneys(journeysData ? journeysData.routes : null);
+  const journeysRoutes = journeysData && typeof journeysData.routes === 'object' ? journeysData.routes : {};
+  const journeys = collectJourneys(journeysRoutes);
 
-  if (!anyJourneyHasTestCase(journeys)) {
+  if (!everyReviewedRouteHasDraftedTestCase(testConditions.routes, journeysRoutes)) {
     return {
       stage: 'test-conditions-reviewed',
       nextCommand: '/compose-test-cases',

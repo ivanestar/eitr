@@ -15,8 +15,11 @@ audit trail; this file is release notes.
 - **Changed**: `scripts/pipeline-status.mjs` and `/ground-zero-setup` now recognize Stage 3/4
   (`/compose-test-cases` and the local-journey automation bridge above), replacing the old
   `ready-to-automate` terminal stage with `test-conditions-reviewed` -> `test-cases-drafted` ->
-  `complete`. `/ground-zero-setup`'s chain now includes `/compose-test-cases`, but still stops
-  before `/automate-ticket` in every mode - code synthesis stays an explicit human command.
+  `complete`. `complete` is reported only once every route with reviewed test conditions actually
+  has a drafted test case, checked per route against `test-conditions.json` - not merely "some
+  journey somewhere has one," which could otherwise report the pipeline done while a route was
+  never even drafted. `/ground-zero-setup`'s chain now includes `/compose-test-cases`, but still
+  stops before `/automate-ticket` in every mode - code synthesis stays an explicit human command.
 
 ## [0.25.0] - 2026-09-03
 
