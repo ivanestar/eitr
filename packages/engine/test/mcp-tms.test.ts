@@ -288,6 +288,17 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Business-Intent Review Artifact');
     expect(mapSkill?.source.text).toContain('NOT authoritative until a human has reviewed it');
 
+    // Business-intent grounding track: confidence/criticality are evidence-anchored, not free
+    // model inference, and the review artifact's label is scoped to the whole route.
+    expect(mapSkill?.source.text).toContain('Route criticality');
+    expect(mapSkill?.source.text).toContain('payment/checkout/billing keyword');
+    expect(mapSkill?.source.text).toContain('MAXIMUM tier found on the route');
+    expect(mapSkill?.source.text).toContain('Confidence is computed from evidence signal strength');
+    expect(mapSkill?.source.text).toContain('Self-verification pass');
+    expect(mapSkill?.source.text).not.toContain(
+      'Tier: <criticalityTier.value>  Confidence: <confidence>',
+    );
+
     // AC9: reuses the existing Level-2 fan-out - no bespoke dispatch mechanism for Step 6.
     expect(mapSkill?.source.text).toContain('orchestrate-swarm.mjs --phase=plan');
 

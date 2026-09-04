@@ -43,13 +43,15 @@ function wellFormedReport() {
           value: 'Checkout',
           confidence: 'high',
           source: 'heading-text',
+          reasoning: 'Heading text directly names the page business function.',
           evidence: [{ signal: 'heading-text', excerpt: 'Checkout' }],
         },
         criticalityTier: {
           value: 'critical',
           confidence: 'high',
-          source: 'route-path',
-          evidence: [{ signal: 'route-path', excerpt: '/checkout' }],
+          source: 'heading-text',
+          reasoning: 'Matches critical checklist: heading text names a checkout/payment flow.',
+          evidence: [{ signal: 'heading-text', excerpt: 'Checkout' }],
         },
         sourceContentHash: 'abc123',
         analyzedAt: '2026-09-02T11:00:00.000Z',
@@ -60,13 +62,15 @@ function wellFormedReport() {
         businessFeature: {
           value: 'Account Settings',
           confidence: 'medium',
-          source: 'heading-text',
-          evidence: [{ signal: 'heading-text', excerpt: 'Account' }],
+          source: 'button-link-text',
+          reasoning: 'Nav link text names the account settings feature.',
+          evidence: [{ signal: 'button-link-text', excerpt: 'Account' }],
         },
         criticalityTier: {
           value: 'medium',
-          confidence: 'medium',
+          confidence: 'low',
           source: 'route-path',
+          reasoning: 'Matches medium checklist: secondary settings page, only URL-path evidence.',
           evidence: [{ signal: 'route-path', excerpt: '/account' }],
         },
         sourceContentHash: 'def456',
@@ -328,6 +332,83 @@ describe('scripts/validate-business-intent.mjs (real execution)', () => {
       const output = JSON.parse(result.stdout);
       expect(output.status).toBe('FAILED');
       expect(output.errors.some((e: string) => e.includes('dangling reference'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Business-intent grounding track: reasoning is mechanically required, must not just restate
+  // evidence, and confidence must match the evidence-signal rule - a human reviewer must be able
+  // to see WHY, and "why" can no longer be freely invented at generation time.
+  it('fails an entry with an empty-string reasoning', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedReport());
+      bad.routes['route-checkout'].businessFeature.reasoning = '';
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('.reasoning must be a non-empty string')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails an entry whose reasoning exactly restates its own evidence excerpt', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedReport());
+      bad.routes['route-checkout'].businessFeature.reasoning = 'Checkout';
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('must not simply restate evidence')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when confidence is "high" but the only evidence signal is route-path', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedReport());
+      bad.routes['route-checkout'].criticalityTier.confidence = 'high';
+      bad.routes['route-checkout'].criticalityTier.evidence = [
+        { signal: 'route-path', excerpt: '/checkout' },
+      ];
+      writeReport(dir, bad);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some(
+          (e: string) => e.includes('.confidence is "high"') && e.includes('imply "low"'),
+        ),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('passes a route-path-only evidence entry when confidence is correctly "low"', () => {
+    const dir = setupProject();
+    try {
+      const good = structuredClone(wellFormedReport());
+      good.routes['route-checkout'].criticalityTier.confidence = 'low';
+      good.routes['route-checkout'].criticalityTier.evidence = [
+        { signal: 'route-path', excerpt: '/checkout' },
+      ];
+      writeReport(dir, good);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
