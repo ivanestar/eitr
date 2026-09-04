@@ -96,7 +96,11 @@ kind, not even a `trial: true` dry-run - inference draws only from already-rende
 button/link text, and ARIA roles reached by a single navigation per route. A zero-dependency
 validator (`scripts/validate-business-intent.mjs`) mechanically checks the artifact's shape before
 a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
-`reviewed: false` as ground truth. Approval also records who gave it - `reviewedBy: 'human'` for a
+`reviewed: false` as ground truth. `confidence` is computed from evidence-signal strength (a
+heading/ARIA/manual signal implies `high`, form-labels/button-link-text implies `medium`,
+route-path alone implies `low`) and mechanically checked against that rule, never chosen freely;
+`criticalityTier` follows a written, evidence-anchored checklist rather than free inference, and
+every `Field<T>` carries a `reasoning` string naming which checklist criterion it matched. Approval also records who gave it - `reviewedBy: 'human'` for a
 real conversational approval, or `'auto-pilot'` only when `/ground-zero-setup`'s auto-pilot mode set
 it on the user's own explicit pre-authorization - so a later audit can always tell which entries a
 human actually looked at. `docs/site-map/site-map.json` itself gets the same mechanical

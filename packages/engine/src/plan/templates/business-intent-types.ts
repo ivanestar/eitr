@@ -42,6 +42,10 @@ export interface Field<T> {
   value: T;
   confidence: Confidence;
   source: BusinessIntentSource;
+  // Names which checklist criterion or confidence-rule branch this value matched - never a
+  // restatement of an evidence excerpt. Lets a human reviewer see WHY, not just WHAT, without
+  // re-deriving the inference themselves.
+  reasoning: string;
   evidence: Evidence[];
 }
 

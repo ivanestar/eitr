@@ -7,6 +7,19 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.27.0] - 2026-09-04
+
+- **Changed**: `/map-site` Step 6 (business-intent analysis) no longer lets `confidence` be chosen
+  freely - it's computed from evidence-signal strength and mechanically checked by
+  `scripts/validate-business-intent.mjs`. `criticalityTier` now follows a written,
+  evidence-anchored checklist (critical/high/medium/low, mixed-criticality routes take the maximum
+  tier found) instead of free inference, with a checklist-conformance self-verification pass before
+  the Mechanical Gate. Every `Field<T>` gains a required `reasoning` string naming which criterion
+  it matched. The Human Sign-Off Gateway's review artifact label changes from `Tier:` to
+  `Route criticality:` and gains a `Why: <reasoning>` line - `businessFeature` and `criticalityTier`
+  each get their own summary/reasoning/evidence block with their own independently-computed
+  `Confidence:`, never a single shared slot for two values that routinely disagree.
+
 ## [0.26.0] - 2026-09-04
 
 - **Added**: `/automate-ticket` now reads `docs/analysis/journeys.json` directly when invoked with

@@ -36,6 +36,18 @@ const SOURCE_VALUES = new Set([
   'aria-roles',
   'manual',
 ]);
+const STRONG_SIGNALS = new Set(['heading-text', 'aria-roles', 'manual']);
+const MEDIUM_SIGNALS = new Set(['form-labels', 'button-link-text']);
+
+// Confidence is computed from evidence signal strength, never chosen freely by the model - this
+// mirrors the rule /map-site Step 6's own prose spells out, so the model can compute the same
+// value itself; this function exists to mechanically catch drift, not to silently rewrite it.
+function expectedConfidence(evidence) {
+  if (!Array.isArray(evidence)) return null;
+  if (evidence.some((e) => e && STRONG_SIGNALS.has(e.signal))) return 'high';
+  if (evidence.some((e) => e && MEDIUM_SIGNALS.has(e.signal))) return 'medium';
+  return 'low';
+}
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -69,6 +81,11 @@ function isField(value, label, errors) {
         '.source must be one of route-path|heading-text|form-labels|button-link-text|aria-roles|manual.',
     );
   }
+  if (typeof value.reasoning !== 'string' || value.reasoning.length === 0) {
+    errors.push(
+      label + '.reasoning must be a non-empty string naming the matched checklist criterion.',
+    );
+  }
   if (!Array.isArray(value.evidence) || value.evidence.length === 0) {
     errors.push(label + '.evidence must be a non-empty array - never emit a value with no evidence.');
   } else {
@@ -86,7 +103,27 @@ function isField(value, label, errors) {
       } else if (ev.excerpt.length > 100) {
         errors.push(evLabel + '.excerpt must be <=100 chars (PII/session-data guard).');
       }
+      if (
+        typeof value.reasoning === 'string' &&
+        typeof ev.excerpt === 'string' &&
+        value.reasoning === ev.excerpt
+      ) {
+        errors.push(
+          label + '.reasoning must not simply restate evidence[' + i + '].excerpt verbatim.',
+        );
+      }
     });
+    const expected = expectedConfidence(value.evidence);
+    if (expected && CONFIDENCE_VALUES.has(value.confidence) && value.confidence !== expected) {
+      errors.push(
+        label +
+          '.confidence is "' +
+          value.confidence +
+          '" but its evidence signals imply "' +
+          expected +
+          '" (heading-text/aria-roles/manual -> high, form-labels/button-link-text -> medium, route-path only -> low).',
+      );
+    }
   }
 }
 
