@@ -432,6 +432,31 @@ Second stage of the app-analysis pipeline, run after \`/map-site\`'s automatic b
 `,
     },
     {
+      name: 'compose-test-cases',
+      description:
+        'Bridges test-conditions.json to a drafted, TMS-shaped test case: deterministically classifies each condition onto a test level (e2e/api/ui-only), then drafts one test case per route. No blocking Human Sign-Off Gateway - writes the draft, reviewable anytime.',
+      disableModelInvocation: true,
+      content: `# Skill: Compose Test Cases (/compose-test-cases)
+
+## Purpose
+Bridges Stage 2's test-condition derivation to a drafted, TMS-shaped test case. Consumes \`docs/analysis/test-conditions.json\`'s reviewed conditions, classifies each deterministically onto a test level (\`e2e\`/\`api\`/\`ui-only\` - zero model involvement, zero dependency on \`criticalityTier\` or any other LLM-derived signal, which is too unstable to gate a structural decision on even with fixed tier definitions), then drafts one test case per route from that classification. This is explicitly a v0 skeleton: journeys are single-route only (no cross-route flow detection yet), and unlike every earlier stage in this pipeline, this skill does NOT pause for a blocking Human Sign-Off Gateway - it writes the draft and moves on, since the draft is cheap to review and correct at any later point rather than needing to be right before the pipeline can proceed.
+
+## Workflow
+1. **Preconditions:**
+   * Default scope: every route in \`docs/analysis/test-conditions.json\` with at least one \`reviewed: true\` condition. If none exist, refuse and print exactly: "No reviewed test conditions found. Run /derive-test-conditions and complete its Human Sign-Off Gateway before composing test cases." Do not proceed.
+2. **Deterministic Classification (zero model involvement):**
+   * Run \`node scripts/compose-journeys.mjs\`. For every route with reviewed conditions, this deterministically groups them into one journey and assigns each condition a test level - \`e2e\` for the route's single all-valid vector if one exists, \`ui-only\` for any probe a client-side HTML5 constraint would block before it ever reaches the network, \`api\` for everything else (see \`scripts/compose-journeys.mjs\`'s own header comment for the exact rule). Writes \`docs/analysis/journeys.json\`.
+3. **Mechanical Gate 1 (structural shape, zero model involvement):**
+   * Run \`node scripts/validate-journeys.mjs --stage=structural\`. If it reports \`FAILED\`, fix the reported errors and re-run before proceeding to Step 4. Do not present unvalidated output to the human.
+4. **Test-Case Drafting:**
+   * For every journey with no \`testCase\` yet, read its \`conditionAssignments\` (resolving each \`conditionId\` back to the actual condition and parameters in \`test-conditions.json\`) and draft a \`testCase\`: a title, preconditions, and ordered steps with expected results. Describe every \`'api'\`-level step generically ("call the project's API client with...") rather than naming a language-specific class - actual code generation is \`/automate-ticket\`'s job, not this skill's. Write the result into that journey's \`testCase\` field, leaving \`reviewed: false\`.
+5. **Mechanical Gate 2 (full shape, zero model involvement):**
+   * Run \`node scripts/validate-journeys.mjs\` (no flag). If it reports \`FAILED\`, fix the reported errors and re-run before finishing.
+6. **Summary (no blocking gate):**
+   * Print a short summary - how many journeys were drafted, how many conditions landed at each test level - and point at \`docs/analysis/journeys.json\` for review "anytime." Do not ask for approval before finishing: this stage's draft is deliberately reviewable-later, not gate-blocking, a departure specific to this stage only - every earlier stage in this pipeline keeps its own blocking Human Sign-Off Gateway unchanged.
+`,
+    },
+    {
       name: 'ground-zero-setup',
       description:
         'Guided orchestrator for a brand-new application: runs the currently-built app-analysis pipeline (/map-site create, then /derive-test-conditions) end-to-end, pausing for human sign-off after each stage by default, or fully unattended in auto-pilot mode.',

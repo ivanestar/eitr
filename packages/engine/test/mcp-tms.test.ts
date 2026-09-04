@@ -201,12 +201,12 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
       'codex',
       'copilot',
     ]);
-    // 9 skills * 4 assistants with 1 file each (antigravity, claude, cursor, codex) = 36
-    // + windsurf: 8 non-map-site skills * 1 file + map-site split into 2 files (map-site.md,
-    //   map-site-update.md) = 10
-    // + copilot: 9 skills * 2 files (prompt + skill) = 18
-    // = 64
-    expect(files.length).toBe(64);
+    // 10 skills * 4 assistants with 1 file each (antigravity, claude, cursor, codex) = 40
+    // + windsurf: 9 non-map-site skills * 1 file + map-site split into 2 files (map-site.md,
+    //   map-site-update.md) = 11
+    // + copilot: 10 skills * 2 files (prompt + skill) = 20
+    // = 71
+    expect(files.length).toBe(71);
     const paths = files.map((f) => f.path);
 
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
@@ -361,6 +361,20 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(automateSkill?.source.text).toContain('tms-validator');
     expect(automateSkill?.source.text).toContain('Human Sign-Off Gateway');
     expect(automateSkill?.source.text).toContain('tests/TC-');
+
+    const composeTestCasesSkill = files.find(
+      (f) => f.path === '.agents/skills/compose-test-cases/SKILL.md',
+    );
+    expect(composeTestCasesSkill?.source.text).toContain(
+      'No reviewed test conditions found. Run /derive-test-conditions and complete its Human Sign-Off Gateway before composing test cases.',
+    );
+    expect(composeTestCasesSkill?.source.text).toContain('scripts/compose-journeys.mjs');
+    // Deliberate departure from every earlier stage's blocking gate - never a "BLOCKING GATE"
+    // phrase (used by /automate-ticket's own Step 4) here.
+    expect(composeTestCasesSkill?.source.text).not.toContain('BLOCKING GATE');
+    expect(composeTestCasesSkill?.source.text).toContain(
+      'Do not ask for approval before finishing',
+    );
 
     const healSkill = files.find((f) => f.path === '.agents/skills/heal-test/SKILL.md');
     expect(healSkill?.source.text).toContain('Fail-Fast Real Bug Detection');
