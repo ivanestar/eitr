@@ -12,8 +12,17 @@ audit trail; this file is release notes.
 - **Changed**: `/derive-test-conditions` and `/compose-test-cases` renamed to `/define-test-conditions`
   and `/design-test-cases` (Test Analysis defines test conditions; Test Design designs test cases
   from them). Prose throughout both skills, `/ground-zero-setup`, `pipeline-status.mjs`'s
-  `nextCommand`, and the `sdet-orchestrator` agent updated to match; no schema or artifact-file
-  changes.
+  `nextCommand`, and the `sdet-orchestrator` agent updated to match.
+- **Changed**: the drafted-test-case artifact moved from `docs/analysis/journeys.json` to its own
+  `docs/test-cases/test-cases.json` - `docs/analysis/` now holds only Stage 1/2's business-intent
+  and test-conditions artifacts, the final output of the test analysis phase. `docs/site-map/`
+  is unaffected. `scripts/compose-journeys.mjs` now creates its output directory itself.
+- **Changed**: `/design-test-cases` now requires one atomic action per drafted step, each with its
+  own concrete expected result drawn from the underlying condition's `description`/`scenario`,
+  instead of steps that bundled several actions behind one blanket result at the end - drafted
+  steps read too generically to review or automate meaningfully, reported from live use. Each
+  drafted step maps to its own `test.step()` block once `/automate-ticket` generates code from it,
+  so a step needs its own verifiable result to be useful.
 - **Fixed**: `/define-test-conditions`'s Test-Conditions Review Artifact printed only per-parameter
   statistics (`Parameter: ... Technique: ... Conditions: <count> Speculative: <count>`), never the
   actual conditions - a human could not review or correct what they never saw, reported from live

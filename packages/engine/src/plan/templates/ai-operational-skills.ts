@@ -246,7 +246,7 @@ Transforms an issue or test case from Jira, TestRail, Zephyr, or Azure DevOps in
 ## Workflow
 1. **Ingestion & DLP Masking:**
    - **TMS ticket** (an explicit case ID is named, e.g. "automate AZURE-789"): fetch ticket details via \`mcp__tms__get_test_case({ caseId })\`.
-   - **Locally-drafted journey** (no case ID named, or explicitly asked to automate drafted test cases): read \`docs/analysis/journeys.json\`. Default scope: every journey with a \`testCase\` and \`reviewed: false\`. If none exist, refuse and print exactly: "No un-automated drafted test cases found. Run /design-test-cases first, or name a specific TMS ticket ID to automate instead." Do not proceed. Treat each selected journey's \`testCase\` (\`title\`/\`preconditions\`/\`steps\`) as this ticket's content for every step below - Steps 2-8 apply identically regardless of source, except where a step below says otherwise.
+   - **Locally-drafted journey** (no case ID named, or explicitly asked to automate drafted test cases): read \`docs/test-cases/test-cases.json\`. Default scope: every journey with a \`testCase\` and \`reviewed: false\`. If none exist, refuse and print exactly: "No un-automated drafted test cases found. Run /design-test-cases first, or name a specific TMS ticket ID to automate instead." Do not proceed. Treat each selected journey's \`testCase\` (\`title\`/\`preconditions\`/\`steps\`) as this ticket's content for every step below - Steps 2-8 apply identically regardless of source, except where a step below says otherwise.
    - Mask any PII, credentials, or proprietary tokens before processing, regardless of source.
 2. **TMS Quality Validation (GIGO Protection):**
    - Delegate test case to 'tms-validator' to audit atomicity (steps <= 10), expected results verifiability, and TDM prerequisites.
@@ -272,10 +272,10 @@ Transforms an issue or test case from Jira, TestRail, Zephyr, or Azure DevOps in
    - Run the newly synthesized test via terminal.
    - If failure occurs, automatically trigger \`/heal-test\` under the Two-Strike Rule.
    - **TMS-sourced ticket:** publish execution results back to TMS via \`mcp__tms__post_test_result\`.
-   - **Locally-sourced journey:** once the test passes, set that journey's \`reviewed: true\` and \`reviewedBy: 'human'\` in \`docs/analysis/journeys.json\` - this skill's own Step 4 confirmation already is the human sign-off; there is no TMS entry to publish results to.
+   - **Locally-sourced journey:** once the test passes, set that journey's \`reviewed: true\` and \`reviewedBy: 'human'\` in \`docs/test-cases/test-cases.json\` - this skill's own Step 4 confirmation already is the human sign-off; there is no TMS entry to publish results to.
 8. **Final Report:**
    - Present the resulting test diff, execution logs, and verification status to the user.
-   - For a locally-sourced batch, also state how many \`docs/analysis/journeys.json\` entries were marked \`reviewed: true\` this run.
+   - For a locally-sourced batch, also state how many \`docs/test-cases/test-cases.json\` entries were marked \`reviewed: true\` this run.
 `,
     },
 
@@ -462,15 +462,36 @@ Elaborates Stage 2's test conditions into test cases. Consumes \`docs/analysis/t
 1. **Preconditions:**
    * Default scope: every route in \`docs/analysis/test-conditions.json\` with at least one \`reviewed: true\` condition. If none exist, refuse and print exactly: "No reviewed test conditions found. Run /define-test-conditions and complete its Human Sign-Off Gateway before designing test cases." Do not proceed.
 2. **Deterministic Classification (zero model involvement):**
-   * Run \`node scripts/compose-journeys.mjs\`. For every route with reviewed conditions, this deterministically groups them into one journey and assigns each condition a test level - \`e2e\` for the route's single all-valid vector if one exists, \`ui-only\` for any probe a client-side HTML5 constraint would block before it ever reaches the network, \`api\` for everything else (see \`scripts/compose-journeys.mjs\`'s own header comment for the exact rule). Writes \`docs/analysis/journeys.json\`.
+   * Run \`node scripts/compose-journeys.mjs\`. For every route with reviewed conditions, this deterministically groups them into one journey and assigns each condition a test level - \`e2e\` for the route's single all-valid vector if one exists, \`ui-only\` for any probe a client-side HTML5 constraint would block before it ever reaches the network, \`api\` for everything else (see \`scripts/compose-journeys.mjs\`'s own header comment for the exact rule). Writes \`docs/test-cases/test-cases.json\`.
 3. **Mechanical Gate 1 (structural shape, zero model involvement):**
    * Run \`node scripts/validate-journeys.mjs --stage=structural\`. If it reports \`FAILED\`, fix the reported errors and re-run before proceeding to Step 4. Do not present unvalidated output to the human.
 4. **Test-Case Drafting:**
-   * For every journey with no \`testCase\` yet, read its \`conditionAssignments\` (resolving each \`conditionId\` back to the actual condition and parameters in \`test-conditions.json\`) and draft a \`testCase\`: a title, preconditions, and ordered steps with expected results. Describe every \`'api'\`-level step generically ("call the project's API client with...") rather than naming a language-specific class - actual code generation is \`/automate-ticket\`'s job, not this skill's. Write the result into that journey's \`testCase\` field, leaving \`reviewed: false\`.
+   * For every journey with no \`testCase\` yet, read its \`conditionAssignments\` (resolving each \`conditionId\` back to the actual condition and parameters in \`test-conditions.json\`) and draft a \`testCase\`: a title, preconditions, and ordered steps with expected results.
+   * **One atomic action per step, each with its own concrete expected result - never a step that bundles multiple actions behind one blanket result at the end.** This is not a style preference: \`/automate-ticket\` wraps each drafted step in its own \`test.step()\` block, so a step with no verifiable expected result gives it nothing to assert on, and a step bundling several actions forces one \`test.step()\` to silently cover several unrelated behaviors. Lean on each condition's own \`description\` and \`scenario\` fields (already written by Stage 2) as the step's source material rather than inventing new prose: a \`scenario: 'positive'\` condition's expected result states the concrete success signal (a specific confirmation message, a field's new displayed value, a status code) - a \`scenario: 'negative'\` condition's expected result states the concrete rejection/handling signal (a specific validation message, a disabled control, an error status code) - never a vague blanket result like "works correctly" or "is handled" that could not tell a passing run from a subtly broken one.
+   * Describe every \`'api'\`-level step generically ("call the project's API client with...") rather than naming a language-specific class - actual code generation is \`/automate-ticket\`'s job, not this skill's.
+   * **Good example** (atomic steps, each with a concrete expected result, drawn from the conditions' own \`description\`/\`scenario\`):
+     \`\`\`
+     Title: Checkout accepts a standard-shipping order and rejects an over-limit quantity
+     Preconditions: ["User is authenticated", "Cart contains at least 1 eligible item"]
+     Steps:
+     1. Select shipping method "Standard" -> Selected shipping method is "Standard" and the order summary's shipping line updates to match.
+     2. Select payment method "Card" -> Selected payment method is "Card" and the card-specific fields become visible.
+     3. Set quantity to 5 (within the valid 1-10 range) -> Quantity field shows 5, no validation error is shown.
+     4. Submit the order -> Order confirmation page shows a confirmation number and the message "Order confirmed", cart is cleared.
+     5. Attempt to set quantity to 11 (one above the max boundary of 10) -> Quantity field shows the validation message "Maximum quantity is 10" and the Submit button stays disabled.
+     \`\`\`
+   * **Bad example** (the exact anti-pattern this rule exists to prevent - real text from an earlier version of this artifact):
+     \`\`\`
+     Title: Checkout succeeds with valid data
+     Steps:
+     1. Submit the checkout form with valid data -> Order confirmed
+     \`\`\`
+     This collapses navigation, three separate field selections, and submission into one step, never states which concrete values were used, and gives \`/automate-ticket\` nothing to assert on beyond the page not crashing - a subtly wrong shipping method or an unconfirmed quantity would still "pass."
+   * Write the result into that journey's \`testCase\` field, leaving \`reviewed: false\`.
 5. **Mechanical Gate 2 (full shape, zero model involvement):**
    * Run \`node scripts/validate-journeys.mjs\` (no flag). If it reports \`FAILED\`, fix the reported errors and re-run before finishing.
 6. **Summary (no blocking gate):**
-   * Print a short summary - how many journeys were drafted, how many conditions landed at each test level - and point at \`docs/analysis/journeys.json\` for review "anytime." Do not ask for approval before finishing: this stage's draft is deliberately reviewable-later, not gate-blocking, a departure specific to this stage only - every earlier stage in this pipeline keeps its own blocking Human Sign-Off Gateway unchanged.
+   * Print a short summary - how many journeys were drafted, how many conditions landed at each test level - and point at \`docs/test-cases/test-cases.json\` for review "anytime." Do not ask for approval before finishing: this stage's draft is deliberately reviewable-later, not gate-blocking, a departure specific to this stage only - every earlier stage in this pipeline keeps its own blocking Human Sign-Off Gateway unchanged.
 `,
     },
     {
@@ -497,7 +518,7 @@ A thin orchestrator for a brand-new application, not a new analysis engine of it
 2. **Stage Loop (Guided mode; repeats once per pipeline stage):**
    * Run the stage by invoking its own skill exactly as documented there (\`/map-site create\` first, then later \`/define-test-conditions\`) - never reimplement, shortcut, or paraphrase any of that skill's own steps.
    * Present that stage's own existing Human Sign-Off Gateway exactly as its own skill defines it (the Business-Intent Review Artifact, the Test-Conditions Review Artifact) - this skill does not invent a different review format or shorten the one that already exists.
-   * **Exception for \`/design-test-cases\`:** it has no blocking Human Sign-Off Gateway of its own - it writes \`docs/analysis/journeys.json\` and moves on. For this stage only, skip the Approve/Reject loop entirely and go straight to "What next?" below.
+   * **Exception for \`/design-test-cases\`:** it has no blocking Human Sign-Off Gateway of its own - it writes \`docs/test-cases/test-cases.json\` and moves on. For this stage only, skip the Approve/Reject loop entirely and go straight to "What next?" below.
    * **Approve / Reject loop:** ask the user to approve, or reject with comments.
      - On approve: follow that stage's own instruction to set \`reviewed: true\` and \`reviewedBy: 'human'\` on every entry just approved, then continue.
      - On reject with comments: apply the requested edits to the affected entries, then re-present the updated review artifact and ask again - this is a loop, not a one-shot gate, and repeats until the human approves.
@@ -510,10 +531,10 @@ A thin orchestrator for a brand-new application, not a new analysis engine of it
    * The blanket pre-authorization given at the Pre-Flight Confirmation screen covers only this: proceeding through this pipeline's own local file writes. It does NOT extend to any action with a real external side effect outside this project's own local files - there are none in this skill's current scope (no stage here talks to a TMS or pushes anything externally), but this boundary matters for future stages once one exists (for example, a future TMS-sync stage must still stop and ask even under auto-pilot - side-effecting actions are never covered by this pre-authorization, only local review is).
 4. **End of Chain:**
    * Once \`pipeline-status.mjs\` reports stage \`test-cases-drafted\` or \`complete\`, this skill's job is done - stop here honestly rather than continuing into code generation, which this orchestrator deliberately never triggers itself (see Purpose).
-   * If the stage is \`test-cases-drafted\`: tell the user plainly that test cases are drafted in \`docs/analysis/journeys.json\`, and that running \`/automate-ticket\` with no ticket ID will automate them directly - no TMS ticket required.
+   * If the stage is \`test-cases-drafted\`: tell the user plainly that test cases are drafted in \`docs/test-cases/test-cases.json\`, and that running \`/automate-ticket\` with no ticket ID will automate them directly - no TMS ticket required.
    * If the stage is \`complete\`: tell the user every drafted test case has already been automated; nothing is left to hand off from this pipeline.
 5. **Final Report (every run, both modes, before finishing):**
-   * Print a deterministic summary: which stage(s) actually ran this session; which files were written or changed (e.g. \`docs/site-map/site-map.json\`, \`docs/analysis/business-intent.json\`, \`docs/analysis/test-conditions.json\`, \`docs/analysis/journeys.json\`); each mechanical gate's result (PASSED/FAILED) for every gate that ran; how many entries were approved this session and by whom (\`reviewedBy: 'human'\` vs \`'auto-pilot'\` counts, if both occurred); elapsed wall-clock time for this run; and the current \`pipeline-status.mjs\` stage plus its \`nextCommand\`, so the user always knows exactly what to do next without re-reading this skill.
+   * Print a deterministic summary: which stage(s) actually ran this session; which files were written or changed (e.g. \`docs/site-map/site-map.json\`, \`docs/analysis/business-intent.json\`, \`docs/analysis/test-conditions.json\`, \`docs/test-cases/test-cases.json\`); each mechanical gate's result (PASSED/FAILED) for every gate that ran; how many entries were approved this session and by whom (\`reviewedBy: 'human'\` vs \`'auto-pilot'\` counts, if both occurred); elapsed wall-clock time for this run; and the current \`pipeline-status.mjs\` stage plus its \`nextCommand\`, so the user always knows exactly what to do next without re-reading this skill.
    * Do not attempt to report token or cost usage here - that telemetry is not available to a skill's own instructions from inside a session. If the user wants that, point them at their assistant's own session-level reporting instead (for example Claude Code's \`/cost\` or \`/context\`).
 `,
     },

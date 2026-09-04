@@ -47,7 +47,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 1. Pre-validation via tms-validator.
 2. Present Markdown proposal artifact for Human Sign-Off Gateway.
 3. Synthesize linear spec with await test.step and tests/fixtures.ts.
-4. With no ticket ID given, read docs/analysis/journeys.json for un-automated drafted test cases instead.
+4. With no ticket ID given, read docs/test-cases/test-cases.json for un-automated drafted test cases instead.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,
@@ -138,7 +138,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 # Skill: Test Design (/design-test-cases)
 1. Preconditions: if no reviewed conditions exist, refuse with "No reviewed test conditions found."
 2. Run scripts/compose-journeys.mjs to deterministically assign each condition a testLevel.
-3. Run scripts/validate-journeys.mjs --stage=structural, then draft each testCase, then validate again.
+3. Run scripts/validate-journeys.mjs --stage=structural. One atomic action per step, each with its own expected result drawn from the condition's description/scenario, then draft each testCase, then validate again.
 4. Write directly with reviewed: false and print a summary - no blocking approval pause before finishing.
 `;
     const grade = gradeSkillCompliance(

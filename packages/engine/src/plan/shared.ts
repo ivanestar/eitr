@@ -150,7 +150,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             source: { kind: 'inline', text: renderPipelineStatus() },
           },
           {
-            path: '.scaffold/schemas/journeys.types.ts',
+            path: '.scaffold/schemas/test-cases.types.ts',
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderJourneysTypes() },

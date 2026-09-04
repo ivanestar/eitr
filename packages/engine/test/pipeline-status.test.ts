@@ -10,6 +10,7 @@ function setupProject(): string {
   writeFileSync(join(dir, 'pipeline-status.mjs'), renderPipelineStatus(), 'utf8');
   mkdirSync(join(dir, 'docs', 'site-map'), { recursive: true });
   mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'docs', 'test-cases'), { recursive: true });
   return dir;
 }
 
@@ -88,7 +89,7 @@ function writeTestConditions(dir: string, reviewed: boolean) {
 
 function writeJourneys(dir: string, opts: { withTestCase: boolean; reviewed: boolean }) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'journeys.json'),
+    join(dir, 'docs', 'test-cases', 'test-cases.json'),
     JSON.stringify({
       schemaVersion: 1,
       generatedAt: '2026-09-04T09:00:00.000Z',
@@ -184,7 +185,7 @@ function writeTestConditionsTwoRoutes(dir: string) {
 }
 
 // route-checkout is always fully drafted+automated; route-cart is either entirely absent from
-// journeys.json (compose-journeys.mjs never ran since its conditions were reviewed) or present with
+// test-cases.json (compose-journeys.mjs never ran since its conditions were reviewed) or present with
 // a journey but no testCase yet (the /design-test-cases drafting step was interrupted) - the two
 // distinct ways a reviewed route can be invisible to a "does any journey have a testCase" check.
 function writeJourneysCheckoutOnly(dir: string, opts: { cartHasJourneyWithoutTestCase: boolean }) {
@@ -229,7 +230,7 @@ function writeJourneysCheckoutOnly(dir: string, opts: { cartHasJourneyWithoutTes
     };
   }
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'journeys.json'),
+    join(dir, 'docs', 'test-cases', 'test-cases.json'),
     JSON.stringify({ schemaVersion: 1, generatedAt: '2026-09-04T09:00:00.000Z', routes }),
     'utf8',
   );
@@ -322,7 +323,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports test-conditions-reviewed (next: /design-test-cases) once test conditions are reviewed, before journeys.json exists', () => {
+  it('reports test-conditions-reviewed (next: /design-test-cases) once test conditions are reviewed, before test-cases.json exists', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -337,7 +338,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports test-conditions-reviewed (next: /design-test-cases) when journeys.json exists but no journey has a drafted testCase yet', () => {
+  it('reports test-conditions-reviewed (next: /design-test-cases) when test-cases.json exists but no journey has a drafted testCase yet', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -353,12 +354,12 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('does not crash on a malformed journeys.json - degrades to test-conditions-reviewed', () => {
+  it('does not crash on a malformed test-cases.json - degrades to test-conditions-reviewed', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
     writeTestConditions(dir, true);
-    writeFileSync(join(dir, 'docs', 'analysis', 'journeys.json'), 'not valid json', 'utf8');
+    writeFileSync(join(dir, 'docs', 'test-cases', 'test-cases.json'), 'not valid json', 'utf8');
     try {
       const result = run(dir);
       expect(result.status).toBe(0);

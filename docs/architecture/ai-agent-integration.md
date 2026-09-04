@@ -164,6 +164,21 @@ way (`'human'` or `'auto-pilot'`) once approved. See
 for what remains out of scope for this stage (domain classification, journey/test-level placement,
 spec synthesis, combinatorial strength beyond 2-way, general boolean-predicate constraints).
 
+## Test design (`/design-test-cases`, ADR 0012 Stage 3)
+
+Bridges `test-conditions.json`'s reviewed conditions to a drafted, TMS-shaped test case, keyed by
+`docs/test-cases/test-cases.json` (`.scaffold/schemas/test-cases.types.ts` documents its shape).
+`scripts/compose-journeys.mjs` deterministically classifies every condition onto a test level
+(`e2e`/`api`/`ui-only`) and groups them into one journey per route - zero model involvement, zero
+dependency on `criticalityTier` or any other LLM-derived signal, which is too unstable to gate a
+structural decision on. An LLM step then drafts each journey's `testCase` (title, preconditions,
+ordered steps): every step is one atomic action with its own concrete expected result, never a
+step bundling several actions behind one blanket result - drawn directly from each condition's own
+`description`/`scenario` rather than invented prose, since `/automate-ticket` wraps each drafted
+step in its own `test.step()` block and needs something concrete to assert on. Unlike every earlier
+stage in this pipeline, this one does not pause for a blocking Human Sign-Off Gateway - it writes
+the draft and moves on, reviewable at any later point rather than gating the pipeline on it.
+
 ## Guided greenfield orchestration (`/ground-zero-setup`)
 
 A thin orchestrator over Stage 1, Stage 2, and Stage 3 for a brand-new application, adding no
@@ -182,7 +197,7 @@ Once the pipeline reaches `test-cases-drafted` (or `complete`, once every drafte
 automated), this skill stops honestly on purpose: `/automate-ticket` synthesizes and executes real
 code, a materially different action than approving a JSON review artifact, so triggering it stays an
 explicit, separate human command in every mode, including auto-pilot. `/automate-ticket` itself now
-reads `docs/analysis/journeys.json` directly when invoked with no ticket ID - no TMS ticket required
+reads `docs/test-cases/test-cases.json` directly when invoked with no ticket ID - no TMS ticket required
 to close the loop from a from-nothing greenfield project.
 
 ## Self-healing (Two-Strike Rule & 4-point trace triage)

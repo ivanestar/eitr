@@ -415,7 +415,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(automateSkill?.source.text).toContain('tms-validator');
     expect(automateSkill?.source.text).toContain('Human Sign-Off Gateway');
     expect(automateSkill?.source.text).toContain('tests/TC-');
-    expect(automateSkill?.source.text).toContain('docs/analysis/journeys.json');
+    expect(automateSkill?.source.text).toContain('docs/test-cases/test-cases.json');
 
     const designTestCasesSkill = files.find(
       (f) => f.path === '.agents/skills/design-test-cases/SKILL.md',
@@ -428,6 +428,14 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // phrase (used by /automate-ticket's own Step 4) here.
     expect(designTestCasesSkill?.source.text).not.toContain('BLOCKING GATE');
     expect(designTestCasesSkill?.source.text).toContain('Do not ask for approval before finishing');
+    // Test-case quality: atomic per-step verification, not a blanket result at the end - raised
+    // from a live-use complaint that drafted test cases read too generically.
+    expect(designTestCasesSkill?.source.text).toContain('One atomic action per step');
+    expect(designTestCasesSkill?.source.text).toContain('Good example');
+    expect(designTestCasesSkill?.source.text).toContain('Bad example');
+    expect(designTestCasesSkill?.source.text).toContain(
+      'gives `/automate-ticket` nothing to assert on',
+    );
 
     const healSkill = files.find((f) => f.path === '.agents/skills/heal-test/SKILL.md');
     expect(healSkill?.source.text).toContain('Fail-Fast Real Bug Detection');

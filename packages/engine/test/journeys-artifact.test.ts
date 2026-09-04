@@ -85,6 +85,7 @@ function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-journeys-'));
   writeFileSync(join(dir, 'validate-journeys.mjs'), renderJourneysValidator(), 'utf8');
   mkdirSync(join(dir, 'docs', 'analysis'), { recursive: true });
+  mkdirSync(join(dir, 'docs', 'test-cases'), { recursive: true });
   writeFileSync(
     join(dir, 'docs', 'analysis', 'test-conditions.json'),
     JSON.stringify(testConditionsFixture(), null, 2),
@@ -95,7 +96,7 @@ function setupProject(): string {
 
 function writeJourneys(dir: string, data: unknown) {
   writeFileSync(
-    join(dir, 'docs', 'analysis', 'journeys.json'),
+    join(dir, 'docs', 'test-cases', 'test-cases.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
@@ -308,7 +309,7 @@ describe('renderJourneysTypes (real standalone tsc check)', () => {
 
     const dir = mkdtempSync(join(tmpdir(), 'eitr-journeys-types-'));
     try {
-      const filePath = join(dir, 'journeys.types.ts');
+      const filePath = join(dir, 'test-cases.types.ts');
       writeFileSync(filePath, text, 'utf8');
       const tscJs = join(process.cwd(), 'node_modules', 'typescript', 'lib', 'tsc.js');
       const result = spawnSync('node', [tscJs, '--noEmit', '--strict', filePath], {

@@ -61,7 +61,7 @@ is for gaps significant enough to shape future architecture, not routine finding
   Stage 3 (test-level/journey placement - the deterministic `/design-test-cases` classifier,
   ADR 0012 Track 5) is implemented, v0: journeys are single-route only, no cross-route flow
   detection yet. Stage 4 (spec synthesis) is implemented as a bridge rather than a new gate:
-  `/automate-ticket` now reads `docs/analysis/journeys.json` directly when invoked with no TMS
+  `/automate-ticket` now reads `docs/test-cases/test-cases.json` directly when invoked with no TMS
   ticket ID, so its own existing Human Sign-Off Gateway (unchanged) is the human sign-off before
   code generation for a locally-drafted test case too - closing the greenfield "from nothing" flow
   end-to-end without a hand-written TMS ticket.

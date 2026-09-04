@@ -1,5 +1,5 @@
 // Template for generating scripts/validate-journeys.mjs. create-if-absent.
-// Mechanical shape gate for docs/analysis/journeys.json, zero dependencies, same style as
+// Mechanical shape gate for docs/test-cases/test-cases.json, zero dependencies, same style as
 // test-conditions-validator.ts. Supports --stage=structural to run only the pre-drafting subset of
 // checks (Gate 1, right after scripts/compose-journeys.mjs runs), or the full check set with no
 // flag (Gate 2, after the /design-test-cases skill's LLM step drafts testCase).
@@ -8,7 +8,7 @@ export function renderJourneysValidator(): string {
   return `#!/usr/bin/env node
 
 /**
- * Mechanical shape gate for docs/analysis/journeys.json.
+ * Mechanical shape gate for docs/test-cases/test-cases.json.
  * Zero model involvement - pure structural checks, run by /design-test-cases before Gate 1
  * (--stage=structural) and again in full (Gate 2) after the test case is drafted.
  *
@@ -21,7 +21,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const CWD = process.cwd();
-const JOURNEYS_PATH = path.join(CWD, 'docs', 'analysis', 'journeys.json');
+const JOURNEYS_PATH = path.join(CWD, 'docs', 'test-cases', 'test-cases.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'docs', 'analysis', 'test-conditions.json');
 
 const args = process.argv.slice(2);
@@ -160,7 +160,7 @@ function isJourneyEntry(value, label, errors, knownConditionIds, seenJourneyIds,
 
 function validate() {
   const errors = [];
-  const loaded = loadJson(JOURNEYS_PATH, 'docs/analysis/journeys.json');
+  const loaded = loadJson(JOURNEYS_PATH, 'docs/test-cases/test-cases.json');
   if (loaded.error) {
     errors.push(loaded.error);
     return { status: 'FAILED', errors };
@@ -168,7 +168,7 @@ function validate() {
   const data = loaded.value;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     errors.push(
-      'docs/analysis/journeys.json must contain a JSON object, found ' + JSON.stringify(data) + '.',
+      'docs/test-cases/test-cases.json must contain a JSON object, found ' + JSON.stringify(data) + '.',
     );
     return { status: 'FAILED', errors };
   }
