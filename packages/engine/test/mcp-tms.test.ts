@@ -327,6 +327,21 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('## Reporting to the User');
     expect(mapSkill?.source.text).toContain('never name an internal script file');
 
+    // Core-purpose track: app-level purpose is drafted, confirmed by the human, then used to raise
+    // (never auto-critical) routes that directly deliver it - before the review artifact, which
+    // recaps the confirmed purpose, numbers routes, and offers a bulk-correction shorthand.
+    expect(mapSkill?.source.text).toContain('Core-Purpose Inference');
+    expect(mapSkill?.source.text).toContain('Core-Purpose Confirmation');
+    expect(mapSkill?.source.text).toContain('Criticality Re-Derivation');
+    expect(mapSkill?.source.text).toContain('mostLikelyIndex');
+    expect(mapSkill?.source.text).toContain(
+      'never automatically to `critical`, which stays reserved',
+    );
+    expect(mapSkill?.source.text).toContain('Confirmed core purpose: <corePurpose.selected.value>');
+    expect(mapSkill?.source.text).toContain('Number each route block');
+    expect(mapSkill?.source.text).toContain('high: 1, 4, 5-8, 15; critical: 2-3, 9');
+    expect(mapSkill?.source.text).toContain('is a convenience, not the only way to reply');
+
     // AC9: reuses the existing Level-2 fan-out - no bespoke dispatch mechanism for Step 6.
     expect(mapSkill?.source.text).toContain('orchestrate-swarm.mjs --phase=plan');
 

@@ -107,7 +107,15 @@ free inference, is labeled "draft" in the review artifact (it drives real downst
 the block-level notice), and every `Field<T>` carries a `reasoning` string that reads as a plain
 explanation for a human (what was found, why it matters for this kind of application), never a
 trace of which internal rule fired. Evidence is deduplicated once per route rather than repeated
-under both fields. Approval also records who gave it - `reviewedBy: 'human'` for a
+under both fields. After every route is drafted, an app-level (not per-route) `corePurpose` is
+synthesized - 2-4 plausible one-sentence descriptions of what the application is actually for, each
+grounded in evidence gathered across the whole crawl, with the model's best guess marked. The human
+picks one or describes the purpose in their own words in a short exchange before the main Review
+Artifact; a route whose functionality directly delivers the confirmed purpose gets raised to `high`
+if the generic checklist alone would have placed it lower (never automatically to `critical`, which
+stays reserved for its own payment/auth/destructive-action criteria). The Review Artifact recaps the
+confirmed purpose, numbers each route for easy reference, and offers a bulk-correction shorthand
+(`high: 1, 4, 5-8; critical: 2-3`) alongside free-form correction. Approval also records who gave it - `reviewedBy: 'human'` for a
 real conversational approval, or `'auto-pilot'` only when `/ground-zero-setup`'s auto-pilot mode set
 it on the user's own explicit pre-authorization - so a later audit can always tell which entries a
 human actually looked at. `docs/site-map/site-map.json` itself gets the same mechanical

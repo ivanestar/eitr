@@ -66,6 +66,28 @@ function loadJson(filePath, label) {
   }
 }
 
+function checkEvidenceArray(evidenceArr, label, errors) {
+  if (!Array.isArray(evidenceArr) || evidenceArr.length === 0) {
+    errors.push(label + ' must be a non-empty array - never emit a value with no evidence.');
+    return;
+  }
+  evidenceArr.forEach((ev, i) => {
+    const evLabel = label + '[' + i + ']';
+    if (!ev || typeof ev !== 'object') {
+      errors.push(evLabel + ' must be an object.');
+      return;
+    }
+    if (!SOURCE_VALUES.has(ev.signal)) {
+      errors.push(evLabel + '.signal must be a known signal.');
+    }
+    if (typeof ev.excerpt !== 'string') {
+      errors.push(evLabel + '.excerpt must be a string.');
+    } else if (ev.excerpt.length > 100) {
+      errors.push(evLabel + '.excerpt must be <=100 chars (PII/session-data guard).');
+    }
+  });
+}
+
 function isField(value, label, errors) {
   if (!value || typeof value !== 'object') {
     errors.push(label + ' must be an object.');
@@ -86,24 +108,11 @@ function isField(value, label, errors) {
       label + '.reasoning must be a non-empty string naming the matched checklist criterion.',
     );
   }
-  if (!Array.isArray(value.evidence) || value.evidence.length === 0) {
-    errors.push(label + '.evidence must be a non-empty array - never emit a value with no evidence.');
-  } else {
+  checkEvidenceArray(value.evidence, label + '.evidence', errors);
+  if (Array.isArray(value.evidence)) {
     value.evidence.forEach((ev, i) => {
-      const evLabel = label + '.evidence[' + i + ']';
-      if (!ev || typeof ev !== 'object') {
-        errors.push(evLabel + ' must be an object.');
-        return;
-      }
-      if (!SOURCE_VALUES.has(ev.signal)) {
-        errors.push(evLabel + '.signal must be a known signal.');
-      }
-      if (typeof ev.excerpt !== 'string') {
-        errors.push(evLabel + '.excerpt must be a string.');
-      } else if (ev.excerpt.length > 100) {
-        errors.push(evLabel + '.excerpt must be <=100 chars (PII/session-data guard).');
-      }
       if (
+        ev &&
         typeof value.reasoning === 'string' &&
         typeof ev.excerpt === 'string' &&
         value.reasoning === ev.excerpt
@@ -124,6 +133,58 @@ function isField(value, label, errors) {
           '" (heading-text/aria-roles/manual -> high, form-labels/button-link-text -> medium, route-path only -> low).',
       );
     }
+  }
+}
+
+// Optional, app-level - see CorePurpose's own doc comment in business-intent.types.ts. Only
+// validated when present at all; an older report predating this feature has none, which is valid.
+function checkCorePurpose(corePurpose, errors) {
+  if (corePurpose === undefined) return;
+  const label = 'corePurpose';
+  if (!corePurpose || typeof corePurpose !== 'object') {
+    errors.push(label + ' must be an object when present.');
+    return;
+  }
+  if (!Array.isArray(corePurpose.candidates) || corePurpose.candidates.length === 0) {
+    errors.push(label + '.candidates must be a non-empty array.');
+  } else {
+    corePurpose.candidates.forEach((c, i) => {
+      const cLabel = label + '.candidates[' + i + ']';
+      if (!c || typeof c !== 'object') {
+        errors.push(cLabel + ' must be an object.');
+        return;
+      }
+      if (typeof c.value !== 'string' || c.value.length === 0) {
+        errors.push(cLabel + '.value must be a non-empty string.');
+      }
+      checkEvidenceArray(c.evidence, cLabel + '.evidence', errors);
+    });
+    if (
+      !Number.isInteger(corePurpose.mostLikelyIndex) ||
+      corePurpose.mostLikelyIndex < 0 ||
+      corePurpose.mostLikelyIndex >= corePurpose.candidates.length
+    ) {
+      errors.push(
+        label + '.mostLikelyIndex must be a valid index into candidates (found ' +
+          JSON.stringify(corePurpose.mostLikelyIndex) + ').',
+      );
+    }
+  }
+  if (typeof corePurpose.reviewed !== 'boolean') {
+    errors.push(label + '.reviewed must be a boolean.');
+  }
+  if (
+    corePurpose.reviewed === true &&
+    corePurpose.reviewedBy !== 'human' &&
+    corePurpose.reviewedBy !== 'auto-pilot'
+  ) {
+    errors.push(label + '.reviewedBy must be "human" or "auto-pilot" when reviewed is true.');
+  }
+  if ('selected' in corePurpose && corePurpose.selected !== undefined) {
+    isField(corePurpose.selected, label + '.selected', errors);
+  }
+  if (corePurpose.reviewed === true && corePurpose.selected === undefined) {
+    errors.push(label + '.selected is required once reviewed is true.');
   }
 }
 
@@ -158,6 +219,8 @@ function validate() {
     errors.push('routes must be an object keyed by routeId.');
     return { status: 'FAILED', errors };
   }
+
+  checkCorePurpose(data.corePurpose, errors);
 
   const siteMap = loadJson(SITE_MAP_PATH, 'docs/site-map/site-map.json');
   const knownRouteIds = new Set();

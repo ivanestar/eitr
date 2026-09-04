@@ -7,6 +7,18 @@ changed, and why only if it isn't obvious. This project follows
 or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
 audit trail; this file is release notes.
 
+## [0.29.0] - 2026-09-04
+
+- **Added**: `/map-site` Step 6 now drafts an app-level `corePurpose` (2-4 plausible one-sentence
+  descriptions of what the application is actually for, each grounded in crawl evidence, with the
+  model's best guess marked) and confirms it with the human in a short exchange before the main
+  Review Artifact - picking a candidate or describing the purpose in free text. A route that
+  directly delivers the confirmed purpose gets raised to `high` if the generic checklist alone
+  would have placed it lower (never automatically to `critical`).
+- **Changed**: the Business-Intent Review Artifact now recaps the confirmed core purpose, numbers
+  each route for easy reference (stable sorted-path order), and offers a bulk-correction shorthand
+  (`high: 1, 4, 5-8; critical: 2-3`) alongside free-form correction.
+
 ## [0.28.0] - 2026-09-04
 
 - **Changed**: `/map-site`'s Business-Intent Review Artifact no longer shows `confidence` (it stays

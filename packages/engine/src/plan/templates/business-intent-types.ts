@@ -49,6 +49,36 @@ export interface Field<T> {
   evidence: Evidence[];
 }
 
+// One plausible one-sentence description of what the application's primary purpose is, grounded in
+// evidence gathered across the whole crawl (not just one route) - never invented without a real
+// signal behind it.
+export interface CorePurposeCandidate {
+  value: string;
+  evidence: Evidence[];
+}
+
+// App-level (not per-route) inference, drafted once per crawl and confirmed once by the human
+// before it's used to adjust any route's criticalityTier - see /map-site Step 6's Core-Purpose
+// Inference/Confirmation/Re-Derivation sub-steps. Optional on the report as a whole: an existing
+// business-intent.json from before this feature existed simply has none, and downstream readers
+// must treat its absence the same as an unconfirmed one - never assume a purpose that was never
+// drafted.
+export interface CorePurpose {
+  // 2-4 plausible candidates the model drafted from evidence - never just one, so the human has a
+  // real choice rather than a single take-it-or-leave-it guess.
+  candidates: CorePurposeCandidate[];
+  // Index into candidates the model's own evidence most strongly supports - shown to the human as
+  // the recommended default, never auto-selected without their confirmation.
+  mostLikelyIndex: number;
+  // Set once the human has picked a candidate or described the purpose in their own words -
+  // interpreted into the same Field<T> shape every other inference in this artifact uses.
+  // source: 'manual' when built from the human's own free text; otherwise the picked candidate's
+  // own strongest evidence signal.
+  selected?: Field<string>;
+  reviewed: boolean;
+  reviewedBy?: 'human' | 'auto-pilot';
+}
+
 export interface BusinessIntentEntry {
   // Joins against docs/site-map/site-map.json's routes[*].routeId - routeId, not the path
   // template key, because routeId is documented there as stable across a URL restructure, and
@@ -75,6 +105,9 @@ export interface BusinessIntentEntry {
 export interface BusinessIntentReport {
   schemaVersion: 1;
   generatedAt: string;
+  // App-level, not per-route - see CorePurpose's own doc comment. Absent until Step 6's
+  // Core-Purpose Inference sub-step runs at least once.
+  corePurpose?: CorePurpose;
   // Keyed by routeId (see BusinessIntentEntry.routeId), unlike site-map.json's own routes object
   // which is keyed by canonical path template - resolve a path with
   // Object.values(siteMap.routes).find(r => r.routeId === id) or a one-time routeId index.
