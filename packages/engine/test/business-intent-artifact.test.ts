@@ -445,6 +445,30 @@ describe('scripts/validate-business-intent.mjs (real execution)', () => {
     }
   });
 
+  it('passes a corePurpose with exactly one candidate - evidence only supported one interpretation', () => {
+    const dir = setupProject();
+    try {
+      const good = structuredClone(wellFormedReport()) as Record<string, unknown>;
+      good.corePurpose = {
+        candidates: [
+          {
+            value: 'A hub of testing utility tools for QA professionals',
+            evidence: [{ signal: 'heading-text', excerpt: 'Welcome to OnlyTests!' }],
+          },
+        ],
+        mostLikelyIndex: 0,
+        reviewed: false,
+      };
+      writeReport(dir, good);
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('fails when corePurpose.candidates is empty', () => {
     const dir = setupProject();
     try {

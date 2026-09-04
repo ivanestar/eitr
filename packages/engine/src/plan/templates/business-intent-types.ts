@@ -64,8 +64,11 @@ export interface CorePurposeCandidate {
 // must treat its absence the same as an unconfirmed one - never assume a purpose that was never
 // drafted.
 export interface CorePurpose {
-  // 2-4 plausible candidates the model drafted from evidence - never just one, so the human has a
-  // real choice rather than a single take-it-or-leave-it guess.
+  // As many plausible candidates as the evidence actually supports genuinely distinct
+  // interpretations for - a single candidate when the crawl only supports one real reading (the
+  // human can still always describe it differently in their own words at confirmation time), up
+  // to 4 when the evidence is genuinely ambiguous between different purposes. Never pad the count
+  // with reworded restatements of the same underlying interpretation.
   candidates: CorePurposeCandidate[];
   // Index into candidates the model's own evidence most strongly supports - shown to the human as
   // the recommended default, never auto-selected without their confirmation.

@@ -108,8 +108,11 @@ the block-level notice), and every `Field<T>` carries a `reasoning` string that 
 explanation for a human (what was found, why it matters for this kind of application), never a
 trace of which internal rule fired. Evidence is deduplicated once per route rather than repeated
 under both fields. After every route is drafted, an app-level (not per-route) `corePurpose` is
-synthesized - 2-4 plausible one-sentence descriptions of what the application is actually for, each
-grounded in evidence gathered across the whole crawl, with the model's best guess marked. The human
+synthesized - one plausible one-sentence description of what the application is actually for per
+genuinely distinct interpretation the evidence supports (exactly one when only one reading holds
+up, up to 4 when the evidence is actually ambiguous - never reworded restatements of the same
+reading padding the count), each grounded in evidence gathered across the whole crawl, with the
+model's best guess marked. The human
 picks one or describes the purpose in their own words in a short exchange before the main Review
 Artifact; a route whose functionality directly delivers the confirmed purpose gets raised to `high`
 if the generic checklist alone would have placed it lower (never automatically to `critical`, which
