@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { GOLDEN_SKILLS_DATASET } from '../src/datasets/skills-dataset.js';
 import { gradeSkillCompliance } from '../src/graders/skills-grader.js';
 
-describe('All 8 Operational Skills Evaluation Benchmark', () => {
+describe('All 9 Operational Skills Evaluation Benchmark', () => {
   // Skill 1: /auth-setup
   it('1. Evaluates /auth-setup workflow and session serialization', () => {
     const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/auth-setup')!;
@@ -140,6 +140,25 @@ describe('All 8 Operational Skills Evaluation Benchmark', () => {
 2. Run scripts/compose-journeys.mjs to deterministically assign each condition a testLevel.
 3. Run scripts/validate-journeys.mjs --stage=structural, then draft each testCase, then validate again.
 4. Write directly with reviewed: false and print a summary - no blocking approval pause before finishing.
+`;
+    const grade = gradeSkillCompliance(
+      simulatedOutput,
+      skillCase.expectedWorkflow.mustContainKeySteps,
+      skillCase.expectedWorkflow.forbiddenPatterns,
+    );
+    expect(grade.passed).toBe(true);
+    expect(grade.score).toBe(100);
+  });
+
+  // Skill 9: /derive-test-conditions
+  it('9. Evaluates /derive-test-conditions read-only extraction and human sign-off gate', () => {
+    const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/derive-test-conditions')!;
+    const simulatedOutput = `
+# Skill: Test-Condition Derivation (/derive-test-conditions)
+1. Preconditions: refuse with "No reviewed business-intent entries found" if none exist.
+2. Extract parameters read-only, redact PII as [REDACTED], synthesize sampleValues never copied from the live page.
+3. Run node scripts/validate-test-conditions.mjs, deterministically generate boundary-value + checklist-based conditions.
+4. Present a Test-Conditions Review Artifact per route - Human Sign-Off Gateway before docs/analysis/test-conditions.json is authoritative.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

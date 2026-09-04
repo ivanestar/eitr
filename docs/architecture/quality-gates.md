@@ -64,6 +64,10 @@ linter wired in by EITR itself.
 
 ## Multi-tier CI/CD gate
 
+Every gate below is continuous testing in practice - quality checks run automatically on every
+change rather than as a separate, manually-triggered phase - without needing that as a rebrand:
+the gate names (CPOM linter, eval suite, Tier 1/Tier 2) stay as they are.
+
 - **Tier 1 (static contract gate):** `npm run lint:cpom` (and `lint:eslint` where generated) for
   TS/Cypress, or the equivalent per-language CPOM script above for Python/Java/C# - sub-second,
   before browsers launch.

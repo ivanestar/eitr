@@ -20,7 +20,7 @@ export function renderJavaPom(opts: { projectName: string }): string {
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.10.2</junit.version>
-        <playwright.version>1.52.0</playwright.version>
+        <playwright.version>1.62.0</playwright.version>
     </properties>
 
     <dependencies>
@@ -106,7 +106,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.microsoft.playwright:playwright:1.52.0'
+    implementation 'com.microsoft.playwright:playwright:1.62.0'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

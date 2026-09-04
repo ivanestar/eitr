@@ -16,28 +16,32 @@ Enforces the 5 security pillars below, secrets protection, and cross-platform pa
 
 ## The 5 Security Pillars
 
-### 1. Diff Entropy & Secret Scanning
+Each pillar names the concrete risk it guards against, not just the mechanism - a finding under any
+pillar should be framed in terms of that risk when reported (e.g. "credential-exposure risk: hardcoded
+API key on line 42"), not as a bare rule-violation notice.
+
+### 1. Diff Entropy & Secret Scanning (credential-exposure risk)
 
 - Scan all modified lines in git diff for hardcoded credentials, JWTs, private keys, API keys (`Bearer [A-Za-z0-9-_=]+`, `ghp_`, `AKIA`, `BEGIN PRIVATE KEY`).
 - Enforce `process.env.<VAR_NAME>` usage with explicit fallback guards.
 - Forbid hardcoding passwords or auth tokens in generated mock files.
 
-### 2. Path Traversal & Shell Injection Prevention
+### 2. Path Traversal & Shell Injection Prevention (unauthorized-access / arbitrary-code-execution risk)
 
 - All dynamic path resolutions MUST use `path.resolve` or `path.normalize` and verify that the target remains within the workspace boundary.
 - Shell command execution MUST NEVER use string concatenation with untrusted input; use parameterized argument arrays.
 
-### 3. Gitignore & Artifact Isolation Parity
+### 3. Gitignore & Artifact Isolation Parity (credential/session-leakage risk)
 
 - Ensure all session state files (`auth.json`, `.env`, `.env.*`, `.eitr-tmp`, `packages/evals/reports/`) are strictly ignored in `.gitignore`.
 - Template files that contain sensitive secrets MUST have `create-if-absent` write policies.
 
-### 4. Zero Lock-in & DLP Integrity
+### 4. Zero Lock-in & DLP Integrity (data-exposure risk; SPDX check is a separate licensing/legal-compliance risk)
 
 - Guarantee that no proprietary tokens, customer data, or creator branding leak into generated client templates.
 - Enforce SPDX-compatible open-source licensing (`MIT`, `Apache-2.0`, `ISC`, `BSD-*`) across all runtime dependencies; a `GPL-*`, `AGPL-*`, or unlicensed dependency is a `[BLOCKER]`.
 
-### 5. Dependency & CVE Audit
+### 5. Dependency & CVE Audit (known-vulnerability / supply-chain risk)
 
 - Run `npm audit --omit=dev` after any `package.json` change (in this repo's manifests or in generated project templates).
 - A `high` or `critical` severity finding in the audit output is a `[BLOCKER]`; a `moderate` or `low` finding is logged but does not block.
