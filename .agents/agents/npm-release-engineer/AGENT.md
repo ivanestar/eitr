@@ -81,7 +81,7 @@ Simulate packaging and verify tarball contents:
 
 ---
 
-### Stage 4. Git OpSec Commit, PR Merge & Release Tagging
+### Stage 4. Git OpSec Commit & Release Tagging
 
 1. Verify working directory is clean (`git status`).
 2. Commit release changes on a release branch using the OpSec evening timestamp rule (23:00):
