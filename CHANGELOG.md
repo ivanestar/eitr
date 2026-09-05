@@ -9,6 +9,7 @@ audit trail; this file is release notes.
 
 ## [0.33.0] - 2026-09-04
 
+- **Added**: GitHub Releases CI workflow (`release.yml`) and deterministic release notes extractor (`extract-release-notes.mjs`) on git tag push.
 - **Changed**: streamlined Protocol 123 to v3.0 by placing Invariants Discovery (`test-conditions-designer`) before Architect plan formulation, adopting a single Lead Reviewer (`code-reviewer`) with on-demand Arbiter escalation, and adding dedicated runner test suite `protocol-123-runner.test.ts`.
 - **Changed**: relocated non-test setup and fixture files from `tests/` to dedicated `fixtures/` directory (`fixtures/index.ts` with `@fixtures` alias in TS Playwright, `fixtures/auth.setup.ts`, Python `fixtures/auth_setup.py`) and added `fixtures/` to CPOM linter target directories.
 - **Added**: polymorphic AI operational skills and AI agents generator (`stack-conventions.ts`) establishing 100% native multi-stack parity across TypeScript Playwright, Cypress TS, Python pytest, C# NUnit, and Java JUnit 5.
