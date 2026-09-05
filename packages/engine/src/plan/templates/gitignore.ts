@@ -5,6 +5,7 @@ export function renderGitignore(tool: string = 'playwright', language?: string):
 obj/
 TestResults/
 test-results/
+artifacts/site-map/screenshots/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -27,6 +28,7 @@ Thumbs.db
 build/
 .gradle/
 test-results/
+artifacts/site-map/screenshots/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -51,6 +53,7 @@ cypress/screenshots/
 cypress/videos/
 cypress/downloads/
 test-results/
+artifacts/site-map/screenshots/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -63,6 +66,8 @@ test-results/
 .env
 .env.*
 !.env.example
+cypress.env.json
+cypress.env.*.json
 auth.json
 *.tsbuildinfo
 .DS_Store
@@ -74,6 +79,7 @@ Thumbs.db
 __pycache__/
 .pytest_cache/
 test-results/
+artifacts/site-map/screenshots/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -96,6 +102,7 @@ Thumbs.db
 test-results/
 playwright-report/
 blob-report/
+artifacts/site-map/screenshots/
 .idea/
 .vscode/*
 !.vscode/extensions.json

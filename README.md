@@ -101,6 +101,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). If you're an AI assistant working on EIT
 
 ---
 
+## Support
+
+If EITR saves you time or helps your team stand up test automation faster, consider supporting its ongoing development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Y5A826FPBL)
+
+---
+
 ## License
 
 Apache License, Version 2.0 - see [LICENSE](LICENSE). Everything EITR generates in your repository is yours: no royalties, no restrictions, free for commercial and client work.

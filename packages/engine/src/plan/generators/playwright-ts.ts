@@ -14,7 +14,11 @@ export class PlaywrightTsGenerator implements TargetGenerator {
 
   plan(profile: StackProfile, opts: PlanOptions): FileDescriptor[] {
     return [
-      ...planSharedScaffold(opts),
+      ...planSharedScaffold({
+        ...opts,
+        language: this.language,
+        automationTool: this.automationTool,
+      }),
       ...this.langAdapter.planFiles(profile, opts),
       ...this.toolAdapter.planFiles(profile, opts),
     ];

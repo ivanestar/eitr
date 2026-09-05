@@ -75,7 +75,7 @@ describe('Stage 5: Ecosystem Orchestration & E2E Scaffold Verification', () => {
     // Scripts & Infrastructure
     expect(paths).toContain('scripts/lint-cpom.js');
     expect(paths).toContain('.github/workflows/playwright.yml');
-    expect(paths).toContain('tests/fixtures.ts');
+    expect(paths).toContain('fixtures/index.ts');
     expect(paths).toContain('shared/utils/api-client.ts');
 
     // Zero Lock-in check on all generated inline templates

@@ -4,7 +4,7 @@ import * as esbuild from 'esbuild';
 import { renderAuthSetupTs } from '../src/plan/templates/auth-setup.js';
 
 // Extracts the self-contained base32Decode()/generateTotp() pair emitted into the generated
-// tests/auth.setup.ts, strips TS types via esbuild, and evaluates it in an isolated VM context
+// fixtures/auth.setup.ts, strips TS types via esbuild, and evaluates it in an isolated VM context
 // so the RFC 6238 test vectors below exercise the exact code shipped to users, not a
 // re-implementation in this test file.
 function loadGeneratedTotp(): (
@@ -32,7 +32,7 @@ function loadGeneratedTotp(): (
   ) => string;
 }
 
-describe('RFC 6238 TOTP generator embedded in tests/auth.setup.ts', () => {
+describe('RFC 6238 TOTP generator embedded in fixtures/auth.setup.ts', () => {
   const generateTotp = loadGeneratedTotp();
   // Base32 encoding of the RFC 6238 Appendix B ASCII SHA1 seed "12345678901234567890".
   const RFC_6238_SHA1_SECRET_B32 = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';

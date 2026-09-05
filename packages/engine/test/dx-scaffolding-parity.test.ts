@@ -67,8 +67,8 @@ describe('DX Scaffolding Parity & Bugfix Suite', () => {
     it('imports from ./fixtures, includes fixture usage example, and has zero _react=/_vue= selectors', () => {
       const content = renderExampleTest('playwright', 'typescript');
 
-      // RC-08, NC-08: import from extensionless ./fixtures
-      expect(content).toContain("from './fixtures'");
+      // RC-08, NC-08: import from @fixtures alias
+      expect(content).toContain("from '@fixtures'");
       expect(content).not.toContain("from '@playwright/test'");
       expect(content).not.toContain("from './fixtures.js'");
 
@@ -162,7 +162,7 @@ describe('DX Scaffolding Parity & Bugfix Suite', () => {
 
     it('renderExampleTest() with zero arguments defaults cleanly', () => {
       const content = renderExampleTest();
-      expect(content).toContain("from './fixtures'");
+      expect(content).toContain("from '@fixtures'");
       expect(content).not.toContain('_react=');
     });
 

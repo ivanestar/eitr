@@ -9,6 +9,13 @@ audit trail; this file is release notes.
 
 ## [0.33.0] - 2026-09-04
 
+- **Changed**: streamlined Protocol 123 to v3.0 by placing Invariants Discovery (`test-conditions-designer`) before Architect plan formulation, adopting a single Lead Reviewer (`code-reviewer`) with on-demand Arbiter escalation, and adding dedicated runner test suite `protocol-123-runner.test.ts`.
+- **Changed**: relocated non-test setup and fixture files from `tests/` to dedicated `fixtures/` directory (`fixtures/index.ts` with `@fixtures` alias in TS Playwright, `fixtures/auth.setup.ts`, Python `fixtures/auth_setup.py`) and added `fixtures/` to CPOM linter target directories.
+- **Added**: polymorphic AI operational skills and AI agents generator (`stack-conventions.ts`) establishing 100% native multi-stack parity across TypeScript Playwright, Cypress TS, Python pytest, C# NUnit, and Java JUnit 5.
+- **Added**: lightweight Protocol 456 pipeline redesign (Phases 0-5) with deterministic runner `scripts/protocol-456.mjs`, on-demand upstream web research, fast-track pre-scoped track execution, and single-reviewer risk audit.
+- **Added**: in-situ initial viewport screenshot capture and Selective Visual Triage Gate in `/map-site`, with `artifacts/site-map/screenshots/` path validation, regex schema constraints, and gitignore protection across all 5 generated stack profiles.
+- **Added**: `scripts/protocol-123.mjs` deterministic pipeline runner, prompt template generator for mandatory subagents (including dual-track `web-researcher`), and phase gate verifier.
+- **Added**: Selective Vision integration in `pom-engineer` referencing disk screenshots for unlabeled icons and prohibiting base64 inlining.
 - **Added**: 9-category negative testing taxonomy, architectural-invariant technique, and Defensive Oracle Polarity validation in Stage 2 test conditions.
 - **Fixed**: CPOM primitive reuse in `sdet-architect` and `pom-engineer`, python pytest fixtures with dynamic `base_url`, git-hooks script casing, and parameterized hydration helpers across all four supported languages.
 - **Fixed**: a fresh `/ground-zero-setup` run opened in Russian with no Russian anywhere in the

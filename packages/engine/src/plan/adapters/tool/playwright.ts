@@ -39,13 +39,13 @@ export class PlaywrightAdapter implements ToolAdapter {
         source: { kind: 'inline', text: renderExampleTest(profile.framework.value) },
       },
       {
-        path: 'tests/fixtures.ts',
+        path: 'fixtures/index.ts',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'seed' },
         source: { kind: 'inline', text: renderFixtures() },
       },
       {
-        path: 'tests/auth.setup.ts',
+        path: 'fixtures/auth.setup.ts',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'seed' },
         source: {

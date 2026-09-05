@@ -21,12 +21,20 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 
 ## Modes
 
-1. **Full Swarm (`123`)**:
-   - 2–3 independent reviewer subagents in Phase 3 (Plan Review) and Phase 6 (Code & Test Review).
-   - Used for all standard features, multi-file changes, and bugfixes.
+1. **Full Protocol (`123`)**:
+   - Streamlined 9-phase lifecycle: live web & codebase recon, invariants discovery feeding the Architect, single Lead Reviewer with Arbiter escalation gateway, and TDD execution.
 2. **Fast Track (`123-fast`)**:
    - 1 research -> 1 plan -> User Approval Gateway -> 1 TDD execution (Red -> Green) -> 1 reviewer -> QA.
-   - Used only for single-file, low-risk fixes.
+   - Used for single-file, pre-scoped fixes.
+
+## Deterministic Orchestration Script
+
+To eliminate LLM reasoning drift or omission of mandatory subagents (such as skipping `web-researcher` or invariant discovery), orchestrators can invoke the deterministic runner script:
+
+- `node scripts/protocol-123.mjs plan [--mode=full|fast] [--json]`: Outputs the exact phase graph, mandatory subagents, and exit gates.
+- `node scripts/protocol-123.mjs prompt <subagent>`: Emits the exact, non-negotiable prompt template for subagents (`web-researcher`, `test-conditions-designer`, `code-reviewer`, `review-arbiter`).
+- `node scripts/protocol-123.mjs verify-phase <0-8>`: Runs mechanical validation for the phase gate.
+- `node scripts/protocol-123.mjs telemetry`: Emits the standard telemetry summary table.
 
 ## 9-Phase Lifecycle (SDD + TDD Hybrid)
 
@@ -36,42 +44,45 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 - **Action**: Run `npm run build` or the targeted test suite _before_ writing any code or plans.
 - **Rule**: If baseline is already failing (Red), explicitly document the broken baseline before starting so the agent does not attempt to repair unrelated failures.
 
-### Phase 1: Research & Diagnosis (Explore & Web Recon)
+### Phase 1: Research & Diagnosis (Explore, Web Recon & ISTQB Grounding)
 
 - **Mandate**: **Uncompromising Engineering Rigor (Anti-Flattery Mandate)**. Act as a ruthless Senior SDET Partner. Unmask genuine production bottlenecks (MFA/SSO auth traps, deduplication gaps, context bloat, batch UX bottlenecks, lack of canvas support) and never artificially flatter or inflate assessment scores.
 - **Agents**:
   - `researcher` (scoped read-only tools: `grep_search`, `find_by_name`, `view_file`): Deeply inspect codebase, trace root causes, locate all call sites and dependencies, collect concrete line-level evidence, and map Impact Radius across the full stack.
-  - `web-researcher`: Perform live web search on official documentation (Playwright, Cypress, MCP, LLM frameworks, Node.js) to ground decisions in upstream best practices and prevent stale memory.
+  - `web-researcher` (**Mandatory Unconditional Invocation**): The orchestrator MUST ALWAYS launch `web-researcher` before Phase 2 plan formulation — relying on pre-trained memory or mental shortcuts is strictly prohibited. `web-researcher` executes two mandatory investigation tracks:
+    1. **Technical Upstream Recon**: Targeted live web searches on official documentation (Playwright, Cypress, MCP, LLM frameworks, Node.js) to ground decisions in current upstream best practices, deprecations, known browser/runtime bugs, and real-world production traps.
+    2. **ISTQB Standards & Syllabi Alignment**: Live web search across official ISTQB syllabi (CTFL v4.0, CTAL-TAE v2.0, CTAL-TA v4.0, CT-GenAI, CT-AI, CT-SEC) and the official glossary (`glossary.istqb.org`) to anchor architecture concepts, entry/exit criteria, test oracles, and test design techniques in standard international testing taxonomy and principles.
+  - **Phase 1 Handoff Gate**: Phase 2 formulation cannot proceed until `web-researcher` delivers its structured synthesis (Top Pitfalls to Avoid, Upstream Recommendations, and ISTQB Taxonomy Mapping).
 
-### Phase 2: Architectural Plan Formulation (Spec-Driven Architecture / SDD)
+### Phase 2: Invariants Discovery & Defensive Spec Formulation (SDD)
 
-- **Agents**:
-  - `architect`: Synthesize findings into a formal, deterministic Markdown specification artifact.
-  - `req-coverage-designer` & `negative-coverage-designer` (Test Conditions Design Swarm): Run immediately after plan formulation to synthesize the complete Test Conditions Matrix before Phase 3 review.
+- **Workflow Pipeline (Invariants -> Defensive Architecture)**:
+  1. **Step 2a (Invariants Discovery)**: `test-conditions-designer` uncovers the critical positive requirements and negative invariants / boundary conditions BEFORE the Architect finalizes the plan.
+     - **High-Signal Invariants Cap**: Enforce density over volume (MAX 15–20 total conditions: 6–10 atomic positive ACs and 8–12 critical negative boundary invariants across the 9 closed taxonomy categories).
+     - **Taxonomy Categories**: `invalid_input`, `boundary`, `missing_precondition`, `concurrent_conflict`, `state_violation`, `permission_denied`, `external_failure`, `data_integrity`, `error_path`.
+     - **Defensive Oracle Polarity**: Assert graceful error handling, input sanitization, and state preservation — NEVER unhandled crashes.
+  2. **Step 2b (Defensive Architecture Plan)**: `architect` takes the discovered invariants on input and designs the formal Markdown SDD plan with proactive architectural defenses (sanitization, retry bounds, error boundary wrapping, null safety).
 - **Executive Summary & Specification requirements**:
   1. **Executive Summary Table**: Target files list, breaking changes flag (`Yes` / `No`), test impact, risk assessment.
-  2. **Acceptance Criteria (AC) $\rightarrow$ Test Matrix**:
+  2. **Acceptance Criteria (AC) -> Test Matrix**:
      | Requirement / Bug Scenario | Target Test File                 | Assertion Type          |
      | -------------------------- | -------------------------------- | ----------------------- |
      | `AC-1: <Description>`      | `packages/*/test/<name>.test.ts` | `<Deterministic Check>` |
   3. **Exact Code Blocks**: Complete `before/after` chunks and line numbers.
-  4. **Formal Test Conditions & Invariant Matrix (ISTQB Stage 2 Contract)**:
-     - `req-coverage-designer`: Positive and alt-flow atomic conditions covering 100% of AC, BR, NFR with mandatory `"Verify "` prefix.
-     - `negative-coverage-designer`: 3–5 negative conditions per positive requirement across the 9 closed taxonomy categories (`invalid_input`, `boundary`, `missing_precondition`, `concurrent_conflict`, `state_violation`, `permission_denied`, `external_failure`, `data_integrity`, `error_path`) with defensive oracle polarity.
+  4. **Embedded Invariants Matrix**: The discovered positive and negative conditions mapped to corresponding architectural defenses.
 
-### Phase 3: Independent Plan Review Swarm & Arbiter Adjudication
+### Phase 3: Lead Plan Review (Single Strong Reviewer)
 
-- **Review Scope**: Audits both the implementation tasks and the Test Conditions Matrix for edge cases, invariants, and false assumptions before presentation to the user.
-- **Subagents**: Swarm of 2–3 independent reviewers selected from the modular pool:
-  1. `code-reviewer`: Code correctness, type safety, missing imports.
-  2. `skill-reviewer` / `DX Reviewer`: Elimination of ambiguous instructions (no "search for", "apply equivalent").
-  3. `security-auditor`: Secret detection, path traversal, injection vulnerability audit.
-  4. `flake-sentinel`: Concurrency safety, race condition prevention, auto-retrying assertions.
-  5. `framework-auditor`: Multi-language stack parity (TS, JS, Python, Java, C#).
-- **Arbiter Adjudication (`review-arbiter`)**:
-  - Validates raw reviewer findings against Ground Truth (`AGENTS.md`, `CONVENTIONS.md`).
-  - Classifies into `ACCEPTED [CRITICAL/MAJOR]`, `DISMISSED: FALSE_POSITIVE`, `DISMISSED: HALLUCINATED_RULE`, `DISMISSED: OUT_OF_SCOPE`.
-  - Outputs concise Arbiter Verdict Artifact before presenting to the user.
+- **Review Scope**: Comprehensive single-reviewer audit of the plan against code quality, security, multi-stack parity, and test determinism before presenting to the user.
+- **Agent**: `code-reviewer` (Lead Reviewer), armed with a 5-point unified rubric:
+  1. Architecture & Plan Compliance (spec adherence, CPOM contracts, Zero Lock-in).
+  2. TypeScript & Language Safety (strict typing, zero `any`, cross-platform paths).
+  3. Security & Privacy (no hardcoded secrets, safe credential retrieval from env, path traversal prevention, gitignore).
+  4. Flake & Determinism (zero arbitrary sleep, proper async order, web-first auto-retrying assertions).
+  5. Polyglot Parity (multi-language alignment across TS, Python, C#, Java).
+- **Arbiter Escalation Gateway (`review-arbiter`)**:
+  - For standard single-reviewer execution, findings are output directly as actionable bullet points (`[SEVERITY] File:Line -- Issue -- Fix`) and hardened into the plan, eliminating extra token round-trips.
+  - In multi-party or high-conflict escalations, `review-arbiter` remains available to adjudicate disputed findings against Ground Truth (`AGENTS.md`, `CONVENTIONS.md`).
 - **Token Economy**: Reviewers return concise, high-signal bullet points (`[SEVERITY] File:Line -- Issue -- Fix`).
 - **Hardening**: Automatically revise the plan artifact based on reviewer findings before presenting to the user.
 
@@ -92,14 +103,14 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 - **Phase 5c (REFACTOR Phase - `core-developer`)**:
   - Clean up formatting and imports adhering strictly to project paradigms with zero opportunistic refactoring.
 
-### Phase 6: Independent Code & Test Review Swarm & Arbiter Adjudication
+### Phase 6: Lead Code & Test Review (Single Strong Reviewer)
 
-- **Subagents**: Swarm of 2–3 independent reviewers auditing the actual `git diff` for both application code and new tests:
-  1. `code-reviewer`: Plan compliance, types, code style, Zero Lock-in, AC Matrix 100% coverage.
-  2. `security-auditor`: Diff entropy scanning, secrets protection, shell injection prevention.
-  3. `flake-sentinel`: AST timing safety (0 `sleep()`, 0 `waitForTimeout()`), Web-First assertions, test determinism.
-- **Arbiter Adjudication (`review-arbiter`)**:
-  - Evaluates code diff comments, filters out bogus warnings, and issues final Actionable Verdict.
+- **Agent**: `code-reviewer` (Lead Reviewer) inspecting the actual `git diff` for both application code and new tests.
+- **Review Rubric**:
+  - Plan compliance, types, code style, Zero Lock-in, AC Matrix 100% coverage.
+  - Security scanning (diff entropy, secrets protection, shell injection prevention).
+  - Flake sentinel checks (zero arbitrary sleep, web-first auto-retrying assertions).
+- **Arbiter Escalation Gateway (`review-arbiter`)**: Available on-demand if multi-party arbitration is required.
 - **Test Quality Rubric**:
   - _Anti-Tautology Guard_: Forbid trivial checks (`expect(true).toBe(true)`).
   - _Anti-Vacuous Guard_: Verify dynamic assertions on actual state.
@@ -123,15 +134,15 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
   | Phase                           | Duration  | Est. Tokens (In/Out) | Est. Cost ($) | Status         |
   | ------------------------------- | --------- | -------------------- | ------------- | -------------- |
   | Phase 0: Pre-Flight Baseline    | 2.1s      | 1.2k / 0.3k          | $0.002        | PASSED         |
-  | Phase 1: Recon & Ingestion      | 4.5s      | 3.5k / 1.1k          | $0.007        | PASSED         |
-  | Phase 2: Spec Formulation (SDD) | 3.8s      | 2.8k / 1.8k          | $0.008        | PASSED         |
-  | Phase 3: Plan Review & Arbiter  | 6.2s      | 8.4k / 2.2k          | $0.016        | PASSED         |
+  | Phase 1: Recon & Web Research   | 4.5s      | 4.2k / 1.5k          | $0.009        | PASSED         |
+  | Phase 2: Invariants & SDD Plan  | 5.0s      | 4.5k / 2.5k          | $0.012        | PASSED         |
+  | Phase 3: Lead Plan Review       | 3.2s      | 3.5k / 1.2k          | $0.007        | PASSED         |
   | Phase 4: Human Intent Lock      | User      | 0 / 0                | $0.000        | APPROVED       |
-  | Phase 5: TDD Dual Synthesis     | 7.1s      | 5.2k / 3.4k          | $0.015        | PASSED         |
-  | Phase 6: Code Review & Arbiter  | 5.4s      | 7.1k / 1.9k          | $0.014        | PASSED         |
-  | Phase 7: Self-Healing (Triage)  | 0.0s      | 0 / 0                | $0.000        | SKIPPED        |
+  | Phase 5: TDD Execution          | 6.5s      | 5.0k / 3.0k          | $0.014        | PASSED         |
+  | Phase 6: Lead Code Review       | 3.5s      | 3.8k / 1.4k          | $0.008        | PASSED         |
+  | Phase 7: Two-Strike Self-Heal   | 0.0s      | 0 / 0                | $0.000        | SKIPPED        |
   | Phase 8: Quality Gate & Handoff | 3.0s      | 2.0k / 0.8k          | $0.004        | PASSED         |
-  | **TOTAL**                       | **32.1s** | **30.2k / 11.5k**    | **~$0.066**   | **100% GREEN** |
+  | **TOTAL**                       | **27.8s** | **24.2k / 10.7k**    | **~$0.056**   | **100% GREEN** |
   ```
 
 ## UX Progress Notification Standard

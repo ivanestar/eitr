@@ -72,7 +72,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'Human Sign-Off Gateway',
         'Markdown proposal artifact',
         'await test.step',
-        'tests/fixtures.ts',
+        'fixtures/index.ts',
         'artifacts/test-cases/test-cases.json',
       ],
       contractGuarantees: [

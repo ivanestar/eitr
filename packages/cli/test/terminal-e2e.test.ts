@@ -127,7 +127,7 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
       expect(existsSync(path.join(cwd, 'eitr.config.ts'))).toBe(false);
       expect(existsSync(path.join(cwd, 'tsconfig.json'))).toBe(true);
       expect(existsSync(path.join(cwd, 'scripts', 'lint-cpom.js'))).toBe(true);
-      expect(existsSync(path.join(cwd, 'tests', 'fixtures.ts'))).toBe(true);
+      expect(existsSync(path.join(cwd, 'fixtures', 'index.ts'))).toBe(true);
       expect(existsSync(path.join(cwd, 'tests', 'smoke.spec.ts'))).toBe(true);
       expect(existsSync(path.join(cwd, 'components', 'base', 'base-page.ts'))).toBe(true);
       expect(existsSync(path.join(cwd, 'components', 'primitives', 'button.ts'))).toBe(true);

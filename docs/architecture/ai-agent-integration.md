@@ -241,7 +241,7 @@ When a generated test fails during live execution:
   external dependency required.
 - Tests register cleanup via `apiClient.registerTeardown(async () => { ... })`; tasks run LIFO
   inside `try/catch`.
-- The `apiClient` fixture in `tests/fixtures.ts` runs `await client.cleanup()` after every test,
+- The `apiClient` fixture in `fixtures/index.ts` runs `await client.cleanup()` after every test,
   including on failure/timeout.
 - Hardcoded production dependencies and shared mutable data are forbidden.
 

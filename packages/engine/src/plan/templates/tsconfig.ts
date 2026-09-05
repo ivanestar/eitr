@@ -22,10 +22,11 @@ export function renderTsconfig(): string {
       "@pages/*": ["./components/pages/*"],
       "@shared/*": ["./shared/*"],
       "@utils/*": ["./shared/utils/*"],
-      "@fixtures": ["./tests/fixtures.ts"]
+      "@fixtures": ["./fixtures/index.ts"],
+      "@fixtures/*": ["./fixtures/*"]
     }
   },
-  "include": ["components", "tests", "shared", "playwright.config.ts"]
+  "include": ["components", "tests", "fixtures", "shared", "playwright.config.ts"]
 }
 `;
 }

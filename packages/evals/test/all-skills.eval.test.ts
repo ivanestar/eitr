@@ -46,7 +46,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 # Skill: Automate Ticket (/automate-test)
 1. Pre-validation via tms-validator.
 2. Present Markdown proposal artifact for Human Sign-Off Gateway.
-3. Synthesize linear spec with await test.step and tests/fixtures.ts.
+3. Synthesize linear spec with await test.step and fixtures/index.ts.
 4. With no ticket ID given, read artifacts/test-cases/test-cases.json for un-automated drafted test cases instead.
 `;
     const grade = gradeSkillCompliance(

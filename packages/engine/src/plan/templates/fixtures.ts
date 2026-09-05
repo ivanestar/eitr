@@ -1,4 +1,4 @@
-// tests/fixtures.ts template for the generated project. create-if-absent.
+// fixtures/index.ts template for the generated project. create-if-absent.
 export function renderFixtures(): string {
   return `import { test as base } from '@playwright/test';
 import { ApiClient } from '../shared/utils/api-client.js';

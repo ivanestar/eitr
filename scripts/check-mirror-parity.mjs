@@ -42,6 +42,7 @@ const CANONICAL_GROUPS = [
   { canon: '@@GLOB@@', terms: ['Glob', 'find_by_name'] },
   { canon: '@@SHELL@@', terms: ['PowerShell', 'run_terminal_cmd'] },
   { canon: '@@SUBAGENT@@', terms: ['subagent'] },
+  { canon: '@@SEARCH@@', terms: ['WebSearch', 'search_web'] },
   { canon: '@@PROJECT_RULES@@', terms: ['CLAUDE\\.md', 'AGENTS\\.md'] },
 ];
 // "Agent" only canonicalizes when followed by " tool" (avoids collapsing the
