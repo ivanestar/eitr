@@ -6,15 +6,17 @@ export interface AuthSetupOpts {
 }
 
 export function renderAuthSetupTs(opts: AuthSetupOpts = {}): string {
-  const storagePath = (opts.storageStatePath ?? '.auth/user.json').replace(/\\/g, '/');
-  const appOrigin = opts.baseUrl ?? 'http://localhost:3000';
+  const storagePath = (opts.storageStatePath ?? '.auth/user.json')
+    .replace(/\\/g, '/')
+    .replace(/'/g, "\\'");
+  const appOrigin = (opts.baseUrl ?? 'http://localhost:3000').replace(/'/g, "\\'");
 
   return `import { test as setup } from '@playwright/test';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { createHmac } from 'node:crypto';
 
-const authFile = path.resolve(${JSON.stringify(storagePath)});
+const authFile = path.resolve('${storagePath}');
 
 // ---------------------------------------------------------------------------
 // RFC 6238 TOTP (Time-Based One-Time Password) generator — self-contained,
@@ -105,7 +107,7 @@ setup('authenticate: API fast-path token', async () => {
       cookies: [],
       origins: [
         {
-          origin: ${JSON.stringify(appOrigin)},
+          origin: '${appOrigin}',
           localStorage: [{ name: 'auth_token', value: token }],
         },
       ],

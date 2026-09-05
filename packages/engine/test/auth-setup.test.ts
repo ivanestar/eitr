@@ -68,11 +68,11 @@ describe('RFC 6238 TOTP generator embedded in fixtures/auth.setup.ts', () => {
 describe('storageStatePath threading (PlanOptions -> renderAuthSetupTs)', () => {
   it('bakes a non-default storageStatePath into the generated auth file path', () => {
     const source = renderAuthSetupTs({ storageStatePath: 'custom/.auth/session.json' });
-    expect(source).toContain('path.resolve("custom/.auth/session.json")');
+    expect(source).toContain("path.resolve('custom/.auth/session.json')");
   });
 
   it('falls back to .auth/user.json when storageStatePath is omitted', () => {
     const source = renderAuthSetupTs({});
-    expect(source).toContain('path.resolve(".auth/user.json")');
+    expect(source).toContain("path.resolve('.auth/user.json')");
   });
 });

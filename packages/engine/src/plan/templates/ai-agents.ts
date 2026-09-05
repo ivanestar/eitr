@@ -1015,7 +1015,7 @@ You audit automated tests to eliminate false-positive ("fake-green") test execut
 ## Audit Checklist
 1. Anti-Fake-Green Check: Reject tests that contain only actions without assertions or trivial assertions like ${sc.language === 'python' ? '`assert True`' : '`expect(true).toBe(true)`'}.
 2. Web-First Auto-Retrying Assertions: Require \`${sc.assertionPattern}\`. Prohibit wrapping snapshot readers in non-retrying boolean checks like \`${antiPatternExample}\`.
-3. Asynchronous Execution Guard: ${sc.language === 'python' || sc.language === 'java' || isCypress ? 'Ensure asynchronous operations and events are properly awaited or synchronized before assertions.' : 'Strictly reject unawaited promises inside assertions (e.g., `expect(locator.isVisible()).toBeTruthy()`), which always evaluate to truthy and create dangerous fake-green tests.'}
+3. Unawaited Promise Guard (Asynchronous Execution): ${sc.language === 'python' || sc.language === 'java' || isCypress ? 'Ensure asynchronous operations and events are properly awaited or synchronized before assertions.' : 'Strictly reject unawaited promises inside assertions (e.g., `expect(locator.isVisible()).toBeTruthy()`), which always evaluate to truthy and create dangerous fake-green tests.'}
 4. Expected Result Alignment: Verify that every step with an Expected Result has a corresponding web-first assertion (100% coverage).
 5. Multi-Source Corroboration & Network Interception:
    - UI + API is the floor, not the ceiling: validate the UI visual change AND verify backend response integrity via ${isCypress ? '`cy.wait("@intercept")`' : 'network response inspection'} or ${sc.language === 'python' ? 'API checks' : '`apiClient` checks'} - matched against the actual submitted values, not just a 2xx status code.
