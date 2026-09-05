@@ -66,6 +66,7 @@
   "scripts": {
     "prepublishOnly": "npm run build",
     "commit": "node scripts/git-safe-commit.mjs",
+    "release:tag": "node scripts/tag-release.mjs",
     "build": "tsc -b packages/engine packages/cli packages/evals && node esbuild.config.mjs",
     "typecheck": "tsc -p packages/engine/assets/tsconfig.json --noEmit",
     "format": "prettier --write .",

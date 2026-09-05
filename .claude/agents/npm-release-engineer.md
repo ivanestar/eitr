@@ -82,24 +82,32 @@ Simulate packaging and verify tarball contents:
 
 ---
 
-### Stage 4. Git OpSec Commit & Release Tagging
+### Stage 4. Git OpSec Commit, PR Merge & Release Tagging
 
 1. Verify working directory is clean (`git status`).
-2. Commit and tag release changes using the OpSec evening timestamp rule (23:00):
+2. Commit release changes on a release branch using the OpSec evening timestamp rule (23:00):
    ```bash
-   node scripts/git-safe-commit.mjs "chore(release): vX.Y.Z" --tag vX.Y.Z
+   node scripts/git-safe-commit.mjs "chore(release): vX.Y.Z"
    ```
+   _Note: Do NOT tag on the branch! Squash-merge generates a new commit SHA on `main`, which would orphan a branch tag._
 3. **STOP - human confirmation gate:** present the Stage 3 dry-run tarball summary and the
    assembled `CHANGELOG.md` diff to the user, and do not proceed to step 4 below or to Stage 5
    until the user explicitly confirms this release in this same conversation. Never push or publish
    on an implicit "go ahead" inferred from the original release request alone - `git push` and
    `npm publish` are irreversible, publicly visible actions and require their own explicit human
    decision point (see `docs/architecture/README.md`'s "augmentation, not replacement" principle).
-4. Push commit and tags to GitHub:
+4. Push release branch and open PR with auto-merge:
    ```bash
-   git push origin main --tags
+   git push origin <branch-name>
+   gh pr create --title "chore(release): vX.Y.Z" --body "Release vX.Y.Z"
+   gh pr merge --auto --squash
    ```
-   Pushing the tag triggers `.github/workflows/release.yml`, which verifies gates, extracts release notes from `CHANGELOG.md`, and publishes the GitHub Release.
+5. Once PR is merged to `main`, switch to `main`, sync, and create/push the release tag:
+   ```bash
+   git checkout main; git pull origin main
+   node scripts/tag-release.mjs vX.Y.Z --push
+   ```
+   Pushing the tag triggers `.github/workflows/release.yml`, which verifies gates, extracts release notes from `CHANGELOG.md`, and publishes the GitHub Release. (Can also be manually triggered via `gh workflow run release.yml -f tag=vX.Y.Z`).
 
 ---
 
@@ -134,9 +142,9 @@ Simulate packaging and verify tarball contents:
 3. Executed boundary tests -> 100% Green.
 4. Ran static quality gates (format, typecheck, build, Cyrillic scan, Zero-Emoji scan).
 5. Executed npm publish --dry-run -> verified @onlytests/eitr, 112.7 KB, public access.
-6. Committed via node scripts/git-safe-commit.mjs "chore(release): v0.4.1" --tag v0.4.1 (23:00 OpSec timestamp).
+6. Committed on branch via node scripts/git-safe-commit.mjs "chore(release): v0.4.1" (23:00 OpSec timestamp).
 7. Presented the dry-run summary and CHANGELOG.md diff, and stopped for explicit user confirmation.
-8. User confirmed -> pushed commit/tags to GitHub, then executed npm publish -> verified npm view @onlytests/eitr version.
+8. User confirmed -> pushed branch, merged PR via squash auto-merge, switched to main, synced, ran node scripts/tag-release.mjs v0.4.1 --push, then verified release workflow and npm view @onlytests/eitr version.
 ```
 
 ### Bad Example (Dangerous / Careless Release)
@@ -153,7 +161,7 @@ Simulate packaging and verify tarball contents:
 ## Operational Rules & Safety Mandates
 
 - **Zero Tolerance for Broken Baseline:** Never publish if any test, typecheck, or format check fails.
-- **Human Confirmation Gate:** Never execute Stage 4 step 4 (`git push`) or Stage 5 step 2
+- **Human Confirmation Gate:** Never execute Stage 4 step 4 (`git push`), tag push, or Stage 5 step 2
   (`npm publish`) without an explicit, in-conversation user confirmation given after presenting the
   Stage 3 dry-run and the `CHANGELOG.md` diff - these are irreversible, publicly visible actions and
   the release request alone is never sufficient authorization to run them.
