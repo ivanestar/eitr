@@ -66,6 +66,8 @@ artifacts/site-map/screenshots/
 .env
 .env.*
 !.env.example
+cypress.env.json
+cypress.env.*.json
 auth.json
 *.tsbuildinfo
 .DS_Store

@@ -20,6 +20,7 @@ export function planMcpServer(
   const isPython = language === 'python';
   const isDotnet = language === 'csharp';
   const isJava = language === 'java';
+  const isGradle = isJava && automationTool.toLowerCase().includes('gradle');
 
   const [runnerBin, runnerArgs] = isCypress
     ? ['npx', ['cypress', 'run', '--spec']]
@@ -28,7 +29,7 @@ export function planMcpServer(
       : isDotnet
         ? ['dotnet', ['test']]
         : isJava
-          ? ['mvn', ['test']]
+          ? [isGradle ? './gradlew' : 'mvn', ['test']]
           : ['npx', ['playwright', 'test']];
 
   const indexCode = `#!/usr/bin/env node

@@ -14,6 +14,7 @@ export interface PythonProjectOpts {
 export function renderPythonConftest(_opts?: Pick<PythonProjectOpts, 'baseUrl'>): string {
   return `"""Root conftest — shared Playwright fixtures for the whole test suite."""
 from collections.abc import Iterator
+import pathlib
 import pytest
 from playwright.sync_api import BrowserContext, Page
 from shared.utils.api_client import ApiClient
@@ -21,12 +22,15 @@ from shared.utils.api_client import ApiClient
 
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args: dict) -> dict:
-    """Extend default browser context: set 1280×720 viewport for all tests."""
-    return {
+    """Extend default browser context: set 1280×720 viewport and preload storage state if available."""
+    args = {
         **browser_context_args,
         "viewport": {"width": 1280, "height": 720},
-        # "storage_state": ".auth/user.json",  # Uncomment after running authentication setup
     }
+    auth_file = pathlib.Path(".auth/user.json")
+    if auth_file.is_file():
+        args["storage_state"] = str(auth_file)
+    return args
 
 
 @pytest.fixture
@@ -418,16 +422,15 @@ def wait_for_angular_hydration(page: Page) -> None:
 `;
 }
 
-/** tests/test_auth_setup.py */
+/** fixtures/auth_setup.py */
 export function renderPythonAuthSetup(): string {
   return `"""Authentication setup blueprint — logs in and saves storage state."""
-import pytest
+import os
 from playwright.sync_api import Page
 
 AUTH_FILE = ".auth/user.json"
 
 
-@pytest.mark.skip(reason="SSO/Form authentication blueprint - configure for your application")
 def test_authenticate(page: Page) -> None:
     # ------------------------------------------------------------------------
     # BLUEPRINT: Customize this block for your application's login mechanism.
@@ -438,8 +441,8 @@ def test_authenticate(page: Page) -> None:
     # page.goto("/login")
 
     # 2. Perform login actions (e.g. fill username/password, click login, handle redirects)
-    # page.get_by_label("Username").fill("admin")
-    # page.get_by_label("Password").fill("password")
+    # page.get_by_label("Username").fill(os.getenv("E2E_USERNAME", ""))
+    # page.get_by_label("Password").fill(os.getenv("E2E_PASSWORD", ""))
     # page.get_by_role("button", name="Log in").click()
 
     # 3. Wait for the application to be in an authenticated state

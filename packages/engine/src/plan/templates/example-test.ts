@@ -2,7 +2,7 @@
 // test is always green once browsers are installed; the real-app smoke is a test.fixme placeholder
 // (shows as pending, never red) until you add real Page Objects.
 export function renderExampleTest(_framework?: string): string {
-  return `import { test, expect } from './fixtures';
+  return `import { test, expect } from '@fixtures';
 
 // Base smoke test. Verify browser harness readiness and baseURL reachability.
 // Edit or expand freely — generator never overwrites this file.
@@ -17,7 +17,7 @@ test.fixme('smoke: app is reachable', async ({ page }) => {
   await expect(page).toHaveTitle(/.+/);
 });
 
-// Fixture injection example (custom fixtures from tests/fixtures.ts):
+// Fixture injection example (custom fixtures from fixtures/index.ts):
 // test('example with api client', async ({ page, apiClient }) => {
 //   const id = apiClient.createUniqueId('item');
 //   await page.goto('/');

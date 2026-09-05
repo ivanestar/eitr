@@ -92,8 +92,8 @@ function auditFile(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
   const lines = content.split(/\\r?\\n/);
   const isComponent = relPath.startsWith('components/');
-  const isTest = relPath.startsWith('tests/') || relPath.startsWith('cypress/e2e/');
-  const isFixtureOrSetup = relPath.includes('fixtures.') || relPath.includes('auth.setup.') || relPath.includes('setup.');
+  const isTest = (relPath.startsWith('tests/') || relPath.startsWith('cypress/e2e/')) && !relPath.startsWith('fixtures/');
+  const isFixtureOrSetup = relPath.includes('fixtures.') || relPath.includes('auth.setup.') || relPath.includes('setup.') || relPath.startsWith('fixtures/');
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -202,7 +202,7 @@ function auditFile(filePath) {
 }
 
 function run() {
-  const targetDirs = ['components', 'tests', 'cypress', 'shared'].filter((d) =>
+  const targetDirs = ['components', 'tests', 'fixtures', 'cypress', 'shared'].filter((d) =>
     fs.existsSync(path.join(CWD, d)),
   );
 

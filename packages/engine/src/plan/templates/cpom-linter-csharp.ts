@@ -51,7 +51,7 @@ using System.IO;
 using System.Linq;
 
 var cwd = Directory.GetCurrentDirectory();
-var targetDirs = new[] { "components", "tests", "shared" };
+var targetDirs = new[] { "components", "tests", "fixtures", "shared" };
 var ignoredDirNames = new HashSet<string> { "bin", "obj", ".vs", ".git", "test-results", "node_modules" };
 var assertionMethods = new[] {
     "Assert.That(", "Assert.IsTrue(", "Assert.IsFalse(", "Assert.AreEqual(",
@@ -136,8 +136,8 @@ void AuditFile(string file)
 {
     var relPath = Path.GetRelativePath(cwd, file).Replace(Path.DirectorySeparatorChar, '/');
     var isComponent = relPath.StartsWith("components/");
-    var isTest = relPath.StartsWith("tests/");
-    var isFixtureOrSetup = relPath.Contains("Setup") || relPath.Contains("Fixture");
+    var isTest = relPath.StartsWith("tests/") && !relPath.StartsWith("fixtures/");
+    var isFixtureOrSetup = relPath.Contains("Setup") || relPath.Contains("Fixture") || relPath.StartsWith("fixtures/");
 
     var lines = File.ReadAllLines(file);
     for (var i = 0; i < lines.Length; i++)

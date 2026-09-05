@@ -1,5 +1,6 @@
 import type { FileDescriptor } from '../../types/generation-plan.js';
 import { yamlSafeScalar } from './yaml-frontmatter.js';
+import { resolveStackConventions, type StackConventions } from '../stack-conventions.js';
 
 interface SkillDefinition {
   name: string;
@@ -89,9 +90,140 @@ function antigravityInvocationNote(skill: SkillDefinition): string {
 `;
 }
 
+function renderAuthSetupContent(sc: StackConventions): string {
+  if (sc.authStrategy === 'cypress') {
+    return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
+
+## Purpose
+Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones using Cypress native session management.
+
+## Workflow
+1. **Execution Mode Decision:**
+   - Primary: Execute authenticated session caching via \`cy.session('user-session', () => { ... }, { validate() { ... } })\`.
+   - Mandatory Validate Callback: Always configure a \`validate\` callback (e.g. cookie/session check or \`cy.request()\`) to detect session expiration and prevent stale session reuse.
+   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
+     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
+     * If developer session cookies are available, import them directly into session setup.
+     * Fallback to interactive browser session with manual prompt to the engineer.
+2. **Session Architecture:**
+   - Register custom authentication command in \`cypress/support/commands.ts\` (e.g. \`Cypress.Commands.add('login', ...)\`).
+   - Wrap authentication logic in \`cy.session()\` so Cypress restores cookies, localStorage, and sessionStorage across spec files.
+   - Prohibit external state files: do not write credentials or storageState to disk.
+3. **CI Environment Alignment:**
+   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
+4. **Fixture Integration:**
+   - Call \`cy.login()\` inside \`beforeEach\` hooks across test specs in \`cypress/e2e/\`.
+5. **Verification:**
+   - Verify session validity by asserting a protected element or querying a protected API endpoint via \`cy.request()\` before proceeding.
+`;
+  }
+
+  if (sc.authStrategy === 'pytest') {
+    return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
+
+## Purpose
+Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in pytest.
+
+## Workflow
+1. **Execution Mode Decision:**
+   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write storageState directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
+   - Dedicated Fixture Script: Run \`fixtures/auth_setup.py\` on-demand (e.g. \`pytest fixtures/auth_setup.py\`) to capture authenticated browser state.
+   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
+     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
+     * If developer session cookies are available, import them directly into storageState.
+     * Fallback to headed browser session with manual prompt to the engineer.
+2. **Session Serialization:**
+   - Capture cookies, localStorage, session tokens, and headers.
+   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
+3. **CI Environment Alignment:**
+   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
+4. **Fixture Integration:**
+   - Configure session-scoped \`browser_context_args\` fixture in \`conftest.py\` to preload \`.auth/user.json\` into browser context when present.
+5. **Verification:**
+   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
+`;
+  }
+
+  if (sc.authStrategy === 'csharp') {
+    return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
+
+## Purpose
+Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in C# Playwright.
+
+## Workflow
+1. **Execution Mode Decision:**
+   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write storageState directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
+   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
+     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
+     * If developer session cookies are available, import them directly into storageState.
+     * Fallback to headed browser session with manual prompt to the engineer.
+2. **Session Serialization:**
+   - Capture cookies, localStorage, session tokens, and headers.
+   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
+3. **CI Environment Alignment:**
+   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
+4. **Fixture Integration:**
+   - Override \`ContextOptions()\` in the \`PageTest\` base class with \`StorageStatePath = ".auth/user.json"\` to preload authentication state.
+5. **Verification:**
+   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
+`;
+  }
+
+  if (sc.authStrategy === 'java') {
+    return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
+
+## Purpose
+Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in Java Playwright.
+
+## Workflow
+1. **Execution Mode Decision:**
+   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write storageState directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
+   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
+     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
+     * If developer session cookies are available, import them directly into storageState.
+     * Fallback to headed browser session with manual prompt to the engineer.
+2. **Session Serialization:**
+   - Capture cookies, localStorage, session tokens, and headers.
+   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
+3. **CI Environment Alignment:**
+   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
+4. **Fixture Integration:**
+   - Initialize browser context in test base class or \`@BeforeEach\` using \`Browser.NewContextOptions().setStorageStatePath(Paths.get(".auth/user.json"))\`.
+5. **Verification:**
+   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
+`;
+  }
+
+  // Default: TypeScript Playwright
+  return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
+
+## Purpose
+Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones.
+
+## Workflow
+1. **Execution Mode Decision:**
+   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write JWT/session token directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
+   - Dedicated Setup Project: Execute \`fixtures/auth.setup.ts\` to generate storageState file in \`.auth/user.json\`.
+   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
+     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
+     * If developer session cookies are available, import them directly into storageState.
+     * Fallback to headed browser session with manual prompt to the engineer.
+2. **Session Serialization:**
+   - Capture cookies, localStorage, session tokens, and headers.
+   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
+3. **CI Environment Alignment:**
+   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
+4. **Fixture Integration:**
+   - Generate or update authentication fixtures in \`fixtures/auth.setup.ts\` to preload \`.auth/user.json\` into browser context.
+5. **Verification:**
+   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
+`;
+}
+
 function buildOperationalSkills(tool: string, language: string): SkillDefinition[] {
-  const isCypress = tool.toLowerCase().includes('cypress');
-  const frameworkName = isCypress ? 'Cypress' : 'Playwright';
+  const sc = resolveStackConventions(tool, language);
+  const isCypress = sc.automationTool === 'cypress';
+  const frameworkName = sc.frameworkName;
 
   return [
     {
@@ -106,7 +238,7 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 ## 8-Phase SDET Lifecycle
 
 ### Phase 0: Pre-Flight Baseline
-- Execute baseline verification via terminal: \`npm test\` to confirm clean initial state.
+- Execute baseline verification via terminal: \`${sc.testRunCmd}\` to confirm clean initial state.
 
 ### Phase 1: Recon, Live Web Search & Ingestion
 1. Requirements Ingestion & GIGO Gate:
@@ -153,18 +285,18 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 
 ### Phase 5: TDD Dual Synthesis
 1. Step 5a (Shared Primitives First):
-   - 'pom-engineer' synthesizes CPOM Page Objects in \`components/pages/\` and verifies each one against the live DOM.
+   - 'pom-engineer' synthesizes CPOM Page Objects in \`${sc.language === 'java' ? 'src/main/java/components/pages/' : 'components/pages/'}\` and verifies each one against the live DOM.
 2. Step 5b (Linear Test Synthesis):
-   - 'test-automator' synthesizes strictly linear test code in \`tests/TC-{id}-{feature}.spec.ts\`.
-   - Wrap steps in \`await test.step()\`, inject fixtures via \`test.extend\`, and register teardown via \`apiClient.registerTeardown()\`.
+   - 'test-automator' synthesizes strictly linear test code in \`${sc.specPath('{id}', '{feature}')}\`.
+   - Wrap steps in \`${sc.stepDemarcation('Step N: ...')}\`, inject fixtures via \`${sc.fixturePattern}\`, and register teardown via \`apiClient.registerTeardown()\`.
 
 ### Phase 6: Code Review Swarm & Arbiter Adjudication
 1. Reviewers inspect \`git diff\` for Web-First matchers, zero sleep, and no assertions inside Page Objects.
 2. 'review-arbiter' evaluates diff comments, dismisses bogus warnings, and approves final code changes.
 
 ### Phase 7: Two-Strike Self-Healing
-- Execute isolated test: \`${isCypress ? 'npx cypress run --spec tests/TC-XXX.cy.ts' : 'npx playwright test tests/TC-XXX.spec.ts'}\`.
-- If failure occurs, 'trace-debugger' performs 4-point trace triage in \`trace.zip\`. Max 2 attempts.
+- Execute isolated test: \`${sc.testIsolatedCmd(sc.specPath('XXX', 'feature'))}\`.
+- If failure occurs, 'trace-debugger' performs 4-point trace triage in ${isCypress ? 'screenshots and video' : '\`trace.zip\`'}. Max 2 attempts.
 - If still red after 2 attempts, execute Two-Strike rollback: \`git checkout -- <files>\` and output Two-Strike Triage Report:
 \`\`\`markdown
 ### Two-Strike Triage Report
@@ -174,7 +306,7 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 \`\`\`
 
 ### Phase 8: Quality Gate & Final Handoff
-- Run contract audit: \`npm run lint:cpom\` and \`npm test\`.
+- Run contract audit: \`${sc.cpomLintCmd}\` and \`${sc.testRunCmd}\`.
 - Present the deterministic Final Handoff Report with Telemetry Summary:
 \`\`\`markdown
 ### Final Handoff Report
@@ -203,28 +335,7 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
       name: 'auth-setup',
       description:
         'Captures, validates, and manages authenticated browser sessions for testing (/auth-setup, /auth-bootstrap).',
-      content: `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
-
-## Purpose
-Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones.
-
-## Workflow
-1. **Execution Mode Decision:**
-   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write JWT/session token directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
-   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
-     * If \`process.env.TOTP_SECRET\` is provided, automatically generate TOTP 2FA code (RFC 6238).
-     * If developer session cookies are available, import them directly into storageState.
-     * Fallback to headed browser session with manual prompt to the engineer.
-2. **Session Serialization:**
-   - Capture cookies, localStorage, session tokens, and headers.
-   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
-3. **CI Environment Alignment:**
-   - For CI/CD runs, configure Service Account token injection via environment variables (\`process.env.AUTH_TOKEN\` / \`process.env.E2E_API_TOKEN\`).
-4. **Fixture Integration:**
-   - Generate or update authentication fixtures in the test project to preload \`.auth/user.json\` into browser context.
-5. **Verification:**
-   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
-`,
+      content: renderAuthSetupContent(sc),
     },
     {
       name: 'scan-and-generate-pom',
@@ -251,7 +362,7 @@ Inspects live application DOM, extracts semantic elements, groups them into CPOM
    - Consult \`artifacts/site-map/site-map.json\` and \`components/widgets/\` for existing shared widgets (e.g. Navbar, Sidebar, Dialog) and compose them via \`this.child(WidgetClass, spec)\`.
    - Generate or update Page Object class inheriting from \`BasePage\`.
    - Group related interactive controls into CPOM primitives (Button, TextInput, Select, Table, Dialog) or collections (\`this.list(ItemComponent, spec)\`).
-   - Enforce Method Safety Contract (Actions return Promise<void>, Snapshot readers suffixed with \`Now()\`).
+   - Enforce Method Safety Contract (Actions return ${sc.actionReturnType}, Snapshot readers suffixed with \`${sc.stateReaderSuffix}\`).
 4. **Live-DOM Liveness Verification:**
    - Verify every generated Page Object directly against the live application with Web-First assertions before treating it as complete. A raw DOM/accessibility-tree match found during extraction (Step 2) is NEVER sufficient evidence by itself that a real user can see or reach the element - an element present in the markup but hidden (\`display: none\`, off-screen, zero-size, \`opacity: 0\`, or covered by another element) MUST NOT become a CPOM property or method:
      * Tier 1 (Actionable Visibility, checked per element, not per page): (a) \`await locator.count() === 1\`; (b) \`await expect(locator).toBeVisible()\` (non-empty bounding box, not \`visibility:hidden\`/\`display:none\` - this alone does NOT catch \`opacity: 0\`); (c) \`await locator.evaluate(el => getComputedStyle(el).opacity !== '0')\`; (d) \`await locator.click({ trial: true })\` (or \`.fill({ trial: true })\` for text inputs) to run Playwright's full actionability pipeline (stable, receives pointer events i.e. not obscured, enabled) without performing the action - safe even for destructive controls. Any element failing (a)-(d) is a phantom: do not scaffold it, and remove it if an earlier pass already did.
@@ -268,7 +379,7 @@ Inspects live application DOM, extracts semantic elements, groups them into CPOM
      * Inspect error traces, perform live DOM triage, adjust locators in the Page Object, and re-verify (Two-Strike Rule).
    - If failures are due to genuine application bugs (e.g. backend 500 error, unhandled JS exception, broken UI component):
      * Do NOT modify anything to hide the bug. Explicitly document and report the real product defect.
-   - Batch Swarm Mode barrier: once every dispatched worker reports done, run \`node scripts/orchestrate-swarm.mjs --phase=verify --targets=<comma-separated Page Object paths each worker was expected to produce>\` to confirm every worker actually wrote its file before declaring the batch complete.
+   - Batch Swarm Mode barrier: ${sc.language === 'typescript' ? 'once every dispatched worker reports done, run `node scripts/orchestrate-swarm.mjs --phase=verify --targets=<comma-separated Page Object paths each worker was expected to produce>` to confirm every worker actually wrote its file before declaring the batch complete.' : 'once every dispatched worker reports done, confirm each target Page Object was produced before declaring the batch complete.'}
 6. **Mandatory Handoff Report:**
    - Present a structured summary listing generated Page Objects, liveness verification status (pass/fail counts), and any detected real application defects.
    - PROHIBIT delivering unverified or red code to the user without explicit defect reporting.
@@ -313,22 +424,23 @@ Transforms a test case - from Jira, TestRail, Zephyr, Azure DevOps, or drafted l
    - Batch Mode: When automating multiple tickets, synthesize a unified **Batch Proposal Matrix** table enabling **1-Click Batch Approval** across all scenarios at once without chat fatigue.
    - BLOCKING GATE: Wait for explicit user confirmation before synthesizing test code. ${INTERACTIVE_CHOICE_NOTE}
 5. **Linear Test Code Synthesis (SOTA 2026):**
-   - **Content fidelity is mandatory, not just structural compliance (found violated in live use - a test with correct \`test.step()\` wrapping, fixture DI, and linear structure that still asserted nothing real).** Every step's body must perform the literal action its \`description\` names, using a real Page Object interaction (\`.selectOption()\`, \`.check()\`, \`.fill()\`, \`.click()\` on the actual child element - never a generic visibility check on an unrelated container standing in for it), and assert the literal value its \`expectedResult\` names (the actual text/value/status code mentioned - never a content-free assertion like \`toBeDefined()\` or \`toBeVisible()\` on something the step never touched). If the target Page Object has no child element for what a step needs to interact with, that is a real gap: fix it via Step 3's \`/scan-and-generate-pom\` trigger first - never paper over the gap by writing a step that quietly checks something else instead.
-     - **Bad** (real code from an earlier run - structurally compliant, semantically empty): step titled \`Verify baseline workflow: enter language="en"\` whose body is only \`await expect(rootPage.primaryContainer.locator).toBeVisible()\` - never touches the language control, would pass identically if language selection were completely broken.
-     - **Good**: \`await rootPage.languageSelect.selectOption('en'); await expect(rootPage.languageSelect.locator).toHaveValue('en');\` - the code does what the step says, and the assertion would actually fail if selection stopped working.
+   - **Content fidelity is mandatory, not just structural compliance (found violated in live use - a test with correct step demarcation, fixture DI, and linear structure that still asserted nothing real).** Every step's body must perform the literal action its \`description\` names, using a real Page Object interaction (\`.selectOption()\`, \`.check()\`, \`.fill()\`, \`.click()\` on the actual child element - never a generic visibility check on an unrelated container standing in for it), and assert the literal value its \`expectedResult\` names (the actual text/value/status code mentioned - never a content-free assertion like \`toBeDefined()\` or \`toBeVisible()\` on something the step never touched). If the target Page Object has no child element for what a step needs to interact with, that is a real gap: fix it via Step 3's \`/scan-and-generate-pom\` trigger first - never paper over the gap by writing a step that quietly checks something else instead.
+      - **Bad** (real code from an earlier run - structurally compliant, semantically empty): step titled \`Verify baseline workflow: enter language="en"\` whose body is only \`await expect(rootPage.primaryContainer.locator).toBeVisible()\` - never touches the language control, would pass identically if language selection were completely broken.
+      - **Good**: \`await rootPage.languageSelect.selectOption('en'); await expect(rootPage.languageSelect.locator).toHaveValue('en');\` - the code does what the step says, and the assertion would actually fail if selection stopped working.
    - **Bracketed step text is the locator's name, verbatim.** When a drafted step references a bracketed literal (\`Click the [Place Order] button\`, \`Select the [Card] payment method\`), the synthesized locator targets exactly that accessible name (\`page.getByRole('button', { name: 'Place Order' })\`, or the matching Page Object child) - never a paraphrase, a different label spotted on the live page, or a role-only locator that drops the name entirely. If a bracketed name doesn't resolve to anything in the target Page Object, that's the same real gap Step 3's \`/scan-and-generate-pom\` trigger exists for - fix the Page Object, never quietly substitute a different element.
    - **Corroborate state-changing steps with every genuinely available independent signal, not just one.** For a step whose action creates, updates, or removes something, UI-visible-change + API-response validation (matched against the actual submitted values, not just a 2xx status) is the floor, not the ceiling: also assert whatever else this specific app actually surfaces for that change, when it's genuinely discoverable - a success toast/notification if the app shows one, a related list/detail endpoint or UI table that should now include (or exclude) the entity, an unambiguous page-state transition. Example: a test that creates a plan via a form also asserts the create response's data matches the submitted fields, then queries or navigates to the plans list and asserts the new plan is present there - not only that the creating request returned success. Never assert a signal the app doesn't actually provide - corroboration is bounded by what's genuinely there to check, not an invented one.
-   - Synthesize strictly linear ${frameworkName} (${language}) test code with ZERO branching (\`if/else\`, loops) in \`tests/TC-{id}-{feature}.spec.ts\` for a TMS-sourced ticket, or \`tests/JR-{journeyId}-{feature}.spec.ts\` (first 12 characters of \`journeyId\`) for a locally-sourced journey - never the \`TC-\` prefix for a journey with no TMS case ID.
-   - Use Fixture Dependency Injection via \`test.extend<{ ... }>()\` to supply Page Objects and ApiClient instances.
-   - Embed metadata tags: \`test('TC-{id}: {title}', { tag: ['@TC-{id}', '@smoke'] }, async ({ ... }) => ...)\`.
-   - Wrap every step in ${isCypress ? '`cy.step("Step N: ...")`' : '`await test.step("Step N: ...", async () => { ... })`'} - the step's own body is exactly where content fidelity above applies.
-   - Map every expected result to an auto-retrying Web-First assertion (\`expect.soft\` for non-blocking multi-field snapshots) that names the concrete expected value, never a bare truthy/definedness check.
-   - For popup, dialog, or navigation triggers, use Race-Free Event Synchronization: \`await Promise.all([page.waitForEvent('dialog'), triggerAction()])\`.
-   - Register cleanup teardown in \`afterEach\` / \`afterAll\` hooks via \`apiClient\`.
+   - Synthesize strictly linear ${frameworkName} (${language}) test code with ZERO branching (\`if/else\`, loops) in \`${sc.specPath('{id}', '{feature}')}\` for a TMS-sourced ticket, or \`${sc.specPath('JR-{journeyId}', '{feature}')}\` (first 12 characters of \`journeyId\`) for a locally-sourced journey - never the \`TC-\` prefix for a journey with no TMS case ID.
+   - Use Fixture Dependency Injection via \`${sc.fixturePattern}\` to supply Page Objects and ApiClient instances.
+   - Embed metadata tags per language conventions (e.g. \`${sc.language === 'python' ? '@pytest.mark.smoke' : sc.language === 'csharp' ? '[Category("smoke")]' : sc.language === 'java' ? '@Tag("smoke")' : "{ tag: ['@smoke'] }"}\`).
+   - Wrap every step in \`${sc.stepDemarcation('Step N: ...')}\` - the step's own body is exactly where content fidelity above applies.
+   - Map every expected result to an auto-retrying Web-First assertion (\`${sc.assertionPattern}\`) that names the concrete expected value, never a bare truthy/definedness check.
+   - For popup, dialog, or navigation triggers, use Race-Free Event Synchronization: \`${sc.asyncEventSync}\`.
+   - Register cleanup teardown ${sc.language === 'python' ? 'via fixture yield or `api_client` register_teardown' : 'in teardown hooks or fixture teardown via `apiClient`'}.
 6. **Assertion Audit & Side-Effect Verification:**
    - Audit test with \`assertion-auditor\` to eliminate fake-green patterns and verify multi-source corroboration (the UI + API floor, plus whatever else was genuinely available and wired up) - explicitly including the content-fidelity and bracket-grounding checks above: flag any step whose assertion doesn't reference something the step's own action actually touched, or whose locator doesn't match the drafted step's bracketed name.
+   - Verify CPOM contract compliance via \`${sc.cpomLintCmd}\`.
 7. **Execution & Self-Healing:**
-   - Run the newly synthesized test via terminal.
+   - Run the newly synthesized test via terminal: \`${sc.testIsolatedCmd(sc.specPath('{id}', '{feature}'))}\` (or run full suite via \`${sc.testRunCmd}\`).
    - If failure occurs, automatically trigger \`/heal-test\` under the Two-Strike Rule.
    - **TMS-sourced ticket:** publish execution results back to TMS via \`mcp__tms__post_test_result\`.
    - **Locally-sourced journey:** once the test passes, set that journey's \`reviewed: true\` and \`reviewedBy: 'human'\` in \`artifacts/test-cases/test-cases.json\` - this skill's own Step 4 confirmation already is the human sign-off; there is no TMS entry to publish results to.
@@ -348,23 +460,23 @@ Performs root-cause analysis on failing test executions and applies precision fi
 
 ## Workflow
 1. **Failure Artifact Ingestion:**
-   - Ingest execution failure artifacts (\`trace.zip\`, screenshots, video, console logs).
+   - Ingest execution failure artifacts (${isCypress ? 'screenshots, video, console logs' : '\`trace.zip\`, screenshots, video, console logs'}).
 2. **4-Point Trace Triage (Fail-Fast Real Bug Detection):**
    - Check Network Waterfall (HTTP 4xx/5xx) and Console Errors first. If a server crash or unhandled runtime exception occurred, classify as **REAL PRODUCT BUG**; do NOT alter Page Objects.
-   - Action Timeline, DOM Snapshots & Visual Diff: Determine if target was obscured, animated, or detached. Perform **Visual Diff & Screenshot Overlay** comparing pre-failure and post-failure frames to distinguish **Semantic Text/Icon Shift** from a broken UI render and calculate **Visual Confidence**.
+   - Action Timeline, DOM Snapshots & Visual Diff: Determine if target was obscured, animated, or detached. Perform **Visual Diff & Screenshot Overlay** comparing pre-failure and post-failure frames to distinguish **Semantic Text/Icon Shift** from a broken UI render and calculate **Visual Confidence**${isCypress ? ' using screenshots and video recordings' : ' in \`trace.zip\`'}.
    - Locator State: Inspect element counts, visibility, and attachment.
 3. **Classification & Targeted Fix:**
    - Selector drift -> update locator in CPOM component adhering to 3-Tier Locator Priority.
    - Timing / race condition -> add auto-retrying web-first assertion or state wait.
    - Test data collision -> switch to dynamic TDM via \`apiClient.createUniqueId()\` / \`createTestEmail()\`.
 4. **Attempt 1 Fix & Isolated Execution:**
-   - Apply targeted fix and execute ONLY the isolated failing test spec (e.g. \`npx playwright test tests/TC-XXX.spec.ts\`).
+   - Apply targeted fix and execute ONLY the isolated failing test spec (e.g. \`${sc.testIsolatedCmd(sc.specPath('XXX', 'spec'))}\`).
    - If Page Objects were modified, re-verify them against the live DOM to ensure neighbor components remain healthy.
 5. **Attempt 2 Refined Fix:**
-   - If still failing, analyze secondary trace and apply refined fix.
+   - If still failing, analyze secondary ${isCypress ? 'screenshots and logs' : 'trace'} and apply refined fix.
 6. **Rollback & Escalation (Two-Strike Rule):**
    - If still failing after 2 attempts, immediately roll back all modified files: \`git checkout -- <modified_files>\`.
-   - Report root cause under taxonomy: \`[FLAKY / TIMING]\`, \`[SELECTOR DRIFT]\`, or \`[PRODUCT BUG]\` with trace evidence.
+   - Report root cause under taxonomy: \`[FLAKY / TIMING]\`, \`[SELECTOR DRIFT]\`, or \`[PRODUCT BUG]\` with ${isCypress ? 'screenshot and log' : 'trace'} evidence.
 `,
     },
     {
@@ -377,7 +489,7 @@ Performs page-level locator updates when application design system or layout cha
 
 ## Workflow
 1. **Impacted Target Identification:**
-   - Run the existing test suite (\`npm test\`) to identify broken components, and map each failing test back to its route.
+   - Run the existing test suite (\`${sc.testRunCmd}\`) to identify broken components, and map each failing test back to its route.
 2. **Parallel Worker Swarm (Fan-Out / Fan-In):**
    - Run \`node scripts/orchestrate-swarm.mjs --phase=plan --routes=<comma-separated affected route paths from Step 1>\` and dispatch parallel 'pom-engineer' worker subagents (Worker Swarm) per its Level 2 worker list for high-speed concurrent rescanning - scoping via \`--routes\` keeps this to exactly the affected, non-overlapping routes rather than the whole site.
 3. **Component Locator Update:**
@@ -387,7 +499,7 @@ Performs page-level locator updates when application design system or layout cha
    - Re-verify each updated Page Object against the live DOM to guarantee 100% component liveness.
    - If any component fails verification, apply targeted locator fix under the Two-Strike Rule until Green.
 5. **Business Suite Regression Confirmation:**
-   - Re-run dependent business test suites (\`npm test\`) to confirm all tests pass green without modifying any test spec files.
+   - Re-run dependent business test suites (\`${sc.testRunCmd}\`) to confirm all tests pass green without modifying any test spec files.
 `,
     },
     {
@@ -415,7 +527,7 @@ Every mechanical gate in this skill (\`validate-site-map.mjs\`, \`validate-busin
 
 ## Workflow
 1. **Authenticated Session Loading:**
-   - Load authenticated storage state from \`.auth/user.json\` (or fallback to \`auth.json\`).
+   - ${isCypress ? 'Load authenticated session via cy.session() or developer cookies.' : 'Load authenticated storage state from \`.auth/user.json\` (or fallback to \`auth.json\`).'}
    - If not authenticated, prompt engineer to execute \`/auth-setup\`.
 2. **Concurrent Route Exploration & Pagination Normalization (Worker Pool):**
    - Execute parallel crawling with worker pool (\`concurrency = 4..6\`) and canonical URL normalization.
@@ -459,14 +571,14 @@ Every mechanical gate in this skill (\`validate-site-map.mjs\`, \`validate-busin
    - If it reports \`status: "CHECKED"\` with a non-empty \`gaps\` array, add one short informational note to this step's summary (not a blocking gate, not part of the Human Sign-Off Gateway below): "Coverage note: the site's sitemap.xml lists <N> route(s) this crawl didn't reach: <canonicalPath list>. Consider /map-site update or a manual look." State plainly that a listed gap can be a false positive for a per-record-slug route the crawl already templated differently (the checker mirrors this skill's numeric-ID/UUID canonicalization, not its slug judgment) - it's a prompt to double-check, not a proven miss.
 4. **Shared Widget Mining (Deduplication Engine):**
    - Identify recurring component structures appearing across >= 2 \`active\` routes (exclude \`removed\` routes from this analysis).
-   - Synthesize reusable widgets in \`components/widgets/<name>.widget.ts\`.
+   - Synthesize reusable widgets in \`${sc.widgetPath('<name>')}\`.
    - Update Page Objects to compose shared widgets via \`this.child(WidgetClass, spec)\` rather than duplicating code.
-   - Run \`node scripts/orchestrate-swarm.mjs --phase=reindex\` so \`components/widgets/index.ts\` picks up any newly-added widgets deterministically, without write collisions from parallel workers.
+   - ${sc.language === 'typescript' ? 'Run `node scripts/orchestrate-swarm.mjs --phase=reindex` so `components/widgets/index.ts` picks up any newly-added widgets deterministically, without write collisions from parallel workers.' : 'Ensure any newly added widgets in components/widgets/ are registered and exported per project conventions.'}
 5. **Orchestrated Fan-Out to POM Engineers (Optional on User Request):**
    - If the user explicitly requested generating Page Objects for the mapped routes:
-     * Run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (this file's own \`artifacts/site-map/site-map.json\` output feeds it directly) and dispatch parallel 'pom-engineer' worker subagents per its Level 2 worker list (1 route per worker) - do not enumerate routes/workers yourself.
-     * Ensure each 'pom-engineer' synthesizes 1:1 Page Objects in \`components/pages/\` AND verifies each one against the live DOM.
-     * Execute a global barrier synchronization via \`node scripts/orchestrate-swarm.mjs --phase=verify --targets=<comma-separated Page Object paths each worker produced>\` - confirm 100% Green component liveness across all workers before completing.
+     * ${sc.language === 'typescript' ? "Run `node scripts/orchestrate-swarm.mjs --phase=plan` (this file's own `artifacts/site-map/site-map.json` output feeds it directly) and dispatch parallel 'pom-engineer' worker subagents per its Level 2 worker list (1 route per worker) - do not enumerate routes/workers yourself." : "Dispatch parallel 'pom-engineer' worker subagents (1 route per worker) to synthesize Page Objects for each mapped route."}
+     * Ensure each 'pom-engineer' synthesizes 1:1 Page Objects in \`${sc.language === 'java' ? 'src/main/java/components/pages/' : 'components/pages/'}\` AND verifies each one against the live DOM.
+     * ${sc.language === 'typescript' ? 'Execute a global barrier synchronization via `node scripts/orchestrate-swarm.mjs --phase=verify --targets=<comma-separated Page Object paths each worker produced>` - confirm 100% Green component liveness across all workers before completing.' : 'Confirm 100% Green component liveness across all workers before completing.'}
 6. **Business-Intent & Criticality Analysis (Automatic, Strictly Read-Only):**
    - Runs automatically for every active route, as part of both \`create\` and \`update\`, immediately after Step 4 - no separate request needed, unless the user explicitly asked to skip it (e.g. "just map the site, skip business-intent"):
      * Run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (add \`--routes=<a,b,c>\` to scope to a subset) and dispatch one read-only analysis worker per \`active\` route from its Level 2 worker list - do not enumerate routes/workers yourself.
@@ -553,7 +665,7 @@ Elaborates Stage 2's test conditions into test cases. Consumes \`artifacts/analy
    * Run \`node scripts/validate-journeys.mjs --stage=structural\`. If it reports \`FAILED\`, fix the reported errors and re-run before proceeding to Step 4. Do not present unvalidated output to the human.
 4. **Test-Case Drafting:**
    * For every journey with no \`testCase\` yet, read its \`conditionAssignments\` (resolving each \`conditionId\` back to the actual condition and parameters in \`test-conditions.json\`) and draft a \`testCase\`: a title, preconditions, and ordered steps with expected results.
-    * **One atomic action per step, each with its own concrete expected result - never a step that bundles multiple actions behind one blanket result at the end.** This is not a style preference: \`/automate-test\` wraps each drafted step in its own \`test.step()\` block, so a step with no verifiable expected result gives it nothing to assert on, and a step bundling several actions forces one \`test.step()\` to silently cover several unrelated behaviors. Lean on each condition's own \`description\` and \`scenario\` fields (already written by Stage 2) as the step's source material rather than inventing new prose: a \`scenario: 'positive'\` condition's expected result states the concrete success signal (a specific confirmation message, a field's new displayed value, a status code) - a \`scenario: 'negative'\` condition's expected result states the concrete rejection/handling signal (a specific validation message, a disabled control, an error status code) following **Defensive Oracle Polarity** (asserting system defense, rejection, and state preservation, never a crash or unhandled defect) - never a vague blanket result like "works correctly" or "is handled" that could not tell a passing run from a subtly broken one. When a condition defines a \`negativeCategory\`, align the expected result with its category:
+    * **One atomic action per step, each with its own concrete expected result - never a step that bundles multiple actions behind one blanket result at the end.** This is not a style preference: \`/automate-test\` wraps each drafted step in its own step block (\`${sc.stepDemarcation('Step N: ...')}\`), so a step with no verifiable expected result gives it nothing to assert on, and a step bundling several actions forces one step block to silently cover several unrelated behaviors. Lean on each condition's own \`description\` and \`scenario\` fields (already written by Stage 2) as the step's source material rather than inventing new prose: a \`scenario: 'positive'\` condition's expected result states the concrete success signal (a specific confirmation message, a field's new displayed value, a status code) - a \`scenario: 'negative'\` condition's expected result states the concrete rejection/handling signal (a specific validation message, a disabled control, an error status code) following **Defensive Oracle Polarity** (asserting system defense, rejection, and state preservation, never a crash or unhandled defect) - never a vague blanket result like "works correctly" or "is handled" that could not tell a passing run from a subtly broken one. When a condition defines a \`negativeCategory\`, align the expected result with its category:
       - \`invalid_input\` / \`boundary\`: field displays inline validation message, submission blocked.
       - \`missing_precondition\` / \`permission_denied\`: redirect to login or display forbidden alert (401/403), resource state unmodified.
       - \`concurrent_conflict\`: conflict notification displayed, stale update rejected (409), initial state intact.

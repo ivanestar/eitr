@@ -826,8 +826,7 @@ import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import org.junit.jupiter.api.*;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
 public class SmokeTest {
     private static Playwright playwright;
@@ -865,7 +864,7 @@ public class SmokeTest {
     @Test
     void testHomepage() {
         page.navigate("https://example.com");
-        assertTrue(page.title().contains("Example Domain"));
+        assertThat(page).hasTitle(java.util.regex.Pattern.compile("Example Domain"));
     }
 }
 `;

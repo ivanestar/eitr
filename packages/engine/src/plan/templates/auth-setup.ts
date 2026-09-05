@@ -1,4 +1,4 @@
-// tests/auth.setup.ts template for the generated project. create-if-absent.
+// fixtures/auth.setup.ts template for the generated project. create-if-absent.
 
 export interface AuthSetupOpts {
   baseUrl?: string;
@@ -6,14 +6,15 @@ export interface AuthSetupOpts {
 }
 
 export function renderAuthSetupTs(opts: AuthSetupOpts = {}): string {
-  const storagePath = opts.storageStatePath ?? '.auth/user.json';
+  const storagePath = (opts.storageStatePath ?? '.auth/user.json').replace(/\\/g, '/');
   const appOrigin = opts.baseUrl ?? 'http://localhost:3000';
 
   return `import { test as setup } from '@playwright/test';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { createHmac } from 'node:crypto';
 
-const authFile = path.resolve('${storagePath}');
+const authFile = path.resolve(${JSON.stringify(storagePath)});
 
 // ---------------------------------------------------------------------------
 // RFC 6238 TOTP (Time-Based One-Time Password) generator — self-contained,
@@ -85,6 +86,7 @@ setup('authenticate: browser session with MFA/TOTP support', async ({ page }) =>
   }
 
   // 3. Serialize session state: cookies, localStorage, sessionStorage
+  await fs.promises.mkdir(path.dirname(authFile), { recursive: true });
   await page.context().storageState({ path: authFile });
 });
 
@@ -103,7 +105,7 @@ setup('authenticate: API fast-path token', async () => {
       cookies: [],
       origins: [
         {
-          origin: '${appOrigin}',
+          origin: ${JSON.stringify(appOrigin)},
           localStorage: [{ name: 'auth_token', value: token }],
         },
       ],

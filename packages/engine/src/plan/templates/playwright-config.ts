@@ -69,6 +69,7 @@ export default defineConfig({
     // Step 2A: Setup project (runs once before all other tests)
     {
       name: 'setup',
+      testDir: './fixtures',
       testMatch: /auth\\.setup\\.ts/,
     },
     // Step 2B: Main E2E tests (depends on the setup task above)

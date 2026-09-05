@@ -48,7 +48,7 @@ IGNORED_DIR_NAMES = {
     "dist",
 }
 
-TARGET_DIRS = ("components", "tests", "shared")
+TARGET_DIRS = ("components", "tests", "fixtures", "shared")
 
 DELAY_CALL_NAMES = {"sleep", "wait_for_timeout"}
 
@@ -209,8 +209,8 @@ def walk_files(cwd: str) -> list[str]:
 def audit_file(cwd: str, path: str, violations_out: list[tuple[str, int, str, str]]) -> None:
     rel_path = os.path.relpath(path, cwd).replace(os.sep, "/")
     is_component = rel_path.startswith("components/")
-    is_test = rel_path.startswith("tests/")
-    is_fixture = "conftest" in rel_path or "fixture" in rel_path.lower()
+    is_test = rel_path.startswith("tests/") and not rel_path.startswith("fixtures/")
+    is_fixture = "conftest" in rel_path or "fixture" in rel_path.lower() or rel_path.startswith("fixtures/")
 
     try:
         with open(path, "r", encoding="utf-8") as handle:
