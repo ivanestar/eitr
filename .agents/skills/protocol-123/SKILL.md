@@ -28,6 +28,15 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
    - 1 research -> 1 plan -> User Approval Gateway -> 1 TDD execution (Red -> Green) -> 1 reviewer -> QA.
    - Used only for single-file, low-risk fixes.
 
+## Deterministic Orchestration Script
+
+To eliminate LLM reasoning drift or omission of mandatory subagents (such as skipping `web-researcher` or ISTQB grounding), orchestrators can invoke the deterministic runner script:
+
+- `node scripts/protocol-123.mjs plan [--mode=full|fast] [--json]`: Outputs the exact phase graph, mandatory subagents, and exit gates.
+- `node scripts/protocol-123.mjs prompt <subagent>`: Emits the exact, non-negotiable prompt template for subagents (`web-researcher`, `req-coverage-designer`, `negative-coverage-designer`, `review-arbiter`).
+- `node scripts/protocol-123.mjs verify-phase <0-8>`: Runs mechanical validation for the phase gate.
+- `node scripts/protocol-123.mjs telemetry`: Emits the standard telemetry summary table.
+
 ## 9-Phase Lifecycle (SDD + TDD Hybrid)
 
 ### Phase 0: Pre-Flight Baseline Check
@@ -36,12 +45,15 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 - **Action**: Run `npm run build` or the targeted test suite _before_ writing any code or plans.
 - **Rule**: If baseline is already failing (Red), explicitly document the broken baseline before starting so the agent does not attempt to repair unrelated failures.
 
-### Phase 1: Research & Diagnosis (Explore & Web Recon)
+### Phase 1: Research & Diagnosis (Explore, Web Recon & ISTQB Grounding)
 
 - **Mandate**: **Uncompromising Engineering Rigor (Anti-Flattery Mandate)**. Act as a ruthless Senior SDET Partner. Unmask genuine production bottlenecks (MFA/SSO auth traps, deduplication gaps, context bloat, batch UX bottlenecks, lack of canvas support) and never artificially flatter or inflate assessment scores.
 - **Agents**:
   - `researcher` (scoped read-only tools: `grep_search`, `find_by_name`, `view_file`): Deeply inspect codebase, trace root causes, locate all call sites and dependencies, collect concrete line-level evidence, and map Impact Radius across the full stack.
-  - `web-researcher`: Perform live web search on official documentation (Playwright, Cypress, MCP, LLM frameworks, Node.js) to ground decisions in upstream best practices and prevent stale memory.
+  - `web-researcher` (**Mandatory Unconditional Invocation**): The orchestrator MUST ALWAYS launch `web-researcher` before Phase 2 plan formulation — relying on pre-trained memory or mental shortcuts is strictly prohibited. `web-researcher` executes two mandatory investigation tracks:
+    1. **Technical Upstream Recon**: Targeted live web searches on official documentation (Playwright, Cypress, MCP, LLM frameworks, Node.js) to ground decisions in current upstream best practices, deprecations, known browser/runtime bugs, and real-world production traps.
+    2. **ISTQB Standards & Syllabi Alignment**: Live web search across official ISTQB syllabi (CTFL v4.0, CTAL-TAE v2.0, CTAL-TA v4.0, CT-GenAI, CT-AI, CT-SEC) and the official glossary (`glossary.istqb.org`) to anchor architecture concepts, entry/exit criteria, test oracles, and test design techniques in standard international testing taxonomy and principles.
+  - **Phase 1 Handoff Gate**: Phase 2 formulation cannot proceed until `web-researcher` delivers its structured synthesis (Top Pitfalls to Avoid, Upstream Recommendations, and ISTQB Taxonomy Mapping).
 
 ### Phase 2: Architectural Plan Formulation (Spec-Driven Architecture / SDD)
 

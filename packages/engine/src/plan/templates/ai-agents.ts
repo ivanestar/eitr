@@ -234,6 +234,12 @@ making that route's drafted test conditions impossible to actually automate.
 3. \`getByLabel(text)\` / \`getByPlaceholder(text)\` / \`getByText(text, { exact: true })\`.
 - Absolute ban on XPath and fragile dynamic CSS classes (e.g., \`.css-123\`, \`.MuiButton-root-xyz\`).
 
+## Selective Vision & Visual Baseline Integration
+- When generating or validating Page Objects for a route mapped in \`artifacts/site-map/site-map.json\`, inspect its \`screenshot\` and \`visualTriage\` properties.
+- **Unlabeled Icons & Visual Affordances**: for icon-only buttons, graphic toggles, or unlabeled clickable elements lacking accessible name/role/label, inspect the route's initial viewport screenshot (\`artifacts/site-map/screenshots/<routeId>.(webp|jpg|jpeg)\`) to deduce the component's semantic intent and choose an accurate primitive/name (e.g. \`ThemeToggle\`, \`CloseButton\`, \`UserProfileAvatar\`).
+- **Security & Context Guard**: NEVER inline base64 image strings into prompts, docstrings, or code comments. Always reference the screenshot path on disk.
+- **Visual Triage Handling**: If \`visualTriage.blockingOverlay\` is \`true\` or \`visualTriage.state\` indicates an overlay/barrier (\`auth_wall\`, \`access_denied\`), model the dismissal or prerequisite navigation in the Page Object before interacting with main content elements.
+
 ## Advanced DOM Handling
 - Lists & Virtual Scrolls: Use \`.filter({ hasText })\`, \`.first()\`, \`.nth()\` instead of hardcoded array indices.
 - Shadow DOM & Iframes: For embedded documents (iframes), extend \`FrameContainer\` and declare children using language-appropriate methods (\`this.childInFrame\`/\`this.listInFrame\` with \`LocatorSpec\` in TS; \`self._child_in_frame\`/\`self._list_in_frame\` with string selector in Python; \`childInFrame\` in Java; \`ChildInFrame<T>\` in C#), rather than unstructured inline \`frameLocator()\` calls.

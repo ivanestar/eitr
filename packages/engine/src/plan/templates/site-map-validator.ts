@@ -29,6 +29,18 @@ const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 
 const BOUNDED_BY_VALUES = new Set(['maxDepth', 'maxPages']);
 const STATUS_VALUES = new Set(['active', 'removed']);
+const TRIAGE_STATE_VALUES = new Set([
+  'ready',
+  'auth_wall',
+  'access_denied',
+  'error_page',
+  'empty_state',
+]);
+const TRIAGE_CONFIDENCE_VALUES = new Set(['high', 'medium', 'low']);
+const TRIAGE_ALLOWED_KEYS = new Set(['state', 'blockingOverlay', 'confidence', 'flags']);
+const ROUTE_ID_RE = /^[a-zA-Z0-9_-]+$/;
+const SCREENSHOT_PATH_RE = /^artifacts\\/site-map\\/screenshots\\/[a-zA-Z0-9_-]+\\.(webp|jpg|jpeg)$/;
+const FLAG_TOKEN_RE = /^[a-z0-9_-]+$/;
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -113,6 +125,8 @@ function validate() {
     }
     if (typeof entry.routeId !== 'string' || entry.routeId.length === 0) {
       errors.push(label + '.routeId must be a non-empty string.');
+    } else if (entry.routeId.length > 128 || !ROUTE_ID_RE.test(entry.routeId)) {
+      errors.push(label + '.routeId must match ^[a-zA-Z0-9_-]+$ with max length 128.');
     } else {
       const owner = routeIdOwners.get(entry.routeId);
       if (owner) {
@@ -146,6 +160,62 @@ function validate() {
     }
     if (!STATUS_VALUES.has(entry.status)) {
       errors.push(label + '.status must be one of active|removed.');
+    }
+    if ('screenshot' in entry) {
+      if (typeof entry.screenshot !== 'string' || entry.screenshot.length === 0) {
+        errors.push(label + '.screenshot, when present, must be a non-empty string.');
+      } else if (
+        entry.screenshot.length > 260 ||
+        !SCREENSHOT_PATH_RE.test(entry.screenshot) ||
+        entry.screenshot.includes('..') ||
+        entry.screenshot.includes(String.fromCharCode(92))
+      ) {
+        errors.push(
+          label +
+            '.screenshot, when present, must be a relative path matching artifacts/site-map/screenshots/<routeId>.(webp|jpg|jpeg) without path traversal.',
+        );
+      }
+    }
+    if ('visualTriage' in entry) {
+      const triage = entry.visualTriage;
+      if (!triage || typeof triage !== 'object' || Array.isArray(triage)) {
+        errors.push(label + '.visualTriage, when present, must be an object.');
+      } else {
+        const extraKeys = Object.keys(triage).filter((k) => !TRIAGE_ALLOWED_KEYS.has(k));
+        if (extraKeys.length > 0) {
+          errors.push(
+            label +
+              '.visualTriage has unrecognized properties: ' +
+              extraKeys.join(', ') +
+              '. Only state, blockingOverlay, confidence, flags are allowed.',
+          );
+        }
+        if (!triage.state || typeof triage.state !== 'string' || !TRIAGE_STATE_VALUES.has(triage.state)) {
+          errors.push(
+            label +
+              '.visualTriage.state must be one of ready|auth_wall|access_denied|error_page|empty_state.',
+          );
+        }
+        if ('blockingOverlay' in triage && typeof triage.blockingOverlay !== 'boolean') {
+          errors.push(label + '.visualTriage.blockingOverlay, when present, must be a boolean.');
+        }
+        if ('confidence' in triage && (!triage.confidence || !TRIAGE_CONFIDENCE_VALUES.has(triage.confidence))) {
+          errors.push(label + '.visualTriage.confidence, when present, must be one of high|medium|low.');
+        }
+        if ('flags' in triage) {
+          if (!Array.isArray(triage.flags) || !triage.flags.every((item) => typeof item === 'string')) {
+            errors.push(label + '.visualTriage.flags, when present, must be an array of strings.');
+          } else if (
+            triage.flags.length > 10 ||
+            triage.flags.some((f) => f.length > 50 || !FLAG_TOKEN_RE.test(f))
+          ) {
+            errors.push(
+              label +
+                '.visualTriage.flags, when present, must contain at most 10 alphanumeric/kebab-case tokens (<=50 chars each).',
+            );
+          }
+        }
+      }
     }
   }
 

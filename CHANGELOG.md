@@ -9,6 +9,9 @@ audit trail; this file is release notes.
 
 ## [0.33.0] - 2026-09-04
 
+- **Added**: in-situ initial viewport screenshot capture and Selective Visual Triage Gate in `/map-site`, with `artifacts/site-map/screenshots/` path validation, regex schema constraints, and gitignore protection across all 5 generated stack profiles.
+- **Added**: `scripts/protocol-123.mjs` deterministic pipeline runner, prompt template generator for mandatory subagents (including dual-track `web-researcher`), and phase gate verifier.
+- **Added**: Selective Vision integration in `pom-engineer` referencing disk screenshots for unlabeled icons and prohibiting base64 inlining.
 - **Added**: 9-category negative testing taxonomy, architectural-invariant technique, and Defensive Oracle Polarity validation in Stage 2 test conditions.
 - **Fixed**: CPOM primitive reuse in `sdet-architect` and `pom-engineer`, python pytest fixtures with dynamic `base_url`, git-hooks script casing, and parameterized hydration helpers across all four supported languages.
 - **Fixed**: a fresh `/ground-zero-setup` run opened in Russian with no Russian anywhere in the

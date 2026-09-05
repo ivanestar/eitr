@@ -77,6 +77,8 @@ export function renderSiteMapSchema(): string {
         "properties": {
           "routeId": {
             "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "maxLength": 128,
             "description": "Stable identifier independent of the path template, so a future consumer (e.g. a Decision Journal entry) survives a URL restructure that would break a raw path-string reference."
           },
           "sampleUrls": {
@@ -122,6 +124,44 @@ export function renderSiteMapSchema(): string {
             "type": "string",
             "enum": ["active", "removed"],
             "description": "\\"removed\\" means /map-site update could no longer resolve this route (404, vanished from nav) - the entry is kept, not silently deleted, so a consumer can see route-removal history. A full /map-site create pass prunes \\"removed\\" entries when it regenerates fresh."
+          },
+          "screenshot": {
+            "type": "string",
+            "pattern": "^artifacts/site-map/screenshots/[a-zA-Z0-9_-]+\\\\.(webp|jpg|jpeg)$",
+            "maxLength": 260,
+            "description": "Relative filesystem path to the initial state viewport screenshot (e.g. \\"artifacts/site-map/screenshots/<routeId>.jpg\\")."
+          },
+          "visualTriage": {
+            "type": "object",
+            "description": "Visual triage classification for the initial route render (ISTQB Entry Criteria & Blocked status).",
+            "required": ["state"],
+            "additionalProperties": false,
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["ready", "auth_wall", "access_denied", "error_page", "empty_state"],
+                "description": "Visual state classification of the route."
+              },
+              "blockingOverlay": {
+                "type": "boolean",
+                "description": "Whether a modal dialog, cookie banner, or blocking backdrop obscures the primary content."
+              },
+              "confidence": {
+                "type": "string",
+                "enum": ["high", "medium", "low"],
+                "description": "Confidence of the visual state classification."
+              },
+              "flags": {
+                "type": "array",
+                "maxItems": 10,
+                "items": {
+                  "type": "string",
+                  "maxLength": 50,
+                  "pattern": "^[a-z0-9_-]+$"
+                },
+                "description": "Diagnostic tags identifying visual anomalies (e.g. [\\"session_expired\\", \\"cookie_banner\\"])."
+              }
+            }
           }
         }
       }
