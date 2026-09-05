@@ -9,6 +9,7 @@ audit trail; this file is release notes.
 
 ## [0.33.0] - 2026-09-04
 
+- **Added**: 9-category negative testing taxonomy, architectural-invariant technique, and Defensive Oracle Polarity validation in Stage 2 test conditions.
 - **Fixed**: CPOM primitive reuse in `sdet-architect` and `pom-engineer`, python pytest fixtures with dynamic `base_url`, git-hooks script casing, and parameterized hydration helpers across all four supported languages.
 - **Fixed**: a fresh `/ground-zero-setup` run opened in Russian with no Russian anywhere in the
   user's own request - a model defaults to mirroring ambient context rather than genuinely
