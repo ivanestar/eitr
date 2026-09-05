@@ -98,6 +98,7 @@ Simulate packaging and verify tarball contents:
    ```bash
    git push origin main --tags
    ```
+   Pushing the tag triggers `.github/workflows/release.yml`, which verifies gates, extracts release notes from `CHANGELOG.md`, and publishes the GitHub Release.
 
 ---
 
