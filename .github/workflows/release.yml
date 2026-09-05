@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag or version to release (e.g. v0.33.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,6 +19,16 @@ jobs:
     name: Build, Verify & Publish GitHub Release
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve Release Tag
+        id: tag
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          if [ -z "$TAG" ]; then
+            echo "Error: Unable to determine release tag"
+            exit 1
+          fi
+          echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
@@ -40,12 +56,12 @@ jobs:
         run: npx vitest run packages/engine/test/boundary.test.ts packages/cli/test/boundary.test.ts packages/cli/test/release-notes.test.ts packages/evals/test/offline-evals.test.ts
 
       - name: Extract Release Notes
-        run: node scripts/extract-release-notes.mjs "${{ github.ref_name }}" --file release-notes.md
+        run: node scripts/extract-release-notes.mjs "${{ steps.tag.outputs.tag_name }}" --file release-notes.md
 
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ steps.tag.outputs.tag_name }}
         run: |
           gh release create "$TAG_NAME" \
             --title "$TAG_NAME" \
