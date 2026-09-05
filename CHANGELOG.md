@@ -9,6 +9,7 @@ audit trail; this file is release notes.
 
 ## [0.33.0] - 2026-09-04
 
+- **Added**: lightweight Protocol 456 pipeline redesign (Phases 0-5) with deterministic runner `scripts/protocol-456.mjs`, on-demand upstream web research, fast-track pre-scoped track execution, and single-reviewer risk audit.
 - **Added**: in-situ initial viewport screenshot capture and Selective Visual Triage Gate in `/map-site`, with `artifacts/site-map/screenshots/` path validation, regex schema constraints, and gitignore protection across all 5 generated stack profiles.
 - **Added**: `scripts/protocol-123.mjs` deterministic pipeline runner, prompt template generator for mandatory subagents (including dual-track `web-researcher`), and phase gate verifier.
 - **Added**: Selective Vision integration in `pom-engineer` referencing disk screenshots for unlabeled icons and prohibiting base64 inlining.
