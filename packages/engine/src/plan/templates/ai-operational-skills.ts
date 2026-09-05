@@ -250,8 +250,11 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
    - Launch Web Search subagents to query official ${frameworkName} and UI library documentation for the target components.
    - Formulate concrete task-specific recommendations for architectural design and test synchronization.
 
-### Phase 2: Spec Formulation (SDD Automation Proposal)
-- Synthesize the deterministic Automation Proposal Artifact before writing code:
+### Phase 2: Invariants Discovery & Spec Formulation (SDD Automation Proposal)
+1. Step 2a (Invariants Discovery):
+   - 'test-conditions-designer' uncovers critical positive requirements and negative boundary invariants across 9 closed taxonomy categories.
+2. Step 2b (Defensive Automation Proposal):
+   - 'sdet-architect' embeds explicit protections against those invariants into the deterministic Automation Proposal Artifact before writing code:
 \`\`\`markdown
 ### Automation Proposal Artifact
 | Field | Value |
@@ -262,14 +265,12 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 | Web Research Findings | [Latest docs & best practice recommendations] |
 | Preconditions Fast-Path | ApiClient.createUser(), ApiClient.login() |
 | Dynamic TDM Strategy | UUIDs, createTestEmail() |
+| Invariants & Defenses | [Discovered boundary conditions and architectural defenses] |
 | Step-by-Step Matrix | Step 1..N -> Expected Results -> Web-First Assertions |
 \`\`\`
 
 ### Phase 3: Plan Review Swarm & Arbiter Adjudication
-1. Review Swarm: Dispatch independent review subagents:
-   - 'assertion-auditor': Checks for Fake-Green risks and Dual-Layer UI+API assertions.
-   - 'sdet-architect': Checks CPOM contract and fixture DI.
-   - 'flake-sentinel': Checks for zero arbitrary sleep and event race condition safety.
+1. Lead Review: 'code-reviewer' (or 'sdet-architect') audits the proposal against CPOM contracts, fixture DI, Web-First assertions, and invariant defenses.
 2. Arbiter Adjudication: 'review-arbiter' validates raw findings against Ground Truth (CONVENTIONS.md), filters false positives/nitpicks, and outputs the official Review Arbiter Verdict Artifact:
 \`\`\`markdown
 ### Review Arbiter Verdict Artifact

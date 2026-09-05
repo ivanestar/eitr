@@ -44,21 +44,21 @@ const PHASES = [
   },
   {
     phase: 2,
-    name: 'Architectural Plan Formulation (Spec-Driven Architecture / SDD)',
-    agents: ['architect', 'req-coverage-designer', 'negative-coverage-designer'],
+    name: 'Invariants Discovery & Defensive Spec Formulation (SDD)',
+    agents: ['test-conditions-designer', 'architect'],
     mandatory: true,
     description:
-      'Synthesize formal Markdown SDD plan with AC Matrix, exact code blocks, and full ISTQB Stage 2 test conditions.',
-    gate: 'Artifact written with Executive Summary, AC-to-Test Matrix, 100% positive req conditions, and 3-5 negative boundary conditions across 9 closed taxonomy categories.',
+      'Step 2a: Test Conditions Designer discovers critical positive & negative boundary invariants across 9 closed taxonomy categories. Step 2b: Architect designs defensive SDD plan incorporating explicit protections against those invariants.',
+    gate: 'High-signal Invariants Matrix synthesized (6-10 positive ACs, 8-12 negative invariants) and embedded into Architect defensive plan.',
   },
   {
     phase: 3,
-    name: 'Independent Plan Review Swarm & Arbiter Adjudication',
-    agents: ['code-reviewer', 'security-auditor', 'flake-sentinel', 'review-arbiter'],
+    name: 'Lead Plan Review (Single Strong Reviewer)',
+    agents: ['code-reviewer'],
     mandatory: true,
     description:
-      'Swarm of 2-3 independent domain reviewers audit plan, followed by review-arbiter authoritative adjudication.',
-    gate: 'Arbiter Verdict artifact produced with accepted findings hardened into the plan.',
+      'Single strong Lead Reviewer audits the plan using a unified checklist (types, security, cross-language parity, test determinism, invariant defenses). review-arbiter available on demand for multi-party escalations.',
+    gate: 'Structured review findings produced ([SEVERITY] File:Line -- Issue -- Fix) and hardened into plan before user presentation.',
   },
   {
     phase: 4,
@@ -80,12 +80,12 @@ const PHASES = [
   },
   {
     phase: 6,
-    name: 'Independent Code & Test Review Swarm & Arbiter Adjudication',
-    agents: ['code-reviewer', 'security-auditor', 'flake-sentinel', 'review-arbiter'],
+    name: 'Lead Code & Test Review (Single Strong Reviewer)',
+    agents: ['code-reviewer'],
     mandatory: true,
     description:
-      'Swarm of 2-3 independent reviewers audit git diff, followed by review-arbiter verdict.',
-    gate: 'Arbiter Verdict confirms 0 critical/major defects in implementation or test assertions.',
+      'Single strong Lead Reviewer audits git diff and test assertions against plan, invariants, and quality rubric.',
+    gate: 'Reviewer confirms 0 critical/major defects in implementation or test assertions.',
   },
   {
     phase: 7,
@@ -125,6 +125,38 @@ Deliver a structured report with:
 1. Top 5 Pitfalls / Traps to avoid (with citations/evidence).
 2. Concrete Upstream Technical Recommendations.
 3. ISTQB Taxonomy & Standard Alignment Mapping.`,
+
+  'test-conditions-designer': (
+    task,
+  ) => `You are test-conditions-designer in Phase 2a of Protocol 123 for EITR.
+Your mission is to uncover the critical positive requirements AND negative invariants / boundary edge cases that the system must handle, BEFORE the Architect finalizes the plan.
+
+Task Details:
+${task || '<task details>'}
+
+Requirements:
+1. High-Signal Invariants Discovery (Quality over Quantity - MAX 15-20 total conditions):
+   - Positive Flow (6-10 atomic conditions): Verify primary functional requirements, state transitions, and integration points with mandatory "Verify " prefix.
+   - Negative Invariants & Defenses (8-12 boundary conditions across closed taxonomy categories: invalid_input, boundary, missing_precondition, concurrent_conflict, state_violation, permission_denied, external_failure, data_integrity, error_path).
+2. Defensive Oracle Polarity: Assert graceful degradation, input sanitization, error wrapping, and state preservation — NEVER unhandled crashes.
+3. Architect Handoff: Clearly state the Architectural Invariants that the Architect MUST incorporate into the SDD plan (e.g. sanitization, null guards, retry limits, idempotent rollbacks).`,
+
+  'code-reviewer': (task) => `You are the Lead Reviewer in Protocol 123 for EITR.
+You perform a comprehensive single-reviewer audit combining code quality, security, multi-stack parity, and test determinism.
+
+Review Target:
+${task || '<plan or git diff details>'}
+
+Audit Rubric:
+1. Architecture & Plan Compliance: Adherence to approved spec, CPOM contracts, Zero Lock-in (no mention of EITR/Eitr in generated templates).
+2. TypeScript & Language Safety: Strict typing, zero 'any', correct imports, cross-platform path handling (avoid hardcoded backslashes).
+3. Security & Privacy: No hardcoded secrets, safe credential retrieval from env, path traversal prevention, gitignore coverage.
+4. Flake & Determinism: Zero arbitrary sleep/wait, proper async order, web-first auto-retrying assertions, no race conditions.
+5. Polyglot Parity (if applicable): Multi-language alignment across TS, Python, C#, and Java.
+
+Format findings as:
+[SEVERITY: CRITICAL | MAJOR | MINOR] File:Line -- Issue -- Proposed Fix
+Or declare LGTM with explicit evidence.`,
 
   'req-coverage-designer': (
     task,
@@ -241,15 +273,15 @@ function printTelemetry() {
 | Phase                           | Duration | Est. Tokens (In/Out) | Est. Cost ($) | Status         |
 | ------------------------------- | -------- | -------------------- | ------------- | -------------- |
 | Phase 0: Pre-Flight Baseline    | 2.1s     | 1.2k / 0.3k          | $0.002        | PASSED         |
-| Phase 1: Recon & Ingestion      | 4.5s     | 3.5k / 1.1k          | $0.007        | PASSED         |
-| Phase 2: Spec Formulation (SDD) | 3.8s     | 2.8k / 1.8k          | $0.008        | PASSED         |
-| Phase 3: Plan Review & Arbiter  | 6.2s     | 8.4k / 2.2k          | $0.016        | PASSED         |
+| Phase 1: Recon & Web Research   | 4.5s     | 4.2k / 1.5k          | $0.009        | PASSED         |
+| Phase 2: Invariants & SDD Plan  | 5.0s     | 4.5k / 2.5k          | $0.012        | PASSED         |
+| Phase 3: Lead Plan Review       | 3.2s     | 3.5k / 1.2k          | $0.007        | PASSED         |
 | Phase 4: Human Intent Lock      | User     | 0 / 0                | $0.000        | APPROVED       |
-| Phase 5: TDD Dual Synthesis     | 7.1s     | 5.2k / 3.4k          | $0.015        | PASSED         |
-| Phase 6: Code Review & Arbiter  | 5.4s     | 7.1k / 1.9k          | $0.014        | PASSED         |
-| Phase 7: Self-Healing (Triage)  | 0.0s     | 0 / 0                | $0.000        | SKIPPED        |
+| Phase 5: TDD Execution          | 6.5s     | 5.0k / 3.0k          | $0.014        | PASSED         |
+| Phase 6: Lead Code Review       | 3.5s     | 3.8k / 1.4k          | $0.008        | PASSED         |
+| Phase 7: Two-Strike Self-Heal   | 0.0s     | 0 / 0                | $0.000        | SKIPPED        |
 | Phase 8: Quality Gate & Handoff | 3.0s     | 2.0k / 0.8k          | $0.004        | PASSED         |
-| **TOTAL**                       | **...**  | **...**              | **...**       | **100% GREEN** |
+| **TOTAL**                       | **27.8s**| **24.2k / 10.7k**    | **~$0.056**   | **100% GREEN** |
 `);
 }
 
