@@ -41,11 +41,32 @@ Not the right tool for:
 
 ## Quick Start
 
+### 1. Scaffold your project
+
 ```bash
 npx @onlytests/eitr new
 ```
 
-The wizard inspects your target URL, asks for your language/CI/TMS choices, and scaffolds the project - installing dependencies and browsers along the way.
+The wizard inspects your target URL and prompts for your project stack:
+
+- **Language & test framework:** TypeScript, Python, C#, Java (Playwright)
+- **AI-assistant tooling:** Cursor, Claude Code, Windsurf, Copilot, Antigravity, Aider, Codex
+- **CI/CD pipeline:** GitHub Actions, GitLab CI, Jenkins, TeamCity
+- **Task tracker:** Jira, Azure DevOps (Work Items), or None / Skip
+- **Test Management System (TMS):** Jira Xray, Azure DevOps (Test Plans), TestRail, Zephyr Scale
+
+### 2. Open in your AI editor
+
+Open the generated directory in **Cursor**, **Claude Code**, **Windsurf**, **Antigravity**, or your assistant of choice.
+
+### 3. Automate from scratch (Zero-Docs / Greenfield)
+
+In your AI assistant's chat:
+
+- **Need login?** Run `/auth-setup` first to capture your authenticated session (for multi-role apps, log in under the highest-access role like Admin to map all areas).
+- **Public app?** Run `/ground-zero-setup` directly.
+
+The `/ground-zero-setup` command explores your live app in a real browser, builds a visual sitemap (`site-map.json`), formulates test conditions, and drafts complete test cases (pausing for your sign-off at each stage) — then seamlessly offers to generate executable tests via `/automate-test`.
 
 ---
 
