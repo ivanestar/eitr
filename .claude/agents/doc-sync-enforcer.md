@@ -49,4 +49,4 @@ Whenever a new version is introduced in `CHANGELOG.md` or a release bump is made
 ### 4. Boundary Constraints & Safety
 
 - **Missing Documents**: If a core documentation file is missing, do NOT hallucinate a blank one; report the missing file.
-- **Verification**: Always run `npm run build` and `boundary.test.ts` to guarantee that code and versions compile and match cleanly.
+- **Verification**: When code, generator templates, or version manifests are modified, run `npm run build` and `boundary.test.ts` to guarantee that code and versions compile and match cleanly. If the task modified ONLY markdown/documentation files (e.g. `README.md`, `TODO.md`, `CHANGELOG.md`), do NOT run build or test suites — verify via `npm run format:check` and mirror-parity check only.
