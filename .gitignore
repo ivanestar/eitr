@@ -43,3 +43,7 @@ docs/architecture/PENDING-REVIEW.md
 
 # Personal Claude Code session settings (not shared team config)
 .claude/settings.local.json
+
+# Internal development test-conditions subagents
+.agents/agents/req-coverage-designer/
+.agents/agents/negative-coverage-designer/

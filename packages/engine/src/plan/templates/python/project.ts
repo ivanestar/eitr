@@ -11,10 +11,12 @@ export interface PythonProjectOpts {
 // ── pytest-playwright config ──────────────────────────────────────────────
 
 /** conftest.py (root) */
-export function renderPythonConftest(_opts: Pick<PythonProjectOpts, 'baseUrl'>): string {
+export function renderPythonConftest(_opts?: Pick<PythonProjectOpts, 'baseUrl'>): string {
   return `"""Root conftest — shared Playwright fixtures for the whole test suite."""
+from collections.abc import Iterator
 import pytest
 from playwright.sync_api import BrowserContext, Page
+from shared.utils.api_client import ApiClient
 
 
 @pytest.fixture(scope="session")
@@ -25,6 +27,13 @@ def browser_context_args(browser_context_args: dict) -> dict:
         "viewport": {"width": 1280, "height": 720},
         # "storage_state": ".auth/user.json",  # Uncomment after running authentication setup
     }
+
+
+@pytest.fixture
+def api_client(base_url: str) -> Iterator[ApiClient]:
+    """Fixture providing an ApiClient instance with automatic cleanup."""
+    with ApiClient(base_url=base_url) as client:
+        yield client
 
 
 # ── Page Object Fixtures (Dependency Injection) ────────────────────────────
@@ -41,8 +50,9 @@ def browser_context_args(browser_context_args: dict) -> dict:
 }
 
 /** pyproject.toml */
-export function renderPyprojectToml(opts: PythonProjectOpts): string {
-  const { projectName, baseUrl } = opts;
+export function renderPyprojectToml(opts?: Partial<PythonProjectOpts>): string {
+  const projectName = opts?.projectName ?? 'playwright-tests';
+  const baseUrl = opts?.baseUrl ?? 'http://localhost:3000';
   return `[build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -58,6 +68,7 @@ dependencies = [
     "pytest-html>=4.1.1",
     "pytest-rerunfailures>=14.0",
     "pytest-split>=0.11.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
@@ -95,24 +106,26 @@ SLOW_MO=0
 // ── Test files ─────────────────────────────────────────────────────────────
 
 /** tests/examples/test_example.py */
-export function renderPythonExampleTest(opts: Pick<PythonProjectOpts, 'baseUrl'>): string {
+export function renderPythonExampleTest(opts?: Pick<PythonProjectOpts, 'baseUrl'>): string {
+  const baseUrl = opts?.baseUrl ?? 'http://localhost:3000';
   return `"""Example smoke tests — demonstrates the Component Page Object Model pattern.
 Copy and adapt these for your own page objects.
 """
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 
 def test_harness_boots(page: Page) -> None:
     """Verify browser harness boots and renders HTML correctly without network."""
     page.set_content("<h1>ok</h1>")
-    assert page.get_by_role("heading").inner_text() == "ok"
+    expect(page.get_by_role("heading")).to_have_text("ok")
+
 
 
 def test_home_page_is_reachable(page: Page) -> None:
     """Verify the application home page returns a successful HTTP response."""
     try:
-        response = page.goto("${opts.baseUrl}")
+        response = page.goto("${baseUrl}")
         assert response is not None, "Expected a response, got None"
         assert response.ok, f"Expected HTTP 2xx, got {response.status}"
     except Exception as err:
@@ -122,7 +135,7 @@ def test_home_page_is_reachable(page: Page) -> None:
 def test_page_has_non_empty_title(page: Page) -> None:
     """Verify the page has a non-empty <title> after loading."""
     try:
-        page.goto("${opts.baseUrl}")
+        page.goto("${baseUrl}")
         assert page.title() != "", "Expected page title to be non-empty"
     except Exception as err:
         pytest.skip(f"Base URL is unreachable: {err}")

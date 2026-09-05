@@ -12,11 +12,13 @@ export function renderGitHooks(
   let testStep: string;
 
   if (language === 'python') {
-    lintStep = `python scripts/LintCpom.py || {
+    lintStep = `PYTHON="\${PYTHON:-python3}"
+command -v "$PYTHON" >/dev/null 2>&1 || PYTHON="python"
+"$PYTHON" scripts/lint_cpom.py || {
   echo "CPOM linter failed."
   exit 1
 }`;
-    testStep = `pytest --tb=short -q || {
+    testStep = `"$PYTHON" -m pytest --tb=short -q || {
   echo "Tests failed."
   exit 1
 }`;

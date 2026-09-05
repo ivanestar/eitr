@@ -138,20 +138,32 @@ One canonical pair - use it to recognize the pattern, not as a template to copy 
 
 Compliant:
 \`\`\`typescript
+import { BasePage } from '../base/base-page';
+import { Element } from '../primitives/element';
+import { TextInput } from '../primitives/text-input';
+import { Button } from '../primitives/button';
+import { NavbarWidget } from '../widgets/navbar.widget';
+
 export class LoginPage extends BasePage {
-  private readonly nav = this.child(NavbarWidget, { root: this.page.getByTestId('app-nav') });
-  get emailInput() { return this.getByTestId('login-email'); }
-  get submitButton() { return this.getByRole('button', { name: 'Sign in' }); }
+  readonly path = '/login';
+  readonly nav = this.child(NavbarWidget, { kind: 'testId', testId: 'app-nav' });
+  readonly emailInput = this.child(TextInput, { kind: 'testId', testId: 'login-email' });
+  readonly passwordInput = this.child(TextInput, { kind: 'testId', testId: 'login-password' });
+  readonly submitButton = this.child(Button, { kind: 'role', role: 'button', name: 'Sign in' });
+  readonly errorMessage = this.child(Element, { kind: 'testId', testId: 'login-error' });
+
   async submit(email: string, password: string): Promise<void> {
     await this.emailInput.fill(email);
+    await this.passwordInput.fill(password);
     await this.submitButton.click();
   }
+
   errorTextNow(): Promise<string | null> {
-    return this.getByTestId('login-error').textContent();
+    return this.errorMessage.textNow();
   }
 }
 \`\`\`
-Extends \`BasePage\`; reuses \`NavbarWidget\` via \`this.child()\` instead of re-declaring navbar locators; \`submit()\` returns \`Promise<void>\` and relies on auto-waiting; \`errorTextNow()\` is \`Now\`-suffixed; zero assertions inside the class.
+Extends \`BasePage\`; reuses \`NavbarWidget\` and primitives (\`TextInput\`, \`Button\`, \`Element\`) via \`this.child()\`; \`submit()\` returns \`Promise<void>\` and relies on auto-waiting; \`errorTextNow()\` delegates to \`this.errorMessage.textNow()\` with \`Now\`-suffix; zero assertions inside the class.
 
 Non-compliant (reject on sight):
 \`\`\`typescript
@@ -184,7 +196,10 @@ You are responsible for generating, updating, and validating Page Objects and co
 Applies to the whole \`components/\` tree this project scaffolds - primitives, widgets, and the
 \`components/base/\` classes every Page Object already extends - not primitives alone: that
 directory exists specifically so it gets reused, not admired.
-1. **Already scaffolded in \`components/primitives/\`** (Button, TextInput, Checkbox, Select, NativeSelect, Radio, Link, FileInput, Heading, Element - read that directory's actual contents rather than assuming this list, since a project's scaffold can vary) or \`components/widgets/\`: compose it via \`this.child(PrimitiveClass, spec)\` / \`this.list(PrimitiveClass, spec)\`. Never hand-roll an ad hoc locator or a bespoke inline class for something a scaffolded primitive already models - that silently forks the interaction contract the primitive exists to standardize (e.g. its own \`Now()\`-suffixed state getters), and the next Page Object touching the same kind of element has no shared behavior to build on.
+1. **Already scaffolded in \`components/primitives/\`** (Button, TextInput, Checkbox, Select, NativeSelect, RadioButton, RadioGroup, Link, FileInput, Heading, Element - read that directory's actual contents rather than assuming this list, since a project's scaffold can vary) or \`components/widgets/\`: compose it via \`this.child(PrimitiveClass, spec)\` / \`this.list(PrimitiveClass, spec)\`. Never hand-roll an ad hoc locator or a bespoke inline class for something a scaffolded primitive already models - that silently forks the interaction contract the primitive exists to standardize (e.g. its own \`Now()\`-suffixed state getters), and the next Page Object touching the same kind of element has no shared behavior to build on.
+   - For native \`<select>\` elements: compose via \`this.child(NativeSelect, spec)\` and interact via \`.selectOption(...)\`.
+   - For custom portal-rendered dropdowns (\`Select\`): in TypeScript, instantiate directly via \`new Select(this.page, descriptor)\` using \`SelectDescriptor: { trigger, listbox, option, reveal }\` (never via \`this.child()\` which expects \`LocatorSpec\`). In Python, Java, and C#, pass discrete arguments \`(trigger, listbox, option, reveal)\`.
+   - For modal dialogs and tables: In TypeScript, \`Dialog\` portals to \`<body>\` and strictly requires \`Page\` (\`new Dialog(this.page)\` on BasePage or \`new Dialog(this.page())\` on Component). \`Table\` accepts any \`Scope\` (\`Page | Locator\`): use \`new Table(this.page)\` for single tables, or container-scoped \`new Table(container.locator)\` for multi-table views to prevent Playwright strict mode resolution clashes. In Python, Java, and C#, both \`Dialog\` and \`Table\` take a scoped \`Locator\`.
 2. **Not yet scaffolded, but still a primitive-shaped, reusable interaction pattern** (a slider, a data table, a tabbed panel, a rich-text editor - the same class of thing across many apps, not specific to this one page): follow \`Extended Primitives - Synthesize On Demand\` below to add it to \`components/primitives/\` or \`components/widgets/\` first, then compose it the same as step 1 - never inline the interaction directly into the Page Object just because no starter file exists for it yet.
 3. **Neither of the above** (a one-off, page-specific element with no reusable interaction shape - a static paragraph, a page-specific heading whose only need is a liveness/text check): only here does it get registered directly on the Page Object itself, as the residual case - not a shortcut for elements that actually match step 1 or 2.
 
@@ -221,7 +236,7 @@ making that route's drafted test conditions impossible to actually automate.
 
 ## Advanced DOM Handling
 - Lists & Virtual Scrolls: Use \`.filter({ hasText })\`, \`.first()\`, \`.nth()\` instead of hardcoded array indices.
-- Shadow DOM & Iframes: Use standard shadow piercing locators or \`frameLocator()\` for embedded documents.
+- Shadow DOM & Iframes: For embedded documents (iframes), extend \`FrameContainer\` and declare children using language-appropriate methods (\`this.childInFrame\`/\`this.listInFrame\` with \`LocatorSpec\` in TS; \`self._child_in_frame\`/\`self._list_in_frame\` with string selector in Python; \`childInFrame\` in Java; \`ChildInFrame<T>\` in C#), rather than unstructured inline \`frameLocator()\` calls.
 
 ## Live Web Search & Documentation Reconnaissance
 - When inspecting complex UI widgets (e.g. Radix dialogs, shadow DOM, virtualized tables, custom select dropdowns), launch Web Search subagents to inspect official documentation and current testing best practices.
