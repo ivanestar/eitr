@@ -9,6 +9,13 @@ audit trail; this file is release notes.
 
 ## [0.33.0] - 2026-09-04
 
+- **Changed**: `/ground-zero-setup` now chains all the way through Stage 4 (`/automate-test`) in one run instead of stopping at drafted test cases - `/automate-test`'s own Human Sign-Off Gateway still blocks code synthesis in both Guided and Auto-pilot mode, and the Final Report (with per-stage timing and route coverage from `pipeline-status.mjs`, both derived from artifact timestamps rather than a model's own guess) now prints once at the true end of the pipeline.
+- **Changed**: `/ground-zero-setup` merges its per-stage approve/reject question and its separate "what next?" question into one combined prompt, and prints a script-authored pre-flight notice verbatim instead of composing the cost warning itself.
+- **Fixed**: `/map-site` now distinguishes routes actually reachable through in-app navigation from ones found only via a raw DOM `href` with no visible/clickable counterpart, and mechanically flags routes that render an identical generic empty/error shell as likely crawler artifacts rather than real routes.
+- **Changed**: `/define-test-conditions`'s route-level invariant conditions are now grounded in each route's own inferred business feature and purpose instead of a fixed 2-3 generic conditions per route, and scale in depth with route criticality.
+- **Added**: `test-data-engineer` agent for on-request structured/bulk datasets and minimal-valid file fixtures, complementing `ApiClient`'s existing scalar synthetic-data helpers.
+- **Changed**: locally-drafted automated tests now use sequential `TC-{seq}` filenames (with the source journey's full ID carried as a `@journey:` tag) instead of a 12-character hash in the filename.
+- **Added**: GitHub/npm discoverability keywords (`ai-testing`, `agentic-testing`, `sdet`, `agent-skills`, `claude-code`, `ai-agents`).
 - **Added**: GitHub Releases CI workflow (`release.yml`) and deterministic release notes extractor (`extract-release-notes.mjs`) on git tag push.
 - **Changed**: streamlined Protocol 123 to v3.0 by placing Invariants Discovery (`test-conditions-designer`) before Architect plan formulation, adopting a single Lead Reviewer (`code-reviewer`) with on-demand Arbiter escalation, and adding dedicated runner test suite `protocol-123-runner.test.ts`.
 - **Changed**: relocated non-test setup and fixture files from `tests/` to dedicated `fixtures/` directory (`fixtures/index.ts` with `@fixtures` alias in TS Playwright, `fixtures/auth.setup.ts`, Python `fixtures/auth_setup.py`) and added `fixtures/` to CPOM linter target directories.

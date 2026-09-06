@@ -1,5 +1,5 @@
 /**
- * Golden Dataset for evaluating all 7 EITR AI Agents.
+ * Golden Dataset for evaluating all 6 EITR AI Agents.
  */
 
 export interface GoldenAgentCase {
@@ -8,9 +8,8 @@ export interface GoldenAgentCase {
     | 'tms-validator'
     | 'sdet-architect'
     | 'pom-engineer'
-    | 'test-automator'
-    | 'assertion-auditor'
-    | 'trace-debugger';
+    | 'test-data-engineer'
+    | 'assertion-auditor';
   description: string;
   inputPrompt: string;
   expectedOutputs: {
@@ -25,7 +24,7 @@ export const GOLDEN_AGENTS_DATASET: GoldenAgentCase[] = [
   {
     agentName: 'sdet-orchestrator',
     description:
-      'Dispatches user request to automate Jira ticket to tms-validator and test-automator',
+      "Dispatches user request to automate Jira ticket to tms-validator, then synthesizes the test directly following /automate-test's own process",
     inputPrompt: 'User wants to automate ticket JIRA-404: "User Reset Password Flow"',
     expectedOutputs: {
       mustContainPatterns: ['tms-validator', 'GIGO', '/automate-test', 'Human Sign-Off'],
@@ -69,14 +68,15 @@ export const GOLDEN_AGENTS_DATASET: GoldenAgentCase[] = [
       forbiddenPatterns: ['expect(', 'waitForTimeout'],
     },
   },
-  // 5. test-automator
+  // 5. test-data-engineer
   {
-    agentName: 'test-automator',
-    description: 'Synthesizes linear AST test spec with test.step and fixtures',
-    inputPrompt: 'Automate valid ticket TC-101 (Login with 2FA) into Playwright spec',
+    agentName: 'test-data-engineer',
+    description: 'Synthesizes a bulk/structured dataset on request, never a single scalar value',
+    inputPrompt:
+      'Generate 20 rows of product catalog data (SKU, price, stock count) for a pagination test',
     expectedOutputs: {
-      mustContainPatterns: ["await test.step('Step 1", '({ loginPage', 'await expect('],
-      forbiddenPatterns: ['if (', 'for (', 'while (', 'try {', 'new LoginPage'],
+      mustContainPatterns: ['fixtures/synthetic-data/', 'SKU'],
+      forbiddenPatterns: ['createTestEmail', 'createUniqueId'],
     },
   },
   // 6. assertion-auditor
@@ -90,21 +90,6 @@ export const GOLDEN_AGENTS_DATASET: GoldenAgentCase[] = [
         'await expect(loginPage.banner.locator).toBeVisible()',
       ],
       forbiddenPatterns: ['expect(locator.isVisible()).toBeTruthy()'],
-    },
-  },
-  // 7. trace-debugger
-  {
-    agentName: 'trace-debugger',
-    description: 'Detects backend HTTP 500 error and triages strictly as [PRODUCT BUG]',
-    inputPrompt: 'Triage trace: POST /api/v1/payment -> 500 Internal Server Error (Database lock)',
-    expectedOutputs: {
-      targetRoleOrCategory: '[PRODUCT BUG]',
-      mustContainPatterns: [
-        '[PRODUCT BUG]',
-        'Do not alter Page Object locators',
-        'Backend service',
-      ],
-      forbiddenPatterns: ['updated selector', 'modified Page Object'],
     },
   },
 ];

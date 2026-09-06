@@ -11,7 +11,7 @@ model: sonnet
 
 This agent prevents architectural and version drift by ensuring that AI assistants immediately update technical documentation, release notes, and version manifests to reflect code reality.
 
-Trigger this agent automatically at Phase 8 of Protocol 123 or at the end of any task that modifies source code, documentation, or release notes.
+Trigger this agent automatically at the end of any task that modifies source code, documentation, or release notes.
 
 ## Rules & Constraints
 

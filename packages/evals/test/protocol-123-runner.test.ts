@@ -57,7 +57,7 @@ describe('Protocol 123 Runner & Gates Suite (scripts/protocol-123.mjs)', () => {
 
       const phase1 = phases.find((p: { phase: number }) => p.phase === 1);
       expect(phase1.agents).toContain('web-researcher');
-      expect(phase1.agents).toContain('researcher');
+      expect(phase1.agents).toContain('general-purpose');
 
       const phase2 = phases.find((p: { phase: number }) => p.phase === 2);
       expect(phase2.agents).toContain('test-conditions-designer');

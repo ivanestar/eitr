@@ -117,10 +117,10 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
     const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/ground-zero-setup')!;
     const simulatedOutput = `
 # Skill: Greenfield Guided Setup (/ground-zero-setup)
-1. Pre-Flight Confirmation: run scripts/pipeline-status.mjs, present stages and cost warning, ask Guided vs Auto-pilot.
+1. Pre-Flight Confirmation: run scripts/pipeline-status.mjs, print its preFlightNotice verbatim, ask Guided vs Auto-pilot.
 2. Guided mode: run each stage, present its own Human Sign-Off Gateway, on approval set reviewedBy: 'human'.
 3. Consult scripts/pipeline-status.mjs after every stage to decide what runs next.
-4. Stop honestly once the stage reaches test-cases-drafted - never chain into /automate-test automatically.
+4. Once the stage reaches test-cases-drafted, chain straight into Stage 4 (/automate-test) in the same run - its own Human Sign-Off Gateway still blocks code synthesis until the human approves, in both Guided and Auto-pilot mode.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

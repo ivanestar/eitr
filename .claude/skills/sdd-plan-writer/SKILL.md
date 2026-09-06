@@ -23,8 +23,8 @@ it does not go into the plan yet.
 must already be understood well enough to name at least one concrete file it touches. Typical
 inputs: the Core-gap rows of a closed `axis-closure-matrix` report, an already-agreed feature
 description, a named bug with a known repro. If any item still requires "figure out what's
-actually wrong first," send that item through investigation (the `researcher` agent, or your own
-direct reading) BEFORE this skill runs — do not fold an open investigation into a plan task; a
+actually wrong first," send that item through investigation (a general-purpose research subagent,
+or your own direct reading) BEFORE this skill runs — do not fold an open investigation into a plan task; a
 plan task is for **known, scoped** work, not for discovery.
 
 **Good trigger**: `"напиши SDD-план на все 7 гэпов из CI/CD-матрицы"` (a closed, named,
@@ -155,9 +155,8 @@ into the findings above."
 
 Present the reviewed plan (as an Artifact — plans are published artifacts, never a markdown file
 committed into the EITR source tree) to the user with a short summary of what the independent
-review changed, and wait for explicit approval before any task begins execution. This mirrors this
-repo's own Protocol 123 User Approval Gateway phase — do not skip it because the review came back
-clean.
+review changed, and wait for explicit approval before any task begins execution - a hard gate
+regardless of context, never skipped just because the review came back clean.
 
 ## Anti-patterns this skill exists to prevent
 

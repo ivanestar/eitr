@@ -160,10 +160,12 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         "reviewedBy: 'human'",
         'Human Sign-Off Gateway',
         'test-cases-drafted',
+        '/automate-test',
       ],
       contractGuarantees: [
         'never silently default to Auto-pilot',
         "reviewedBy: 'auto-pilot' on every entry auto-approved",
+        "/automate-test's own Human Sign-Off Gateway still blocks code synthesis in both modes",
       ],
       forbiddenPatterns: ['EITR', 'Eitr'],
     },

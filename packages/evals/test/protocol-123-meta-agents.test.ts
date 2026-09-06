@@ -7,15 +7,12 @@ describe('Protocol 123 Meta-Agents Suite (.agents/agents/)', () => {
 
   const EXPECTED_META_AGENTS = [
     'architect',
-    'researcher',
     'web-researcher',
     'test-writer',
     'eval-engineer',
     'code-reviewer',
     'review-arbiter',
     'core-developer',
-    'security-auditor',
-    'flake-sentinel',
     'qa-guard',
     'doc-sync-enforcer',
     'framework-auditor',
@@ -24,7 +21,7 @@ describe('Protocol 123 Meta-Agents Suite (.agents/agents/)', () => {
     'npm-release-engineer',
   ];
 
-  it('all 16 specialized meta-agents exist on disk with valid AGENT.md definitions', () => {
+  it('all 13 specialized meta-agents exist on disk with valid AGENT.md definitions', () => {
     for (const agentName of EXPECTED_META_AGENTS) {
       const agentFile = path.join(agentsDir, agentName, 'AGENT.md');
       expect(fs.existsSync(agentFile), `Expected agent file to exist: ${agentFile}`).toBe(true);
@@ -70,14 +67,6 @@ describe('Protocol 123 Meta-Agents Suite (.agents/agents/)', () => {
     expect(content).toContain('Bad Example');
   });
 
-  it('verifies researcher meta-agent has 4 investigation pillars', () => {
-    const content = fs.readFileSync(path.join(agentsDir, 'researcher', 'AGENT.md'), 'utf8');
-    expect(content).toContain('Root Cause Pinpointing');
-    expect(content).toContain('Impact Radius');
-    expect(content).toContain('Minimal Reproduction');
-    expect(content).toContain('Zero-Emoji Policy');
-  });
-
   it('verifies test-writer meta-agent enforces test-first and zero-config rules', () => {
     const content = fs.readFileSync(path.join(agentsDir, 'test-writer', 'AGENT.md'), 'utf8');
     expect(content).toContain('Test-First Execution');
@@ -85,17 +74,12 @@ describe('Protocol 123 Meta-Agents Suite (.agents/agents/)', () => {
     expect(content).toContain('Sandbox Isolation');
   });
 
-  it('verifies security-auditor meta-agent enforces secret scanning and path traversal checks', () => {
-    const content = fs.readFileSync(path.join(agentsDir, 'security-auditor', 'AGENT.md'), 'utf8');
+  it('verifies code-reviewer meta-agent folds in security and flake/determinism audits', () => {
+    const content = fs.readFileSync(path.join(agentsDir, 'code-reviewer', 'AGENT.md'), 'utf8');
     expect(content).toContain('Diff Entropy & Secret Scanning');
     expect(content).toContain('Path Traversal');
     expect(content).toContain('Gitignore & Artifact Isolation');
-  });
-
-  it('verifies flake-sentinel meta-agent enforces zero arbitrary sleep and web-first assertions', () => {
-    const content = fs.readFileSync(path.join(agentsDir, 'flake-sentinel', 'AGENT.md'), 'utf8');
     expect(content).toContain('Zero Arbitrary Sleep');
-    expect(content).toContain('Web-First Auto-Retrying Assertions');
     expect(content).toContain('Proper Asynchronous Order');
   });
 
@@ -120,7 +104,6 @@ describe('Protocol 123 Meta-Agents Suite (.agents/agents/)', () => {
       path.resolve(process.cwd(), '.agents/skills/protocol-123/SKILL.md'),
       'utf8',
     );
-    expect(skillContent).toContain('researcher');
     expect(skillContent).toContain('web-researcher');
     expect(skillContent).toContain('review-arbiter');
     expect(skillContent).toContain('eval-engineer');

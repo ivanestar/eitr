@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 // Distinct from all-skills.eval.test.ts, which benchmarks the 6-skill roster
 // generated INTO end-user scaffolded projects (via graders/golden datasets).
-// This file instead verifies EITR's OWN 11 development-time skill
+// This file instead verifies EITR's OWN 10 development-time skill
 // definitions under .claude/skills/ - the files that drive Claude Code
 // sessions working on the EITR repository itself.
 
@@ -18,7 +18,6 @@ const EXPECTED_SKILL_SLUGS = [
   'axis-closure-matrix',
   'commit-writer',
   'framework-quality-audit',
-  'project-memory-keeper',
   'protocol-123',
   'protocol-456',
   'sdd-plan-writer',
@@ -40,7 +39,6 @@ const EXPLICIT_TRIGGER_PHRASE_SLUGS = [
   'axis-closure-matrix',
   'commit-writer',
   'framework-quality-audit',
-  'project-memory-keeper',
   'sdd-plan-writer',
   'strategic-architecture-advisor',
 ];
@@ -70,8 +68,8 @@ function parseFrontmatter(text: string): Record<string, string> {
   return fields;
 }
 
-describe('All 11 EITR Dev-Skill Definitions Evaluation Benchmark (.claude/skills/)', () => {
-  it('AC-1: exactly the 11 expected skill directories exist, 0 extra, 0 missing', async () => {
+describe('All 10 EITR Dev-Skill Definitions Evaluation Benchmark (.claude/skills/)', () => {
+  it('AC-1: exactly the 10 expected skill directories exist, 0 extra, 0 missing', async () => {
     const entries = await fs.readdir(skillsDir, { withFileTypes: true });
     const actualSlugs = entries
       .filter((e) => e.isDirectory())

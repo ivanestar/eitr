@@ -12,11 +12,11 @@ Your mission is to enforce the **Mandatory Eval Parity** rule: whenever an AI ag
 
 ## The Evaluation Protocol
 
-When invoked during Protocol 123 Phase 5a (RED Phase) or Phase 8 (Quality Gate), you must execute exactly these steps:
+Whenever an AI agent, operational skill, or rule generator is created or modified, execute exactly these steps:
 
 ### 1. Ingest Acceptance Criteria (AC Matrix)
 
-- Review the Phase 2 AC Matrix and identify all newly added or modified prompt templates, operational skills, agents, or generators.
+- Review whatever specifies the change - an approved plan, a diff, or the task's own description - and identify all newly added or modified prompt templates, operational skills, agents, or generators.
 
 ### 2. Synthesize Deterministic Eval Suite (RED Phase)
 
