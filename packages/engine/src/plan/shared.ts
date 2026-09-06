@@ -39,6 +39,7 @@ import { renderTestConditionsTypes } from './templates/test-conditions-types.js'
 import { renderTestConditionsEngine } from './templates/test-conditions-engine.js';
 import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
 import { renderPipelineStatus } from './templates/pipeline-status.js';
+import { renderAuthStatus } from './templates/auth-status.js';
 import { renderJourneysTypes } from './templates/journeys-types.js';
 import { renderJourneysEngine } from './templates/journeys-engine.js';
 import { renderJourneysValidator } from './templates/journeys-validator.js';
@@ -147,6 +148,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderPipelineStatus() },
+          },
+          {
+            path: 'scripts/auth-status.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderAuthStatus() },
           },
           {
             path: '.scaffold/schemas/test-cases.types.ts',
@@ -319,21 +326,30 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       path: '.github/workflows/playwright.yml',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
-      source: { kind: 'inline', text: renderGithubActions(opts.language, opts.automationTool) },
+      source: {
+        kind: 'inline',
+        text: renderGithubActions(opts.language, opts.automationTool, opts.baseUrl),
+      },
     });
   } else if (ciCd === 'gitlab') {
     files.push({
       path: '.gitlab-ci.yml',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
-      source: { kind: 'inline', text: renderGitlabCi(opts.language, opts.automationTool) },
+      source: {
+        kind: 'inline',
+        text: renderGitlabCi(opts.language, opts.automationTool, opts.baseUrl),
+      },
     });
   } else if (ciCd === 'jenkins') {
     files.push({
       path: 'Jenkinsfile',
       writePolicy: 'create-if-absent',
       provenance: { origin: 'project' },
-      source: { kind: 'inline', text: renderJenkinsfile(opts.language, opts.automationTool) },
+      source: {
+        kind: 'inline',
+        text: renderJenkinsfile(opts.language, opts.automationTool, opts.baseUrl),
+      },
     });
   } else if (ciCd === 'teamcity') {
     files.push({
@@ -351,7 +367,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       provenance: { origin: 'project' },
       source: {
         kind: 'inline',
-        text: renderTeamcityKotlinDsl(opts.language, opts.automationTool),
+        text: renderTeamcityKotlinDsl(opts.language, opts.automationTool, opts.baseUrl),
       },
     });
     files.push({
