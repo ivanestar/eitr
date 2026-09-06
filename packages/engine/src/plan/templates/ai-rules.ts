@@ -20,7 +20,7 @@ You are modifying a ${toolName} CPOM framework setup.
 ## Constraints & Limits:
 - **NO NEW FILES**: You must NOT create >0 new test files, folders, or Page Objects.
 - **MODIFY ONLY**: You are permitted to modify exactly these files:
-  - \`${configFile}\`, \`.env.example\`, \`.env\`, \`package.json\`.
+  - \`${configFile}\`, \`.env\`, \`package.json\`.
   - Base components under \`components/primitives/*\`.
 
 ## Verification Steps:

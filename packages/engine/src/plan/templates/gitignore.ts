@@ -1,4 +1,4 @@
-// .gitignore for the generated project. Ignores install/run outputs, temporary files, and .scaffold/ metadata.
+﻿// .gitignore for the generated project. Ignores install/run outputs, temporary files, and .scaffold/ metadata.
 export function renderGitignore(tool: string = 'playwright', language?: string): string {
   if (language === 'csharp') {
     return `bin/
@@ -17,7 +17,6 @@ artifacts/site-map/screenshots/
 .tms-cache/
 .env
 .env.*
-!.env.example
 auth.json
 .DS_Store
 Thumbs.db
@@ -41,7 +40,6 @@ artifacts/site-map/screenshots/
 .tms-cache/
 .env
 .env.*
-!.env.example
 auth.json
 .DS_Store
 Thumbs.db
@@ -65,7 +63,6 @@ artifacts/site-map/screenshots/
 .tms-cache/
 .env
 .env.*
-!.env.example
 cypress.env.json
 cypress.env.*.json
 auth.json
@@ -91,7 +88,6 @@ artifacts/site-map/screenshots/
 .tms-cache/
 .env
 .env.*
-!.env.example
 auth.json
 *.tsbuildinfo
 .DS_Store
@@ -114,7 +110,6 @@ artifacts/site-map/screenshots/
 .tms-cache/
 .env
 .env.*
-!.env.example
 auth.json
 *.tsbuildinfo
 .DS_Store

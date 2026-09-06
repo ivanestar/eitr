@@ -6,13 +6,13 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
 
-EITR generates a complete, working Playwright test framework from your app's URL and a short questionnaire – TypeScript, Python, C#, or Java.
+EITR scaffolds a Playwright test framework from your app's URL and a short questionnaire – TypeScript, Python, C#, or Java.
 
 ---
 
 ## Why EITR
 
-Standing up E2E automation on a new project usually means a week of boilerplate before you write a real test: project structure, page objects, CI config, login/session handling, test data, TMS wiring. EITR generates all of that from your app's URL and a short questionnaire, in one pass, so you start from a working framework instead of an empty repo.
+Standing up E2E automation on a new project usually means a week of boilerplate before you write a real test: project structure, a Page Object base layer, CI config, login/session handling, test data, TMS wiring. EITR scaffolds all of that from your app's URL and a short questionnaire, in one pass, so you start from a working framework instead of an empty repo.
 
 The generated code doesn't depend on EITR at runtime – it's plain Playwright, plain CI config. Delete EITR right after scaffolding and nothing breaks.
 

@@ -7,7 +7,9 @@ import {
   renderCsharpApiClient,
   renderCsharpExampleTest,
   renderCsharpProjectReadme,
+  renderCsharpEnvSetup,
 } from '../../templates/csharp/project.js';
+import { renderEnvExample } from '../../templates/env-example.js';
 
 export class CsharpPlaywrightAdapter implements ToolAdapter {
   readonly id = 'playwright';
@@ -34,6 +36,21 @@ export class CsharpPlaywrightAdapter implements ToolAdapter {
         writePolicy: 'create-if-absent',
         provenance: { origin: 'seed' },
         source: { kind: 'inline', text: renderCsharpApiClient() },
+      },
+      {
+        path: '.env',
+        writePolicy: 'create-if-absent',
+        provenance: { origin: 'project' },
+        source: {
+          kind: 'inline',
+          text: renderEnvExample(baseUrl, opts.taskTracker, opts.tmsProviders),
+        },
+      },
+      {
+        path: 'EnvSetup.cs',
+        writePolicy: 'create-if-absent',
+        provenance: { origin: 'seed' },
+        source: { kind: 'inline', text: renderCsharpEnvSetup() },
       },
       {
         path: 'tests/SmokeTest.cs',

@@ -92,19 +92,17 @@ export async function resolveTargetUrl(
     } catch {}
   }
 
-  // 3. Check .env / .env.example
-  for (const envName of ['.env', '.env.example']) {
-    try {
-      const envPath = path.join(cwd, envName);
-      const content = await fs.readFile(envPath, 'utf8');
-      const match = content.match(
-        /^\s*(?:E2E_BASE_URL|BASE_URL)\s*=\s*['"]?(https?:\/\/[^\s'"#]+)['"]?/m,
-      );
-      if (match && match[1]) {
-        return { url: match[1].trim(), source: envName };
-      }
-    } catch {}
-  }
+  // 3. Check .env
+  try {
+    const envPath = path.join(cwd, '.env');
+    const content = await fs.readFile(envPath, 'utf8');
+    const match = content.match(
+      /^\s*(?:E2E_BASE_URL|BASE_URL)\s*=\s*['"]?(https?:\/\/[^\s'"#]+)['"]?/m,
+    );
+    if (match && match[1]) {
+      return { url: match[1].trim(), source: '.env' };
+    }
+  } catch {}
 
   return undefined;
 }

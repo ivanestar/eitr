@@ -1,6 +1,31 @@
-// CI/CD templates for E2E workflows. create-if-absent.
+﻿// CI/CD templates for E2E workflows. create-if-absent.
 
-export function renderGithubActions(language?: string, automationTool?: string): string {
+// A literal single quote inside a YAML single-quoted scalar is escaped by doubling it (''), not
+// by a backslash - YAML has no backslash-escape mechanism inside single-quoted strings. Applies
+// to every baseUrl interpolated into GitHub Actions / GitLab CI YAML below.
+function yamlSingleQuoted(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+// Job-level env, inserted after every `runs-on: ubuntu-latest` line: the same 6 auth-related
+// variable names /auth-setup writes to .env locally are read here from GitHub Actions secrets -
+// unset secrets simply resolve to an empty string, harmless for jobs that never touch auth.
+function githubAuthEnvBlock(baseUrl?: string): string {
+  return `    env:
+      E2E_BASE_URL: '${yamlSingleQuoted(baseUrl ?? 'http://localhost:3000')}'
+      E2E_USERNAME: \${{ secrets.E2E_USERNAME }}
+      E2E_PASSWORD: \${{ secrets.E2E_PASSWORD }}
+      AUTH_TOKEN: \${{ secrets.AUTH_TOKEN }}
+      E2E_API_TOKEN: \${{ secrets.E2E_API_TOKEN }}
+      TOTP_SECRET: \${{ secrets.TOTP_SECRET }}
+`;
+}
+
+export function renderGithubActions(
+  language?: string,
+  automationTool?: string,
+  baseUrl?: string,
+): string {
   if (language === 'python') {
     return `name: E2E Tests (pytest + Playwright)
 on:
@@ -17,7 +42,7 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    strategy:
+${githubAuthEnvBlock(baseUrl)}    strategy:
       fail-fast: false
       matrix:
         shardIndex: [1, 2, 3, 4]
@@ -72,7 +97,7 @@ jobs:
   cpom-lint:
     timeout-minutes: 10
     runs-on: ubuntu-latest
-    steps:
+${githubAuthEnvBlock(baseUrl)}    steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-dotnet@v6
       with:
@@ -82,7 +107,7 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    strategy:
+${githubAuthEnvBlock(baseUrl)}    strategy:
       fail-fast: false
       matrix:
         shard: [0, 1, 2, 3]
@@ -170,7 +195,7 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    strategy:
+${githubAuthEnvBlock(baseUrl)}    strategy:
       fail-fast: false
       matrix:
         shard: [0, 1, 2, 3]
@@ -247,7 +272,7 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    strategy:
+${githubAuthEnvBlock(baseUrl)}    strategy:
       fail-fast: false
       matrix:
         shard: [0, 1, 2, 3]
@@ -330,7 +355,7 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    steps:
+${githubAuthEnvBlock(baseUrl)}    steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-node@v7
       with:
@@ -368,7 +393,7 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    strategy:
+${githubAuthEnvBlock(baseUrl)}    strategy:
       fail-fast: false
       matrix:
         shardIndex: [1, 2, 3, 4]
@@ -401,7 +426,7 @@ jobs:
     needs: [test]
     timeout-minutes: 10
     runs-on: ubuntu-latest
-    steps:
+${githubAuthEnvBlock(baseUrl)}    steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-node@v7
       with:
@@ -426,12 +451,28 @@ jobs:
 `;
 }
 
-export function renderGitlabCi(language?: string, automationTool?: string): string {
+// GitLab auto-injects CI/CD Variables (Settings > CI/CD > Variables) into every job's shell
+// environment with zero YAML wiring needed - unlike GitHub Actions, there is no per-job `env:`
+// key to populate. Only E2E_BASE_URL (not sensitive) is worth baking into the YAML directly;
+// E2E_USERNAME/E2E_PASSWORD/AUTH_TOKEN/E2E_API_TOKEN/TOTP_SECRET just need to exist as masked
+// CI/CD Variables in project settings - they show up in script: automatically once they do.
+function gitlabAuthVariablesBlock(baseUrl?: string): string {
+  return `variables:
+  E2E_BASE_URL: '${yamlSingleQuoted(baseUrl ?? 'http://localhost:3000')}'
+
+`;
+}
+
+export function renderGitlabCi(
+  language?: string,
+  automationTool?: string,
+  baseUrl?: string,
+): string {
   if (language === 'python') {
     return `stages:
   - test
 
-workflow:
+${gitlabAuthVariablesBlock(baseUrl)}workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
       when: never
@@ -462,7 +503,7 @@ pytest-playwright-tests:
     return `stages:
   - test
 
-workflow:
+${gitlabAuthVariablesBlock(baseUrl)}workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
       when: never
@@ -510,7 +551,7 @@ csharp-cpom-lint:
     return `stages:
   - test
 
-workflow:
+${gitlabAuthVariablesBlock(baseUrl)}workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
       when: never
@@ -539,7 +580,7 @@ java-playwright-tests:
     return `stages:
   - test
 
-workflow:
+${gitlabAuthVariablesBlock(baseUrl)}workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
       when: never
@@ -569,7 +610,7 @@ cypress-tests:
   - test
   - report
 
-workflow:
+${gitlabAuthVariablesBlock(baseUrl)}workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
       when: never
@@ -621,11 +662,35 @@ merge-playwright-reports:
 `;
 }
 
-export function renderJenkinsfile(language?: string, automationTool?: string): string {
+// Jenkins' declarative `credentials()` binding throws a hard pipeline error if the named
+// credential does not exist yet in the Credentials store - unlike GitHub/GitLab, an unset
+// binding is not tolerated. Auto-wiring all 5 auth variables unconditionally would break every
+// Jenkins build for the common case (an app that needs none of them) the moment this file is
+// generated, before the user has created any credential. Only E2E_BASE_URL (a plain, non-secret
+// string) is baked in here; the rest are added by hand, one `environment {}` line per credential,
+// only once the matching Jenkins Credential actually exists - the /auth-setup skill's Jenkins
+// flow gives the exact snippet to paste in at that point.
+function jenkinsAuthEnvironmentBlock(baseUrl?: string): string {
+  // Groovy single-quoted strings escape a literal quote with a backslash, unlike YAML above.
+  const escaped = (baseUrl ?? 'http://localhost:3000').replace(/'/g, "\\'");
+  return `    environment {
+        E2E_BASE_URL = '${escaped}'
+        // Add one line per credential you actually create in Jenkins > Credentials, e.g.:
+        // E2E_USERNAME = credentials('E2E_USERNAME')
+        // E2E_PASSWORD = credentials('E2E_PASSWORD')
+    }
+`;
+}
+
+export function renderJenkinsfile(
+  language?: string,
+  automationTool?: string,
+  baseUrl?: string,
+): string {
   if (language === 'python') {
     return `pipeline {
     agent none
-    stages {
+${jenkinsAuthEnvironmentBlock(baseUrl)}    stages {
         stage('Sharded Tests') {
             matrix {
                 axes {
@@ -678,7 +743,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
     agent {
         docker { image 'mcr.microsoft.com/dotnet/sdk:8.0' }
     }
-    stages {
+${jenkinsAuthEnvironmentBlock(baseUrl)}    stages {
         stage('Build') {
             steps {
                 sh 'dotnet build'
@@ -736,7 +801,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
     agent {
         docker { image 'eclipse-temurin:17-jdk-jammy' }
     }
-    stages {
+${jenkinsAuthEnvironmentBlock(baseUrl)}    stages {
         stage('Install Playwright Browsers') {
             steps {
                 sh '${installCmd}'
@@ -767,7 +832,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
     agent {
         docker { image 'cypress/included:13.6.0' }
     }
-    stages {
+${jenkinsAuthEnvironmentBlock(baseUrl)}    stages {
         stage('Install') {
             steps {
                 sh 'npm ci'
@@ -795,7 +860,7 @@ export function renderJenkinsfile(language?: string, automationTool?: string): s
 
   return `pipeline {
     agent none
-    stages {
+${jenkinsAuthEnvironmentBlock(baseUrl)}    stages {
         stage('Sharded Tests') {
             matrix {
                 axes {
@@ -901,14 +966,14 @@ Add the following Build Steps to your configuration:
   \`\`\`bash
   pytest --splits 4 --group %SHARD% --junitxml=test-results/junit-results.xml
   \`\`\`
-  (\`%SHARD%\` only resolves if you add the Matrix Build feature below — for a single-agent run
+  (\`%SHARD%\` only resolves if you add the Matrix Build feature below – for a single-agent run
   without sharding, drop \`--splits 4 --group %SHARD%\` entirely.)
 
 ## 2. Shard across parallel agents (optional, recommended for larger suites)
 
 The generated \`.teamcity/settings.kts\` (Kotlin DSL, generated alongside this guide) already wires
 up a 4-way \`Matrix Build\` feature for you. To do it manually here instead: go to **Build Features**,
-add **Matrix Build**, and add a parameter named \`SHARD\` with values \`1\`, \`2\`, \`3\`, \`4\` — TeamCity
+add **Matrix Build**, and add a parameter named \`SHARD\` with values \`1\`, \`2\`, \`3\`, \`4\` – TeamCity
 then runs 4 parallel build cells, each with its own \`%SHARD%\` value substituted into the script
 above.
 
@@ -1081,7 +1146,7 @@ Add the following Build Steps to your configuration:
   \`\`\`bash
   npx playwright test --project=chromium --shard=%SHARD%/4 --reporter=blob
   \`\`\`
-  (\`%SHARD%\` only resolves if you add the Matrix Build feature below — for a single-agent run
+  (\`%SHARD%\` only resolves if you add the Matrix Build feature below – for a single-agent run
   without sharding, use \`npm test\` instead.)
 
 ## 2. Shard across parallel agents (optional, recommended for larger suites)
@@ -1091,7 +1156,7 @@ up a 4-way \`Matrix Build\` feature plus a downstream \`Merge Playwright Reports
 combines all 4 shards via \`playwright merge-reports\` into one HTML + JUnit report. To do the split
 manually here instead: go to **Build Features**, add **Matrix Build**, and add a parameter named
 \`SHARD\` with values \`1\`, \`2\`, \`3\`, \`4\`. You will still need to build the merge step yourself
-(JetBrains' own Matrix Build docs don't publish a ready-made merge-configuration recipe) — the
+(JetBrains' own Matrix Build docs don't publish a ready-made merge-configuration recipe) – the
 Kotlin DSL file is the easier path for this reason.
 
 ## 3. Artifacts Configuration
@@ -1113,7 +1178,7 @@ To show detailed test results and build trends directly on the TeamCity dashboar
 `;
 }
 
-// Companion Maven module for the Kotlin DSL below — required for settings.kts to compile on
+// Companion Maven module for the Kotlin DSL below – required for settings.kts to compile on
 // either the TeamCity server or in an IDE. It resolves the configs-dsl-kotlin-{version} JARs from
 // JetBrains' own Maven repository; a bare .kts file with no pom.xml does not compile.
 export function renderTeamcityDslPom(): string {
@@ -1176,10 +1241,31 @@ export function renderTeamcityDslPom(): string {
 }
 
 // Kotlin DSL Configuration-as-Code, generated alongside the markdown guide above (not replacing
-// it — teams doing manual UI setup still need the guide). Matches JetBrains' own default
+// it – teams doing manual UI setup still need the guide). Matches JetBrains' own default
 // onboarding path for TeamCity projects with Versioned Settings enabled since 2019, formalized
 // further in 2026.1 (auto-conversion of UI-configured projects into this same DSL).
-export function renderTeamcityKotlinDsl(language?: string, automationTool?: string): string {
+// TeamCity params prefixed "env." become real environment variables in every build step with
+// zero further wiring. Only E2E_BASE_URL (not sensitive) is worth baking into the versioned DSL
+// here - E2E_USERNAME/E2E_PASSWORD/AUTH_TOKEN/E2E_API_TOKEN/TOTP_SECRET should be added as
+// Project Parameters in the TeamCity UI instead (checked "Password" type there), never through
+// this generated file: TeamCity's DSL-level `password()` type requires a token minted by the
+// TeamCity server itself (Project Settings > ... > "Edit as code"), which this generator has no
+// way to produce, and hardcoding a real secret into checked-in code would defeat the point.
+function teamcityAuthParamsBlock(baseUrl?: string): string {
+  // Kotlin double-quoted strings escape a literal quote with a backslash.
+  const escaped = (baseUrl ?? 'http://localhost:3000').replace(/"/g, '\\"');
+  return `
+    params {
+        param("env.E2E_BASE_URL", "${escaped}")
+    }
+`;
+}
+
+export function renderTeamcityKotlinDsl(
+  language?: string,
+  automationTool?: string,
+  baseUrl?: string,
+): string {
   const header = `import jetbrains.buildServer.configs.kotlin.*
 import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
@@ -1211,7 +1297,7 @@ object E2ETests : BuildType({
     vcs {
         root(DslContext.settingsRoot)
     }
-
+${teamcityAuthParamsBlock(baseUrl)}
     steps {
 ${stepsBlock}
     }
@@ -1256,7 +1342,7 @@ object E2ETests : BuildType({
     vcs {
         root(DslContext.settingsRoot)
     }
-
+${teamcityAuthParamsBlock(baseUrl)}
     steps {
         script {
             name = "Install dependencies"
@@ -1364,7 +1450,7 @@ object E2ETests : BuildType({
     vcs {
         root(DslContext.settingsRoot)
     }
-
+${teamcityAuthParamsBlock(baseUrl)}
     steps {
         script {
             name = "Install dependencies"

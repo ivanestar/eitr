@@ -1,4 +1,6 @@
-// .env.example template for the generated project. create-if-absent.
+// .env template for the generated project — real file, gitignored, create-if-absent.
+// Shared across every language (TypeScript, Cypress, Python, C#, Java); native dotenv loading
+// per language reads exactly this file, so variable names must never drift by stack.
 const PROVIDER_ENV_STANZA: Record<string, string> = {
   'azure-devops': `# --- Azure DevOps (Work Items / Test Plans) ---
 # Org/project come from your ADO URL: https://dev.azure.com/<ORG>/<PROJECT>
@@ -64,17 +66,32 @@ export function renderEnvExample(
           .join('\n')}`
       : '';
 
-  return `# The base URL of the application under test
+  return `# ==============================================================================
+# App under test
+# ==============================================================================
 E2E_BASE_URL=${baseUrl}
 
-# (Optional) Authentication credentials
+# ==============================================================================
+# Authentication — filled in by /auth-setup, or by hand. Used locally and,
+# once pushed to your CI provider's secrets, in CI too.
+# ==============================================================================
 # E2E_USERNAME=
 # E2E_PASSWORD=
 
-# (Optional) TOTP secret for MFA/SSO login flows in auth.setup.ts
+# (Optional) TOTP secret for MFA/SSO login flows in the auth-setup fixture.
 # TOTP_SECRET=
 
-# (Optional) Pre-issued API token — CI fast-path that skips interactive login in auth.setup.ts
+# (Optional) Pre-issued API/session token — CI fast-path that skips interactive login.
 # E2E_API_TOKEN=
-${tmsSection}`;
+# AUTH_TOKEN=
+${tmsSection}
+# ==============================================================================
+# AI-model provider tokens — NOT used by anything generated in this project.
+# Only needed if your own AI-assistant billing is pay-as-you-go rather than a
+# subscription, or if you write your own token-based evals against these APIs.
+# ==============================================================================
+# ANTHROPIC_API_KEY=
+# OPENAI_API_KEY=
+# GEMINI_API_KEY=
+`;
 }

@@ -169,7 +169,7 @@ export class CypressAdapter implements ToolAdapter {
         source: { kind: 'inline', text: renderCypressExampleTest() },
       },
       {
-        path: '.env.example',
+        path: '.env',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'project' },
         source: {
