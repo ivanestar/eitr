@@ -14,11 +14,8 @@ Generated Test Repository
 │   ├── tms-validator         -- TMS requirements quality gate, atomicity check & GIGO guard
 │   ├── sdet-architect        -- Architecture governance, DI fixtures & CPOM validation
 │   ├── pom-engineer          -- DOM inspection, Page Object generation & live-DOM liveness checking
-│   ├── test-automator        -- Linear test synthesis from TMS, dynamic TDM & fast-path API
 │   ├── test-data-engineer    -- Structured/bulk datasets & minimal-valid file fixtures on request
-│   ├── assertion-auditor     -- Web-first anti-fake-green guard & mutation verification
-│   ├── trace-debugger        -- Playwright trace analysis & Two-Strike self-healing
-│   └── review-arbiter        -- Independent Review Arbiter, adjudicates multi-agent findings (Protocol 123)
+│   └── assertion-auditor     -- Web-first anti-fake-green guard & mutation verification
 │
 ├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/skills/, .windsurf/workflows/, .codex/skills/, .github/)
 │   ├── /auth-setup           -- Session capture (auth.json) and state re-use with SSO fallback

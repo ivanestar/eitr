@@ -115,26 +115,24 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(copilotOnly.map((f) => f.path).sort()).toEqual(['.mcp.json', '.vscode/mcp.json']);
   });
 
-  it('generates 8 specialized SDET agents for all supported assistants (Antigravity, Claude, Cursor, Windsurf, Codex, Copilot)', () => {
+  it('generates 6 specialized SDET agents for all supported assistants (Antigravity, Claude, Cursor, Windsurf, Codex, Copilot)', () => {
     const files = planAiAgents(['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot']);
-    expect(files.length).toBe(48); // 8 agents * 6 assistants
+    expect(files.length).toBe(36); // 6 agents * 6 assistants
     const paths = files.map((f) => f.path);
 
     expect(paths).toContain('.agents/agents/sdet-orchestrator/agent.md');
     expect(paths).toContain('.agents/agents/tms-validator/agent.md');
     expect(paths).toContain('.agents/agents/sdet-architect/agent.md');
     expect(paths).toContain('.agents/agents/pom-engineer/agent.md');
-    expect(paths).toContain('.agents/agents/test-automator/agent.md');
+    expect(paths).toContain('.agents/agents/test-data-engineer/agent.md');
     expect(paths).toContain('.agents/agents/assertion-auditor/agent.md');
-    expect(paths).toContain('.agents/agents/trace-debugger/agent.md');
-    expect(paths).toContain('.agents/agents/review-arbiter/agent.md');
 
     expect(paths).toContain('.claude/agents/sdet-orchestrator.md');
     expect(paths).toContain('.claude/agents/tms-validator.md');
     expect(paths).toContain('.cursor/skills/tms-validator/SKILL.md');
     expect(paths).toContain('.cursor/skills/pom-engineer/SKILL.md');
     expect(paths).toContain('.windsurf/rules/agent-tms-validator.md');
-    expect(paths).toContain('.windsurf/rules/agent-trace-debugger.md');
+    expect(paths).toContain('.windsurf/rules/agent-assertion-auditor.md');
     expect(paths).toContain('.codex/agents/tms-validator.toml');
     expect(paths).toContain('.github/agents/tms-validator.agent.md');
 
@@ -184,9 +182,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(pomEngineer?.source.text).toContain('test-conditions.json');
     expect(pomEngineer?.source.text).not.toContain('test:sanity');
 
-    const automator = files.find((f) => f.path === '.agents/agents/test-automator/agent.md');
-    expect(automator?.source.text).toContain('Dynamic Test Data Management');
-    expect(automator?.source.text).toContain('test.step');
+    const testDataEngineer = files.find(
+      (f) => f.path === '.agents/agents/test-data-engineer/agent.md',
+    );
+    expect(testDataEngineer?.source.text).toContain('Structured/bulk datasets');
+    expect(testDataEngineer?.source.text).toContain('fixtures/synthetic-data/');
 
     const auditor = files.find((f) => f.path === '.agents/agents/assertion-auditor/agent.md');
     expect(auditor?.source.text).toContain('Anti-Fake-Green Check');
@@ -198,13 +198,6 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(auditor?.source.text).toContain('floor, not the ceiling');
     expect(auditor?.source.text).toContain('Mutation Analysis Protocol');
     expect(auditor?.source.text).toContain('Zero-Emoji Compliance');
-
-    const traceDebugger = files.find((f) => f.path === '.agents/agents/trace-debugger/agent.md');
-    expect(traceDebugger?.source.text).toContain('4-Point Trace Triage');
-    expect(traceDebugger?.source.text).toContain('Fail-Fast Real Bug Detection');
-    expect(traceDebugger?.source.text).toContain('Isolated Test Execution');
-    expect(traceDebugger?.source.text).toContain('Two-Strike Rule');
-    expect(traceDebugger?.source.text).toContain('[FLAKY / TIMING]');
   });
 
   it('generates one file per operational skill per assistant', () => {
@@ -356,7 +349,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
       'never automatically to `critical`, which stays reserved',
     );
     expect(mapSkill?.source.text).toContain('Confirmed core purpose: <corePurpose.selected.value>');
-    expect(mapSkill?.source.text).toContain('Number each route block');
+    expect(mapSkill?.source.text).toContain('Number each remaining route block');
     expect(mapSkill?.source.text).toContain('high: 1, 4, 5-8, 15; critical: 2-3, 9');
     expect(mapSkill?.source.text).toContain('is a convenience, not the only way to reply');
 
@@ -596,7 +589,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).not.toContain('.vscode/mcp.json');
     expect(paths).toContain('.agents/agents/sdet-orchestrator/agent.md');
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
-    expect(paths).toContain('.cursor/skills/test-automator/SKILL.md');
+    expect(paths).toContain('.cursor/skills/pom-engineer/SKILL.md');
     expect(paths).toContain('.claude/agents/assertion-auditor.md');
   });
 

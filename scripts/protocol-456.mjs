@@ -63,7 +63,7 @@ const PHASES = [
   {
     phase: 4,
     name: 'Single-Reviewer Risk Audit',
-    agents: ['code-reviewer', 'security-auditor', 'flake-sentinel', 'framework-auditor'],
+    agents: ['code-reviewer', 'framework-auditor'],
     mandatory: true,
     description:
       'Exactly 1 specialized domain reviewer based on risk shape. Zero arbiters. Structured triage tags: [CONFIRMED_IN_SCOPE], [DISMISSED_OUT_OF_SCOPE], [DEFERRED_TO_TODO]. Mandatory even in fast/track mode.',
@@ -127,8 +127,6 @@ Guidelines:
 
   'single-reviewer': SINGLE_REVIEWER_PROMPT,
   'code-reviewer': SINGLE_REVIEWER_PROMPT,
-  'security-auditor': SINGLE_REVIEWER_PROMPT,
-  'flake-sentinel': SINGLE_REVIEWER_PROMPT,
   'framework-auditor': SINGLE_REVIEWER_PROMPT,
 });
 

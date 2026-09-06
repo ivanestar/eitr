@@ -31,7 +31,7 @@ const PHASES = [
   {
     phase: 1,
     name: 'Research & Diagnosis (Explore, Web Recon & ISTQB Grounding)',
-    agents: ['researcher', 'web-researcher'],
+    agents: ['general-purpose', 'web-researcher'],
     mandatory: true,
     description:
       'Codebase impact radius mapping + MANDATORY dual-track web research (Technical Upstream + ISTQB Syllabi).',

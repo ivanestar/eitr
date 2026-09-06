@@ -260,8 +260,6 @@ function lcsDiff(a, b) {
 // exact phrasing.
 const KNOWN_LEGITIMATE_RESIDUE_SECTIONS = [
   { kind: 'agent', slug: 'core-developer', section: '2. surgical edits & fallback rules' },
-  { kind: 'skill', slug: 'project-memory-keeper', section: '3. how to update memory' },
-  { kind: 'skill', slug: 'project-memory-keeper', section: 'bad examples' },
   // axis-closure-matrix and sdd-plan-writer: both files were authored together in
   // one commit (608081a) with deliberately different System-native phrasing for
   // Claude-specific mechanics (the `Artifact` tool, a named `web-researcher`/

@@ -6,14 +6,14 @@ import { gradeSpecLinearity } from '../src/graders/spec-linearity-grader.js';
 import { gradeAssertionAuditorOutput } from '../src/graders/assertion-auditor-grader.js';
 import { gradeTriageOutput } from '../src/graders/triage-grader.js';
 
-describe('All 7 AI Agents Evaluation Benchmark', () => {
+describe('All 7 Core SDET Capabilities Evaluation Benchmark', () => {
   // Agent 1: sdet-orchestrator
   it('1. Evaluates sdet-orchestrator dispatch and routing matrix', () => {
     const simulatedOutput = `
 Parsed intent: Automate ticket JIRA-404.
 Step 1: Dispatch to tms-validator for GIGO requirements quality check.
 Step 2: Run /automate-test workflow and present Markdown proposal for Human Sign-Off.
-Step 3: Dispatch to pom-engineer and test-automator for linear test synthesis.
+Step 3: Dispatch to pom-engineer, then synthesize linear test code directly following /automate-test's own Step 5.
 `;
     const grade = gradeOrchestratorOutput(simulatedOutput, 'automate-test');
     expect(grade.passed).toBe(true);
@@ -82,8 +82,8 @@ export class LoginPage extends Component {
     expect(grade.violations).toEqual([]);
   });
 
-  // Agent 5: test-automator
-  it('5. Evaluates test-automator linear AST test synthesis', () => {
+  // Capability 5: Linear Test Code Synthesis (now /automate-test's own Step 5, not a separate agent)
+  it('5. Evaluates linear AST test synthesis quality', () => {
     const validSpec = `
 import { test } from '@fixtures';
 import { expect } from '@playwright/test';
@@ -120,8 +120,8 @@ Fix Applied: await expect(loginPage.banner.locator).toBeVisible()
     expect(grade.fixedToWebFirst).toBe(true);
   });
 
-  // Agent 7: trace-debugger
-  it('7. Evaluates trace-debugger 4-point triage and fail-fast bug detection', () => {
+  // Capability 7: 4-Point Trace Triage (now /heal-test's own process, not a separate agent)
+  it('7. Evaluates 4-point triage and fail-fast bug detection quality', () => {
     const simulatedTriageOutput = `
 [PRODUCT BUG] Backend service returned HTTP 500 (Database lock timeout).
 Action: File backend defect ticket. Do not alter Page Object locators.

@@ -52,10 +52,8 @@ Protocol 456 handles both general fast-track tasks and pre-scoped plan tracks:
 ### Phase 4: Single-Reviewer Risk Audit
 
 - Spawn exactly ONE specialized domain reviewer matching the task risk shape:
-  - `security-auditor`: For injection, secrets, authentication, or path traversal.
-  - `flake-sentinel`: For timing races, async promises, or flaky test assertions.
   - `framework-auditor`: For cross-language generator templates or multi-stack parity.
-  - `code-reviewer`: For general correctness, architecture, and schema alignment.
+  - `code-reviewer`: For everything else - general correctness, architecture, schema alignment, security/privacy (injection, secrets, path traversal, CVEs), and flake/determinism (timing races, async promises, flaky assertions) are all covered by its own unified review protocol.
 - Zero review-arbiters: A single reviewer produces no multi-agent conflict to adjudicate.
 - The reviewer tags all findings as `[CONFIRMED_IN_SCOPE]` (must fix now), `[DISMISSED_OUT_OF_SCOPE]` (non-blocking observation), or `[DEFERRED_TO_TODO]` (log to `TODO.md`). Mandatory in both full and fast-track modes.
 

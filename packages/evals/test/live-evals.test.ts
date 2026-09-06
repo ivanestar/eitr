@@ -376,7 +376,7 @@ ${goodTicket.steps.map((s, i) => `${i + 1}. Action: ${s.action} -> ${s.expectedR
     { timeout: 120_000 },
     async () => {
       const serverErrorTrace = GOLDEN_TRIAGE_TRACES[0];
-      const systemInstruction = `You are trace-debugger, an expert SDET.
+      const systemInstruction = `You are an expert SDET performing the same 4-point trace triage process /heal-test defines.
 Analyze test failure traces. If console/network logs show HTTP 500 or uncaught backend server errors, classify strictly as [PRODUCT BUG] and do not modify Page Objects.`;
 
       const userPrompt = `
@@ -418,7 +418,7 @@ Network Logs: ${JSON.stringify(serverErrorTrace.networkLogs)}
     { timeout: 120_000 },
     async () => {
       const driftTrace = GOLDEN_TRIAGE_TRACES[1];
-      const systemInstruction = `You are trace-debugger, an expert SDET.
+      const systemInstruction = `You are an expert SDET performing the same 4-point trace triage process /heal-test defines.
 Analyze test failure traces. If an element selector changed or is missing due to UI redesign without backend errors, classify as [SELECTOR DRIFT] and recommend updating Page Object locators.`;
 
       const userPrompt = `
@@ -460,7 +460,7 @@ Console Logs: ${driftTrace.consoleLogs.join('\n')}
     { timeout: 120_000 },
     async () => {
       const timingTrace = GOLDEN_TRIAGE_TRACES[2];
-      const systemInstruction = `You are trace-debugger, an expert SDET.
+      const systemInstruction = `You are an expert SDET performing the same 4-point trace triage process /heal-test defines.
 Analyze test failure traces. If a test failed due to instantaneous unawaited boolean read (isVisibleNow) or timing jitter, classify as [FLAKY / TIMING] and recommend auto-retrying Web-First assertions.`;
 
       const userPrompt = `

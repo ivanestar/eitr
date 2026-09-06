@@ -24,9 +24,7 @@ export function gradeOrchestratorOutput(
 
   if (/tms-validator/i.test(output)) routedToSubagents.push('tms-validator');
   if (/pom-engineer/i.test(output)) routedToSubagents.push('pom-engineer');
-  if (/test-automator/i.test(output)) routedToSubagents.push('test-automator');
   if (/assertion-auditor/i.test(output)) routedToSubagents.push('assertion-auditor');
-  if (/trace-debugger/i.test(output)) routedToSubagents.push('trace-debugger');
   if (/sdet-architect/i.test(output)) routedToSubagents.push('sdet-architect');
 
   let enforcedSharedPrimitivesFirst = true;

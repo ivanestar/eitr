@@ -95,13 +95,7 @@ describe('Protocol 456 Runner & Gates Suite (scripts/protocol-456.mjs)', () => {
     });
 
     it('generates single-reviewer prompt with structured triage tags for all domain reviewer aliases', () => {
-      const reviewerAliases = [
-        'single-reviewer',
-        'code-reviewer',
-        'security-auditor',
-        'flake-sentinel',
-        'framework-auditor',
-      ];
+      const reviewerAliases = ['single-reviewer', 'code-reviewer', 'framework-auditor'];
       for (const alias of reviewerAliases) {
         const { status, stdout } = runCli(['prompt', alias, '--task=Review diff']);
         expect(status).toBe(0);

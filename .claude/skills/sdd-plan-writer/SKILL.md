@@ -23,8 +23,8 @@ it does not go into the plan yet.
 must already be understood well enough to name at least one concrete file it touches. Typical
 inputs: the Core-gap rows of a closed `axis-closure-matrix` report, an already-agreed feature
 description, a named bug with a known repro. If any item still requires "figure out what's
-actually wrong first," send that item through investigation (the `researcher` agent, or your own
-direct reading) BEFORE this skill runs — do not fold an open investigation into a plan task; a
+actually wrong first," send that item through investigation (a general-purpose research subagent,
+or your own direct reading) BEFORE this skill runs — do not fold an open investigation into a plan task; a
 plan task is for **known, scoped** work, not for discovery.
 
 **Good trigger**: `"напиши SDD-план на все 7 гэпов из CI/CD-матрицы"` (a closed, named,

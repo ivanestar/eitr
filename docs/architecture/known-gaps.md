@@ -27,8 +27,10 @@ is for gaps significant enough to shape future architecture, not routine finding
   cross-platform/cross-browser pixel diffs, binary baseline images that don't review cleanly in a
   PR, recurring baseline-approval churn on every legitimate UI change) was judged not worth it for
   this project's actual usage pattern. The dead helper and its unconditional wiring have been
-  removed. This does not affect the unrelated `trace-debugger` "Visual Diff & Screenshot Overlay"
-  capability (comparing pre/post-failure frames during self-healing triage), which stays. Re-open
+  removed. This does not affect the unrelated `/heal-test` "Visual Diff & Screenshot Overlay"
+  capability (comparing pre/post-failure frames during self-healing triage), which stays - it was
+  previously duplicated in a separate `trace-debugger` agent, removed 2026-09-06 as redundant since
+  only `/heal-test` was ever actually invoked on the common path. Re-open
   only on a new, explicit maintainer decision to build this - not on a future audit finding the gap
   again.
 - **Human-readable site-map viewer (`artifacts/site-map/site-map.html`):** deliberately excluded, not

@@ -229,11 +229,11 @@ function buildOperationalSkills(tool: string, language: string): SkillDefinition
     {
       name: 'protocol-123',
       description:
-        'Executes the rigorous 8-phase SDET Protocol 123 for full-lifecycle test automation, baseline establishment, or maintenance with multi-agent review and Arbiter adjudication.',
+        'Executes the rigorous 8-phase SDET Protocol 123 for full-lifecycle test automation, baseline establishment, or maintenance with multi-agent review and adjudicated false-positive filtering.',
       content: `# Skill: Protocol 123 SDET Engineering (/protocol-123, /123)
 
 ## Purpose
-Executes the deterministic, production-grade 8-phase SDET workflow for test automation, Page Object refactoring, and test suite maintenance with multi-agent review and Arbiter false-positive filtering.
+Executes the deterministic, production-grade 8-phase SDET workflow for test automation, Page Object refactoring, and test suite maintenance with multi-agent review and adjudicated false-positive filtering.
 
 ## 8-Phase SDET Lifecycle
 
@@ -252,7 +252,7 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 
 ### Phase 2: Invariants Discovery & Spec Formulation (SDD Automation Proposal)
 1. Step 2a (Invariants Discovery):
-   - 'test-conditions-designer' uncovers critical positive requirements and negative boundary invariants across 9 closed taxonomy categories.
+   - Uncover critical positive requirements and negative boundary invariants directly, across the 9 closed taxonomy categories (\`invalid_input\`, \`boundary\`, \`missing_precondition\`, \`concurrent_conflict\`, \`state_violation\`, \`permission_denied\`, \`external_failure\`, \`data_integrity\`, \`error_path\`), grounded in the TMS case and Phase 1's own DOM reconnaissance - the same investigation, continued, not a separate persona's job.
 2. Step 2b (Defensive Automation Proposal):
    - 'sdet-architect' embeds explicit protections against those invariants into the deterministic Automation Proposal Artifact before writing code:
 \`\`\`markdown
@@ -269,15 +269,15 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 | Step-by-Step Matrix | Step 1..N -> Expected Results -> Web-First Assertions |
 \`\`\`
 
-### Phase 3: Plan Review Swarm & Arbiter Adjudication
-1. Lead Review: 'code-reviewer' (or 'sdet-architect') audits the proposal against CPOM contracts, fixture DI, Web-First assertions, and invariant defenses.
-2. Arbiter Adjudication: 'review-arbiter' validates raw findings against Ground Truth (CONVENTIONS.md), filters false positives/nitpicks, and outputs the official Review Arbiter Verdict Artifact:
+### Phase 3: Plan Review & Adjudication
+1. Lead Review: 'sdet-architect' audits the proposal against CPOM contracts, fixture DI, Web-First assertions, and invariant defenses.
+2. Adjudication: cross-examine every raw finding directly against Ground Truth (CONVENTIONS.md, AGENTS.md, actual DOM and codebase) - no separate arbiter persona needed, this is a mechanical cross-check anyone doing the review can perform. Classify each finding into exactly one of: \`ACCEPTED [CRITICAL / MAJOR]\` (a real defect - CPOM violation, race condition, unawaited promise, missing teardown), \`DISMISSED: FALSE_POSITIVE\` (the code is actually correct), \`DISMISSED: HALLUCINATED_RULE\` (the finding invents a non-existent rule), or \`DISMISSED: OUT_OF_SCOPE\` (nitpick or refactor outside this task). Output the official Review Verdict Artifact:
 \`\`\`markdown
-### Review Arbiter Verdict Artifact
-- Arbiter Status: [APPROVED | REQUIRES_REFINEMENT]
+### Review Verdict Artifact
+- Status: [APPROVED | REQUIRES_REFINEMENT]
 - Findings Processed: N total (M accepted, K dismissed)
 - Actionable Fixes: [Exact Line + Concrete Fix]
-- Dismissed Findings: [Reviewer + Dismissal Reason: FALSE_POSITIVE / HALLUCINATED_RULE / OUT_OF_SCOPE]
+- Dismissed Findings: [Claimed Issue + Dismissal Reason: FALSE_POSITIVE / HALLUCINATED_RULE / OUT_OF_SCOPE]
 \`\`\`
 
 ### Phase 4: Human Intent Lock (Sign-off)
@@ -288,16 +288,16 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 1. Step 5a (Shared Primitives First):
    - 'pom-engineer' synthesizes CPOM Page Objects in \`${sc.language === 'java' ? 'src/main/java/components/pages/' : 'components/pages/'}\` and verifies each one against the live DOM.
 2. Step 5b (Linear Test Synthesis):
-   - 'test-automator' synthesizes strictly linear test code in \`${sc.specPath('{id}', '{feature}')}\`.
+   - Synthesize strictly linear test code directly in \`${sc.specPath('{id}', '{feature}')}\`, following the exact content-fidelity and bracket-grounding process \`/automate-test\`'s own Step 5 defines - never a looser paraphrase.
    - Wrap steps in \`${sc.stepDemarcation('Step N: ...')}\`, inject fixtures via \`${sc.fixturePattern}\`, and register teardown via \`apiClient.registerTeardown()\`.
 
-### Phase 6: Code Review Swarm & Arbiter Adjudication
+### Phase 6: Code Review & Adjudication
 1. Reviewers inspect \`git diff\` for Web-First matchers, zero sleep, and no assertions inside Page Objects.
-2. 'review-arbiter' evaluates diff comments, dismisses bogus warnings, and approves final code changes.
+2. Cross-examine every diff comment directly against Ground Truth the same way Phase 3 does, and approve final code changes once every finding is ACCEPTED-and-resolved or correctly DISMISSED.
 
 ### Phase 7: Two-Strike Self-Healing
 - Execute isolated test: \`${sc.testIsolatedCmd(sc.specPath('XXX', 'feature'))}\`.
-- If failure occurs, 'trace-debugger' performs 4-point trace triage in ${isCypress ? 'screenshots and video' : '\`trace.zip\`'}. Max 2 attempts.
+- If failure occurs, apply \`/heal-test\`'s own 4-Point Trace Triage process directly (network/console first, action timeline + visual diff, locator state, isolated execution) in ${isCypress ? 'screenshots and video' : '\`trace.zip\`'}. Max 2 attempts.
 - If still red after 2 attempts, execute Two-Strike rollback: \`git checkout -- <files>\` and output Two-Strike Triage Report:
 \`\`\`markdown
 ### Two-Strike Triage Report
@@ -322,10 +322,10 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 | Phase 0: Pre-Flight Baseline | 2.1s | 1.2k / 0.3k | $0.002 | PASSED |
 | Phase 1: Recon & Ingestion | 4.5s | 3.5k / 1.1k | $0.007 | PASSED |
 | Phase 2: Spec Formulation (SDD) | 3.8s | 2.8k / 1.8k | $0.008 | PASSED |
-| Phase 3: Plan Review & Arbiter | 6.2s | 8.4k / 2.2k | $0.016 | PASSED |
+| Phase 3: Plan Review & Adjudication | 6.2s | 8.4k / 2.2k | $0.016 | PASSED |
 | Phase 4: Human Intent Lock | User | 0 / 0 | $0.000 | APPROVED |
 | Phase 5: TDD Dual Synthesis | 7.1s | 5.2k / 3.4k | $0.015 | PASSED |
-| Phase 6: Code Review & Arbiter | 5.4s | 7.1k / 1.9k | $0.014 | PASSED |
+| Phase 6: Code Review & Adjudication | 5.4s | 7.1k / 1.9k | $0.014 | PASSED |
 | Phase 7: Self-Healing (Triage) | 0.0s | 0 / 0 | $0.000 | SKIPPED |
 | Phase 8: Quality Gate & Handoff | 3.0s | 2.0k / 0.8k | $0.004 | PASSED |
 | **TOTAL** | **32.1s** | **30.2k / 11.5k** | **~$0.066** | **100% GREEN** |

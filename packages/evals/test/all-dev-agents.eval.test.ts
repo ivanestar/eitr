@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 // Distinct from all-agents.eval.test.ts, which benchmarks the 7-agent roster
 // generated INTO end-user scaffolded projects (via graders/golden datasets).
-// This file instead verifies EITR's OWN 17 development-time agent
+// This file instead verifies EITR's OWN 14 development-time agent
 // definitions under .claude/agents/ - the files that drive Claude Code
 // sessions working on the EITR repository itself (CLAUDE.md Section 13's
 // Tier 2 pipeline, Section 6's model-routing policy).
@@ -20,14 +20,11 @@ const EXPECTED_AGENT_NAMES = [
   'core-developer',
   'doc-sync-enforcer',
   'eval-engineer',
-  'flake-sentinel',
   'framework-auditor',
   'innovation-brainstormer',
   'npm-release-engineer',
   'qa-guard',
-  'researcher',
   'review-arbiter',
-  'security-auditor',
   'skill-reviewer',
   'test-writer',
   'web-researcher',
@@ -56,8 +53,8 @@ function parseFrontmatter(text: string): Record<string, string> {
   return fields;
 }
 
-describe('All 17 EITR Dev-Agent Definitions Evaluation Benchmark (.claude/agents/)', () => {
-  it('AC-1: exactly the 17 expected agent .md files exist, 0 extra, 0 missing', async () => {
+describe('All 14 EITR Dev-Agent Definitions Evaluation Benchmark (.claude/agents/)', () => {
+  it('AC-1: exactly the 14 expected agent .md files exist, 0 extra, 0 missing', async () => {
     const entries = await fs.readdir(agentsDir);
     const actualNames = entries
       .filter((f) => f.endsWith('.md'))

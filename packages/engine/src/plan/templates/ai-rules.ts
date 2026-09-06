@@ -165,10 +165,10 @@ Whenever tasked with automating tickets, establishing baselines, or refactoring 
 - **Phase 0 (Baseline):** Confirm clean project state via \`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`.
 - **Phase 1 (Recon & Web Search):** Inspect live DOM, site-map, and launch Web Search subagents to query official docs for target widgets.
 - **Phase 2 (Spec Formulation):** Output the Automation Proposal Artifact before writing code.
-- **Phase 3 (Plan Review & Arbiter):** Review swarm ('assertion-auditor', 'sdet-architect', 'flake-sentinel') audits plan; 'review-arbiter' filters false positives.
+- **Phase 3 (Plan Review & Adjudication):** Review swarm ('assertion-auditor', 'sdet-architect') audits plan; findings are cross-examined against Ground Truth and classified ACCEPTED/DISMISSED directly - no separate arbiter persona needed.
 - **Phase 4 (Human Intent Lock):** Present Proposal to user; ZERO code until approved.
-- **Phase 5 (TDD Dual Synthesis):** 'pom-engineer' synthesizes CPOM components and verifies each against the live DOM, then 'test-automator' writes linear test code.
-- **Phase 6 (Code Review & Arbiter):** Reviewers inspect diff; 'review-arbiter' evaluates comments and approves.
+- **Phase 5 (TDD Dual Synthesis):** 'pom-engineer' synthesizes CPOM components and verifies each against the live DOM, then linear test code is written directly following \`/automate-test\`'s own Step 5 process.
+- **Phase 6 (Code Review & Adjudication):** Reviewers inspect diff; comments are cross-examined against Ground Truth the same way Phase 3 does, and approved.
 - **Phase 7 (Two-Strike Self-Healing):** Isolated test run (\`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`); max 2 attempts, automatic rollback via \`git checkout -- <files>\` if red.
 - **Phase 8 (Quality Gate & Handoff):** Run linters and the test suite, present Final Handoff Report with Protocol 123 Telemetry Summary table (Phase, Duration, Est. Tokens In/Out, Est. Cost, Status).
 
@@ -657,10 +657,10 @@ ${s8AsyncSync}
   * Phase 0: Baseline Verification
   * Phase 1: Recon & Live Web Search
   * Phase 2: Spec Formulation (Automation Proposal Artifact)
-  * Phase 3: Plan Review Swarm & review-arbiter Adjudication
+  * Phase 3: Plan Review Swarm & Adjudication
   * Phase 4: Human Intent Lock (Approval Gateway)
   * Phase 5: TDD Dual Synthesis (Shared Primitives First -> Linear Test)
-  * Phase 6: Code Review Swarm & review-arbiter Adjudication
+  * Phase 6: Code Review Swarm & Adjudication
   * Phase 7: Two-Strike Self-Healing (4-Point Trace Triage with Visual Diff & Screenshot Overlay + Rollback)
   * Phase 8: Quality Gate & Final Handoff Report with Telemetry Summary table
 

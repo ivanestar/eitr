@@ -100,11 +100,6 @@ describe('Polymorphic AI Operational Skills & AI Agents Parity (AC-5, AC-6, AC-7
       expect(archText).not.toContain('Promise<void>');
       expect(archText).not.toContain('process.env');
 
-      const automator = agents.find((a) => a.path.includes('test-automator'))!;
-      const autoText = (automator.source as { text: string }).text;
-      expect(autoText).not.toContain('await test.step');
-      expect(autoText).not.toContain('Promise.all');
-
       const pom = agents.find((a) => a.path.includes('pom-engineer'))!;
       const pomText = (pom.source as { text: string }).text;
       expect(pomText).toContain('components/pages/');
@@ -120,10 +115,6 @@ describe('Polymorphic AI Operational Skills & AI Agents Parity (AC-5, AC-6, AC-7
       expect(archText).not.toContain('Promise<void>');
       expect(archText).not.toContain('process.env');
 
-      const automator = agents.find((a) => a.path.includes('test-automator'))!;
-      const autoText = (automator.source as { text: string }).text;
-      expect(autoText).not.toContain('await test.step');
-
       const pom = agents.find((a) => a.path.includes('pom-engineer'))!;
       const pomText = (pom.source as { text: string }).text;
       expect(pomText).toContain('Page.cs');
@@ -136,21 +127,9 @@ describe('Polymorphic AI Operational Skills & AI Agents Parity (AC-5, AC-6, AC-7
       expect(archText).not.toContain('Promise<void>');
       expect(archText).not.toContain('process.env');
 
-      const automator = agents.find((a) => a.path.includes('test-automator'))!;
-      const autoText = (automator.source as { text: string }).text;
-      expect(autoText).not.toContain('await test.step');
-
       const pom = agents.find((a) => a.path.includes('pom-engineer'))!;
       const pomText = (pom.source as { text: string }).text;
       expect(pomText).toContain('src/main/java/components/pages/');
-    });
-
-    it('Cypress agents: emit Cypress.Chainable, zero trace.zip, and zero await test.step', () => {
-      const agents = planAiAgents(['antigravity'], 'cypress', 'typescript');
-      const automator = agents.find((a) => a.path.includes('test-automator'))!;
-      const autoText = (automator.source as { text: string }).text;
-      expect(autoText).not.toContain('await test.step');
-      expect(autoText).not.toContain('trace.zip');
     });
   });
 });
