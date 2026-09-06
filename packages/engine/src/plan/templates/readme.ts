@@ -34,7 +34,7 @@ two install commands above manually.
 ### Useful Commands
 
 - **\`npm test\`** — runs all tests in headless mode.
-- **\`npm run test:ui\`** — opens Playwright's interactive UI mode (highly recommended for debugging and writing tests visually!).
+- **\`npm run test:ui\`** — opens Playwright's interactive UI mode for debugging and writing tests visually.
 - **\`npm run report\`** — opens the HTML report of the last run.
 - **\`npm run typecheck\`** — runs strict TypeScript compiler checks.
 - **\`npm run format\`** — formats files using Prettier.
@@ -52,9 +52,9 @@ two install commands above manually.
 
 ## Working with AI Agents & SSO (Authentication)
 
-If your application uses Single Sign-On (SSO) like Auth0, Okta, or Microsoft Entra, providing your base URL to the AI agent might redirect it to the login provider. This means the AI won't see your actual application to determine its tech stack and structure!
+If your application uses Single Sign-On (SSO) like Auth0, Okta, or Microsoft Entra, providing your base URL to the AI agent might redirect it to the login provider. This means the AI won't see your actual application to determine its tech stack and structure.
 
-To fix this, you need to create an authenticated session state (\`storageState\`) that the AI can use to bypass login:
+Fix this by creating an authenticated session state (\`storageState\`) the AI can use to bypass login:
 
 1. **Generate the State File:**
    Run Playwright's code generator, which opens a browser where you can manually log in:
@@ -62,7 +62,7 @@ To fix this, you need to create an authenticated session state (\`storageState\`
    npx playwright codegen --save-storage=auth.json <YOUR_APP_URL>
    \`\`\`
 2. **Log In:** Log into your application in the opened browser window. Once you see the main dashboard of your app, close the browser. A file named \`auth.json\` will be created.
-3. **Instruct the AI:** Tell the AI agent to use this \`auth.json\` file for reconnaissance. It will inject your cookies and tokens into its browser, bypass the SSO redirect, and correctly analyze your real application.
+3. **Instruct the AI:** Tell the AI agent to use this \`auth.json\` file for reconnaissance. It will inject your cookies and tokens into its browser, bypass the SSO redirect, and analyze your real application.
 
 > [!WARNING]
 > \`auth.json\` contains sensitive session tokens. It is automatically ignored by Git (if you use standard Playwright ignores), but **never commit it or share it publicly**.
@@ -99,9 +99,5 @@ Where do the \`<...>\` come from? Only the \`components/\` library uses them (e.
 is known to be a \`Row\`, so \`.cell(...)\` is suggested and typos are caught. You read them, but you rarely
 write them: your Page Objects and tests stay generics-free.
 
-## Scripts
-
-- \`npm test\` — run tests   ·   \`npm run test:ui\` — Playwright UI mode   ·   \`npm run report\` — open the HTML report
-- \`npm run typecheck\` — \`tsc --noEmit\`
 `;
 }
