@@ -48,8 +48,21 @@ describe('tag-release helper functions', () => {
         cwd: repoRoot,
         allowDirty: true,
         allowBranch: false,
+        currentBranch: 'feature/not-main',
       }),
     ).toThrow("Release tags must be created on 'main' branch");
+  });
+
+  it('does not throw the branch error when actually on main', () => {
+    expect(() =>
+      validatePreconditions({
+        targetTag: 'v99.99.99',
+        cwd: repoRoot,
+        allowDirty: true,
+        allowBranch: false,
+        currentBranch: 'main',
+      }),
+    ).not.toThrow();
   });
 
   it('allows simulation via dryRun', () => {
@@ -66,21 +79,39 @@ describe('tag-release helper functions', () => {
 });
 
 describe('tag-release CLI execution', () => {
+  // A version string that will never collide with a real, already-published release tag -
+  // v0.33.0 was used here previously and broke the moment that version actually shipped, since
+  // validatePreconditions' remote-tag-exists check runs unconditionally regardless of
+  // --allow-branch/--allow-dirty.
+  const DRY_RUN_TAG = 'v99.99.98';
+
   it('supports dry-run via CLI with allow-branch and allow-dirty flags', () => {
     const { status, stdout } = runScript([
-      'v0.33.0',
+      DRY_RUN_TAG,
       '--dry-run',
       '--allow-branch',
       '--allow-dirty',
     ]);
     expect(status).toBe(0);
-    expect(stdout).toContain('[tag-release] Target tag: v0.33.0');
+    expect(stdout).toContain(`[tag-release] Target tag: ${DRY_RUN_TAG}`);
     expect(stdout).toContain('[tag-release] [DRY RUN]');
     expect(stdout).toContain('23:00:00');
   });
 
   it('fails safely if invoked on non-main branch without allow-branch', () => {
-    const { status, stderr } = runScript(['v0.33.0', '--dry-run', '--allow-dirty']);
+    const actualBranch = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    }).stdout.trim();
+    // This CLI path has no way to inject a fake branch the way the unit-level
+    // validatePreconditions tests above do - it genuinely reads real git state. The Nightly
+    // workflow checks out 'main' directly, which makes this test's own premise ("we are NOT on
+    // main") false in that one environment; every other context (local dev, PR branches) is
+    // unaffected.
+    if (actualBranch === 'main') {
+      return;
+    }
+    const { status, stderr } = runScript([DRY_RUN_TAG, '--dry-run', '--allow-dirty']);
     expect(status).toBe(1);
     expect(stderr).toContain("Release tags must be created on 'main' branch");
   });
