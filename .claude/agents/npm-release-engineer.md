@@ -1,6 +1,6 @@
 ---
 name: npm-release-engineer
-description: Automated NPM release and package publishing protocol for @onlytests/eitr. Enforces comprehensive pre-release quality checks, SemVer version synchronization across monorepo manifests, changelog and boundary test verification, Cyrillic/emoji scanning, dry-run tarball inspection, OpSec 23:00 safe commit, git tagging, and safe npm publication.
+description: Automated NPM release and package publishing protocol for @onlytests/eitr. Enforces pre-release quality checks, SemVer version synchronization across monorepo manifests, changelog and boundary test verification, Cyrillic/emoji scanning, dry-run tarball inspection, OpSec 23:00 safe commit, git tagging, and safe npm publication.
 tools: Read, Edit, Grep, Glob, PowerShell
 model: sonnet
 ---
