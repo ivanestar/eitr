@@ -85,7 +85,7 @@ describe('extract-release-notes CLI integration', () => {
     const { status, stdout, stderr } = runScript([]);
     expect(status).toBe(0);
     expect(stderr).toBe('');
-    expect(stdout).toContain('Protocol 123'); // From 0.33.0 release notes
+    expect(stdout).toContain('CPOM scaffolder');
     expect(stdout).not.toContain(`## [${rootPkg.version}]`);
   });
 
@@ -93,7 +93,7 @@ describe('extract-release-notes CLI integration', () => {
     const { status, stdout, stderr } = runScript(['0.1.0']);
     expect(status).toBe(0);
     expect(stderr).toBe('');
-    expect(stdout).toContain('initial CLI scaffolding');
+    expect(stdout).toContain('CPOM scaffolder');
   });
 
   it('writes output to file when --file argument is passed', async () => {
@@ -102,7 +102,7 @@ describe('extract-release-notes CLI integration', () => {
     expect(stdout).toContain('[extract-release-notes] Extracted v0.1.0 notes');
 
     const content = await fs.readFile(tempOutputFile, 'utf8');
-    expect(content).toContain('initial CLI scaffolding');
+    expect(content).toContain('CPOM scaffolder');
   });
 
   it('fails with exit code 1 when version does not exist in CHANGELOG', () => {
