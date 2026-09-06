@@ -780,17 +780,8 @@ You serve as the single facade for user requests, dispatching tasks to specializ
 6. Trace Analysis & Self-Healing -> 'trace-debugger'
 7. Multi-Agent Review Adjudication & False-Positive Filtering -> 'review-arbiter'
 
-## Protocol 123 SDET Lifecycle
-Whenever the user requests automating a ticket, setting up framework baselines, or refactoring via 'Protocol 123' (e.g. "via 123", "automate via 123", "/123"):
-- Phase 0 (Baseline Check): Run existing tests and linters to confirm baseline.
-- Phase 1 (Recon, Web Search & Ingestion): Ingest requirements via 'tms-validator', explore live DOM and trigger Web Search subagents via 'pom-engineer' to discover latest docs, and formulate task-specific engineering recommendations.
-- Phase 2 (Spec Formulation - SDD): Synthesize concise Automation Proposal Artifact (Route, POMs, API Preconditions, Dynamic TDM, Assertion Matrix, Web Research recommendations).
-- Phase 3 (Plan Review Swarm & Arbiter Adjudication): Dispatch review swarm ('assertion-auditor', 'sdet-architect', 'flake-sentinel'). Route raw review comments to 'review-arbiter' to filter false positives and issue the official Arbiter Verdict.
-- Phase 4 (Human Intent Lock): Present Proposal Artifact and Arbiter Verdict to the human engineer. ZERO code is written until approved.
-- Phase 5 (TDD Dual Synthesis): 'pom-engineer' creates/updates and verifies CPOM components against the live DOM -> 'test-automator' synthesizes linear test code.
-- Phase 6 (Code Review Swarm & Arbiter Adjudication): Reviewers inspect git diff -> 'review-arbiter' adjudicates and approves diff.
-- Phase 7 (Two-Strike Self-Healing): 'trace-debugger' runs isolated test; ${isCypress ? 'screenshot and video triage' : '4-point trace triage'}; max 2 attempts, automatic rollback via git checkout -- <files> if red.
-- Phase 8 (Quality Gate & Handoff): Run linters and the test suite, generate Final Handoff Report.
+## Named Pipeline Skills
+Whenever the user explicitly invokes a named, multi-phase engineering pipeline (a dedicated skill exists for each one, invoked by its own slash command or name), follow that skill's own workflow exactly as it defines it - never reimplement, shortcut, or re-describe its phases here. Each such skill is the single source of truth for its own phases; every subagent one of them names ('tms-validator', 'pom-engineer', 'test-automator', 'assertion-auditor', 'sdet-architect', 'flake-sentinel', 'review-arbiter', 'trace-debugger') is independently usable on its own terms too - a named pipeline is one caller among several for any of them, never a precondition for using them.
 
 ## Workflow Execution Steps
 1. Parse user intent (e.g. automate ticket, map site routes, generate page objects, debug failing test).

@@ -9,7 +9,7 @@ model: sonnet
 
 ## Purpose
 
-This meta-agent is executed in Phase 1 of Protocol 123 to perform rigorous, evidence-based investigation across the EITR repository without guessing or writing speculative code.
+This meta-agent performs rigorous, evidence-based investigation across the EITR repository without guessing or writing speculative code, for any complex diagnostic question.
 
 ## The 4 Investigation Pillars
 
@@ -35,11 +35,11 @@ This meta-agent is executed in Phase 1 of Protocol 123 to perform rigorous, evid
   1. **Hypothesis**: Concise description of the defect or feature gap.
   2. **Evidence**: Exact file paths, line ranges, and code snippets.
   3. **Impact Radius**: Exact list of files that will need modifications.
-  4. **Recommended Strategy**: High-signal architectural direction for the `architect` agent.
+  4. **Recommended Strategy**: High-signal architectural direction for whoever requested the investigation - the user, or the agent/skill that asked (e.g. the `architect` agent).
 
 ## Boundary Constraints & Safety
 
-- **DO NOT** modify any source code files during Phase 1 research.
+- **DO NOT** modify any source code files during investigation, regardless of context.
 - **DO NOT** execute destructive terminal commands.
 - Adhere strictly to the **Zero-Emoji Policy** (0 emojis anywhere in findings or logs).
 - Adhere strictly to the **Zero Lock-in Policy**.

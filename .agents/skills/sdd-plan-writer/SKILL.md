@@ -156,9 +156,8 @@ into the findings above."
 
 Present the reviewed plan (as a published document/artifact — plans are published, never a
 markdown file committed into the EITR source tree) to the user with a short summary of what the
-independent review changed, and wait for explicit approval before any task begins execution. This
-mirrors this repo's own Protocol 123 User Approval Gateway phase — do not skip it because the
-review came back clean.
+independent review changed, and wait for explicit approval before any task begins execution - a
+hard gate regardless of context, never skipped just because the review came back clean.
 
 ## Anti-patterns this skill exists to prevent
 
