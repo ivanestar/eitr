@@ -5,7 +5,6 @@ import { DEFAULT_BASE_URL } from '../../types.js';
 import {
   renderPyprojectToml,
   renderPythonConftest,
-  renderPythonEnvExample,
   renderPythonTestBat,
   renderPythonTestSh,
   renderPythonExampleTest,
@@ -13,6 +12,7 @@ import {
   renderPythonApiClient,
   renderPythonProjectReadme,
 } from '../../templates/python/project.js';
+import { renderEnvExample } from '../../templates/env-example.js';
 
 export class PytestAdapter implements ToolAdapter {
   readonly id = 'pytest';
@@ -31,7 +31,7 @@ export class PytestAdapter implements ToolAdapter {
     return [
       cia('pyproject.toml', renderPyprojectToml({ projectName, baseUrl })),
       cia('conftest.py', renderPythonConftest({ baseUrl })),
-      cia('.env.example', renderPythonEnvExample({ baseUrl })),
+      cia('.env', renderEnvExample(baseUrl, opts.taskTracker, opts.tmsProviders)),
       cia('test.bat', renderPythonTestBat()),
       cia('test.sh', renderPythonTestSh()),
       cia('tests/test_smoke.py', renderPythonExampleTest({ baseUrl })),

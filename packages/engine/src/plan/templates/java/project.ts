@@ -30,6 +30,11 @@ export function renderJavaPom(opts: { projectName: string }): string {
             <version>\${playwright.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
             <version>\${junit.version}</version>
@@ -107,6 +112,7 @@ repositories {
 
 dependencies {
     implementation 'com.microsoft.playwright:playwright:1.62.0'
+    implementation 'io.github.cdimascio:dotenv-java:3.2.0'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -136,6 +142,43 @@ tasks.register('playwrightInstall', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.microsoft.playwright.CLI'
     args = ['install', '--with-deps']
+}
+
+// Interactive session capture: gradle playwrightCodegen -Purl=https://example.com/login -Poutput=.auth/user.json
+tasks.register('playwrightCodegen', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.microsoft.playwright.CLI'
+    doFirst {
+        def url = project.findProperty('url') ?: ''
+        def output = project.findProperty('output') ?: '.auth/user.json'
+        args = ['codegen', "--save-storage=\${output}", url]
+    }
+}
+`;
+}
+
+export function renderJavaEnvConfig(): string {
+  return `package shared.utils;
+
+import io.github.cdimascio.dotenv.Dotenv;
+
+/**
+ * Loads .env once per JVM. A real environment variable (e.g. a CI secret) always wins over
+ * the .env file's value - never the other way around.
+ */
+public final class EnvConfig {
+    private static final Dotenv DOTENV = Dotenv.configure().ignoreIfMissing().load();
+
+    private EnvConfig() {}
+
+    public static String get(String key) {
+        return DOTENV.get(key);
+    }
+
+    public static String get(String key, String fallback) {
+        String value = DOTENV.get(key);
+        return value != null ? value : fallback;
+    }
 }
 `;
 }

@@ -59,7 +59,7 @@ export class PlaywrightAdapter implements ToolAdapter {
         },
       },
       {
-        path: '.env.example',
+        path: '.env',
         writePolicy: 'create-if-absent',
         provenance: { origin: 'project' },
         source: {

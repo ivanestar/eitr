@@ -7,7 +7,9 @@ import {
   renderJavaApiClient,
   renderJavaExampleTest,
   renderJavaProjectReadme,
+  renderJavaEnvConfig,
 } from '../../templates/java/project.js';
+import { renderEnvExample } from '../../templates/env-example.js';
 
 export class GradleAdapter implements ToolAdapter {
   readonly id = 'playwright-gradle';
@@ -28,6 +30,21 @@ export class GradleAdapter implements ToolAdapter {
         writePolicy: 'create-if-absent',
         provenance: { origin: 'seed' },
         source: { kind: 'inline', text: renderJavaApiClient() },
+      },
+      {
+        path: 'src/main/java/shared/utils/EnvConfig.java',
+        writePolicy: 'create-if-absent',
+        provenance: { origin: 'seed' },
+        source: { kind: 'inline', text: renderJavaEnvConfig() },
+      },
+      {
+        path: '.env',
+        writePolicy: 'create-if-absent',
+        provenance: { origin: 'project' },
+        source: {
+          kind: 'inline',
+          text: renderEnvExample(baseUrl, opts.taskTracker, opts.tmsProviders),
+        },
       },
       {
         path: 'src/test/java/tests/SmokeTest.java',

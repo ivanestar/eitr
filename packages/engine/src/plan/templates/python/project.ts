@@ -16,8 +16,13 @@ export function renderPythonConftest(_opts?: Pick<PythonProjectOpts, 'baseUrl'>)
 from collections.abc import Iterator
 import pathlib
 import pytest
+from dotenv import load_dotenv
 from playwright.sync_api import BrowserContext, Page
 from shared.utils.api_client import ApiClient
+
+# Loads .env into the process environment once, before anything below reads os.getenv(...).
+# Never overrides a variable already set in the real environment (e.g. CI secrets).
+load_dotenv()
 
 
 @pytest.fixture(scope="session")
@@ -73,6 +78,7 @@ dependencies = [
     "pytest-rerunfailures>=14.0",
     "pytest-split>=0.11.0",
     "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -92,18 +98,6 @@ target-version = "py311"
 
 [tool.setuptools.packages.find]
 include = ["components*", "shared*"]
-`;
-}
-
-/** .env.example */
-export function renderPythonEnvExample(opts: Pick<PythonProjectOpts, 'baseUrl'>): string {
-  return `# Environment configuration — copy to .env and fill in real values.
-# pytest-playwright reads BASE_URL from pyproject.toml [tool.pytest.ini_options].
-# Override here if needed for local development.
-
-BASE_URL=${opts.baseUrl}
-HEADLESS=true
-SLOW_MO=0
 `;
 }
 

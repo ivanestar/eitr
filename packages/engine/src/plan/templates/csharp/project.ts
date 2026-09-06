@@ -21,6 +21,7 @@ export function renderCsharpCsproj(_opts: CsharpProjectOpts): string {
     <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
     <PackageReference Include="NUnit.Analyzers" Version="4.0.1" />
     <PackageReference Include="JunitXml.TestLogger" Version="8.0.0" />
+    <PackageReference Include="DotNetEnv" Version="3.2.0" />
   </ItemGroup>
 
   <!-- Optional, explicit-invoke-only CPOM contract check: \`dotnet build -t:LintCpom\`. Deliberately
@@ -36,6 +37,24 @@ export function renderCsharpCsproj(_opts: CsharpProjectOpts): string {
   </Target>
 
 </Project>
+`;
+}
+
+export function renderCsharpEnvSetup(): string {
+  return `using NUnit.Framework;
+
+// Loads .env into the process environment once, before any test runs. Never overrides a
+// variable already set in the real environment (e.g. CI secrets) - DotNetEnv's default
+// behavior already matches that.
+[SetUpFixture]
+public class EnvSetup
+{
+    [OneTimeSetUp]
+    public void LoadEnv()
+    {
+        DotNetEnv.Env.NoClobber().TraversePath().Load();
+    }
+}
 `;
 }
 
