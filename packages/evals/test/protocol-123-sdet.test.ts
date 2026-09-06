@@ -11,30 +11,26 @@ import {
 describe('AC-1 to AC-6: Protocol 123 SDET Engine, Review Arbiter & Polyglot Frameworks', () => {
   const assistants = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
 
-  it('AC-1: review-arbiter agent is planned for all 6 assistants with Ground Truth & False Positive filtering rules', () => {
-    const agentFiles = planAiAgents(assistants, 'playwright', 'typescript');
-    const arbiterFiles = agentFiles.filter((f) => f.path.includes('review-arbiter'));
+  it('AC-1: protocol-123 skill defines Ground Truth adjudication & False Positive filtering rules directly (no separate review-arbiter agent is generated - folded into the skill itself)', () => {
+    const skillFiles = planAiOperationalSkills(assistants, 'playwright', 'typescript');
+    const p123Files = skillFiles.filter((f) => f.path.includes('protocol-123'));
+    expect(p123Files.length).toBeGreaterThanOrEqual(6);
 
-    expect(arbiterFiles.length).toBeGreaterThanOrEqual(6);
-
-    const sampleArbiter = arbiterFiles[0];
-    expect(sampleArbiter.source.kind).toBe('inline');
-    const content = (sampleArbiter.source as { text: string }).text;
-    expect(content).toContain('review-arbiter');
+    const content = (p123Files[0].source as { text: string }).text;
     expect(content).toContain('FALSE_POSITIVE');
     expect(content).toContain('HALLUCINATED_RULE');
     expect(content).toContain('OUT_OF_SCOPE');
     expect(content).toContain('ACCEPTED');
   });
 
-  it('AC-2: recon-scout/researcher agent includes Live Web Search & task recommendations', () => {
+  it('AC-2: sdet-orchestrator points at named pipeline skills rather than re-describing their phases inline', () => {
     const agentFiles = planAiAgents(assistants, 'playwright', 'typescript');
     const orchestratorFiles = agentFiles.filter((f) => f.path.includes('sdet-orchestrator'));
     expect(orchestratorFiles.length).toBeGreaterThanOrEqual(1);
 
     const sampleContent = (orchestratorFiles[0].source as { text: string }).text;
-    expect(sampleContent).toContain('Web Search');
-    expect(sampleContent).toContain('review-arbiter');
+    expect(sampleContent).toContain('Named Pipeline Skills');
+    expect(sampleContent).toContain('never reimplement, shortcut, or re-describe');
   });
 
   it('AC-3: protocol-123 skill is planned for all 6 assistants with 8-phase SDET lifecycle', () => {
@@ -52,23 +48,23 @@ describe('AC-1 to AC-6: Protocol 123 SDET Engine, Review Arbiter & Polyglot Fram
     expect(text).toContain('Phase 0: Pre-Flight Baseline');
     expect(text).toContain('Phase 1: Recon, Live Web Search & Ingestion');
     expect(text).toContain('Phase 2: Spec Formulation');
-    expect(text).toContain('Phase 3: Plan Review Swarm & Arbiter Adjudication');
+    expect(text).toContain('Phase 3: Plan Review & Adjudication');
     expect(text).toContain('Phase 4: Human Intent Lock');
     expect(text).toContain('Phase 5: TDD Dual Synthesis');
-    expect(text).toContain('Phase 6: Code Review Swarm & Arbiter Adjudication');
+    expect(text).toContain('Phase 6: Code Review & Adjudication');
     expect(text).toContain('Phase 7: Two-Strike Self-Healing');
     expect(text).toContain('Phase 8: Quality Gate & Final Handoff');
   });
 
-  it('AC-4: ai-rules.ts enshrines Protocol 123 SDET standard, Review Swarm + Arbiter, and language/tool awareness', () => {
+  it('AC-4: ai-rules.ts enshrines Protocol 123 SDET standard, Review Swarm + Adjudication, and language/tool awareness', () => {
     const agentsMd = renderAgentsMd('playwright', 'typescript');
     expect(agentsMd).toContain('Protocol 123');
-    expect(agentsMd).toContain('review-arbiter');
+    expect(agentsMd).toContain('Adjudication');
     expect(agentsMd).toContain('Web-First');
 
     const claudeMd = renderClaudeMd('cypress', 'typescript');
     expect(claudeMd).toContain('Protocol 123');
-    expect(claudeMd).toContain('review-arbiter');
+    expect(claudeMd).toContain('Adjudication');
     expect(claudeMd).toContain('Cypress');
 
     const conventionsMd = renderConventionsMd('playwright', 'typescript');
@@ -82,7 +78,7 @@ describe('AC-1 to AC-6: Protocol 123 SDET Engine, Review Arbiter & Polyglot Fram
 
     const text = (p123!.source as { text: string }).text;
     expect(text).toContain('Automation Proposal Artifact');
-    expect(text).toContain('Review Arbiter Verdict Artifact');
+    expect(text).toContain('Review Verdict Artifact');
     expect(text).toContain('Two-Strike Triage Report');
     expect(text).toContain('Final Handoff Report');
   });
