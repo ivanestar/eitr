@@ -30,9 +30,23 @@ export interface ConditionAssignment {
   reason: string;
 }
 
+// Present only on a step belonging to a journey whose layer is 'api' - the observed contract this
+// step is grounded in (from artifacts/site-map/api-contracts.json), never a guessed endpoint.
+// expectedResponseShape maps field name to a type hint ("string (uuid)", "integer", "... or null"),
+// never a concrete instance - the concrete values a step actually checks live in expectedResult.
+export interface ApiStepDetail {
+  method: string;
+  path: string;
+  payload?: Record<string, unknown>;
+  expectedStatus: number;
+  expectedResponseShape?: Record<string, string>;
+  contractGrounded: boolean;
+}
+
 export interface DraftTestCaseStep {
   description: string;
   expectedResult: string;
+  api?: ApiStepDetail;
 }
 
 // Written by the /design-test-cases skill's LLM step, not scripts/compose-journeys.mjs - absent
@@ -47,9 +61,16 @@ export interface DraftTestCase {
 
 export interface JourneyEntry {
   // sha256(routeId + '|' + JSON.stringify(sorted conditionIds)).slice(0, 16) - same convention as
-  // test-conditions.json's own conditionId.
+  // test-conditions.json's own conditionId. Computed per layer group (see JourneysReport below), so
+  // a route's 3 layer-journeys never collide.
   journeyId: string;
   routeId: string;
+  // Which test level every conditionAssignment in THIS journey shares - scripts/compose-journeys.mjs
+  // now groups a route's reviewed conditions into one journey PER distinct testLevel present
+  // (e2e/api/ui-only), instead of one journey for the whole route regardless of level. A route with
+  // conditions at all 3 levels gets up to 3 journeys, each independently drafted and automated -
+  // never one journey silently absorbing every level and only ever producing one test case.
+  layer: TestLevel;
   conditionAssignments: ConditionAssignment[];
   // Absent until the /design-test-cases skill's LLM step drafts it.
   testCase?: DraftTestCase;
@@ -74,8 +95,9 @@ export interface JourneysReport {
   schemaVersion: 1;
   generatedAt: string;
   // Keyed by routeId, one entry per route with at least one reviewed test condition - same
-  // convention as business-intent.json and test-conditions.json. journeys is an array for forward
-  // compatibility (a future cross-route stage), but v1 never writes more than one entry per route.
+  // convention as business-intent.json and test-conditions.json. journeys holds one entry per
+  // distinct testLevel actually present among that route's reviewed conditions (up to 3 - e2e,
+  // api, ui-only), each independently drafted and automated.
   routes: Record<string, { routeId: string; journeys: JourneyEntry[] }>;
 }
 `;

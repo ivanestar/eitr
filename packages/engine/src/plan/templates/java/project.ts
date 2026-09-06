@@ -744,7 +744,10 @@ import com.microsoft.playwright.APIRequest;
 import com.microsoft.playwright.APIRequestContext;
 import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.options.RequestOptions;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -753,34 +756,72 @@ import java.util.Map;
  */
 public class ApiClient implements AutoCloseable {
     private final APIRequestContext request;
+    private String authToken;
 
-    public ApiClient(Playwright playwright, String baseUrl) {
+    /**
+     * storageStatePath: shares a captured browser session's cookies (e.g. ".auth/user.json",
+     * written by /auth-setup) via Playwright's own native storage-state support, so API calls
+     * authenticate the same way the UI does - pass null to skip. authToken: falls back to
+     * E2E_API_TOKEN / AUTH_TOKEN from the environment when passed as null, mirroring the other
+     * language ApiClients.
+     */
+    public ApiClient(Playwright playwright, String baseUrl, String storageStatePath, String authToken) {
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");
-        this.request = playwright.request().newContext(new APIRequest.NewContextOptions()
+        headers.put("Accept", "application/json");
+        APIRequest.NewContextOptions options = new APIRequest.NewContextOptions()
                 .setBaseURL(baseUrl)
-                .setExtraHTTPHeaders(headers));
+                .setExtraHTTPHeaders(headers);
+        if (storageStatePath != null && Files.exists(Paths.get(storageStatePath))) {
+            options.setStorageStatePath(Paths.get(storageStatePath));
+        }
+        this.request = playwright.request().newContext(options);
+        this.authToken = authToken != null ? authToken
+                : System.getenv("E2E_API_TOKEN") != null ? System.getenv("E2E_API_TOKEN")
+                : System.getenv("AUTH_TOKEN");
+    }
+
+    public ApiClient(Playwright playwright, String baseUrl) {
+        this(playwright, baseUrl, ".auth/user.json", null);
+    }
+
+    /**
+     * Set (or clear, passing null) the bearer token injected into every subsequent request's
+     * Authorization header. Call this after an API-based login step returns an access_token, so
+     * the rest of that test's API calls (create/modify/delete/read preconditions) authenticate
+     * the same way the real application does.
+     */
+    public void setAuthToken(String token) {
+        this.authToken = token;
+    }
+
+    private RequestOptions options() {
+        RequestOptions opts = RequestOptions.create();
+        if (authToken != null) {
+            opts.setHeader("Authorization", "Bearer " + authToken);
+        }
+        return opts;
     }
 
     public APIResponse get(String endpoint) {
-        return request.get(endpoint);
+        return request.get(endpoint, options());
     }
 
     public APIResponse post(String endpoint, String jsonBody) {
-        return request.post(endpoint, com.microsoft.playwright.options.RequestOptions.create().setData(jsonBody));
+        return request.post(endpoint, options().setData(jsonBody));
     }
 
     public APIResponse put(String endpoint, String jsonBody) {
-        return request.put(endpoint, com.microsoft.playwright.options.RequestOptions.create().setData(jsonBody));
+        return request.put(endpoint, options().setData(jsonBody));
     }
 
     public APIResponse delete(String endpoint) {
-        return request.delete(endpoint);
+        return request.delete(endpoint, options());
     }
 
     public APIResponse graphql(String endpoint, String query) {
         String body = String.format("{\\\"query\\\": \\\"%s\\\"}", query.replace("\\\"", "\\\\\\\"").replace("\\n", "\\\\n"));
-        return request.post(endpoint, com.microsoft.playwright.options.RequestOptions.create().setData(body));
+        return request.post(endpoint, options().setData(body));
     }
 
     // ── Test Data Management (TDM) ─────────────────────────────────────────────

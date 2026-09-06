@@ -47,7 +47,9 @@ describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
 
     const automateContent = (automateSkill?.source as { text: string }).text;
     expect(automateContent).toContain('Batch Proposal Matrix');
-    expect(automateContent).toContain('1-Click Batch Approval');
+    expect(automateContent).toContain(
+      'approved in one reply instead of one confirmation per ticket',
+    );
   });
 
   it('AC-6: Parallel Worker Swarm in /bulk-rescan', () => {

@@ -400,12 +400,30 @@ export function renderCypressApiClient(): string {
 }
 
 export class ApiClient {
+  // Falls back to a CYPRESS_E2E_API_TOKEN / CYPRESS_AUTH_TOKEN environment variable (surfaced via
+  // Cypress.env(...)) when not set explicitly - set either to have it picked up automatically.
+  private authToken: string | undefined = Cypress.env('E2E_API_TOKEN') ?? Cypress.env('AUTH_TOKEN');
+
+  /**
+   * Set (or clear, passing undefined) the bearer token injected into every subsequent request's
+   * Authorization header. Call this after an API-based login step returns an access_token, so the
+   * rest of that test's API calls (create/modify/delete/read preconditions) authenticate the same
+   * way the real application does. cy.request already shares this browser session's cookies
+   * automatically, so no separate cookie wiring is needed for cookie-based auth.
+   */
+  setAuthToken(token: string | undefined): void {
+    this.authToken = token;
+  }
+
   request<T = unknown>(options: ApiRequestOptions): Cypress.Chainable<Cypress.Response<T>> {
     return cy.request<T>({
       method: options.method ?? 'GET',
       url: options.url,
       body: options.body,
-      headers: options.headers,
+      headers: {
+        ...(this.authToken ? { Authorization: \`Bearer \${this.authToken}\` } : {}),
+        ...options.headers,
+      },
     });
   }
 

@@ -162,8 +162,16 @@ function assignmentFor(
   routeId: string,
   conditionId: string,
 ) {
-  const assignments = journeys.routes[routeId].journeys[0].conditionAssignments;
+  const assignments = journeys.routes[routeId].journeys.flatMap((j) => j.conditionAssignments);
   return assignments.find((a) => a.conditionId === conditionId);
+}
+
+function journeyForLayer(
+  journeys: { routes: Record<string, { journeys: Array<{ layer: string }> }> },
+  routeId: string,
+  layer: string,
+) {
+  return journeys.routes[routeId].journeys.find((j) => j.layer === layer);
 }
 
 describe('scripts/compose-journeys.mjs (real execution)', () => {
@@ -283,7 +291,7 @@ describe('scripts/compose-journeys.mjs (real execution)', () => {
       writeTestConditions(dir, testConditionsFixture(routeAFixture()));
       run(dir);
       const firstPass = readJourneys(dir);
-      const journey = firstPass.routes['route-checkout'].journeys[0];
+      const journey = journeyForLayer(firstPass, 'route-checkout', 'api')!;
       journey.testCase = {
         title: 'Manually drafted',
         preconditions: [],
@@ -296,7 +304,7 @@ describe('scripts/compose-journeys.mjs (real execution)', () => {
       // Re-run with the exact same test-conditions.json - nothing structurally changed.
       run(dir);
       const secondPass = readJourneys(dir);
-      const preserved = secondPass.routes['route-checkout'].journeys[0];
+      const preserved = journeyForLayer(secondPass, 'route-checkout', 'api')!;
       expect(preserved.testCase.title).toBe('Manually drafted');
       expect(preserved.reviewed).toBe(true);
       expect(preserved.reviewedBy).toBe('human');
@@ -311,7 +319,7 @@ describe('scripts/compose-journeys.mjs (real execution)', () => {
       writeTestConditions(dir, testConditionsFixture(routeAFixture()));
       run(dir);
       const firstPass = readJourneys(dir);
-      firstPass.routes['route-checkout'].journeys[0].testCase = {
+      journeyForLayer(firstPass, 'route-checkout', 'api')!.testCase = {
         title: 'Stale draft',
         preconditions: [],
         steps: [{ description: 'x', expectedResult: 'y' }],
@@ -329,7 +337,7 @@ describe('scripts/compose-journeys.mjs (real execution)', () => {
       writeTestConditions(dir, changed);
       run(dir);
       const secondPass = readJourneys(dir);
-      expect(secondPass.routes['route-checkout'].journeys[0].testCase).toBeUndefined();
+      expect(journeyForLayer(secondPass, 'route-checkout', 'api')!.testCase).toBeUndefined();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
