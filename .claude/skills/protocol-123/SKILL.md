@@ -7,7 +7,7 @@ description: Strict 9-phase multi-agent autonomous engineering and bugfixing pip
 
 ## Purpose
 
-Provides a 100% deterministic, enterprise-grade engineering workflow combining **Spec-Driven Architecture (SDD)** with **Test-Driven Execution (TDD)** and multi-agent verification swarms.
+Provides a 100% deterministic engineering workflow combining **Spec-Driven Architecture (SDD)** with **Test-Driven Execution (TDD)** and multi-agent verification swarms.
 
 ## Activation Rules & Trigger Phrases
 
@@ -22,7 +22,7 @@ Provides a 100% deterministic, enterprise-grade engineering workflow combining *
 ## Modes
 
 1. **Full Protocol (`123`)**:
-   - Streamlined 9-phase lifecycle: live web & codebase recon, invariants discovery feeding the Architect, single Lead Reviewer with Arbiter escalation gateway, and TDD execution.
+   - 9-phase lifecycle: live web & codebase recon, invariants discovery feeding the Architect, single Lead Reviewer with Arbiter escalation gateway, and TDD execution.
 2. **Fast Track (`123-fast`)**:
    - 1 research -> 1 plan -> User Approval Gateway -> 1 TDD execution (Red -> Green) -> 1 reviewer -> QA.
    - Used for single-file, pre-scoped fixes.
@@ -73,7 +73,7 @@ To eliminate LLM reasoning drift or omission of mandatory subagents (such as ski
 
 ### Phase 3: Lead Plan Review (Single Strong Reviewer)
 
-- **Review Scope**: Comprehensive single-reviewer audit of the plan against code quality, security, multi-stack parity, and test determinism before presenting to the user.
+- **Review Scope**: Single-reviewer audit of the plan against code quality, security, multi-stack parity, and test determinism before presenting to the user.
 - **Agent**: `code-reviewer` (Lead Reviewer), armed with a 5-point unified rubric:
   1. Architecture & Plan Compliance (spec adherence, CPOM contracts, Zero Lock-in).
   2. TypeScript & Language Safety (strict typing, zero `any`, cross-platform paths).

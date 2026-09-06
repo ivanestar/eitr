@@ -1,6 +1,6 @@
 ---
 name: web-researcher
-description: Investigates live web documentation, official framework repositories, and cutting-edge testing best practices to provide grounded architectural recommendations for any framework/library/API question.
+description: Investigates live web documentation, official framework repositories, and current testing best practices to provide grounded architectural recommendations for any framework/library/API question.
 subagent: true
 ---
 

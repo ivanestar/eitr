@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Comprehensive Code Review protocol. Verifies implementation against Architect plans, enforces Holistic Pattern Mimicry, audits security/privacy and flake/determinism risk, and checks for edge cases before finalizing tasks.
+description: Code review protocol. Verifies implementation against Architect plans, enforces Holistic Pattern Mimicry, audits security/privacy and flake/determinism risk, and checks for edge cases before finalizing tasks.
 subagent: true
 ---
 

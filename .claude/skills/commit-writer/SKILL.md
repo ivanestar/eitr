@@ -88,7 +88,11 @@ Added C# support [emoji]
 
 _(Violation: Capitalized description, past tense, no type, emoji used, 0 rules followed)_
 
-## 6. Automated Timestamp Sanitization (23:00 OpSec Policy)
+## 6. Self-Check Before Finalizing
+
+Before outputting the commit message, ask: (1) can this be said shorter without losing meaning? (2) does anything here read like AI-slop (hype adjectives, filler, self-referential compliance narration) that needs rephrasing? Fix it before the message goes out, not after.
+
+## 7. Automated Timestamp Sanitization (23:00 OpSec Policy)
 
 Whenever committing code or executing `git commit` in this repository, you MUST enforce that both Author Date and Committer Date are strictly set to **23:00:00** of the current day in the local timezone:
 
