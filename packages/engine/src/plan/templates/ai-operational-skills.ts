@@ -90,31 +90,82 @@ function antigravityInvocationNote(skill: SkillDefinition): string {
 `;
 }
 
+// Identical across every language - which CI provider is configured (if any) is read from
+// `.scaffold/init.json`'s `ciCd` field (surfaced by `scripts/auth-status.mjs`), and each
+// provider's actual secret-injection mechanism is genuinely different, not a lookup-table
+// variation on one shared template: GitHub/GitLab both have a local CLI commonly already
+// authenticated (gh/glab) so pushing secrets can be offered as one command; Jenkins' declarative
+// `credentials()` binding throws a hard build error the moment it references a credential that
+// does not exist yet, so nothing gets auto-wired there - only manual, one credential at a time;
+// TeamCity's DSL-level password parameter type requires a token minted by the TeamCity server
+// itself, which cannot be produced from outside it, so that one is manual too, but through the
+// UI's own Parameters screen (typed "Password"), not a DSL edit.
+const AUTH_SETUP_CI_SECTION = `## Step 5: CI - only if CI/CD was actually chosen at generation time
+
+Read \`ciCd\` from \`scripts/auth-status.mjs\`'s output (backed by \`.scaffold/init.json\`). If it is absent or \`none\`, skip this whole step silently - do not ask a CI question with no real target.
+
+Otherwise ask: **"Want this login available in CI too, so tests run there the same way? (Recommended)"** ${INTERACTIVE_CHOICE_NOTE} A "No" ends the flow here - say plainly that CI was skipped and can be revisited later by re-running this skill.
+
+On "Yes," dispatch to exactly the one matching provider below - never reuse another provider's steps, they are not interchangeable.
+
+### GitHub Actions
+1. Confirm \`.github/workflows/playwright.yml\`'s job already has an \`env:\` block wired to \`secrets.E2E_USERNAME\`/\`secrets.E2E_PASSWORD\`/\`secrets.AUTH_TOKEN\`/\`secrets.E2E_API_TOKEN\`/\`secrets.TOTP_SECRET\` (present by default in a freshly generated project; add it once if this project predates that).
+2. Check whether \`.env\` already has real values for the auth variables this app actually needs. If not, ask for them now and write them into \`.env\` - never echo a value back into chat, confirm only its presence and length (e.g. "got a value, 12 characters").
+3. Run \`gh auth status\`. If authenticated, ask explicitly: **"Push these as GitHub Actions secrets now via \`gh secret set\`?"** ${INTERACTIVE_CHOICE_NOTE} Yes -> for each filled variable, run \`gh secret set <NAME> --body "$(grep '^<NAME>=' .env | cut -d= -f2-)"\` - the value is read from \`.env\` at shell-execution time, never typed or interpolated into the command string yourself, so it never appears in anything you write or in this session's own transcript. Then run \`gh secret list\` to mechanically confirm each name now exists (never print a value). No, or \`gh\` missing/unauthenticated -> print the exact manual path instead: repo Settings -> Secrets and variables -> Actions -> New repository secret, naming exactly which variables are needed.
+
+### GitLab CI
+1. \`.gitlab-ci.yml\`'s top-level \`variables:\` block already bakes in \`E2E_BASE_URL\` by default - nothing to do there.
+2. Explain plainly: GitLab auto-injects CI/CD Variables into every job's environment with zero YAML changes, unlike GitHub - once a variable exists in project settings, \`script:\` steps just see it.
+3. Run \`glab auth status\`. If \`glab\` is installed and authenticated, ask: **"Push these as GitLab CI/CD variables now via \`glab variable set\`?"** ${INTERACTIVE_CHOICE_NOTE} Yes -> for each filled variable, run \`glab variable set <NAME> "$(grep '^<NAME>=' .env | cut -d= -f2-)" --masked\` - the value is read from \`.env\` at shell-execution time, never typed or interpolated into the command string yourself, so it never appears in anything you write or in this session's own transcript. Then verify via \`glab variable list\` (names only). No, or \`glab\` missing/unauthenticated -> manual path: Settings -> CI/CD -> Variables -> Add variable, exact names, tick both "Masked" and "Protected."
+
+### Jenkins
+Never attempt an automated push here - there is no universal, already-authenticated local CLI for Jenkins the way \`gh\`/\`glab\` exist for GitHub/GitLab, and a wrong guess breaks the whole pipeline (see below).
+1. Tell the user exactly: Jenkins -> Manage Jenkins -> Credentials -> (System) -> Global credentials -> Add Credentials - one per variable actually needed, using that exact variable name as the Credential ID (e.g. \`E2E_USERNAME\`).
+2. Only once a credential genuinely exists, give the exact line to paste into the generated \`Jenkinsfile\`'s \`environment {}\` block (e.g. \`E2E_USERNAME = credentials('E2E_USERNAME')\`). Never add this line yourself for a credential that does not exist yet - Jenkins' declarative \`credentials()\` binding fails the entire build immediately if the named credential is missing, unlike GitHub/GitLab where an unset secret just resolves empty.
+
+### TeamCity
+Never attempt an automated push here either - TeamCity's DSL-level \`password()\` parameter type needs a token minted by the TeamCity server itself (via its own UI), which nothing outside that server can produce; hardcoding a fake token into checked-in code would not work and must not be attempted.
+1. Tell the user exactly: Project Settings -> Parameters -> Add new parameter, name prefixed \`env.\` (e.g. \`env.E2E_USERNAME\`), type set to **Password**. This alone makes it a real environment variable in every build step - no DSL/code change needed at all.
+
+## Step 6: Final Report
+
+Print what actually happened this run: session file(s) written (by path, not content), whether CI wiring was done or skipped and why, which secret **names** were pushed if any (never values), and the exact next action for anything left for the user to do by hand.`;
+
+// Identical across every language - the part of the flow that decides whether auth is even
+// needed, whether a session already exists, and how many roles to capture, all computed from
+// `scripts/auth-status.mjs` rather than re-derived ad hoc each time.
+const AUTH_SETUP_STEPS_0_TO_3 = `## Step 0: Explain and confirm
+
+Before doing anything, state in plain language what this does and why: "This sets up a saved login session so tests don't need to log in every time - locally, and in CI too if you want. It opens a real browser once for you to log in by hand." Then ask: **Continue, or stop here?** ${INTERACTIVE_CHOICE_NOTE} Stop immediately on anything but an explicit yes - zero side effects up to this point.
+
+## Step 1: Check whether auth is even needed
+
+Run \`node scripts/auth-status.mjs\` and read its output for every fact the rest of this flow needs - never re-derive session/env/CI state yourself by guessing or re-reading files ad hoc. Ask directly: "Does your app need a login for the areas you care about testing?" A public app with nothing behind a login means nothing else to do here - say so and stop.
+
+## Step 2: Existing session check
+
+If \`auth-status.mjs\` reports \`hasSession: true\`, list the existing session file(s) by name and ask: **Reuse it as-is / Capture a fresh one / Add another role.** ${INTERACTIVE_CHOICE_NOTE} Never silently overwrite a session that already works.
+
+## Step 3: How many roles
+
+Ask: "One role, or more than one (e.g. Admin plus a regular user)?" For each additional role, repeat Step 4 with its own session name (a separate storage-state file for Playwright/pytest/C#/Java, a separate \`cy.session()\` name for Cypress) - never overwrite one role's saved session with another's.
+
+`;
+
 function renderAuthSetupContent(sc: StackConventions): string {
   if (sc.authStrategy === 'cypress') {
     return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
 
 ## Purpose
-Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones using Cypress native session management.
+Captures a real, working login session for testing, locally and (optionally) in CI - guided step by step, with your explicit go-ahead before anything that touches CI.
 
-## Workflow
-1. **Execution Mode Decision:**
-   - Primary: Execute authenticated session caching via \`cy.session('user-session', () => { ... }, { validate() { ... } })\`.
-   - Mandatory Validate Callback: Always configure a \`validate\` callback (e.g. cookie/session check or \`cy.request()\`) to detect session expiration and prevent stale session reuse.
-   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
-     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
-     * If developer session cookies are available, import them directly into session setup.
-     * Fallback to interactive browser session with manual prompt to the engineer.
-2. **Session Architecture:**
-   - Register custom authentication command in \`cypress/support/commands.ts\` (e.g. \`Cypress.Commands.add('login', ...)\`).
-   - Wrap authentication logic in \`cy.session()\` so Cypress restores cookies, localStorage, and sessionStorage across spec files.
-   - Prohibit external state files: do not write credentials or storageState to disk.
-3. **CI Environment Alignment:**
-   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
-4. **Fixture Integration:**
-   - Call \`cy.login()\` inside \`beforeEach\` hooks across test specs in \`cypress/e2e/\`.
-5. **Verification:**
-   - Verify session validity by asserting a protected element or querying a protected API endpoint via \`cy.request()\` before proceeding.
+${AUTH_SETUP_STEPS_0_TO_3}## Step 4: Capture (Cypress has no external record tool - write the session command directly)
+
+Unlike Playwright's \`codegen --save-storage\`, Cypress has no standalone tool to record a login into a portable file - session state lives inside the test run via \`cy.session()\`. Write (or update) a \`login\` custom command in \`cypress/support/commands.ts\` that fills \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\` into the real login form and wraps it in \`cy.session('user-session', () => { ... }, { validate() { ... } })\`, so Cypress restores cookies/localStorage/sessionStorage across spec files instead of logging in per test. A \`validate()\` callback (a cookie check or an authenticated API call) is mandatory, not optional - without it a stale/expired session is silently reused.
+- SSO/MFA/2FA: if \`${sc.envAccess('TOTP_SECRET')}\` is set, generate a real RFC 6238 code and fill it into the MFA prompt; otherwise the first login is manual/human-driven, then cached via \`cy.session()\` from there on.
+- **Verify, never assume success**: call \`cy.login()\` once and assert a genuinely protected element or page is visible afterward - a command that runs without throwing is not proof it actually authenticated.
+
+${AUTH_SETUP_CI_SECTION}
 `;
   }
 
@@ -122,25 +173,17 @@ Establishes a reusable authenticated browser state for running tests and reconna
     return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
 
 ## Purpose
-Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in pytest.
+Captures a real, working login session for testing, locally and (optionally) in CI - guided step by step, with your explicit go-ahead before anything that touches CI.
 
-## Workflow
-1. **Run \`pytest fixtures/auth_setup.py\` - it already picks the right mode from \`.env\`, never attempt more than one mode yourself:**
-   - The script's two setup functions are mutually exclusive and self-select from environment variables already in \`.env\`: if \`${sc.envAccess('E2E_API_TOKEN')}\`/\`${sc.envAccess('AUTH_TOKEN')}\`/\`${sc.envAccess('E2E_SESSION_COOKIE')}\` is set, the API fast-path writes \`.auth/user.json\` instantly with zero browser; otherwise the browser-based function fills the login form from \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\` (the common case for a plain form login - no SSO/MFA/token involved).
-   - One run is enough. Only escalate to manual troubleshooting (inspect the real login page's field labels/redirect URL, adjust the script's locators) if this run genuinely fails - do not pre-emptively try an alternate mode "to be safe," and do not treat the options below as a checklist to attempt in sequence.
-   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
-     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
-     * If developer session cookies are available, import them directly into storageState.
-     * Fallback to headed browser session with manual prompt to the engineer.
-2. **Session Serialization:**
-   - Capture cookies, localStorage, session tokens, and headers.
-   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
-3. **CI Environment Alignment:**
-   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
-4. **Fixture Integration:**
-   - Configure session-scoped \`browser_context_args\` fixture in \`conftest.py\` to preload \`.auth/user.json\` into browser context when present.
-5. **Verification:**
-   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
+${AUTH_SETUP_STEPS_0_TO_3}## Step 4: Capture (the only step that touches a real browser)
+
+- Resolve the login URL the same way \`eitr auth\`'s CLI does: \`${sc.envAccess('E2E_BASE_URL')}\` in \`.env\` first, then \`pyproject.toml\`'s \`base_url\`, then ask directly if neither resolves - never guess a URL.
+- State plainly: "A real browser window will open at <url>. Log in there yourself - any SSO/MFA/2FA, just do it normally, that's the whole point of using a real browser and a real human. Close the window once you see you're logged in - the session saves automatically."
+- Run: \`playwright codegen --save-storage=.auth/user.json <url>\` (a different filename per role, e.g. \`.auth/admin.json\`).
+- **Mechanically verify, never assume success**: after the command exits, confirm the output file exists, is non-empty JSON, and actually contains at least one cookie or \`origins\` entry. If not: "Doesn't look like login actually completed - no session data was captured. Try again?" - a file that merely exists is not proof of a real session.
+- \`fixtures/auth_setup.py\` (\`browser_context_args\` in \`conftest.py\` already preloads \`.auth/user.json\` when present) exists for CI/headless re-auth without a human - this step's own capture is the one-time, human-driven path, not a replacement for it.
+
+${AUTH_SETUP_CI_SECTION}
 `;
   }
 
@@ -148,51 +191,39 @@ Establishes a reusable authenticated browser state for running tests and reconna
     return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
 
 ## Purpose
-Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in C# Playwright.
+Captures a real, working login session for testing, locally and (optionally) in CI - guided step by step, with your explicit go-ahead before anything that touches CI.
 
-## Workflow
-1. **No pre-generated setup fixture exists for C# yet - default straight to assisted interactive login, do not search for a nonexistent API endpoint first:**
-   - Navigate to the application's login page with Playwright, fill credentials from \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\` yourself, submit, and call \`context.StorageStateAsync(path: ".auth/user.json")\` once authenticated - this is the common case (plain form login, no SSO/MFA/token).
-   - Only attempt an API Fast-Path (writing storageState directly via \`apiClient\`) when the target application actually exposes a documented token-issuing endpoint - never assume one exists and spend time probing for it on a plain form-login site.
-   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
-     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
-     * If developer session cookies are available, import them directly into storageState.
-     * Fallback to headed browser session with manual prompt to the engineer.
-2. **Session Serialization:**
-   - Capture cookies, localStorage, session tokens, and headers.
-   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
-3. **CI Environment Alignment:**
-   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
-4. **Fixture Integration:**
-   - Override \`ContextOptions()\` in the \`PageTest\` base class with \`StorageStatePath = ".auth/user.json"\` to preload authentication state.
-5. **Verification:**
-   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
+${AUTH_SETUP_STEPS_0_TO_3}## Step 4: Capture (the only step that touches a real browser)
+
+- Resolve the login URL the same way \`eitr auth\`'s CLI does: \`${sc.envAccess('E2E_BASE_URL')}\` in \`.env\` first, then \`test.runsettings\`, then ask directly if neither resolves - never guess a URL.
+- State plainly: "A real browser window will open at <url>. Log in there yourself - any SSO/MFA/2FA, just do it normally, that's the whole point of using a real browser and a real human. Close the window once you see you're logged in - the session saves automatically."
+- Run (Windows): \`pwsh bin/Debug/net8.0/playwright.ps1 codegen --save-storage=.auth/user.json <url>\`. Run (macOS/Linux): \`bin/Debug/net8.0/playwright.sh codegen --save-storage=.auth/user.json <url>\` (a different filename per role, e.g. \`.auth/admin.json\`).
+- **Mechanically verify, never assume success**: after the command exits, confirm the output file exists, is non-empty JSON, and actually contains at least one cookie or \`origins\` entry. If not: "Doesn't look like login actually completed - no session data was captured. Try again?" - a file that merely exists is not proof of a real session.
+- Nothing preloads this automatically yet: override \`ContextOptions()\` in the \`PageTest\` base class once with \`StorageStatePath = ".auth/user.json"\` so every test picks it up.
+
+${AUTH_SETUP_CI_SECTION}
 `;
   }
 
   if (sc.authStrategy === 'java') {
+    const isGradle = sc.buildTool === 'gradle';
+    const captureCmd = isGradle
+      ? '`gradle playwrightCodegen -Purl=<url> -Poutput=<output path>`'
+      : '`mvn exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="codegen --save-storage=<output path> <url>"`';
     return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
 
 ## Purpose
-Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in Java Playwright.
+Captures a real, working login session for testing, locally and (optionally) in CI - guided step by step, with your explicit go-ahead before anything that touches CI.
 
-## Workflow
-1. **No pre-generated setup fixture exists for Java yet - default straight to assisted interactive login, do not search for a nonexistent API endpoint first:**
-   - Navigate to the application's login page with Playwright, fill credentials from \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\` yourself, submit, and call \`context.storageState(new BrowserContext.StorageStateOptions().setPath(Paths.get(".auth/user.json")))\` once authenticated - this is the common case (plain form login, no SSO/MFA/token).
-   - Only attempt an API Fast-Path (writing storageState directly via \`apiClient\`) when the target application actually exposes a documented token-issuing endpoint - never assume one exists and spend time probing for it on a plain form-login site.
-   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
-     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
-     * If developer session cookies are available, import them directly into storageState.
-     * Fallback to headed browser session with manual prompt to the engineer.
-2. **Session Serialization:**
-   - Capture cookies, localStorage, session tokens, and headers.
-   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
-3. **CI Environment Alignment:**
-   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
-4. **Fixture Integration:**
-   - Initialize browser context in test base class or \`@BeforeEach\` using \`Browser.NewContextOptions().setStorageStatePath(Paths.get(".auth/user.json"))\`.
-5. **Verification:**
-   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
+${AUTH_SETUP_STEPS_0_TO_3}## Step 4: Capture (the only step that touches a real browser)
+
+- Resolve the login URL the same way \`eitr auth\`'s CLI does: \`${sc.envAccess('E2E_BASE_URL')}\` in \`.env\` first, then ask directly if that's unset - never guess a URL.
+- State plainly: "A real browser window will open at <url>. Log in there yourself - any SSO/MFA/2FA, just do it normally, that's the whole point of using a real browser and a real human. Close the window once you see you're logged in - the session saves automatically."
+- Run: ${captureCmd} (\`.auth/user.json\` by default, a different filename per role, e.g. \`.auth/admin.json\`).
+- **Mechanically verify, never assume success**: after the command exits, confirm the output file exists, is non-empty JSON, and actually contains at least one cookie or \`origins\` entry. If not: "Doesn't look like login actually completed - no session data was captured. Try again?" - a file that merely exists is not proof of a real session.
+- Nothing preloads this automatically yet: initialize the browser context once with \`Browser.NewContextOptions().setStorageStatePath(Paths.get(".auth/user.json"))\` in the test base class or \`@BeforeEach\` so every test picks it up.
+
+${AUTH_SETUP_CI_SECTION}
 `;
   }
 
@@ -200,25 +231,17 @@ Establishes a reusable authenticated browser state for running tests and reconna
   return `# Skill: Auth Setup (/auth-setup, /auth-bootstrap)
 
 ## Purpose
-Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones.
+Captures a real, working login session for testing, locally and (optionally) in CI - guided step by step, with your explicit go-ahead before anything that touches CI.
 
-## Workflow
-1. **Run \`npx playwright test fixtures/auth.setup.ts\` - it already picks the right mode from \`.env\`, never attempt more than one mode yourself:**
-   - The file's two setup blocks are mutually exclusive and self-select from environment variables already in \`.env\`: if \`${sc.envAccess('E2E_API_TOKEN')}\`/\`${sc.envAccess('AUTH_TOKEN')}\`/\`${sc.envAccess('E2E_SESSION_COOKIE')}\` is set, the API fast-path writes \`.auth/user.json\` instantly with zero browser; otherwise the browser-based block runs (the common case for a plain form login - no SSO/MFA/token involved), filling the login form from \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\`.
-   - One run is enough. Only escalate to manual troubleshooting (inspect the real login page's field labels/redirect URL, adjust the block's locators) if this run genuinely fails - do not pre-emptively try an alternate mode "to be safe," and do not treat the options below as a checklist to attempt in sequence.
-   - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
-     * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
-     * If developer session cookies are available, import them directly into storageState.
-     * Fallback to headed browser session with manual prompt to the engineer.
-2. **Session Serialization:**
-   - Capture cookies, localStorage, session tokens, and headers.
-   - Serialize state directly into \`.auth/user.json\` (secured with \`create-if-absent\` and strictly excluded from version control).
-3. **CI Environment Alignment:**
-   - For CI/CD runs, configure Service Account token injection via environment variables (\`${sc.envAccess('AUTH_TOKEN')}\` / \`${sc.envAccess('E2E_API_TOKEN')}\`).
-4. **Fixture Integration:**
-   - Generate or update authentication fixtures in \`fixtures/auth.setup.ts\` to preload \`.auth/user.json\` into browser context.
-5. **Verification:**
-   - Verify session validity by requesting a protected endpoint with the embedded \`ApiClient\` before proceeding.
+${AUTH_SETUP_STEPS_0_TO_3}## Step 4: Capture (the only step that touches a real browser)
+
+- Resolve the login URL the same way \`eitr auth\`'s CLI does: \`${sc.envAccess('E2E_BASE_URL')}\` in \`.env\` first, then \`playwright.config.ts\`'s \`baseURL\`, then ask directly if neither resolves - never guess a URL.
+- State plainly: "A real browser window will open at <url>. Log in there yourself - any SSO/MFA/2FA, just do it normally, that's the whole point of using a real browser and a real human. Close the window once you see you're logged in - the session saves automatically."
+- Run: \`npx playwright codegen --save-storage=.auth/user.json <url>\` (a different filename per role, e.g. \`.auth/admin.json\`).
+- **Mechanically verify, never assume success**: after the command exits, confirm the output file exists, is non-empty JSON, and actually contains at least one cookie or \`origins\` entry. If not: "Doesn't look like login actually completed - no session data was captured. Try again?" - a file that merely exists is not proof of a real session.
+- \`fixtures/auth.setup.ts\` exists for CI/headless re-auth without a human - it already handles MFA/TOTP (via \`TOTP_SECRET\`, a real RFC 6238 code) and an API Fast-Path Token mode (via \`E2E_API_TOKEN\`/\`AUTH_TOKEN\`, for an app whose login issues a token directly) - this step's own capture is the one-time, human-driven path, not a replacement for it. Nothing preloads the captured file automatically yet: uncomment \`storageState: '.auth/user.json'\` in \`playwright.config.ts\` once so every test picks it up.
+
+${AUTH_SETUP_CI_SECTION}
 `;
 }
 

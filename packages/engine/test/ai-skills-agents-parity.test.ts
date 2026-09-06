@@ -11,6 +11,7 @@ describe('Polymorphic AI Operational Skills & AI Agents Parity (AC-5, AC-6, AC-7
       expect(authText).toContain('fixtures/auth.setup.ts');
       expect(authText).toContain('.auth/user.json');
       expect(authText).toContain('process.env');
+      expect(authText).toContain('playwright codegen --save-storage');
 
       const automateSkill = skills.find((s) => s.path.includes('automate-test'))!;
       const autoText = (automateSkill.source as { text: string }).text;
