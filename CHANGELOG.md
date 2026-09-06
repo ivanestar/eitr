@@ -1,11 +1,7 @@
 # Changelog
 
-All notable changes to this project are documented here, newest release first. Each entry is one
-dense line: a bold category prefix (`Added`/`Changed`/`Fixed`/`Removed`/`Security`) followed by what
-changed, and why only if it isn't obvious. This project follows
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Verification detail (the exact command
-or test run to confirm a fix) lives in the corresponding commit message, not here — `git log` is the
-audit trail; this file is release notes.
+All notable changes to this project are documented here, newest release first, following
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.0] - 2026-09-06
 
