@@ -59,6 +59,7 @@ export function validatePreconditions({
   cwd = repoRoot,
   allowDirty = false,
   allowBranch = false,
+  currentBranch: currentBranchOverride = null,
 }) {
   // 1. Check clean working directory
   if (!allowDirty) {
@@ -72,10 +73,17 @@ export function validatePreconditions({
 
   // 2. Check current branch is main
   if (!allowBranch) {
-    const currentBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-      cwd,
-      encoding: 'utf8',
-    }).trim();
+    // currentBranchOverride exists so tests can assert this check deterministically without
+    // depending on which branch the test runner itself happens to be checked out on (found
+    // failing specifically in the Nightly workflow, which checks out 'main' directly - the
+    // real `git rev-parse` below then legitimately reports 'main', so this check silently
+    // passed instead of throwing the "not on main" error the test expected).
+    const currentBranch =
+      currentBranchOverride ??
+      execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd,
+        encoding: 'utf8',
+      }).trim();
     if (currentBranch !== 'main') {
       throw new Error(
         `Release tags must be created on 'main' branch (found: '${currentBranch}').\n` +
