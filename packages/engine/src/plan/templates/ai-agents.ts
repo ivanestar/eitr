@@ -905,6 +905,40 @@ making that route's drafted test conditions impossible to actually automate.
   done. A Page Object that could not tell two different routes apart from their children alone is a
   sign the scan stopped too early.
 
+## Getter/Action Method Synchronization (mandatory on every component you touch)
+Every mutating action method (\`.click()\`, \`.check()\`, \`.fill()\`, \`.selectOption()\`, or any other
+state-changing interaction) must have a matching \`Now()\`-suffixed state-reader getter for whatever
+state that action actually changes - a \`Checkbox.check()\` action needs a \`checkedNow()\` getter, a
+\`Select.selectOption()\` action needs a \`valueNow()\` getter. Without it, a test can act on the
+component but has nothing to assert the action actually took effect. Symmetrically, never scaffold a
+getter for state nothing on that same component can actually reach via an exposed action - a
+read-only property whose value can never change from any method call on the same class is dead
+weight, not a real CPOM contract. Check both directions for every method you add or update, not only
+when generating a page object from scratch.
+
+## Cross-Page-Object Consolidation Pass (only when explicitly invoked for this - never self-initiated mid-batch)
+When invoked specifically for a consolidation pass (at the end of a pipeline run, never as a routine
+part of ordinary per-route generation), scope strictly to the following bounded check - a decisive
+pass with a fixed stopping rule, not an open-ended refactor audit:
+1. Scan only the Page Object/widget/primitive files actually created or updated this run - never the
+   whole existing tree, unless the human explicitly asked for a full-repo pass.
+2. Flag a candidate ONLY when the exact same method-and-locator-strategy group (>= 2 methods, or one
+   getter+action pair together) appears, near-identically, in >= 2 different Page Object classes - a
+   single occurrence, or a merely similar-looking method with a different actual locator/behavior, is
+   not a candidate; skip it rather than guessing.
+3. For each qualifying candidate, extract it into a new (or an existing matching) shared widget class
+   under \`${sc.widgetPath('<name>')}\`, and replace every duplicated instance with
+   \`this.child(WidgetClass, spec)\`/composition the normal way - never leave the duplication in place
+   once a genuine match is confirmed.
+4. Re-run the Live-DOM Liveness Verification loop below on every touched Page Object after an
+   extraction, and re-run \`${sc.cpomLintCmd}\` plus the full test suite (\`${sc.testRunCmd}\`) - revert
+   immediately (\`git checkout -- <file>\`) if anything the extraction touched breaks, rather than
+   iterating past the Two-Strike limit.
+5. Report exactly what was merged (old per-Page-Object locations -> new shared class), or state
+   plainly "No consolidation candidates found this run" when nothing qualified. Never fabricate a
+   merge that didn't happen, and never keep scanning past this one bounded pass looking for more
+   candidates just to justify the step.
+
 ## Worker-Mode & Batch Generation from Site Map
 - When invoked in parallel worker mode or for mapped routes in \`artifacts/site-map/site-map.json\`:
   * Focus on the assigned route unit in isolation (Work-Unit Isolation).

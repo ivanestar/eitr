@@ -12,8 +12,12 @@ export interface MyFixtures {
 
 // Extend base test with custom fixtures
 export const test = base.extend<MyFixtures>({
-  apiClient: async ({ request }, use) => {
-    const client = new ApiClient(request);
+  apiClient: async ({ context }, use) => {
+    // context.request shares cookies with this test's own browser context, so an ApiClient built
+    // from it reuses a cookie-based session already captured by /auth-setup (.auth/user.json)
+    // instead of an unauthenticated request context. Token-based sessions still work the same way
+    // via apiClient.setAuthToken(...) after an API login step - see ApiClient's own doc comment.
+    const client = new ApiClient(context.request);
     await use(client);
     await client.cleanup();
   },

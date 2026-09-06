@@ -506,7 +506,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(apiClientText).toContain('createTestEmail');
 
     const fixturesText = renderFixtures();
-    expect(fixturesText).toContain('apiClient: async ({ request }, use)');
+    expect(fixturesText).toContain('apiClient: async ({ context }, use)');
     expect(fixturesText).toContain('await client.cleanup()');
   });
 

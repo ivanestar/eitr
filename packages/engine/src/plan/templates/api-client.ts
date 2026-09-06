@@ -7,6 +7,11 @@ import { randomUUID } from 'node:crypto';
 export interface ApiClientOptions {
   baseURL?: string;
   graphqlPath?: string;
+  /** Bearer token to inject into every request's Authorization header, when the target API uses
+   *  token auth rather than (or alongside) the cookie-based session already carried by the request
+   *  context this client wraps. Defaults to \`process.env.E2E_API_TOKEN ?? process.env.AUTH_TOKEN\`
+   *  when not passed explicitly - set either in .env to have it picked up automatically. */
+  authToken?: string;
 }
 
 /**
@@ -22,10 +27,22 @@ export class ApiClient {
   private readonly request: APIRequestContext;
   private readonly options: ApiClientOptions;
   private readonly teardownTasks: Array<() => Promise<void> | void> = [];
+  private authToken: string | undefined;
 
   constructor(request: APIRequestContext, options: ApiClientOptions = {}) {
     this.request = request;
     this.options = options;
+    this.authToken = options.authToken ?? process.env.E2E_API_TOKEN ?? process.env.AUTH_TOKEN;
+  }
+
+  /**
+   * Set (or clear, passing undefined) the bearer token injected into every subsequent request's
+   * Authorization header. Call this after an API-based login step returns an access_token, so the
+   * rest of that test's API calls (create/modify/delete/read preconditions) authenticate the same
+   * way the real application does.
+   */
+  setAuthToken(token: string | undefined): void {
+    this.authToken = token;
   }
 
   /**
@@ -140,6 +157,7 @@ export class ApiClient {
     return {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      ...(this.authToken ? { Authorization: \`Bearer \${this.authToken}\` } : {}),
     };
   }
 

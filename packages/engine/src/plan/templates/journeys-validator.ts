@@ -115,7 +115,29 @@ function isDraftTestCase(value, label, errors) {
       if (typeof s.expectedResult !== 'string' || s.expectedResult.length === 0) {
         errors.push(sLabel + '.expectedResult must be a non-empty string.');
       }
+      if (s.api !== undefined) {
+        isApiStepDetail(s.api, sLabel + '.api', errors);
+      }
     });
+  }
+}
+
+function isApiStepDetail(value, label, errors) {
+  if (!value || typeof value !== 'object') {
+    errors.push(label + ' must be an object.');
+    return;
+  }
+  if (typeof value.method !== 'string' || value.method.length === 0) {
+    errors.push(label + '.method must be a non-empty string.');
+  }
+  if (typeof value.path !== 'string' || value.path.length === 0) {
+    errors.push(label + '.path must be a non-empty string.');
+  }
+  if (typeof value.expectedStatus !== 'number') {
+    errors.push(label + '.expectedStatus must be a number.');
+  }
+  if (typeof value.contractGrounded !== 'boolean') {
+    errors.push(label + '.contractGrounded must be a boolean.');
   }
 }
 
@@ -126,6 +148,16 @@ function isJourneyEntry(value, label, errors, knownConditionIds, seenJourneyIds,
   }
   if (value.routeId !== expectedRouteId) {
     errors.push(label + '.routeId must equal "' + expectedRouteId + '".');
+  }
+  if (!TEST_LEVEL_VALUES.has(value.layer)) {
+    errors.push(label + ".layer must be one of 'e2e'|'api'|'ui-only'.");
+  } else if (
+    Array.isArray(value.conditionAssignments) &&
+    !value.conditionAssignments.every(function (a) {
+      return a && a.testLevel === value.layer;
+    })
+  ) {
+    errors.push(label + '.conditionAssignments must all share this journey\\'s own .layer value.');
   }
   if (typeof value.journeyId !== 'string' || value.journeyId.length === 0) {
     errors.push(label + '.journeyId must be a non-empty string.');

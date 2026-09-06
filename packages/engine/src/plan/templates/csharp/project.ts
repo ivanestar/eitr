@@ -533,17 +533,85 @@ public class RadioGroup : Container
 }
 
 export function renderCsharpApiClient(): string {
-  return `using System.Net.Http;
+  return `using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace Shared.Utils;
 
 public class ApiClient
 {
     private readonly HttpClient _client;
+    private string? _authToken;
 
-    public ApiClient(string baseUrl)
+    /// <summary>
+    /// storageStatePath: shares a captured browser session's cookies (default ".auth/user.json",
+    /// written by /auth-setup) via a real CookieContainer - not a hand-built header string, which
+    /// would corrupt on a cookie value containing ";"/","/quotes - so API calls authenticate the
+    /// same way the UI does. Pass null to skip loading a session. authToken: falls back to
+    /// E2E_API_TOKEN / AUTH_TOKEN from the environment (.env) when not passed explicitly, mirroring
+    /// the other language ApiClients.
+    /// </summary>
+    public ApiClient(string baseUrl, string? storageStatePath = ".auth/user.json", string? authToken = null)
     {
-        _client = new HttpClient { BaseAddress = new Uri(baseUrl) };
+        var baseUri = new Uri(baseUrl);
+        var cookieContainer = new CookieContainer();
+        if (storageStatePath != null)
+        {
+            foreach (var (name, value) in LoadStorageStateCookies(storageStatePath))
+            {
+                cookieContainer.Add(baseUri, new Cookie(name, value));
+            }
+        }
+        _client = new HttpClient(new HttpClientHandler { CookieContainer = cookieContainer })
+        {
+            BaseAddress = baseUri,
+        };
+        _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _authToken = authToken ?? Environment.GetEnvironmentVariable("E2E_API_TOKEN") ?? Environment.GetEnvironmentVariable("AUTH_TOKEN");
+        if (!string.IsNullOrEmpty(_authToken))
+        {
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _authToken);
+        }
+    }
+
+    /// <summary>
+    /// Set (or clear, passing null) the bearer token injected into every subsequent request's
+    /// Authorization header. Call this after an API-based login step returns an access_token, so
+    /// the rest of that test's API calls (create/modify/delete/read preconditions) authenticate
+    /// the same way the real application does.
+    /// </summary>
+    public void SetAuthToken(string? token)
+    {
+        _authToken = token;
+        _client.DefaultRequestHeaders.Authorization =
+            string.IsNullOrEmpty(token) ? null : new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    /// <summary>
+    /// Read cookies out of a Playwright storage-state JSON file (e.g. .auth/user.json), so an
+    /// ApiClient can reuse a browser session's cookie-based auth instead of an unauthenticated
+    /// request. Returns an empty dictionary when the file does not exist.
+    /// </summary>
+    public static Dictionary<string, string> LoadStorageStateCookies(string storageStatePath)
+    {
+        var cookies = new Dictionary<string, string>();
+        if (!File.Exists(storageStatePath))
+        {
+            return cookies;
+        }
+        using var doc = JsonDocument.Parse(File.ReadAllText(storageStatePath));
+        if (doc.RootElement.TryGetProperty("cookies", out var cookiesEl))
+        {
+            foreach (var cookie in cookiesEl.EnumerateArray())
+            {
+                cookies[cookie.GetProperty("name").GetString()!] = cookie.GetProperty("value").GetString()!;
+            }
+        }
+        return cookies;
     }
 
     public async Task<HttpResponseMessage> GetAsync(string endpoint)

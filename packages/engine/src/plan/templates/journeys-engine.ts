@@ -1,9 +1,12 @@
 // Template for generating scripts/compose-journeys.mjs. create-if-absent.
-// Deterministic bridge from Stage 2's test-conditions.json to artifacts/test-cases/test-cases.json: groups
-// each route's reviewed conditions into one journey and classifies every condition onto a test
-// level (e2e/api/ui-only). Zero model involvement, zero dependency on criticalityTier or any other
-// LLM-derived signal - that judgment is too unstable to gate a structural decision on, even with
-// fixed tier definitions, per the design correction this template implements.
+// Deterministic bridge from Stage 2's test-conditions.json to artifacts/test-cases/test-cases.json:
+// classifies every reviewed condition onto a test level (e2e/api/ui-only), then groups a route's
+// conditions into one journey PER distinct level present (up to 3 per route) - never one journey
+// silently absorbing every level, which left every non-e2e condition classified but never actually
+// drafted into its own test case downstream. Zero model involvement, zero dependency on
+// criticalityTier or any other LLM-derived signal - that judgment is too unstable to gate a
+// structural decision on, even with fixed tier definitions, per the design correction this template
+// implements.
 //
 // Classification rule (in priority order):
 //   1. The one all-valid vector among a route's combinatorial/equivalence-partition conditions
@@ -201,35 +204,58 @@ function findAnchorConditionId(reviewedConditions, parameters) {
   return candidates[0].conditionId;
 }
 
-function composeForRoute(routeId, entry, existingJourney) {
+const TEST_LEVELS = ['e2e', 'api', 'ui-only'];
+
+// One journey PER distinct testLevel present among a route's reviewed conditions - not one journey
+// for the whole route regardless of level. A route with conditions at all 3 levels gets up to 3
+// journeys, each with its own stable journeyId (hashed from routeId + that level's own conditionIds,
+// so adding/removing a condition at one level never reshuffles another level's journeyId) and its
+// own independently-preserved testCase/reviewed state across re-runs.
+function composeForRoute(routeId, entry, existingJourneysByLayer) {
   const reviewedConditions = (entry.conditions || []).filter(function (c) {
     return c && c.reviewed === true;
   });
-  if (reviewedConditions.length === 0) return null;
-
-  const currentHash = computeSourceConditionsHash(reviewedConditions);
-  if (existingJourney && existingJourney.sourceConditionsHash === currentHash) {
-    return existingJourney;
-  }
+  if (reviewedConditions.length === 0) return [];
 
   const parameters = entry.parameters || [];
   const anchorId = findAnchorConditionId(reviewedConditions, parameters);
-  const conditionAssignments = reviewedConditions.map(function (c) {
+  const byLayer = { e2e: [], api: [], 'ui-only': [] };
+  for (const c of reviewedConditions) {
     const result = classify(c, parameters, anchorId);
-    return { conditionId: c.conditionId, testLevel: result.testLevel, reason: result.reason };
-  });
-  const conditionIds = reviewedConditions.map(function (c) {
-    return c.conditionId;
-  });
+    byLayer[result.testLevel].push({
+      conditionId: c.conditionId,
+      testLevel: result.testLevel,
+      reason: result.reason,
+    });
+  }
 
-  return {
-    journeyId: journeyId(routeId, conditionIds),
-    routeId: routeId,
-    conditionAssignments: conditionAssignments,
-    reviewed: false,
-    sourceConditionsHash: currentHash,
-    analyzedAt: new Date().toISOString(),
-  };
+  const journeys = [];
+  for (const layer of TEST_LEVELS) {
+    const assignments = byLayer[layer];
+    if (assignments.length === 0) continue;
+    const conditionIds = assignments.map(function (a) {
+      return a.conditionId;
+    });
+    const layerConditions = reviewedConditions.filter(function (c) {
+      return conditionIds.indexOf(c.conditionId) !== -1;
+    });
+    const currentHash = computeSourceConditionsHash(layerConditions);
+    const existingJourney = existingJourneysByLayer[layer];
+    if (existingJourney && existingJourney.sourceConditionsHash === currentHash) {
+      journeys.push(existingJourney);
+      continue;
+    }
+    journeys.push({
+      journeyId: journeyId(routeId, conditionIds),
+      routeId: routeId,
+      layer: layer,
+      conditionAssignments: assignments,
+      reviewed: false,
+      sourceConditionsHash: currentHash,
+      analyzedAt: new Date().toISOString(),
+    });
+  }
+  return journeys;
 }
 
 function checkShape(data) {
@@ -262,11 +288,17 @@ function compose() {
   const routes = {};
   for (const [routeId, entry] of Object.entries(data.routes)) {
     const existingEntry = existingRoutes[routeId];
-    const existingJourney =
-      existingEntry && Array.isArray(existingEntry.journeys) ? existingEntry.journeys[0] : null;
-    const journey = composeForRoute(routeId, entry, existingJourney);
-    if (!journey) continue;
-    routes[routeId] = { routeId: routeId, journeys: [journey] };
+    const existingJourneysByLayer = { e2e: null, api: null, 'ui-only': null };
+    if (existingEntry && Array.isArray(existingEntry.journeys)) {
+      for (const j of existingEntry.journeys) {
+        if (j && j.layer && Object.prototype.hasOwnProperty.call(existingJourneysByLayer, j.layer)) {
+          existingJourneysByLayer[j.layer] = j;
+        }
+      }
+    }
+    const journeys = composeForRoute(routeId, entry, existingJourneysByLayer);
+    if (journeys.length === 0) continue;
+    routes[routeId] = { routeId: routeId, journeys: journeys };
   }
 
   const report = {

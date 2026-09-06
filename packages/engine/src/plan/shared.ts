@@ -42,6 +42,8 @@ import { renderPipelineStatus } from './templates/pipeline-status.js';
 import { renderAuthStatus } from './templates/auth-status.js';
 import { renderJourneysTypes } from './templates/journeys-types.js';
 import { renderJourneysEngine } from './templates/journeys-engine.js';
+import { renderApiContractsTypes } from './templates/api-contracts-types.js';
+import { renderApiContractsValidator } from './templates/api-contracts-validator.js';
 import { renderJourneysValidator } from './templates/journeys-validator.js';
 
 /**
@@ -118,6 +120,18 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderSiteMapValidator() },
+          },
+          {
+            path: '.scaffold/schemas/api-contracts.types.ts',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderApiContractsTypes() },
+          },
+          {
+            path: 'scripts/validate-api-contracts.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderApiContractsValidator() },
           },
           {
             path: 'scripts/check-sitemap-coverage.mjs',

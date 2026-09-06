@@ -47,6 +47,7 @@ function wellFormedJourneysStructuralOnly() {
           {
             journeyId: 'j1a2b3c4d5e6f7a8',
             routeId: 'route-checkout',
+            layer: 'e2e',
             conditionAssignments: [
               {
                 conditionId: 'a1b2c3d4e5f6a1b2',

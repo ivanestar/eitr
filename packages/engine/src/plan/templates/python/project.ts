@@ -14,6 +14,7 @@ export interface PythonProjectOpts {
 export function renderPythonConftest(_opts?: Pick<PythonProjectOpts, 'baseUrl'>): string {
   return `"""Root conftest — shared Playwright fixtures for the whole test suite."""
 from collections.abc import Iterator
+import json
 import pathlib
 import pytest
 from dotenv import load_dotenv
@@ -40,8 +41,18 @@ def browser_context_args(browser_context_args: dict) -> dict:
 
 @pytest.fixture
 def api_client(base_url: str) -> Iterator[ApiClient]:
-    """Fixture providing an ApiClient instance with automatic cleanup."""
-    with ApiClient(base_url=base_url) as client:
+    """Fixture providing an ApiClient instance with automatic cleanup.
+
+    Shares cookies with the captured browser session (.auth/user.json, written by /auth-setup)
+    when present, so API-based preconditions authenticate the same way the UI does. Token-based
+    sessions still work via api_client.set_auth_token(...) after an API login step.
+    """
+    cookies: dict[str, str] = {}
+    auth_file = pathlib.Path(".auth/user.json")
+    if auth_file.is_file():
+        state = json.loads(auth_file.read_text())
+        cookies = {c["name"]: c["value"] for c in state.get("cookies", [])}
+    with ApiClient(base_url=base_url, cookies=cookies) as client:
         yield client
 
 
@@ -156,6 +167,7 @@ Requires: pip install httpx  (or add to pyproject.toml [project.optional-depende
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 
 try:
@@ -175,12 +187,36 @@ class ApiClient:
             users = response.json()
     """
 
-    def __init__(self, base_url: str = "${opts.baseUrl}") -> None:
+    def __init__(
+        self,
+        base_url: str = "${opts.baseUrl}",
+        cookies: dict[str, str] | None = None,
+        auth_token: str | None = None,
+    ) -> None:
         if httpx is None:
             raise ImportError(
                 "httpx package is required for ApiClient. Install it with: pip install httpx"
             )
-        self._client = httpx.Client(base_url=base_url.rstrip("/"), timeout=30)
+        # Falls back to E2E_API_TOKEN / AUTH_TOKEN from the environment (.env) when not passed
+        # explicitly, mirroring the TypeScript ApiClient's own default resolution.
+        self._auth_token = auth_token or os.getenv("E2E_API_TOKEN") or os.getenv("AUTH_TOKEN")
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        if self._auth_token:
+            headers["Authorization"] = f"Bearer {self._auth_token}"
+        self._client = httpx.Client(
+            base_url=base_url.rstrip("/"), timeout=30, cookies=cookies or {}, headers=headers
+        )
+
+    def set_auth_token(self, token: str | None) -> None:
+        """Set (or clear, passing None) the bearer token injected into every subsequent request's
+        Authorization header. Call this after an API-based login step returns an access_token, so
+        the rest of that test's API calls (create/modify/delete/read preconditions) authenticate
+        the same way the real application does."""
+        self._auth_token = token
+        if token:
+            self._client.headers["Authorization"] = f"Bearer {token}"
+        else:
+            self._client.headers.pop("Authorization", None)
 
     # ── HTTP verbs ────────────────────────────────────────────────────────────
 
@@ -207,6 +243,8 @@ class ApiClient:
         if variables:
             payload["variables"] = variables
         response = self._client.post("/graphql", json=payload)
+        return response.json()
+
     # ── Test Data Management (TDM) ─────────────────────────────────────────────
 
     @staticmethod
