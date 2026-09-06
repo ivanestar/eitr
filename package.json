@@ -48,7 +48,13 @@
     "testrail",
     "xray",
     "azure-devops",
-    "zephyr"
+    "zephyr",
+    "ai-testing",
+    "agentic-testing",
+    "sdet",
+    "agent-skills",
+    "claude-code",
+    "ai-agents"
   ],
   "workspaces": [
     "packages/*"

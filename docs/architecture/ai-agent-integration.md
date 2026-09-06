@@ -15,6 +15,7 @@ Generated Test Repository
 │   ├── sdet-architect        -- Architecture governance, DI fixtures & CPOM validation
 │   ├── pom-engineer          -- DOM inspection, Page Object generation & live-DOM liveness checking
 │   ├── test-automator        -- Linear test synthesis from TMS, dynamic TDM & fast-path API
+│   ├── test-data-engineer    -- Structured/bulk datasets & minimal-valid file fixtures on request
 │   ├── assertion-auditor     -- Web-first anti-fake-green guard & mutation verification
 │   ├── trace-debugger        -- Playwright trace analysis & Two-Strike self-healing
 │   └── review-arbiter        -- Independent Review Arbiter, adjudicates multi-agent findings (Protocol 123)
@@ -27,7 +28,9 @@ Generated Test Repository
 │   ├── /heal-test            -- 4-Point trace inspection + Two-Strike autonomous fix loop
 │   ├── /bulk-rescan          -- Batch locator update on Page Objects, re-verified against the live DOM
 │   ├── /ground-zero-setup    -- Guided orchestrator: chains /map-site + /define-test-conditions +
-│   │                             /design-test-cases, with a human sign-off gate per stage, or auto-pilot
+│   │                             /design-test-cases + /automate-test end-to-end, one command from
+│   │                             nothing to verified working tests, with a human sign-off gate per
+│   │                             stage (or auto-pilot for local review; code synthesis always gated)
 │   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
 │   │                             optional read-only business-intent analysis (ADR 0012 Stage 1)
 │   ├── /define-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
@@ -197,28 +200,33 @@ blocking the pipeline on it.
 
 ## Guided greenfield orchestration (`/ground-zero-setup`)
 
-A thin orchestrator over Stage 1, Stage 2, and Stage 3 for a brand-new application, adding no
-analysis logic of its own. `pipeline-status.mjs` also computes a fixed roadmap string (all four
-stages plus their review points, current position bracketed) that this skill and every stage it
-sequences print at each human-facing stop, so Stage 4 (`/automate-test`) is always visible as the
-pipeline's own next step - informational only, never run by this orchestrator itself. It sequences
-`/map-site create` (with its automatic Step 6),
-`/define-test-conditions`, and `/design-test-cases` in order, pausing at each stage's own Human
-Sign-Off Gateway by default (Guided mode) - except `/design-test-cases`, which has no blocking gate
-of its own and is simply run and moved past - or writing `reviewedBy: 'auto-pilot'` straight through
-on the user's own explicit pre-authorization (Auto-pilot mode). What runs next is never hardcoded in
-the orchestrator's own prose - both it and the underlying skills' own end-of-run hints consult one
-deterministic script, `scripts/pipeline-status.mjs`, which recomputes the pipeline's current stage
-from real artifact state on disk (site map existence, reviewed business-intent entries, reviewed
-test conditions, drafted/automated journeys) every time it runs, never from a cached belief. This
-keeps the single-source-of-truth property intact as later stages get added - extending the script's
-stage list is the only change a new stage needs, not a rewrite of the orchestrator's own sequencing.
-Once the pipeline reaches `test-cases-drafted` (or `complete`, once every drafted case has been
-automated), this skill stops honestly on purpose: `/automate-test` synthesizes and executes real
-code, a materially different action than approving a JSON review artifact, so triggering it stays an
-explicit, separate human command in every mode, including auto-pilot. `/automate-test` itself now
-reads `artifacts/test-cases/test-cases.json` directly when invoked with no ticket ID - no TMS ticket required
-to close the loop from a from-nothing greenfield project.
+A thin orchestrator over all four stages for a brand-new application, adding no analysis or
+code-synthesis logic of its own. `pipeline-status.mjs` also computes a fixed roadmap string (all
+four stages plus their review points, current position bracketed) that this skill and every stage it
+sequences print at each human-facing stop, plus a script-authored `preFlightNotice` (roadmap + cost
+warning + human-gates disclosure, printed verbatim rather than composed fresh by the model each run),
+per-stage `stageTimings` (derived from each artifact's own timestamp, not a guess), and
+`routeCoverage` (routes mapped/reviewed/automated, and any flagged as likely crawler artifacts). It
+sequences `/map-site create` (with its automatic Step 6), `/define-test-conditions`,
+`/design-test-cases`, and `/automate-test` in order, pausing at each stage's own Human Sign-Off
+Gateway by default (Guided mode) - except `/design-test-cases`, which has no blocking gate of its
+own and is simply run and moved past - or writing `reviewedBy: 'auto-pilot'` straight through on the
+user's own explicit pre-authorization for local artifact review (Auto-pilot mode). Guided mode merges
+what used to be two separate exchanges (approve-this-stage, then what-next) into one combined
+question. What runs next is never hardcoded in the orchestrator's own prose - both it and the
+underlying skills' own end-of-run hints consult one deterministic script, `scripts/pipeline-status.mjs`,
+which recomputes the pipeline's current stage from real artifact state on disk (site map existence,
+reviewed business-intent entries, reviewed test conditions, drafted/automated journeys) every time it
+runs, never from a cached belief. This keeps the single-source-of-truth property intact as later
+stages get added - extending the script's stage list is the only change a new stage needs, not a
+rewrite of the orchestrator's own sequencing. `/automate-test` is an in-chain stage like the three
+before it, not a separate command the user must remember to run afterward - but the one point where
+code actually gets synthesized and executed still needs its own human decision: `/automate-test`'s
+own Step 4 Human Sign-Off Gateway remains a hard blocking stop in every mode, including auto-pilot,
+never bypassed by this orchestrator's own local-review pre-authorization. The Final Report - files
+changed, gate results, review counts by `reviewedBy`, stage timings, route coverage, and the current
+pipeline stage - now prints once, at the true end of the run (`complete`), instead of prematurely at
+`test-cases-drafted`.
 
 ## Self-healing (Two-Strike Rule & 4-point trace triage)
 
