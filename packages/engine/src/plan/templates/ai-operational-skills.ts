@@ -125,9 +125,9 @@ Establishes a reusable authenticated browser state for running tests and reconna
 Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in pytest.
 
 ## Workflow
-1. **Execution Mode Decision:**
-   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write storageState directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
-   - Dedicated Fixture Script: Run \`fixtures/auth_setup.py\` on-demand (e.g. \`pytest fixtures/auth_setup.py\`) to capture authenticated browser state.
+1. **Run \`pytest fixtures/auth_setup.py\` - it already picks the right mode from \`.env\`, never attempt more than one mode yourself:**
+   - The script's two setup functions are mutually exclusive and self-select from environment variables already in \`.env\`: if \`${sc.envAccess('E2E_API_TOKEN')}\`/\`${sc.envAccess('AUTH_TOKEN')}\`/\`${sc.envAccess('E2E_SESSION_COOKIE')}\` is set, the API fast-path writes \`.auth/user.json\` instantly with zero browser; otherwise the browser-based function fills the login form from \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\` (the common case for a plain form login - no SSO/MFA/token involved).
+   - One run is enough. Only escalate to manual troubleshooting (inspect the real login page's field labels/redirect URL, adjust the script's locators) if this run genuinely fails - do not pre-emptively try an alternate mode "to be safe," and do not treat the options below as a checklist to attempt in sequence.
    - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
      * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
      * If developer session cookies are available, import them directly into storageState.
@@ -151,8 +151,9 @@ Establishes a reusable authenticated browser state for running tests and reconna
 Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in C# Playwright.
 
 ## Workflow
-1. **Execution Mode Decision:**
-   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write storageState directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
+1. **No pre-generated setup fixture exists for C# yet - default straight to assisted interactive login, do not search for a nonexistent API endpoint first:**
+   - Navigate to the application's login page with Playwright, fill credentials from \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\` yourself, submit, and call \`context.StorageStateAsync(path: ".auth/user.json")\` once authenticated - this is the common case (plain form login, no SSO/MFA/token).
+   - Only attempt an API Fast-Path (writing storageState directly via \`apiClient\`) when the target application actually exposes a documented token-issuing endpoint - never assume one exists and spend time probing for it on a plain form-login site.
    - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
      * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
      * If developer session cookies are available, import them directly into storageState.
@@ -176,8 +177,9 @@ Establishes a reusable authenticated browser state for running tests and reconna
 Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones in Java Playwright.
 
 ## Workflow
-1. **Execution Mode Decision:**
-   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write storageState directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
+1. **No pre-generated setup fixture exists for Java yet - default straight to assisted interactive login, do not search for a nonexistent API endpoint first:**
+   - Navigate to the application's login page with Playwright, fill credentials from \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\` yourself, submit, and call \`context.storageState(new BrowserContext.StorageStateOptions().setPath(Paths.get(".auth/user.json")))\` once authenticated - this is the common case (plain form login, no SSO/MFA/token).
+   - Only attempt an API Fast-Path (writing storageState directly via \`apiClient\`) when the target application actually exposes a documented token-issuing endpoint - never assume one exists and spend time probing for it on a plain form-login site.
    - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
      * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
      * If developer session cookies are available, import them directly into storageState.
@@ -201,9 +203,9 @@ Establishes a reusable authenticated browser state for running tests and reconna
 Establishes a reusable authenticated browser state for running tests and reconnaissance inside protected application zones.
 
 ## Workflow
-1. **Execution Mode Decision:**
-   - Primary (API Fast-Path Token Injection): Execute headless API authentication and write JWT/session token directly to \`.auth/user.json\` via \`apiClient\` for instant zero-browser setup.
-   - Dedicated Setup Project: Execute \`fixtures/auth.setup.ts\` to generate storageState file in \`.auth/user.json\`.
+1. **Run \`npx playwright test fixtures/auth.setup.ts\` - it already picks the right mode from \`.env\`, never attempt more than one mode yourself:**
+   - The file's two setup blocks are mutually exclusive and self-select from environment variables already in \`.env\`: if \`${sc.envAccess('E2E_API_TOKEN')}\`/\`${sc.envAccess('AUTH_TOKEN')}\`/\`${sc.envAccess('E2E_SESSION_COOKIE')}\` is set, the API fast-path writes \`.auth/user.json\` instantly with zero browser; otherwise the browser-based block runs (the common case for a plain form login - no SSO/MFA/token involved), filling the login form from \`${sc.envAccess('E2E_USERNAME')}\`/\`${sc.envAccess('E2E_PASSWORD')}\`.
+   - One run is enough. Only escalate to manual troubleshooting (inspect the real login page's field labels/redirect URL, adjust the block's locators) if this run genuinely fails - do not pre-emptively try an alternate mode "to be safe," and do not treat the options below as a checklist to attempt in sequence.
    - Interactive & MFA Fallback: If blocked by SSO (Okta, Keycloak, Azure AD), MFA, or TOTP:
      * If \`${sc.envAccess('TOTP_SECRET')}\` is provided, automatically generate TOTP 2FA code (RFC 6238).
      * If developer session cookies are available, import them directly into storageState.
