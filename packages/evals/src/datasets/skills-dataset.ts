@@ -1,7 +1,6 @@
 /**
  * Golden Dataset for evaluating EITR Operational Skills against their documented workflow.
- * Not full coverage of every generated skill - protocol-123 has its own dedicated eval suite
- * (protocol-123-*.test.ts).
+ * Not full coverage of every generated skill.
  */
 
 export interface GoldenSkillCase {

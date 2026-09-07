@@ -111,4 +111,17 @@ describe('Protocol 123 Meta-Agents Suite (.agents/agents/)', () => {
     expect(skillContent).toContain('npm run eval');
     expect(skillContent).toContain('Test Quality Rubric');
   });
+
+  it('verifies Protocol 123 SKILL.md and AGENTS.md include Telemetry Summary in Phase 8', () => {
+    const skillContent = fs.readFileSync(
+      path.resolve(process.cwd(), '.agents/skills/protocol-123/SKILL.md'),
+      'utf8',
+    );
+    expect(skillContent).toContain('Protocol 123 Telemetry Summary');
+    expect(skillContent).toContain('Est. Tokens');
+    expect(skillContent).toContain('Est. Cost');
+
+    const agentsMdContent = fs.readFileSync(path.resolve(process.cwd(), 'AGENTS.md'), 'utf8');
+    expect(agentsMdContent).toContain('Telemetry Summary');
+  });
 });

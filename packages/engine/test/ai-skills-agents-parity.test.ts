@@ -132,5 +132,13 @@ describe('Polymorphic AI Operational Skills & AI Agents Parity (AC-5, AC-6, AC-7
       const pomText = (pom.source as { text: string }).text;
       expect(pomText).toContain('src/main/java/components/pages/');
     });
+
+    it('sdet-orchestrator points at named pipeline skills generically, never re-describing or hardcoding a specific one', () => {
+      const agents = planAiAgents(['antigravity'], 'playwright', 'typescript');
+      const orchestrator = agents.find((a) => a.path.includes('sdet-orchestrator'))!;
+      const text = (orchestrator.source as { text: string }).text;
+      expect(text).toContain('Named Pipeline Skills');
+      expect(text).toContain('never reimplement, shortcut, or re-describe');
+    });
   });
 });
