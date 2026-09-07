@@ -25,8 +25,9 @@ export function renderSwarmDispatcher(): string {
  * --phase=plan reads artifacts/site-map/site-map.json and outputs a 4-tier DAG: Level 0 (base
  * primitives, always empty - pre-existing seed content), Level 1 (shared widgets, from the site
  * map's own sharedWidgets list), Level 2 (pages - one worker per active route, optionally scoped
- * via --routes/--routes-file), Level 3 (journeys, reserved for future cross-route scenario
- * synthesis). Workers carry routeId/path/sampleUrl/slug only - never a full target file path, since
+ * via --routes/--routes-file), Level 3 (journeys - one worker per drafted journey in
+ * artifacts/test-cases/test-cases.json that is not yet automated, i.e. reviewed !== true, scoped by
+ * the same route filter; empty until /design-test-cases has run). Workers carry routeId/path/sampleUrl/slug only - never a full target file path, since
  * the Page Object naming convention (*.page.ts vs *_page.py vs *Page.java/.cs) is per-language and
  * already lives in this project's own AI rules; the calling agent already knows the language.
  */
@@ -38,6 +39,7 @@ import process from 'node:process';
 
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
+const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 
 function argValue(name) {
   const prefix = '--' + name + '=';
@@ -147,16 +149,17 @@ function planPhase() {
   const sharedWidgets = Array.isArray(siteMap.sharedWidgets)
     ? siteMap.sharedWidgets.slice().sort()
     : [];
+  const journeyWorkers = planJourneyWorkers(routes, filter);
   const maxConcurrency = Math.max(1, Math.min(os.cpus().length, 4));
 
   const output = {
-    status: workers.length > 0 ? 'READY' : 'EMPTY',
+    status: workers.length > 0 || journeyWorkers.length > 0 ? 'READY' : 'EMPTY',
     maxConcurrency: maxConcurrency,
     dag_waves: [
       { level: 0, name: 'primitives', workers: [] },
       { level: 1, name: 'shared_widgets', workers: sharedWidgets },
       { level: 2, name: 'pages', workers: workers },
-      { level: 3, name: 'journeys', workers: [] },
+      { level: 3, name: 'journeys', workers: journeyWorkers },
     ],
   };
 
@@ -164,6 +167,51 @@ function planPhase() {
   if (workers.length === 0 && !filter) {
     process.stderr.write('[orchestrate-swarm] no active routes found in site-map.json.\\n');
   }
+}
+
+// Level 3 is one worker per drafted-but-not-yet-automated journey. A journey is the natural unit
+// here because each one produces exactly one spec file, so two workers never write the same file.
+// Automating a large batch serially in a single agent turn was live-observed stopping at 12 of 92
+// with no explicit hand-off; a deterministic worker list makes "how many are left" a fact the
+// caller reads rather than a number it has to keep in its head.
+function planJourneyWorkers(routes, filter) {
+  if (!fs.existsSync(JOURNEYS_PATH)) return [];
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(JOURNEYS_PATH, 'utf8'));
+  } catch {
+    return [];
+  }
+  const journeyRoutes = data && typeof data.routes === 'object' && data.routes !== null ? data.routes : {};
+
+  const routePathByRouteId = new Map();
+  for (const [routePath, route] of Object.entries(routes)) {
+    if (route && typeof route.routeId === 'string') routePathByRouteId.set(route.routeId, routePath);
+  }
+
+  const workers = [];
+  for (const entry of Object.values(journeyRoutes)) {
+    const journeys = entry && Array.isArray(entry.journeys) ? entry.journeys : [];
+    for (const journey of journeys) {
+      if (!journey || !journey.testCase) continue;
+      // reviewed:true is what /automate-test sets once a journey's test is written and green.
+      if (journey.reviewed === true) continue;
+      const routePath = routePathByRouteId.get(journey.routeId) || null;
+      if (filter && !filter.has(journey.routeId) && (routePath === null || !filter.has(routePath))) {
+        continue;
+      }
+      workers.push({
+        workerId: 'journey-' + String(journey.journeyId || '').slice(0, 12),
+        journeyId: journey.journeyId || null,
+        routeId: journey.routeId || null,
+        path: routePath,
+        layer: journey.layer || null,
+        title: (journey.testCase && journey.testCase.title) || null,
+      });
+    }
+  }
+  workers.sort((a, b) => String(a.workerId).localeCompare(String(b.workerId)));
+  return workers;
 }
 
 function checkTarget(target) {

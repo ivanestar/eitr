@@ -129,32 +129,45 @@ function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeysRoute
 // Fixed, deterministic roadmap of the whole greenfield pipeline - one string, printed by every
 // skill at every human-facing stop, so the human always sees where they are without re-deriving it
 // themselves. Position is computed from the stage value below, never guessed by the model.
+// Only the four real stages. An earlier version interleaved a literal 'Review' step between each
+// pair, which rendered as one long line repeating the same context-free word four times and wrapped
+// into an illegible block in any real terminal - the review pause is a property of every stage, so
+// it is stated once in the pre-flight notice instead of being fake-staged four times here.
 const ROADMAP_STEPS = [
-  'Stage 1: Create a site map',
-  'Review',
-  'Stage 2: Define test conditions',
-  'Review',
-  'Stage 3: Design test cases',
-  'Review',
-  'Stage 4: Automate test cases',
-  'Review',
+  { short: 'Site map', blurb: 'crawl the app, and work out what each page is for' },
+  { short: 'Test conditions', blurb: 'decide what should be tested on each page' },
+  { short: 'Test cases', blurb: 'turn those into concrete, readable test cases' },
+  { short: 'Automated tests', blurb: 'write the real test code and run it' },
 ];
 
-const STAGE_TO_ROADMAP_INDEX = {
-  'not-started': 0,
-  'business-intent-pending-review': 1,
-  'business-intent-reviewed': 2,
-  'test-conditions-pending-review': 3,
-  'test-conditions-reviewed': 4,
-  'test-cases-drafted': 5,
-  complete: 7,
+// Each stage has two distinguishable positions - being worked on, and waiting for the human's
+// review - so a stage index alone cannot say which of the two the human is looking at.
+const STAGE_POSITION = {
+  'not-started': { index: 0, phase: 'run' },
+  'business-intent-pending-review': { index: 0, phase: 'review' },
+  'business-intent-reviewed': { index: 1, phase: 'run' },
+  'test-conditions-pending-review': { index: 1, phase: 'review' },
+  'test-conditions-reviewed': { index: 2, phase: 'run' },
+  'test-cases-drafted': { index: 3, phase: 'run' },
+  complete: { index: 3, phase: 'done' },
 };
 
+function positionFor(stage) {
+  return STAGE_POSITION[stage] || { index: 0, phase: 'run' };
+}
+
 function formatRoadmap(stage) {
-  const currentIndex = STAGE_TO_ROADMAP_INDEX[stage];
-  if (currentIndex === undefined) return ROADMAP_STEPS.join(' -> ');
+  const position = STAGE_POSITION[stage];
+  const marker =
+    position && position.phase === 'review'
+      ? ' <- awaiting your review'
+      : position && position.phase === 'done'
+        ? ' <- done'
+        : ' <- you are here';
   return ROADMAP_STEPS.map(function (step, i) {
-    return i === currentIndex ? '[' + step + ' <- you are here]' : step;
+    const label = 'S' + (i + 1) + ' ' + step.short;
+    if (!position || i !== position.index) return label;
+    return '[' + label + marker + ']';
   }).join(' -> ');
 }
 
@@ -229,9 +242,27 @@ const COST_WARNING =
 const HUMAN_GATES_DISCLOSURE =
   "By default there is a pause after every stage, where that stage's own review artifact is presented and you must approve before the next stage runs.";
 
-function computePreFlightNotice(roadmap, coverage) {
-  const lines = ['Roadmap: ' + roadmap, 'Cost warning: ' + COST_WARNING, 'Human gates: ' + HUMAN_GATES_DISCLOSURE];
+// Rendered as a short vertical block rather than one long concatenated line: the previous
+// single-line form wrapped unpredictably and buried the one fact a first-time user actually needs
+// (what these four stages are) inside the same paragraph as the cost warning.
+function computePreFlightNotice(stage, coverage) {
+  const position = positionFor(stage);
+  const widest = ROADMAP_STEPS.reduce(function (max, step) {
+    return Math.max(max, step.short.length);
+  }, 0);
+  const lines = ['Four stages, each one ending with your review:', ''];
+  ROADMAP_STEPS.forEach(function (step, i) {
+    const isHere = i === position.index;
+    const padded = step.short + ' '.repeat(widest - step.short.length);
+    lines.push(
+      '  ' + (i + 1) + '. ' + padded + '  ' + step.blurb + (isHere ? '   <- you are here' : ''),
+    );
+  });
+  lines.push('');
+  lines.push('Time and cost: ' + COST_WARNING);
+  lines.push('Your control:  ' + HUMAN_GATES_DISCLOSURE);
   if (coverage.likelyPhantomRoutes > 0) {
+    lines.push('');
     lines.push(
       'Heads up: ' +
         coverage.likelyPhantomRoutes +
@@ -324,7 +355,7 @@ function main() {
   const roadmap = formatRoadmap(status.stage);
   const routeCoverage = computeRouteCoverage(siteMap, businessIntent, testConditions, journeysRoutes);
   const stageTimings = computeStageTimings(siteMap, businessIntent, testConditions, journeysData);
-  const preFlightNotice = computePreFlightNotice(roadmap, routeCoverage);
+  const preFlightNotice = computePreFlightNotice(status.stage, routeCoverage);
 
   process.stdout.write(
     JSON.stringify(

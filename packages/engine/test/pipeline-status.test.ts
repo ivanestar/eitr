@@ -249,10 +249,14 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('not-started');
       expect(output.nextCommand).toBe('/map-site create');
-      // Roadmap: current stage bracketed, every other stage plain, printed in fixed order.
+      // Roadmap: current stage bracketed, every other stage plain, printed in fixed order. Only
+      // the four real stages appear - the review pause belongs to every stage, so it is stated
+      // once in preFlightNotice rather than interleaved as four context-free 'Review' entries.
       expect(output.roadmap).toBe(
-        '[Stage 1: Create a site map <- you are here] -> Review -> Stage 2: Define test conditions -> Review -> Stage 3: Design test cases -> Review -> Stage 4: Automate test cases -> Review',
+        '[S1 Site map <- you are here] -> S2 Test conditions -> S3 Test cases -> S4 Automated tests',
       );
+      expect(output.preFlightNotice).toContain('Four stages, each one ending with your review:');
+      expect(output.preFlightNotice).not.toContain('-> Review ->');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -410,7 +414,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       expect(output.stage).toBe('complete');
       expect(output.nextCommand).toBeNull();
       expect(output.roadmap).toBe(
-        'Stage 1: Create a site map -> Review -> Stage 2: Define test conditions -> Review -> Stage 3: Design test cases -> Review -> Stage 4: Automate test cases -> [Review <- you are here]',
+        'S1 Site map -> S2 Test conditions -> S3 Test cases -> [S4 Automated tests <- done]',
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });

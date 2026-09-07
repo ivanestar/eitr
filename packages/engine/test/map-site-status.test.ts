@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderMapSiteStatus } from '../src/plan/templates/map-site-status.js';
@@ -41,6 +41,7 @@ describe('scripts/map-site-status.mjs (real execution)', () => {
         lastTouched: null,
         modeRedirected: false,
         noticeMessage: null,
+        staleScreenshotCount: 0,
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -98,6 +99,72 @@ describe('scripts/map-site-status.mjs (real execution)', () => {
       expect(output.noticeMessage).toBeNull();
       // Falls back to generatedAt when lastUpdatedAt is absent (never updated yet).
       expect(output.lastTouched).toBe('2026-09-03T10:00:00.000Z');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('prune-screenshots deletes only images no current routeId references, and leaves other files alone', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, {
+        schemaVersion: 2,
+        generatedAt: '2026-09-03T10:00:00.000Z',
+        routes: { '/': { routeId: 'keep-me' } },
+      });
+      const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+      mkdirSync(shots, { recursive: true });
+      writeFileSync(join(shots, 'keep-me.jpg'), 'referenced', 'utf8');
+      writeFileSync(join(shots, 'orphan-a.jpg'), 'stale', 'utf8');
+      writeFileSync(join(shots, 'orphan-b.webp'), 'stale', 'utf8');
+      // Not an image this pipeline produces - never touched, even though no route references it.
+      writeFileSync(join(shots, 'notes.txt'), 'unrelated', 'utf8');
+
+      const output = run(dir, 'prune-screenshots');
+      expect(output.action).toBe('prune-screenshots');
+      expect(output.pruned).toBe(2);
+      expect(output.failures).toEqual([]);
+      expect(existsSync(join(shots, 'keep-me.jpg'))).toBe(true);
+      expect(existsSync(join(shots, 'notes.txt'))).toBe(true);
+      expect(existsSync(join(shots, 'orphan-a.jpg'))).toBe(false);
+      expect(existsSync(join(shots, 'orphan-b.webp'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('prune-screenshots deletes nothing when the site map is missing - every file would look stale', () => {
+    const dir = setupProject();
+    try {
+      const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+      mkdirSync(shots, { recursive: true });
+      writeFileSync(join(shots, 'a.jpg'), 'x', 'utf8');
+
+      const output = run(dir, 'prune-screenshots');
+      expect(output.pruned).toBe(0);
+      expect(output.skippedReason).toContain('nothing was deleted');
+      expect(existsSync(join(shots, 'a.jpg'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports how many screenshots are stale without deleting them during ordinary mode resolution', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, {
+        schemaVersion: 2,
+        generatedAt: '2026-09-03T10:00:00.000Z',
+        routes: { '/': { routeId: 'keep-me' } },
+      });
+      const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+      mkdirSync(shots, { recursive: true });
+      writeFileSync(join(shots, 'keep-me.jpg'), 'referenced', 'utf8');
+      writeFileSync(join(shots, 'orphan-a.jpg'), 'stale', 'utf8');
+
+      const output = run(dir, 'create');
+      expect(output.staleScreenshotCount).toBe(1);
+      expect(existsSync(join(shots, 'orphan-a.jpg'))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

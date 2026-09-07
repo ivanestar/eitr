@@ -22,6 +22,8 @@ Two modes are supported:
 
 Options:
   --url <url>           Login page URL (optional, auto-detected from playwright.config.ts / .env if omitted)
+  --role <name>         Capture this role's own session (writes .auth/<name>.json). Letters, digits,
+                        '-' and '_' only. Ignored when --output is given explicitly.
   --output <file>       Path to write the storage state JSON (default: .auth/user.json)
   --mode <headed|token> Execution mode (default: headed)
   --token <string>      Bearer token value (overrides E2E_API_TOKEN env var)
@@ -32,10 +34,26 @@ Options:
 
 Examples:
   eitr auth
+  eitr auth --role admin
   eitr auth --url https://app.example.com/login
   eitr auth --url https://app.example.com/login --output auth/admin.json
   eitr auth --mode token --token-header X-API-Key
 `;
+
+/**
+ * A role name becomes a path segment, so it is validated rather than sanitized: silently rewriting
+ * `../../etc/passwd` into something safe would write a session file somewhere the caller did not ask
+ * for and could not predict, which is worse than refusing outright.
+ */
+export function resolveRoleOutput(role: string): { path: string } | { error: string } {
+  const trimmed = role.trim();
+  if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) {
+    return {
+      error: `invalid --role "${role}". Use letters, digits, '-' or '_' only (e.g. --role admin).`,
+    };
+  }
+  return { path: path.join('.auth', `${trimmed.toLowerCase()}.json`) };
+}
 
 export async function resolveTargetUrl(
   cwd: string,
@@ -117,6 +135,7 @@ export async function runAuth(argv: string[]): Promise<number> {
     args: argv,
     options: {
       url: { type: 'string' },
+      role: { type: 'string' },
       output: { type: 'string' },
       mode: { type: 'string' },
       token: { type: 'string' },
@@ -131,7 +150,17 @@ export async function runAuth(argv: string[]): Promise<number> {
   const cwd = path.resolve(cwdArg);
 
   const mode = (values['mode'] as string | undefined) ?? 'headed';
-  const outputArg = (values['output'] as string | undefined) ?? path.join('.auth', 'user.json');
+  const role = values['role'] as string | undefined;
+  let defaultOutput = path.join('.auth', 'user.json');
+  if (role !== undefined) {
+    const resolvedRole = resolveRoleOutput(role);
+    if ('error' in resolvedRole) {
+      process.stderr.write(`eitr auth: ${resolvedRole.error}\n`);
+      return 1;
+    }
+    defaultOutput = resolvedRole.path;
+  }
+  const outputArg = (values['output'] as string | undefined) ?? defaultOutput;
   const outputPath = path.resolve(cwd, outputArg);
 
   if (mode !== 'headed' && mode !== 'token') {

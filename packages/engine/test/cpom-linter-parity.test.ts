@@ -86,12 +86,14 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(text).toContain('N/A for Python');
     expect(text).toContain('Rule 5: Fixture Dependency Injection');
     expect(text).toContain('Rule 6: Inappropriate Mocking Guard');
+    expect(text).toContain('Rule 7: Hardcoded Credential Literal');
+    expect(text).toContain('@allow-credential-literal:');
     expect(text).not.toContain('Deferred');
     expect(text).not.toContain('EITR');
     expect(text).not.toContain('Eitr');
   });
 
-  it('Java linter covers all 6 rules with Now()/get*Now() parity', () => {
+  it('Java linter covers all 7 rules with Now()/get*Now() parity', () => {
     const text = renderCpomLinterJava();
     expect(text).toContain('Rule 1: Zero Arbitrary Delays');
     expect(text).toContain('Rule 2: Mandatory Now() Suffix');
@@ -99,11 +101,13 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(text).toContain('Rule 4: Non-Retrying State Assertion Guard');
     expect(text).toContain('Rule 5: Fixture Dependency Injection');
     expect(text).toContain('Rule 6: Inappropriate Mocking Guard');
+    expect(text).toContain('Rule 7: Hardcoded Credential Literal');
+    expect(text).toContain('@allow-credential-literal:');
     expect(text).not.toContain('EITR');
     expect(text).not.toContain('Eitr');
   });
 
-  it('C# linter covers all 6 rules, flags raw Assert.* as the anti-pattern, and recognizes Expect(...) as the real assertion idiom', () => {
+  it('C# linter covers all 7 rules, flags raw Assert.* as the anti-pattern, and recognizes Expect(...) as the real assertion idiom', () => {
     const text = renderCpomLinterCsharp();
     expect(text).toContain('Rule 1: Zero Arbitrary Delays');
     expect(text).toContain('Rule 2: Mandatory NowAsync() Suffix');
@@ -111,6 +115,8 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(text).toContain('Rule 4: Non-Retrying State Assertion Guard');
     expect(text).toContain('Rule 5: Fixture Dependency Injection');
     expect(text).toContain('Rule 6: Inappropriate Mocking Guard');
+    expect(text).toContain('Rule 7: Hardcoded Credential Literal');
+    expect(text).toContain('@allow-credential-literal:');
     // Rule 3 flags an assertion of ANY kind inside a component (Assert.* or Expect(...) alike -
     // components must have neither); Rule 4 specifically flags a raw Assert.That/IsTrue/IsFalse
     // wrapping a state-read call in tests, recommending Expect(...) instead. Both patterns must
@@ -167,6 +173,46 @@ describe('Per-language CPOM contract linter parity', () => {
       }
     },
   );
+
+  it('TypeScript Rule 7 flags a credential literal in a spec, and honours the declared exception', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'eitr-lint-ts-rule7-'));
+    try {
+      writeFileSync(join(dir, 'lint-cpom.js'), renderCpomLinter(), 'utf8');
+      const testsDir = join(dir, 'tests');
+      mkdirSync(testsDir, { recursive: true });
+      writeFileSync(
+        join(testsDir, 'login.spec.ts'),
+        [
+          "import { test, expect } from '@fixtures';",
+          '',
+          "test('login', async ({ loginPage }) => {",
+          // Flagged: a real account's credentials belong in environment variables.
+          "  await loginPage.usernameInput.fill('tomsmith');",
+          "  await loginPage.passwordInput.fill('SuperSecretPassword!');",
+          // Not flagged: reads from the environment, which is the prescribed pattern.
+          '  await loginPage.passwordInput.fill(process.env.E2E_PASSWORD ?? "");',
+          // Not flagged: the one legitimate exception, declared with a reason.
+          '  // @allow-credential-literal: deliberately wrong password for the rejection case',
+          "  await loginPage.passwordInput.fill('WrongPassword!');",
+          // Not flagged: not a credential-shaped target.
+          "  await loginPage.searchInput.fill('shoes');",
+          '});',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const result = spawnSync('node', ['lint-cpom.js'], { cwd: dir, encoding: 'utf8' });
+      const violations = (result.stderr.match(/Rule 7: Hardcoded Credential Literal/g) ?? [])
+        .length;
+      expect(violations).toBe(2);
+      expect(result.stderr).toContain('tomsmith');
+      expect(result.stderr).toContain('SuperSecretPassword!');
+      expect(result.stderr).not.toContain('WrongPassword!');
+      expect(result.stderr).not.toContain('shoes');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it.skipIf(pythonCmd === null)(
     'Python Rule 5 catches raw Page Object construction in a test file, but exempts conftest.py and fixture files',

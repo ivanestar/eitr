@@ -44,11 +44,16 @@ export function renderCpomLinterCsharp(): string {
 //      BrowserContext.RouteAsync()/RouteFromHARAsync() calls in test specs. A
 //      "// @allow-mock: <reason>" comment on the flagged line, the line before, or the line
 //      after suppresses it (legitimate 3rd-party isolation like analytics or Sentry).
+//   7. Hardcoded Credential Literal - rejects a non-empty string literal filled into a
+//      credential-shaped field (password/username/email/token) in a test spec. A
+//      "// @allow-credential-literal: <reason>" comment suppresses it, for the one legitimate
+//      case: a deliberately wrong value in a rejection test.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 var cwd = Directory.GetCurrentDirectory();
 var targetDirs = new[] { "components", "tests", "fixtures", "shared" };
@@ -70,6 +75,17 @@ var mockCallNeedles = new[] {
     "Page.RouteAsync(", "Context.RouteAsync(", "BrowserContext.RouteAsync(",
     "Page.RouteFromHARAsync(", "Context.RouteFromHARAsync(", "BrowserContext.RouteFromHARAsync("
 };
+
+var CredentialTargetPattern = new Regex(
+    "(?:password|passwd|pwd|username|user_?name|email|login|token|secret|api_?key)",
+    RegexOptions.IgnoreCase);
+
+// Group 1 is the receiver immediately before FillAsync/TypeAsync; group 2 is the selector in the
+// page-level two-argument form (Page.FillAsync("#password", "x")). Matching the receiver rather
+// than the whole line is what keeps LoginPage.SearchInput.FillAsync("shoes") clean - a line-wide
+// match would flag it for "LoginPage".
+var CredentialLiteralPattern = new Regex(
+    "([A-Za-z0-9_]+)\\\\s*\\\\.(?:Fill|Type)Async\\\\s*\\\\(\\\\s*(?:\\"([^\\"]*)\\"\\\\s*,\\\\s*)?\\"[^\\"]+\\"");
 
 var violations = new List<(string File, int Line, string Rule, string Message, string Snippet)>();
 var files = new List<string>();
@@ -237,7 +253,54 @@ void AuditFile(string file)
                 }
             }
         }
+
+        var credentialMatch = CredentialLiteralPattern.Match(line);
+        if (isTest && !isFixtureOrSetup
+            && credentialMatch.Success
+            && CredentialTargetPattern.IsMatch(
+                credentialMatch.Groups[1].Value + " " + credentialMatch.Groups[2].Value)
+            && !HasAllowCredentialSuppression(lines, i))
+        {
+            violations.Add((relPath, lineNum, "Rule 7: Hardcoded Credential Literal",
+                "Credential-shaped literal typed into a credential field in a test spec. Read a real " +
+                "account's value from an environment variable (E2E_PASSWORD, or the per-role " +
+                "E2E_<ROLE>_PASSWORD), or generate one via the project's test-data helpers. If this " +
+                "literal is deliberately invalid test data for a rejection case, annotate with " +
+                "\\"// @allow-credential-literal: <reason>\\".",
+                trimmed));
+        }
     }
+}
+
+bool HasAllowCredentialSuppression(string[] lines, int idx)
+{
+    for (var i = idx - 1; i <= idx + 1; i++)
+    {
+        if (i < 0 || i >= lines.Length)
+        {
+            continue;
+        }
+        if (LineHasMarker(lines[i], "@allow-credential-literal:"))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool LineHasMarker(string candidate, string marker)
+{
+    var markerIdx = candidate.IndexOf(marker, StringComparison.Ordinal);
+    if (markerIdx < 0)
+    {
+        return false;
+    }
+    var slashIdx = candidate.LastIndexOf("//", markerIdx, StringComparison.Ordinal);
+    if (slashIdx < 0 || candidate.Substring(slashIdx + 2, markerIdx - slashIdx - 2).Trim().Length > 0)
+    {
+        return false;
+    }
+    return candidate.Substring(markerIdx + marker.Length).Trim().Length > 0;
 }
 
 bool HasAllowMockSuppression(string[] lines, int idx)

@@ -6,15 +6,23 @@
 // and compose the reset-warning text fresh each time, the same failure mode pipeline-status.mjs's
 // own preFlightNotice already guards against elsewhere (a model composing a warning it's supposed to
 // print verbatim can silently shorten or drop it).
+//
+// It also owns screenshot lifecycle. A `create` pass regenerates every routeId, and screenshots are
+// keyed by routeId - so every re-crawl orphaned the previous pass's image files, which nothing ever
+// deleted. Live-observed result: 1239 files (~146 MB) on disk backing a 44-route site map. Pruning
+// belongs here rather than in the skill's prose for the same reason mode resolution does: "which
+// files are no longer referenced" is a pure fact about on-disk state, not a judgment call.
 export function renderMapSiteStatus(): string {
   return `#!/usr/bin/env node
 
 /**
- * Resolves /map-site's create/update mode from real artifacts/site-map/site-map.json state - zero
- * model involvement, safe to run at any time.
+ * Resolves /map-site's create/update mode from real artifacts/site-map/site-map.json state, and
+ * prunes screenshot files no current route references - zero model involvement, safe to run at any
+ * time.
  *
  * Usage:
  *   node scripts/map-site-status.mjs <create|update>
+ *   node scripts/map-site-status.mjs prune-screenshots
  */
 
 import fs from 'node:fs';
@@ -23,6 +31,8 @@ import process from 'node:process';
 
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
+const SCREENSHOT_DIR = path.join(CWD, 'artifacts', 'site-map', 'screenshots');
+const SCREENSHOT_EXTENSIONS = ['.jpg', '.jpeg', '.webp', '.png'];
 
 function loadSiteMap() {
   if (!fs.existsSync(SITE_MAP_PATH)) return null;
@@ -37,7 +47,87 @@ function loadSiteMap() {
   }
 }
 
-function main() {
+function knownRouteIds(siteMap) {
+  const ids = new Set();
+  if (!siteMap || !siteMap.routes || typeof siteMap.routes !== 'object') return ids;
+  for (const entry of Object.values(siteMap.routes)) {
+    if (entry && typeof entry.routeId === 'string') ids.add(entry.routeId);
+  }
+  return ids;
+}
+
+// A screenshot is stale when its filename stem is not a routeId in the CURRENT site map. Anything
+// that is not a recognised image extension is left alone rather than guessed about - this function
+// only ever proposes deleting files it can positively identify as this pipeline's own output.
+function listStaleScreenshots(siteMap) {
+  if (!fs.existsSync(SCREENSHOT_DIR)) return [];
+  const ids = knownRouteIds(siteMap);
+  let entries;
+  try {
+    entries = fs.readdirSync(SCREENSHOT_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const stale = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!SCREENSHOT_EXTENSIONS.includes(ext)) continue;
+    const stem = path.basename(entry.name, path.extname(entry.name));
+    if (ids.has(stem)) continue;
+    stale.push(entry.name);
+  }
+  return stale;
+}
+
+function fileSize(name) {
+  try {
+    return fs.statSync(path.join(SCREENSHOT_DIR, name)).size;
+  } catch {
+    return 0;
+  }
+}
+
+// Refuses to delete anything when the site map is missing or unparseable: with no current route set
+// to compare against, EVERY file would look stale, which would silently wipe a directory whose
+// contents may be the only surviving evidence of the last crawl.
+function pruneScreenshots() {
+  const siteMap = loadSiteMap();
+  if (siteMap === null) {
+    return {
+      action: 'prune-screenshots',
+      pruned: 0,
+      freedBytes: 0,
+      skippedReason: 'no readable artifacts/site-map/site-map.json - nothing was deleted',
+    };
+  }
+
+  const stale = listStaleScreenshots(siteMap);
+  let freedBytes = 0;
+  let pruned = 0;
+  const failures = [];
+  for (const name of stale) {
+    const size = fileSize(name);
+    try {
+      fs.unlinkSync(path.join(SCREENSHOT_DIR, name));
+      pruned += 1;
+      freedBytes += size;
+    } catch (err) {
+      failures.push(name + ': ' + err.message);
+    }
+  }
+
+  return {
+    action: 'prune-screenshots',
+    pruned,
+    freedBytes,
+    remaining: knownRouteIds(siteMap).size,
+    failures,
+    skippedReason: null,
+  };
+}
+
+function resolveMode() {
   const requestedModeArg = (process.argv[2] || '').toLowerCase();
   const requestedMode = requestedModeArg === 'update' ? 'update' : 'create';
 
@@ -69,7 +159,7 @@ function main() {
       're-review. Use /map-site update instead to refresh in place and preserve routeId/history.';
   }
 
-  const result = {
+  return {
     requestedMode,
     resolvedMode,
     siteMapExists,
@@ -77,8 +167,13 @@ function main() {
     lastTouched,
     modeRedirected,
     noticeMessage,
+    staleScreenshotCount: siteMapExists ? listStaleScreenshots(siteMap).length : 0,
   };
+}
 
+function main() {
+  const action = (process.argv[2] || '').toLowerCase();
+  const result = action === 'prune-screenshots' ? pruneScreenshots() : resolveMode();
   process.stdout.write(JSON.stringify(result, null, 2) + '\\n');
 }
 

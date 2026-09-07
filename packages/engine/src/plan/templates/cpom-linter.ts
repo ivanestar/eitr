@@ -15,6 +15,10 @@ export function renderCpomLinter(): string {
  * 5. Fixture Dependency Injection (No direct new PageObject(page) in tests)
  * 6. Anti-Over-Mocking Guard (No page.route/context.route/browserContext.route/routeFromHAR or
  *    cy.intercept in test specs without a structured "// @allow-mock: <reason>" annotation)
+ * 7. Hardcoded Credential Literal (No credential-shaped string literal filled into a
+ *    password/username/email/token field in a test spec, unless annotated with a structured
+ *    "// @allow-credential-literal: <reason>" - the one legitimate case being a deliberately
+ *    wrong value in a rejection test)
  */
 
 import fs from 'node:fs';
@@ -66,6 +70,48 @@ const ALLOW_MOCK_PATTERN = /\\/\\/\\s*@allow-mock:\\s*\\S.*/;
 function hasAllowMockSuppression(fileLines, idx) {
   return [fileLines[idx], fileLines[idx - 1], fileLines[idx + 1]].some(
     (candidate) => candidate !== undefined && ALLOW_MOCK_PATTERN.test(candidate),
+  );
+}
+
+// Rule 7: a literal typed into a credential-shaped field. A working account's credentials belong in
+// environment variables, and a value that merely needs to be valid belongs in a test-data helper -
+// either way, not inline in a spec. The escape hatch exists because one legitimate case does need a
+// literal: a deliberately wrong password in a rejection test is test data, not a secret. Same shape
+// as Rule 6's suppression, so there is one convention to learn rather than two.
+const CREDENTIAL_TARGET_PATTERN = /(?:password|passwd|pwd|username|user_?name|email|login|token|secret|api_?key)/i;
+// The receiver segment immediately before .fill()/.type(), plus that call's arguments. Matching the
+// receiver rather than the whole line is what keeps loginPage.searchInput.fill('shoes') clean: the
+// page object is called "loginPage", which a line-wide match would flag every time.
+const FILL_CALL_PATTERN = /([A-Za-z0-9_$]+)\\s*\\.\\s*(?:fill|type)\\s*\\(([^)]*)\\)/;
+const STRING_LITERAL_PATTERN = /(['"])((?:(?!\\1).)*)\\1/g;
+const ALLOW_CREDENTIAL_PATTERN = /\\/\\/\\s*@allow-credential-literal:\\s*\\S.*/;
+
+function credentialLiteralViolation(line) {
+  const call = line.match(FILL_CALL_PATTERN);
+  if (!call) return false;
+  const receiver = call[1];
+  const args = call[2];
+
+  const literals = [];
+  STRING_LITERAL_PATTERN.lastIndex = 0;
+  let match;
+  while ((match = STRING_LITERAL_PATTERN.exec(args)) !== null) {
+    literals.push(match[2]);
+  }
+  if (literals.length === 0) return false;
+
+  // The value is always the last string argument; an empty one is a legitimate boundary case.
+  if (literals[literals.length - 1] === '') return false;
+
+  // Page-level two-argument form (page.fill('#password', 'x')) names its target in the selector,
+  // not the receiver - check both so neither call style slips through.
+  const target = literals.length >= 2 ? receiver + ' ' + literals[0] : receiver;
+  return CREDENTIAL_TARGET_PATTERN.test(target);
+}
+
+function hasAllowCredentialSuppression(fileLines, idx) {
+  return [fileLines[idx], fileLines[idx - 1], fileLines[idx + 1]].some(
+    (candidate) => candidate !== undefined && ALLOW_CREDENTIAL_PATTERN.test(candidate),
   );
 }
 
@@ -194,6 +240,19 @@ function auditFile(filePath) {
           line: lineNum,
           rule: 'Rule 6: Inappropriate Mocking Guard',
           message: 'Network route interception/mocking detected in a test spec. This can mask a real backend defect behind a fake-green test. If this is legitimate 3rd-party isolation (e.g. analytics, Sentry), annotate with "// @allow-mock: <reason>".',
+          snippet: trimmed,
+        });
+      }
+    }
+
+    // Rule 7: Hardcoded Credential Literal
+    if (isTest && !isFixtureOrSetup) {
+      if (credentialLiteralViolation(line) && !hasAllowCredentialSuppression(lines, i)) {
+        violations.push({
+          file: relPath,
+          line: lineNum,
+          rule: 'Rule 7: Hardcoded Credential Literal',
+          message: 'Credential-shaped literal typed into a credential field in a test spec. Read a real account\\'s value from an environment variable (e.g. process.env.E2E_PASSWORD, or the per-role E2E_<ROLE>_PASSWORD), or generate one via the project\\'s test-data helpers. If this literal is deliberately invalid test data for a rejection case, annotate with "// @allow-credential-literal: <reason>".',
           snippet: trimmed,
         });
       }

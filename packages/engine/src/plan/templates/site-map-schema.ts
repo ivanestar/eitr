@@ -60,6 +60,15 @@ export function renderSiteMapSchema(): string {
         }
       }
     },
+    "crawledAsRoles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      },
+      "description": "Role names whose saved sessions this crawl actually ran as, e.g. [\\"admin\\", \\"customer\\"]. Absent on a crawl that used a single session (or none), which is the common case. Present only when /map-site genuinely re-crawled per role - never as a statement of intent.",
+      "uniqueItems": true
+    },
     "routes": {
       "type": "object",
       "description": "Keyed by canonical path template with dynamic segments collapsed (e.g. \\"/users/{id}\\" covers both /users/42 and /users/43). Serialize keys in sorted order for a deterministic diff.",
@@ -105,6 +114,30 @@ export function renderSiteMapSchema(): string {
               "type": "string"
             },
             "description": "Page Object / widget class names discovered on this route."
+          },
+          "access": {
+            "type": "object",
+            "description": "What each crawled role actually got when it requested this route. Keys are role names from the file-level crawledAsRoles. Absent when the crawl ran as a single session - this records an observed difference between roles, never an assumption about one.",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["reachable", "outcome", "observedAt"],
+              "additionalProperties": false,
+              "properties": {
+                "reachable": {
+                  "type": "boolean",
+                  "description": "Whether this role reached the route's real content, as opposed to a login wall, a forbidden page, or a 404."
+                },
+                "outcome": {
+                  "type": "string",
+                  "enum": ["ok", "redirected_to_login", "forbidden", "not_found", "error"],
+                  "description": "What the request actually produced for this role. Derived from the observed HTTP status and final URL, never inferred from the role's name."
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
           },
           "discoveredAt": {
             "type": "string",

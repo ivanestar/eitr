@@ -930,14 +930,24 @@ pass with a fixed stopping rule, not an open-ended refactor audit:
    under \`${sc.widgetPath('<name>')}\`, and replace every duplicated instance with
    \`this.child(WidgetClass, spec)\`/composition the normal way - never leave the duplication in place
    once a genuine match is confirmed.
-4. Re-run the Live-DOM Liveness Verification loop below on every touched Page Object after an
+4. Read the tests that actually use these Page Objects (the spec files written against them this
+   run) and check the fit in both directions - this is the half a purely file-to-file diff misses:
+   (a) a sequence of Page Object calls repeated near-identically in >= 2 tests is a missing method on
+   the Page Object itself, not something each test should keep re-assembling; (b) an interaction a
+   test had to reach around the Page Object to perform (raw page-level selectors, a locator built
+   inline in the spec) is a missing child or method - add it to the Page Object and rewrite the test
+   to use it; (c) an element modeled on the Page Object that no test and no drafted test case
+   references is not automatically dead - leave it, and note it, since a later test may need it.
+   Apply the same >= 2-occurrence evidence bar here as in check 2: one occurrence is not a pattern.
+5. Re-run the Live-DOM Liveness Verification loop below on every touched Page Object after an
    extraction, and re-run \`${sc.cpomLintCmd}\` plus the full test suite (\`${sc.testRunCmd}\`) - revert
    immediately (\`git checkout -- <file>\`) if anything the extraction touched breaks, rather than
    iterating past the Two-Strike limit.
-5. Report exactly what was merged (old per-Page-Object locations -> new shared class), or state
-   plainly "No consolidation candidates found this run" when nothing qualified. Never fabricate a
-   merge that didn't happen, and never keep scanning past this one bounded pass looking for more
-   candidates just to justify the step.
+6. Report exactly what was merged (old per-Page-Object locations -> new shared class), what was added
+   to a Page Object because tests were working around its absence, and what was deliberately left
+   alone - or state plainly "No consolidation candidates found this run" when nothing qualified.
+   Never fabricate a merge that didn't happen, and never keep scanning past this one bounded pass
+   looking for more candidates just to justify the step.
 
 ## Worker-Mode & Batch Generation from Site Map
 - When invoked in parallel worker mode or for mapped routes in \`artifacts/site-map/site-map.json\`:
@@ -1048,13 +1058,23 @@ You audit automated tests to eliminate false-positive ("fake-green") test execut
 4. Expected Result Alignment: Verify that every step with an Expected Result has a corresponding web-first assertion (100% coverage).
 5. Multi-Source Corroboration & Network Interception:
    - UI + API is the floor, not the ceiling: validate the UI visual change AND verify backend response integrity via ${isCypress ? '`cy.wait("@intercept")`' : 'network response inspection'} or ${sc.language === 'python' ? 'API checks' : '`apiClient` checks'} - matched against the actual submitted values, not just a 2xx status code.
-   - Flag a state-changing step (create/update/delete) that stops at that floor when another independent signal is genuinely available in the same flow: a success toast/notification the app shows, a related list/detail endpoint or UI table that should now reflect the change, or an unambiguous page-state transition. A test that only checks the mutating request succeeded, when the app also exposes a list endpoint that should now contain the new entity, is under-verified.
+   - Two channels, not one repeated: a state-changing step must be verified through at least two of rendered UI text/value, the HTTP response, the URL, persisted storage (cookie/session), and a second view or endpoint that should now reflect the change. Asserting the same fact twice through one channel counts as one.
+   - Flag a state-changing step that stops at the floor when another independent signal is genuinely available in the same flow: a success toast the app shows, a related list/detail endpoint or UI table that should now reflect the change, or an unambiguous page-state transition.
    - Never demand a signal the app doesn't actually provide - corroboration is bounded by what a step's own flow genuinely surfaces, not an invented source.
    - Ensure network waiters are registered BEFORE the triggering action (${sc.asyncEventSync}) to prevent race conditions.
-6. Mutation Analysis Protocol (Inversion Check):
+6. Negative-Space Check (rejection steps): a step asserting something was refused must also assert the success artifact that must NOT exist - no session cookie created, no navigation away from the current page, the record absent from the list it would otherwise appear in. A visible error message proves a message rendered, not that the operation was prevented. Flag any rejection step whose only evidence is the error text.
+7. Auth & Permission Boundary Check: when the subject under test is a login, logout, or access restriction, require an assertion that the protected resource is still refused on a DIRECT request to it, not only that the UI displayed an error. An application that shows an error banner while leaving the protected page reachable passes every UI-only check and is exactly the defect this catches.
+8. Literal Fidelity: when a step names a concrete value (a status code, a message, a field's new value), require that exact value to be asserted. A bare visibility or definedness check never satisfies a step that named a literal.
+9. HTTP-Outcome Check: when the behavior under test is a response code or redirect, require an assertion on the real response${isCypress ? " (`cy.request()` / an intercepted response's `.status`)" : ' (`page.goto()` returns the main resource response, so `response.status()` is assertable; a click-triggered navigation uses `page.waitForResponse()` raced with the click)'}. ${isCypress ? 'Cypress' : 'Playwright'} does not fail a navigation on a 4xx/5xx, so an unasserted status silently passes. Asserting that a link to a status code is visible is not a test of that status code - flag it.
+10. Hardcoded-Credential Check: reject any credential-shaped literal passed to an input-filling call (a username, password, email, token) in a spec file. Real account credentials come from environment variables (\`E2E_USERNAME\`/\`E2E_PASSWORD\`, or the per-role \`E2E_<ROLE>_USERNAME\`/\`E2E_<ROLE>_PASSWORD\` pair when roles were captured); values that only need to be valid come from the project's own test-data helpers. \`${sc.cpomLintCmd}\` enforces this as its Rule 7, with one declared exception: a deliberately wrong value in a rejection test, annotated \`// @allow-credential-literal: <reason>\` (\`#\` in Python). Accept that annotation when the reason genuinely describes invalid-by-design data; flag it when it is being used to silence a real credential.
+11. Mutation Analysis Protocol (Inversion Check):
    - Confirm that the test would deterministically fail if the backend returned HTTP 400/500 or if the UI component failed to render.
-7. Anti-Over-Mocking Guard: Reject any unannotated network route mock in a test spec that masks a real backend defect behind a fake-green result. A structured \`// @allow-mock: <reason>\` (\`#\` in Python) comment with a non-empty, legitimate reason (e.g. isolating 3rd-party analytics) is the only acceptable exception - flag anything else.
-8. Zero-Emoji Compliance: Ensure zero emojis in all code, comments, and logs.
+   - State, in one sentence per test, the concrete change to the application that would turn this test red. A test for which no such change can be named asserts nothing and is rejected outright, however many assertion calls it contains.
+12. Anti-Over-Mocking Guard: Reject any unannotated network route mock in a test spec that masks a real backend defect behind a fake-green result. A structured \`// @allow-mock: <reason>\` (\`#\` in Python) comment with a non-empty, legitimate reason (e.g. isolating 3rd-party analytics) is the only acceptable exception - flag anything else.
+13. Zero-Emoji Compliance: Ensure zero emojis in all code, comments, and logs.
+
+## Reporting
+Report one line per violated check, naming the test, the step, and which numbered check it failed - never a general impression of quality. When a check cannot be satisfied because the application genuinely does not surface that signal, say so explicitly against that check rather than passing it silently: "no observable API response for this step" is a finding a human can act on, an unmentioned gap is not.
 
 ${renderAssertionWorkedExamples(sc)}
 `;

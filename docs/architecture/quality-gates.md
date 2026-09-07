@@ -9,14 +9,14 @@ package install, no network access, runs in under a second before any browser la
 concrete implementation is per-language, each at a rigor tier matched to what a single-file,
 zero-dependency script can reasonably check in that language:
 
-| Language           | Script                                                                                | Mechanism                                 | Rules                       |
-| ------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------- |
-| TypeScript/Cypress | `scripts/lint-cpom.js` (`npm run lint:cpom`)                                          | line-by-line regex scan                   | 1-5, all real               |
-| Python             | `scripts/lint_cpom.py`                                                                | real AST (`ast.NodeVisitor`, stdlib only) | 1-3 real, 4 N/A, 5 deferred |
-| Java               | `scripts/LintCpom.java` (JDK single-file source-launch, `java scripts/LintCpom.java`) | line-by-line scan                         | 1-5, all real               |
-| C#                 | `scripts/LintCpom.cs` (.NET file-based apps, `dotnet run --file scripts/LintCpom.cs`) | line-by-line scan                         | 1-5, all real               |
+| Language           | Script                                                                                | Mechanism                                 | Rules                |
+| ------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------- |
+| TypeScript/Cypress | `scripts/lint-cpom.js` (`npm run lint:cpom`)                                          | line-by-line regex scan                   | 1-7, all real        |
+| Python             | `scripts/lint_cpom.py`                                                                | real AST (`ast.NodeVisitor`, stdlib only) | 1-3, 5-7 real, 4 N/A |
+| Java               | `scripts/LintCpom.java` (JDK single-file source-launch, `java scripts/LintCpom.java`) | line-by-line scan                         | 1-7, all real        |
+| C#                 | `scripts/LintCpom.cs` (.NET file-based apps, `dotnet run --file scripts/LintCpom.cs`) | line-by-line scan                         | 1-7, all real        |
 
-The five rules, in spirit, across every implementation:
+The seven rules, in spirit, across every implementation:
 
 1. **Zero arbitrary delays** - no `sleep()`/`Thread.sleep()`, `setTimeout()`,
    `page.waitForTimeout()`/`.waitForTimeout()`.
@@ -42,6 +42,18 @@ The five rules, in spirit, across every implementation:
    fixture convention yet for this rule to check test specs against. The script's header documents
    this as a deliberate deferral; once such a fixture convention exists, this rule slots in the
    same way it already does for TS/Java/C#.
+6. **Anti-over-mocking guard** - rejects an unannotated `page.route`/`context.route`/`routeFromHAR`
+   (or `cy.intercept`) in a test spec, since a mocked backend turns a real defect into a green run.
+   A `// @allow-mock: <reason>` comment (`#` in Python) on the line, the line before, or the line
+   after declares a legitimate third-party isolation.
+7. **Hardcoded credential literal** - rejects a non-empty string literal filled into a
+   credential-shaped field (password/username/email/token) in a test spec: a real account's value
+   belongs in an environment variable (`E2E_PASSWORD`, or the per-role `E2E_<ROLE>_PASSWORD`), and a
+   value that only needs to be valid belongs in a test-data helper. The check reads the receiver of
+   the fill call (and the selector, in the page-level two-argument form) rather than the whole line,
+   so a page object named `loginPage` does not make every call on it look credential-shaped. One
+   declared exception: `// @allow-credential-literal: <reason>` for a deliberately wrong value in a
+   rejection test, which is test data rather than a secret.
 
 The Java and C# scripts run as native single-file programs in their own language rather than
 through Node.js: none of the generated CI templates for Python/C#/Java install Node.js anywhere, so

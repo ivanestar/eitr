@@ -111,7 +111,16 @@ kind, not even a `trial: true` dry-run - inference draws only from already-rende
 button/link text, and ARIA roles reached by a single navigation per route. A zero-dependency
 validator (`scripts/validate-business-intent.mjs`) mechanically checks the artifact's shape before
 a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
-`reviewed: false` as ground truth. `confidence` is computed from evidence-signal strength (a
+`reviewed: false` as ground truth. Every review gateway in the pipeline renders through one shared
+script (`scripts/render-review-artifact.mjs`) rather than each skill re-specifying a block format in
+prose: it builds the artifact from the stored JSON, so the text a human approves cannot drift from
+what was actually written, and it decides by entry count whether the artifact belongs inline or in
+`artifacts/review/<kind>-review.md` - a large run previously scrolled past the top of the terminal
+and got abbreviated by the model, which asks a human to approve entries they never saw. When more
+than one role session exists, `/map-site` can also crawl once per role, recording `crawledAsRoles`
+and a per-route `access` map in the site map; the resulting access differences are the only
+observed evidence of a permission boundary anywhere in the pipeline, and `/define-test-conditions`
+draws its `permission_denied` conditions from them rather than from a role's name. `confidence` is computed from evidence-signal strength (a
 heading/ARIA/manual signal implies `high`, form-labels/button-link-text implies `medium`,
 route-path alone implies `low`) and mechanically checked against that rule, never chosen freely -
 it stays an internal signal, never shown in the review artifact itself, since a route's

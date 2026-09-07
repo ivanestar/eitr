@@ -82,6 +82,22 @@ export interface CorePurpose {
   reviewedBy?: 'human' | 'auto-pilot';
 }
 
+// One per role the crawl actually ran as (site-map.json's own crawledAsRoles). What a role IS FOR
+// is a business fact the application's markup cannot state - it can only be inferred from what that
+// role could and could not reach, then confirmed by the human, which is why this carries the same
+// Field/reviewed shape as every other inference here rather than being a plain string.
+export interface RoleProfile {
+  // Matches the normalized role slug used for the session file (.auth/<name>.json) and the
+  // E2E_<NAME>_USERNAME/PASSWORD environment variables, so one name identifies the role everywhere.
+  name: string;
+  purpose: Field<string>;
+  // Route paths this role reached that at least one other crawled role did not - the concrete
+  // evidence the purpose was inferred from, and what a human is really confirming.
+  exclusiveRoutes: string[];
+  reviewed: boolean;
+  reviewedBy?: 'human' | 'auto-pilot';
+}
+
 export interface BusinessIntentEntry {
   // Joins against artifacts/site-map/site-map.json's routes[*].routeId - routeId, not the path
   // template key, because routeId is documented there as stable across a URL restructure, and
@@ -111,6 +127,9 @@ export interface BusinessIntentReport {
   // App-level, not per-route - see CorePurpose's own doc comment. Absent until Step 6's
   // Core-Purpose Inference sub-step runs at least once.
   corePurpose?: CorePurpose;
+  // Keyed by role name. Absent on a single-session crawl, which is the common case - its absence
+  // means "no role distinction was observed", never "every role has the same access".
+  roles?: Record<string, RoleProfile>;
   // Keyed by routeId (see BusinessIntentEntry.routeId), unlike site-map.json's own routes object
   // which is keyed by canonical path template - resolve a path with
   // Object.values(siteMap.routes).find(r => r.routeId === id) or a one-time routeId index.
