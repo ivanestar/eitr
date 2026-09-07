@@ -52,7 +52,24 @@ function businessIntentWith(routeCount: number) {
       reviewed: true,
     };
   }
-  return { schemaVersion: 1, generatedAt: '2026-09-07T00:00:00.000Z', routes };
+  return {
+    schemaVersion: 1,
+    generatedAt: '2026-09-07T00:00:00.000Z',
+    corePurpose: {
+      candidates: [{ value: 'A test fixture application', evidence: [] }],
+      mostLikelyIndex: 0,
+      selected: {
+        value: 'A test fixture application',
+        confidence: 'high',
+        source: 'heading-text',
+        reasoning: 'fixture default',
+        evidence: [],
+      },
+      reviewed: true,
+      reviewedBy: 'human',
+    },
+    routes,
+  };
 }
 
 function run(dir: string, ...args: string[]) {
@@ -74,11 +91,16 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
       expect(output.mode).toBe('inline');
       expect(output.entryCount).toBe(2);
       expect(output.filePath).toBeNull();
+      expect(output.markdown).toContain('Confirmed core purpose: A test fixture application');
       // Renders the route's resolved path/title, never the raw routeId.
       expect(output.markdown).toContain('**1. /route-00 - Page 0**');
+      expect(output.markdown).toContain('Feature: Feature 0');
       expect(output.markdown).toContain('**Route criticality (draft): CRITICAL**');
+      expect(output.markdown).toContain('Reasoning: tier reason 0');
       expect(output.markdown).toContain('Evidences: "Heading 0"');
       expect(output.markdown).not.toContain('id-0');
+      // confidence is an internal, mechanically-checked signal only - never shown to the human.
+      expect(output.markdown).not.toContain('Confidence:');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
