@@ -279,112 +279,6 @@ function buildOperationalSkills(tool: string, language: string): SkillDefinition
 
   return [
     {
-      name: 'protocol-123',
-      description:
-        'Executes the rigorous 8-phase SDET Protocol 123 for full-lifecycle test automation, baseline establishment, or maintenance with multi-agent review and adjudicated false-positive filtering.',
-      content: `# Skill: Protocol 123 SDET Engineering (/protocol-123, /123)
-
-## Purpose
-Executes the deterministic, production-grade 8-phase SDET workflow for test automation, Page Object refactoring, and test suite maintenance with multi-agent review and adjudicated false-positive filtering.
-
-## 8-Phase SDET Lifecycle
-
-### Phase 0: Pre-Flight Baseline
-- Execute baseline verification via terminal: \`${sc.testRunCmd}\` to confirm clean initial state.
-
-### Phase 1: Recon, Live Web Search & Ingestion
-1. Requirements Ingestion & GIGO Gate:
-   - Ingest TMS case via 'tms-validator' (Quality Score >= 80%, atomicity <= 10 steps, concrete expected results).
-2. Live DOM & Site Map Reconnaissance:
-   - Consult \`artifacts/site-map/site-map.json\`, \`components/pages/\`, and \`components/widgets/\`.
-   - Inspect live DOM (3-Tier Locator Priority, shadow DOM, iframes).
-3. Live Web Search & Recommendations:
-   - Launch Web Search subagents to query official ${frameworkName} and UI library documentation for the target components.
-   - Formulate concrete task-specific recommendations for architectural design and test synchronization.
-
-### Phase 2: Invariants Discovery & Spec Formulation (SDD Automation Proposal)
-1. Step 2a (Invariants Discovery):
-   - Uncover critical positive requirements and negative boundary invariants directly, across the 9 closed taxonomy categories (\`invalid_input\`, \`boundary\`, \`missing_precondition\`, \`concurrent_conflict\`, \`state_violation\`, \`permission_denied\`, \`external_failure\`, \`data_integrity\`, \`error_path\`), grounded in the TMS case and Phase 1's own DOM reconnaissance - the same investigation, continued, not a separate persona's job.
-2. Step 2b (Defensive Automation Proposal):
-   - 'sdet-architect' embeds explicit protections against those invariants into the deterministic Automation Proposal Artifact before writing code:
-\`\`\`markdown
-### Automation Proposal Artifact
-| Field | Value |
-|---|---|
-| Ticket ID & Title | TC-XXX: [Title] |
-| Target Route & Page | /app/route -> LoginPage, DashboardPage |
-| Shared Widgets Used | NavbarWidget, DataGridWidget |
-| Web Research Findings | [Latest docs & best practice recommendations] |
-| Preconditions Fast-Path | ApiClient.createUser(), ApiClient.login() |
-| Dynamic TDM Strategy | UUIDs, createTestEmail() |
-| Invariants & Defenses | [Discovered boundary conditions and architectural defenses] |
-| Step-by-Step Matrix | Step 1..N -> Expected Results -> Web-First Assertions |
-\`\`\`
-
-### Phase 3: Plan Review & Adjudication
-1. Lead Review: 'sdet-architect' audits the proposal against CPOM contracts, fixture DI, Web-First assertions, and invariant defenses.
-2. Adjudication: cross-examine every raw finding directly against Ground Truth (CONVENTIONS.md, AGENTS.md, actual DOM and codebase) - no separate arbiter persona needed, this is a mechanical cross-check anyone doing the review can perform. Classify each finding into exactly one of: \`ACCEPTED [CRITICAL / MAJOR]\` (a real defect - CPOM violation, race condition, unawaited promise, missing teardown), \`DISMISSED: FALSE_POSITIVE\` (the code is actually correct), \`DISMISSED: HALLUCINATED_RULE\` (the finding invents a non-existent rule), or \`DISMISSED: OUT_OF_SCOPE\` (nitpick or refactor outside this task). Output the official Review Verdict Artifact:
-\`\`\`markdown
-### Review Verdict Artifact
-- Status: [APPROVED | REQUIRES_REFINEMENT]
-- Findings Processed: N total (M accepted, K dismissed)
-- Actionable Fixes: [Exact Line + Concrete Fix]
-- Dismissed Findings: [Claimed Issue + Dismissal Reason: FALSE_POSITIVE / HALLUCINATED_RULE / OUT_OF_SCOPE]
-\`\`\`
-
-### Phase 4: Human Intent Lock (Sign-off)
-- Present Proposal Artifact and Arbiter Verdict to the human engineer.
-- BLOCKING GATE: ZERO code is written until explicitly approved by the user.
-
-### Phase 5: TDD Dual Synthesis
-1. Step 5a (Shared Primitives First):
-   - 'pom-engineer' synthesizes CPOM Page Objects in \`${sc.language === 'java' ? 'src/main/java/components/pages/' : 'components/pages/'}\` and verifies each one against the live DOM.
-2. Step 5b (Linear Test Synthesis):
-   - Synthesize strictly linear test code directly in \`${sc.specPath('{id}', '{feature}')}\`, following the exact content-fidelity and bracket-grounding process \`/automate-test\`'s own Step 5 defines - never a looser paraphrase.
-   - Wrap steps in \`${sc.stepDemarcation('Step N: ...')}\`, inject fixtures via \`${sc.fixturePattern}\`, and register teardown via \`apiClient.registerTeardown()\`.
-
-### Phase 6: Code Review & Adjudication
-1. Reviewers inspect \`git diff\` for Web-First matchers, zero sleep, and no assertions inside Page Objects.
-2. Cross-examine every diff comment directly against Ground Truth the same way Phase 3 does, and approve final code changes once every finding is ACCEPTED-and-resolved or correctly DISMISSED.
-
-### Phase 7: Two-Strike Self-Healing
-- Execute isolated test: \`${sc.testIsolatedCmd(sc.specPath('XXX', 'feature'))}\`.
-- If failure occurs, apply \`/heal-test\`'s own 4-Point Trace Triage process directly (network/console first, action timeline + visual diff, locator state, isolated execution) in ${isCypress ? 'screenshots and video' : '\`trace.zip\`'}. Max 2 attempts.
-- If still red after 2 attempts, execute Two-Strike rollback: \`git checkout -- <files>\` and output Two-Strike Triage Report:
-\`\`\`markdown
-### Two-Strike Triage Report
-- Triage Category: [FLAKY / TIMING] | [SELECTOR DRIFT] | [PRODUCT BUG]
-- Root Cause Evidence: Network status / Console log / DOM screenshot
-- Action Taken: Two-Strike rollback executed via git checkout -- <files>
-\`\`\`
-
-### Phase 8: Quality Gate & Final Handoff
-- Run contract audit: \`${sc.cpomLintCmd}\` and \`${sc.testRunCmd}\`.
-- Present the deterministic Final Handoff Report with Telemetry Summary:
-\`\`\`markdown
-### Final Handoff Report
-- Created/Updated Page Objects: [List with paths]
-- Created Test Specs: [List with paths]
-- Execution Results: Total N, Passed M, Failed 0
-- Real Application Bugs Discovered: [None | Issue details]
-
-### Protocol 123 Telemetry Summary
-| Phase | Duration | Est. Tokens (In/Out) | Est. Cost ($) | Status |
-|---|---|---|---|---|
-| Phase 0: Pre-Flight Baseline | 2.1s | 1.2k / 0.3k | $0.002 | PASSED |
-| Phase 1: Recon & Ingestion | 4.5s | 3.5k / 1.1k | $0.007 | PASSED |
-| Phase 2: Spec Formulation (SDD) | 3.8s | 2.8k / 1.8k | $0.008 | PASSED |
-| Phase 3: Plan Review & Adjudication | 6.2s | 8.4k / 2.2k | $0.016 | PASSED |
-| Phase 4: Human Intent Lock | User | 0 / 0 | $0.000 | APPROVED |
-| Phase 5: TDD Dual Synthesis | 7.1s | 5.2k / 3.4k | $0.015 | PASSED |
-| Phase 6: Code Review & Adjudication | 5.4s | 7.1k / 1.9k | $0.014 | PASSED |
-| Phase 7: Self-Healing (Triage) | 0.0s | 0 / 0 | $0.000 | SKIPPED |
-| Phase 8: Quality Gate & Handoff | 3.0s | 2.0k / 0.8k | $0.004 | PASSED |
-| **TOTAL** | **32.1s** | **30.2k / 11.5k** | **~$0.066** | **100% GREEN** |
-\`\`\`
-`,
-    },
-    {
       name: 'auth-setup',
       description:
         'Captures, validates, and manages authenticated browser sessions for testing (/auth-setup, /auth-bootstrap).',
@@ -400,6 +294,7 @@ Executes the deterministic, production-grade 8-phase SDET workflow for test auto
 Inspects live application DOM, extracts semantic elements, groups them into CPOM components, and validates their liveness.
 
 ## Workflow
+0. **Standalone Entry Check (skip entirely when invoked as part of \`/automate-test\`'s or \`/map-site\`'s own chain - their own gates already cover this):** state in one plain sentence what this does - "Crawls this page live and generates a verified Page Object for it - the same step /automate-test and /map-site already trigger automatically when a component is missing." - then ask: **Continue, or stop here?** ${INTERACTIVE_CHOICE_NOTE} Stop on anything but an explicit yes; nothing has run yet at this point.
 1. **Target Inspection & Batch Worker Mode:**
    - Single Page: Navigate to target URL using Playwright MCP or reconnaissance engine.
    - Batch Swarm Mode: If processing multiple routes, run \`node scripts/orchestrate-swarm.mjs --phase=plan\` (add \`--routes=<a,b,c>\` to scope to a specific subset) and dispatch parallel 'pom-engineer' worker subagents per its Level 2 worker list (1 route per worker) for concurrent synthesis - do not enumerate routes/workers yourself.
@@ -474,6 +369,7 @@ Transforms a test case - from Jira, TestRail, Zephyr, Azure DevOps, or drafted l
    - Consult \`artifacts/site-map/site-map.json\` and \`components/pages/\` to resolve target routes, Page Objects, and shared widgets.
    - If components are missing, trigger \`/scan-and-generate-pom\` to generate and liveness-verify the required Page Objects.
    - If a step needs a file-upload fixture (image, PDF, CSV, or a deliberately-wrong-format file for a negative case) or a bulk/structured dataset beyond \`ApiClient\`'s scalar synthetic-data helpers (\`createTestEmail()\`, \`createTestUuid()\`, etc.), delegate to \`test-data-engineer\` rather than inventing one inline.
+   - If this route or step involves an unfamiliar UI library, component pattern, or ${frameworkName}/${sc.language} API you're not confident about, look up its current official documentation before synthesizing code against it in Step 5 - guessing at an unfamiliar API's actual signature or behavior is how a synthesized test ends up subtly wrong in a way that still passes. Skip this for anything already well-established from prior steps in this same run or from \`CONVENTIONS.md\`'s own documented conventions - this is for genuine unfamiliarity, not a blanket research pass on every ticket.
 4. **Human Sign-Off Gateway (Proposal Artifact):**
    - **TMS-sourced ticket(s)**: present a concise Markdown automation proposal artifact per ticket - Ticket ID, Target Route, Page Objects used, Execution Plan, TDM strategy - and, when more than one ticket is being automated in the same run, a **Batch Proposal Matrix** table so they can all be approved in one reply instead of one confirmation per ticket.
    - **Locally-sourced journeys (arrived from \`/design-test-cases\`/\`/ground-zero-setup\`)**: this is always "automate everything reviewed," never a subset to negotiate case-by-case - skip the proposal-matrix format entirely and ask one direct question naming the count: **"Create Page Objects and automate all <N> reviewed test cases?"** ${INTERACTIVE_CHOICE_NOTE}
@@ -525,6 +421,7 @@ Transforms a test case - from Jira, TestRail, Zephyr, Azure DevOps, or drafted l
 Performs root-cause analysis on failing test executions and applies precision fixes under the Two-Strike Rule.
 
 ## Workflow
+0. **Standalone Entry Check (skip entirely when invoked as part of \`/automate-test\`'s own chain - its own healing trigger already covers this):** state in one plain sentence what this does - "Investigates why a test is failing - network, console, DOM evidence - and applies a targeted fix, rolling back if two attempts don't get it green." - then ask: **Continue, or stop here?** ${INTERACTIVE_CHOICE_NOTE} Stop on anything but an explicit yes; nothing has run yet at this point.
 1. **Failure Artifact Ingestion:**
    - Ingest execution failure artifacts (${isCypress ? 'screenshots, video, console logs' : '\`trace.zip\`, screenshots, video, console logs'}).
 2. **4-Point Trace Triage (Fail-Fast Real Bug Detection):**
@@ -554,8 +451,10 @@ Performs root-cause analysis on failing test executions and applies precision fi
 Performs page-level locator updates when application design system or layout changes, healing multiple dependent tests in one step.
 
 ## Workflow
+0. **Explain and confirm:** state in one plain sentence what this does - "This finds every test currently broken by a UI/design change, then rewrites the affected Page Objects' locators to match the new markup and re-verifies each one against the live app." - then ask: **Continue, or stop here?** ${INTERACTIVE_CHOICE_NOTE} Stop on anything but an explicit yes; nothing has run yet at this point.
 1. **Impacted Target Identification:**
    - Run the existing test suite (\`${sc.testRunCmd}\`) to identify broken components, and map each failing test back to its route.
+1b. **Blast-Radius Confirmation (before touching any file):** report the actual scope Step 1 just found - the affected route count and their paths. If zero components are broken, say so plainly and stop here; there is nothing to rescan. Otherwise ask, naming the actual count: **"Update locators across these N routes now?"** ${INTERACTIVE_CHOICE_NOTE} A "no," or a request to narrow the list to specific routes, ends this run here (or restarts Step 1 scoped to the named subset) - never proceed against the full list Step 1 found without this explicit go-ahead.
 2. **Parallel Worker Swarm (Fan-Out / Fan-In):**
    - Run \`node scripts/orchestrate-swarm.mjs --phase=plan --routes=<comma-separated affected route paths from Step 1>\` and dispatch parallel 'pom-engineer' worker subagents (Worker Swarm) per its Level 2 worker list for high-speed concurrent rescanning - scoping via \`--routes\` keeps this to exactly the affected, non-overlapping routes rather than the whole site.
 3. **Component Locator Update:**
@@ -694,6 +593,7 @@ Second stage of the app-analysis pipeline, run after \`/map-site\`'s automatic b
 0. **Standalone Entry Check (skip entirely when invoked as part of \`/ground-zero-setup\`'s own chain - its Pre-Flight and per-stage gate already cover this):** state in one plain sentence what this does - "Reads your reviewed site map and infers test conditions - positive and negative scenarios - for each page, for you to review." - then ask: **Continue, or stop here?** ${INTERACTIVE_CHOICE_NOTE} Stop on anything but an explicit yes; nothing has run yet at this point.
 1. **Preconditions:**
    * Default scope: every route in \`artifacts/analysis/business-intent.json\` with \`reviewed: true\`. If none exist, refuse and print exactly: "No reviewed business-intent entries found. Run /map-site Step 6 and complete its Human Sign-Off Gateway before defining test conditions." Do not proceed.
+1b. **Domain Knowledge Check (one optional question, easy to skip):** ask once, before drafting anything: **"Any business rules, past incidents, or edge cases you already know about that this app's test conditions should specifically cover? (optional - skip if nothing comes to mind)"** ${INTERACTIVE_CHOICE_NOTE} A skip or "no" is a completely normal answer - proceed to Step 2 either way. This is the one stage in the whole pipeline where a real functional/business-logic defect gets caught before code exists (see Step 2's own architectural-invariant investigation below) - a UI crawl alone cannot infer something like "refunds are processed by a nightly batch job," so a domain expert naming it here directly feeds Step 2's investigation instead of being missed entirely. Anything the human names becomes an additional architectural-invariant condition in Step 2, folded into that same investigation rather than a separate bolt-on list, cited with an \`evidence\` entry whose \`signal\` is \`'manual'\` quoting the human's own words.
 2. **Parameter & Partition Extraction (Read-Only, With One Narrow Reveal Exception):**
    * Compute the target route set: Step 1's default, or the routes named by an explicit \`--routes=<a,b,c>\` argument intersected with \`reviewed:true\` entries.
    * Run \`node scripts/orchestrate-swarm.mjs --phase=plan --routes=<the computed comma-separated routeId list>\` and dispatch one read-only worker per route from its Level 2 worker list - do not enumerate routes/workers yourself. The dispatcher itself has no knowledge of \`business-intent.json\`'s \`reviewed\` flag; this skill computes the reviewed-route subset itself before invoking it.

@@ -212,11 +212,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
       'codex',
       'copilot',
     ]);
-    // 10 skills * 4 assistants with 1 file each (claude, cursor, codex, and the merged
-    // antigravity+devin pair sharing one .agents/skills/ descriptor set) = 40
-    // + copilot: 10 skills * 2 files (prompt + skill) = 20
-    // = 60
-    expect(files.length).toBe(60);
+    // 9 skills * 4 assistants with 1 file each (claude, cursor, codex, and the merged
+    // antigravity+devin pair sharing one .agents/skills/ descriptor set) = 36
+    // + copilot: 9 skills * 2 files (prompt + skill) = 18
+    // = 54
+    expect(files.length).toBe(54);
     const paths = files.map((f) => f.path);
 
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');

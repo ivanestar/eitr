@@ -162,19 +162,7 @@ ${componentSyntax}
 - **Immediate Collection Synthesis:** Immediately synthesize a CPOM Collection property via \`this.list(ItemComponent, spec)\` (returning \`Collection<ItemComponent>\`) and terminate page exploration.
 - **Bounded Exploration Loops:** All DOM exploration and scrolling loops MUST have a hard iteration ceiling (maximum 3 iterations); unbounded \`while(true)\` exploration is strictly prohibited.
 
-### 10. Protocol 123 SDET Engineering Standard
-Whenever tasked with automating tickets, establishing baselines, or refactoring code by Protocol 123 (e.g. "via 123", "automate via 123", "/123"):
-- **Phase 0 (Baseline):** Confirm clean project state via \`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`.
-- **Phase 1 (Recon & Web Search):** Inspect live DOM, site-map, and launch Web Search subagents to query official docs for target widgets.
-- **Phase 2 (Spec Formulation):** Output the Automation Proposal Artifact before writing code.
-- **Phase 3 (Plan Review & Adjudication):** Review swarm ('assertion-auditor', 'sdet-architect') audits plan; findings are cross-examined against Ground Truth and classified ACCEPTED/DISMISSED directly - no separate arbiter persona needed.
-- **Phase 4 (Human Intent Lock):** Present Proposal to user; ZERO code until approved.
-- **Phase 5 (TDD Dual Synthesis):** 'pom-engineer' synthesizes CPOM components and verifies each against the live DOM, then linear test code is written directly following \`/automate-test\`'s own Step 5 process.
-- **Phase 6 (Code Review & Adjudication):** Reviewers inspect diff; comments are cross-examined against Ground Truth the same way Phase 3 does, and approved.
-- **Phase 7 (Two-Strike Self-Healing):** Isolated test run (\`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`); max 2 attempts, automatic rollback via \`git checkout -- <files>\` if red.
-- **Phase 8 (Quality Gate & Handoff):** Run linters and the test suite, present Final Handoff Report with Protocol 123 Telemetry Summary table (Phase, Duration, Est. Tokens In/Out, Est. Cost, Status).
-
-### 11. Frontend Framework Hydration Helpers
+### 10. Frontend Framework Hydration Helpers
 - When testing applications built with React, Next.js, or hydration-dependent SPA frameworks, wait for hydration before interacting with elements to eliminate synthetic click misses and state resets.
 - ${resolveHydrationSnippet(language)}
 
@@ -640,7 +628,7 @@ ${componentSyntax}
 - Autonomous Execution: Whenever creating or modifying Page Objects, you MUST immediately verify them against the live application (via the embedded Playwright MCP tools or the direct test runner).
 - Actionable Visibility, Not Mere DOM Presence: an element existing in the DOM/accessibility tree is NEVER sufficient evidence to scaffold a property or method for it - a hidden nav search input becoming a phantom \`searchInput\`/\`search()\` is exactly this failure mode. Before scaffolding a locator, confirm per element: (a) it resolves uniquely; ${s6Liveness} to run Playwright's full actionability pipeline (stable, not obscured by another element, enabled) without performing the action. Remove any already-scaffolded property that fails this check.
 - Self-Healing vs Real Bugs:
-  * If verification fails due to selector drift / timing, adjust locators and re-verify under the Two-Strike Rule.
+  * If verification fails due to selector drift / timing, perform 4-Point Trace Triage with **Visual Diff & Screenshot Overlay** (comparing pre/post failure frames to distinguish semantic text/icon shifts from broken rendering), adjust locators and re-verify under the Two-Strike Rule.
   * If a genuine application defect is found (backend 500, broken UI), document the real bug clearly without masking.
 - Mandatory Handoff Report: Always list created Page Objects, liveness verification results, test execution results (pass/fail counts), and any detected real application defects.
 - Zero Unverified Code Policy: You MUST NOT hand off unverified or failing code to the user.
@@ -658,19 +646,7 @@ ${s8AsyncSync}
 - Use \`apiClient\` zero-dependency TDM generators: \`createUniqueId()\`, \`createTestEmail()\`, \`createTestPhone()\`, \`createTestPassword()\`, \`createTestUuid()\`, \`createTestName()\`, \`createTestAmount()\`, \`createTestDate()\`.
 - NEVER register a network route mock/interception (${s8RouteMocks}) to force a failing test to pass — fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
 
-### 9. Protocol 123 SDET Engineering Standard
-- Whenever tasked with automating tickets, establishing baselines, or refactoring code by Protocol 123:
-  * Phase 0: Baseline Verification
-  * Phase 1: Recon & Live Web Search
-  * Phase 2: Spec Formulation (Automation Proposal Artifact)
-  * Phase 3: Plan Review Swarm & Adjudication
-  * Phase 4: Human Intent Lock (Approval Gateway)
-  * Phase 5: TDD Dual Synthesis (Shared Primitives First -> Linear Test)
-  * Phase 6: Code Review Swarm & Adjudication
-  * Phase 7: Two-Strike Self-Healing (4-Point Trace Triage with Visual Diff & Screenshot Overlay + Rollback)
-  * Phase 8: Quality Gate & Final Handoff Report with Telemetry Summary table
-
-### 10. Frontend Framework Hydration Helpers
+### 9. Frontend Framework Hydration Helpers
 - When testing applications built with React, Next.js, or hydration-dependent SPA frameworks, wait for hydration before interacting with elements to eliminate synthetic click misses and state resets.
 - ${resolveHydrationSnippet(language)}
 `;
