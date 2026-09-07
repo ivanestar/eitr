@@ -25,6 +25,9 @@ Options:
   --role <name>         Capture this role's own session (writes .auth/<name>.json). Letters, digits,
                         '-' and '_' only. Ignored when --output is given explicitly.
   --output <file>       Path to write the storage state JSON (default: .auth/user.json)
+  --save-har <file>     Also record the login's network traffic to this HAR file (headed mode only).
+                        Delete it once you've located the login response's token field - it captures
+                        the credentials you just typed and must never be committed or left on disk.
   --mode <headed|token> Execution mode (default: headed)
   --token <string>      Bearer token value (overrides E2E_API_TOKEN env var)
   --token-header <name> HTTP header name for the token (default: Authorization)
@@ -35,6 +38,7 @@ Options:
 Examples:
   eitr auth
   eitr auth --role admin
+  eitr auth --save-har .auth/login-capture.har
   eitr auth --url https://app.example.com/login
   eitr auth --url https://app.example.com/login --output auth/admin.json
   eitr auth --mode token --token-header X-API-Key
@@ -137,6 +141,7 @@ export async function runAuth(argv: string[]): Promise<number> {
       url: { type: 'string' },
       role: { type: 'string' },
       output: { type: 'string' },
+      'save-har': { type: 'string' },
       mode: { type: 'string' },
       token: { type: 'string' },
       'token-header': { type: 'string' },
@@ -168,6 +173,12 @@ export async function runAuth(argv: string[]): Promise<number> {
     return 1;
   }
 
+  const saveHar = values['save-har'] as string | undefined;
+  if (saveHar !== undefined && mode !== 'headed') {
+    process.stderr.write('eitr auth: --save-har only applies to headed mode.\n');
+    return 1;
+  }
+
   // Ensure output directory exists
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
@@ -175,13 +186,14 @@ export async function runAuth(argv: string[]): Promise<number> {
     return runTokenMode(values, outputPath);
   }
 
-  return runHeadedMode(values, outputPath, cwd);
+  return runHeadedMode(values, outputPath, cwd, saveHar);
 }
 
 async function runHeadedMode(
   values: Record<string, string | boolean | string[] | undefined>,
   outputPath: string,
   cwd: string,
+  saveHarArg?: string,
 ): Promise<number> {
   const passedUrl = values['url'] as string | undefined;
   const resolved = await resolveTargetUrl(cwd, passedUrl);
@@ -197,12 +209,14 @@ async function runHeadedMode(
 
   const loginUrl = resolved.url;
   const timeoutMs = parseInt((values['timeout'] as string | undefined) ?? '300000', 10);
+  const harPath = saveHarArg === undefined ? undefined : path.resolve(cwd, saveHarArg);
 
   process.stdout.write(
     [
       'Starting headed browser session for authentication capture.',
       `Auto-detected target URL from ${resolved.source}: ${loginUrl}`,
       `Output:    ${outputPath}`,
+      ...(harPath ? [`HAR:       ${harPath}`] : []),
       `Timeout:   ${timeoutMs / 1000}s`,
       '',
       'Instructions:',
@@ -215,9 +229,10 @@ async function runHeadedMode(
   );
 
   const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
+  const harFlag = harPath ? ` --save-har="${harPath}"` : '';
 
   try {
-    execSync(`npx playwright open --save-storage="${outputPath}" "${loginUrl}"`, {
+    execSync(`npx playwright open --save-storage="${outputPath}"${harFlag} "${loginUrl}"`, {
       stdio: 'inherit',
       timeout: timeoutMs,
       shell,
@@ -227,6 +242,9 @@ async function runHeadedMode(
     process.stdout.write(
       `  playwright.config.ts > use > storageState: '${outputPath.replace(/\\/g, '/')}'\n`,
     );
+    if (harPath) {
+      process.stdout.write(`HAR saved to: ${harPath}\n`);
+    }
     return 0;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

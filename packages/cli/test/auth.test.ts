@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runAuth, resolveTargetUrl } from '../src/commands/auth.js';
+import { runAuth, resolveTargetUrl, resolveRoleOutput } from '../src/commands/auth.js';
+import { execSync } from 'node:child_process';
+import * as path from 'node:path';
 
 // Mock child_process to avoid actual browser launches in unit tests
 vi.mock('node:child_process', () => ({
@@ -22,6 +24,12 @@ describe('eitr auth command', () => {
   beforeEach(() => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    // execSync is a bare vi.fn() (mocked at module scope, not spied on a real object), so
+    // restoreAllMocks() in afterEach does not clear its call history the way it does for
+    // vi.spyOn-created spies - without this, mock.calls[0] silently returns an earlier test's
+    // call instead of this test's own, which is exactly what broke the --role/--save-har
+    // assertions below until this was added.
+    vi.mocked(execSync).mockClear();
   });
 
   afterEach(() => {
@@ -139,6 +147,73 @@ describe('eitr auth command', () => {
     await runAuth(['--mode', 'token', '--token-header', 'X-Custom-Auth']);
     const output = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(output).toContain('X-Custom-Auth');
+  });
+
+  it('passes --save-har through to the underlying playwright command in headed mode', async () => {
+    process.env['E2E_BASE_URL'] = 'https://app.example.com';
+    const code = await runAuth(['--mode', 'headed', '--save-har', '.auth/login-capture.har']);
+    expect(code).toBe(0);
+    const command = String(vi.mocked(execSync).mock.calls[0][0]);
+    expect(command).toContain('--save-storage=');
+    expect(command).toContain('--save-har=');
+    expect(command).toContain('login-capture.har');
+    const output = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(output).toContain('HAR saved to:');
+  });
+
+  it('omits --save-har from the command when not requested', async () => {
+    process.env['E2E_BASE_URL'] = 'https://app.example.com';
+    await runAuth(['--mode', 'headed']);
+    const command = String(vi.mocked(execSync).mock.calls[0][0]);
+    expect(command).not.toContain('--save-har');
+  });
+
+  it('rejects --save-har in token mode - the flag only applies to a real browser session', async () => {
+    const code = await runAuth(['--mode', 'token', '--token', 'x', '--save-har', 'x.har']);
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toContain('--save-har only applies to headed mode');
+  });
+
+  it('writes to .auth/<role>.json for --role, and rejects a role name that is not a safe path segment', async () => {
+    process.env['E2E_BASE_URL'] = 'https://app.example.com';
+    const code = await runAuth(['--mode', 'headed', '--role', 'Admin']);
+    expect(code).toBe(0);
+    const command = String(vi.mocked(execSync).mock.calls[0][0]);
+    expect(command).toContain('admin.json');
+
+    const badCode = await runAuth(['--mode', 'headed', '--role', '../../etc/passwd']);
+    expect(badCode).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toContain('invalid --role');
+  });
+
+  it('--output overrides --role rather than the two combining', async () => {
+    process.env['E2E_BASE_URL'] = 'https://app.example.com';
+    await runAuth(['--mode', 'headed', '--role', 'admin', '--output', '.auth/custom.json']);
+    const command = String(vi.mocked(execSync).mock.calls[0][0]);
+    expect(command).toContain('custom.json');
+    expect(command).not.toContain('admin.json');
+  });
+
+  describe('resolveRoleOutput', () => {
+    it('lowercases the role and writes under .auth/', () => {
+      expect(resolveRoleOutput('Admin')).toEqual({ path: path.join('.auth', 'admin.json') });
+    });
+
+    it('rejects a role name containing a path traversal segment', () => {
+      const result = resolveRoleOutput('../../etc/passwd');
+      expect('error' in result).toBe(true);
+    });
+
+    it('rejects a role name with spaces or special characters', () => {
+      expect('error' in resolveRoleOutput('read only')).toBe(true);
+      expect('error' in resolveRoleOutput('admin;rm -rf')).toBe(true);
+    });
+
+    it('accepts letters, digits, hyphens and underscores', () => {
+      expect('path' in resolveRoleOutput('read_only-2')).toBe(true);
+    });
   });
 
   describe('resolveTargetUrl', () => {
