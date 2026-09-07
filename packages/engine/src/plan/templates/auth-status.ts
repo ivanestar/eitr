@@ -45,7 +45,20 @@ function listSessionFiles() {
     .sort();
 }
 
-function readCiProvider() {
+// Each provider's generated pipeline file, checked in this exact order (the file that actually
+// exists on disk, not a record of what the questionnaire once said). \`.scaffold/init.json\` is
+// gitignored by the generated project's own .gitignore - a fresh clone, a CI runner's checkout, or
+// a plain workspace cleanup all legitimately lack it while the real pipeline file (committed,
+// meant to persist) sits right there. Checking init.json first was live-observed reporting "no CI
+// configured" against a project that already had a working .gitlab-ci.yml.
+const CI_MARKER_FILES = [
+  { provider: 'github', file: path.join('.github', 'workflows', 'playwright.yml') },
+  { provider: 'gitlab', file: '.gitlab-ci.yml' },
+  { provider: 'jenkins', file: 'Jenkinsfile' },
+  { provider: 'teamcity', file: path.join('.teamcity', 'settings.kts') },
+];
+
+function readCiProviderFromInitJson() {
   if (!fs.existsSync(INIT_PATH)) return null;
   try {
     const data = JSON.parse(fs.readFileSync(INIT_PATH, 'utf8'));
@@ -54,6 +67,15 @@ function readCiProvider() {
   } catch {
     return null;
   }
+}
+
+function readCiProvider() {
+  for (const { provider, file } of CI_MARKER_FILES) {
+    if (fs.existsSync(path.join(CWD, file))) return provider;
+  }
+  // No pipeline file on disk yet - fall back to what the questionnaire recorded, in case CI/CD was
+  // chosen but generation of that specific file was skipped for some other reason.
+  return readCiProviderFromInitJson();
 }
 
 function main() {
