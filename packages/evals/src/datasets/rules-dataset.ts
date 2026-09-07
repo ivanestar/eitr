@@ -8,7 +8,7 @@ export interface GoldenRuleCase {
     | 'AGENTS.md'
     | 'CONVENTIONS.md'
     | '.cursor/rules'
-    | '.windsurf'
+    | '.devin'
     | '.codex'
     | '.github/copilot';
   assistant: string;

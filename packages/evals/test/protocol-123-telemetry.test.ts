@@ -8,7 +8,7 @@ import {
 } from '../../engine/src/plan/templates/ai-rules.js';
 
 describe('Task 1: Token, Cost & Time Telemetry in Protocol 123', () => {
-  const assistants = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
+  const assistants = ['antigravity', 'claude', 'cursor', 'devin', 'codex', 'copilot'] as const;
 
   it('AC-1: ai-operational-skills.ts defines Telemetry Summary table in protocol-123 skill', () => {
     const skillFiles = planAiOperationalSkills(assistants, 'playwright', 'typescript');

@@ -159,7 +159,7 @@ cypress/screenshots/
 .agents/
 .claude/
 .cursor/
-.windsurf/
+.devin/
 .codex/
 bin/
 obj/

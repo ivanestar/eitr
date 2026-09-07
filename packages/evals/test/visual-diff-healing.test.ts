@@ -6,7 +6,7 @@ import {
 } from '../../engine/src/plan/templates/ai-rules.js';
 
 describe('Task 4: Visual Diff & Screenshot Overlay in Self-Healing', () => {
-  const assistants = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
+  const assistants = ['antigravity', 'claude', 'cursor', 'devin', 'codex', 'copilot'] as const;
 
   it('AC-1/2: heal-test operational skill incorporates Visual Diffing in 4-Point Trace Triage (the sole surviving self-healing implementation - the former trace-debugger agent duplicated this and was removed)', () => {
     const skills = planAiOperationalSkills(assistants, 'playwright', 'typescript');

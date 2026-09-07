@@ -37,18 +37,18 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
   it('generates multi-editor MCP configs for testrail including Playwright MCP and proxy env vars', () => {
     const files = planMcpConfigs('none', ['testrail']);
-    // 5 unique files: .agents/mcp_config.json (antigravity), .cursor/mcp.json (cursor),
-    // .mcp.json (claude + copilot, shared), .vscode/mcp.json (copilot), .codex/config.toml (codex).
-    // Windsurf contributes none - see the module doc comment in mcp-configs.ts for why.
-    expect(files.length).toBe(5);
+    // 6 unique files: .agents/mcp_config.json (antigravity), .cursor/mcp.json (cursor),
+    // .mcp.json (claude + copilot, shared), .vscode/mcp.json (copilot), .codex/config.toml (codex),
+    // .devin/mcp_config.json (devin - project-scoped MCP support since the Windsurf rebrand).
+    expect(files.length).toBe(6);
     const paths = files.map((f) => f.path);
     expect(paths).toContain('.agents/mcp_config.json');
     expect(paths).toContain('.cursor/mcp.json');
     expect(paths).toContain('.mcp.json');
     expect(paths).toContain('.vscode/mcp.json');
     expect(paths).toContain('.codex/config.toml');
+    expect(paths).toContain('.devin/mcp_config.json');
     expect(paths).not.toContain('.claude/mcp.json');
-    expect(paths).not.toContain('.windsurf/mcp.json');
     expect(paths).not.toContain('.codex/mcp.json');
 
     const cursorConfig = files.find((f) => f.path === '.cursor/mcp.json');
@@ -101,10 +101,13 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
       '.vscode/mcp.json',
     ]);
 
-    // Windsurf contributes nothing (no project-scoped MCP mechanism exists for it); Codex CLI
-    // gets its own TOML file instead of a JSON path.
-    const windsurfCodex = planMcpConfigs('none', [], true, ['windsurf', 'codex']);
-    expect(windsurfCodex.map((f) => f.path)).toEqual(['.codex/config.toml']);
+    // Devin Desktop gets its own project-scoped .devin/mcp_config.json; Codex CLI gets its own
+    // TOML file instead of a JSON path.
+    const devinCodex = planMcpConfigs('none', [], true, ['devin', 'codex']);
+    expect(devinCodex.map((f) => f.path).sort()).toEqual([
+      '.codex/config.toml',
+      '.devin/mcp_config.json',
+    ]);
 
     const unknownAssistant = planMcpConfigs('none', [], true, ['aider', 'unknown']);
     expect(unknownAssistant).toEqual([]);
@@ -115,8 +118,8 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(copilotOnly.map((f) => f.path).sort()).toEqual(['.mcp.json', '.vscode/mcp.json']);
   });
 
-  it('generates 6 specialized SDET agents for all supported assistants (Antigravity, Claude, Cursor, Windsurf, Codex, Copilot)', () => {
-    const files = planAiAgents(['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot']);
+  it('generates 6 specialized SDET agents for all supported assistants (Antigravity, Claude, Cursor, Devin, Codex, Copilot)', () => {
+    const files = planAiAgents(['antigravity', 'claude', 'cursor', 'devin', 'codex', 'copilot']);
     expect(files.length).toBe(36); // 6 agents * 6 assistants
     const paths = files.map((f) => f.path);
 
@@ -131,8 +134,8 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).toContain('.claude/agents/tms-validator.md');
     expect(paths).toContain('.cursor/skills/tms-validator/SKILL.md');
     expect(paths).toContain('.cursor/skills/pom-engineer/SKILL.md');
-    expect(paths).toContain('.windsurf/rules/agent-tms-validator.md');
-    expect(paths).toContain('.windsurf/rules/agent-assertion-auditor.md');
+    expect(paths).toContain('.devin/rules/agent-tms-validator.md');
+    expect(paths).toContain('.devin/rules/agent-assertion-auditor.md');
     expect(paths).toContain('.codex/agents/tms-validator.toml');
     expect(paths).toContain('.github/agents/tms-validator.agent.md');
 
@@ -205,16 +208,15 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
       'antigravity',
       'claude',
       'cursor',
-      'windsurf',
+      'devin',
       'codex',
       'copilot',
     ]);
-    // 10 skills * 4 assistants with 1 file each (antigravity, claude, cursor, codex) = 40
-    // + windsurf: 9 non-map-site skills * 1 file + map-site split into 2 files (map-site.md,
-    //   map-site-update.md) = 11
+    // 10 skills * 4 assistants with 1 file each (claude, cursor, codex, and the merged
+    // antigravity+devin pair sharing one .agents/skills/ descriptor set) = 40
     // + copilot: 10 skills * 2 files (prompt + skill) = 20
-    // = 71
-    expect(files.length).toBe(71);
+    // = 60
+    expect(files.length).toBe(60);
     const paths = files.map((f) => f.path);
 
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
@@ -226,20 +228,13 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     expect(paths).toContain('.claude/skills/auth-setup/SKILL.md');
     expect(paths).toContain('.cursor/skills/automate-test/SKILL.md');
-    expect(paths).toContain('.windsurf/workflows/heal-test.md');
     expect(paths).toContain('.codex/skills/bulk-rescan/SKILL.md');
     expect(paths).toContain('.github/prompts/map-site.prompt.md');
     expect(paths).toContain('.github/skills/map-site/SKILL.md');
 
-    // Windsurf's map-site is split into two self-contained workflow files (no confirmed
-    // argument-substitution mechanism for Windsurf), unlike every other assistant's single
-    // map-site entry with a create|update mode argument.
-    expect(paths).toContain('.windsurf/workflows/map-site.md');
-    expect(paths).toContain('.windsurf/workflows/map-site-update.md');
-    const windsurfCreate = files.find((f) => f.path === '.windsurf/workflows/map-site.md');
-    expect(windsurfCreate?.source.text).toContain('CREATE mode');
-    const windsurfUpdate = files.find((f) => f.path === '.windsurf/workflows/map-site-update.md');
-    expect(windsurfUpdate?.source.text).toContain('UPDATE mode');
+    // Devin Desktop discovers skills from the exact same shared .agents/skills/ path as
+    // Antigravity (both confirmed 2026) - a single descriptor set covers both, never doubled.
+    expect(paths.filter((p) => p === '.agents/skills/map-site/SKILL.md')).toHaveLength(1);
 
     const mapSkill = files.find((f) => f.path === '.agents/skills/map-site/SKILL.md');
     expect(mapSkill?.source.text).toContain('artifacts/site-map/site-map.json');
@@ -258,10 +253,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Coverage Cross-Check');
     expect(mapSkill?.source.text).toContain('Optional Signal');
 
-    // map-site declares `arguments: ['mode']`, so its Antigravity rendering must explain that
-    // Antigravity has no slash-command argument mechanism - live-verified 2026-09-03 (skills are
-    // activated autonomously from description, or requested by name in chat).
-    expect(mapSkill?.source.text).toContain('Antigravity note:');
+    // map-site declares `arguments: ['mode']`, so the shared antigravity+devin rendering must
+    // explain that neither assistant has a slash-command argument mechanism - live-verified
+    // 2026-09-03/2026-09-06 (skills are activated autonomously from description, or requested by
+    // name in chat, on both).
+    expect(mapSkill?.source.text).toContain('> **Note:**');
     expect(mapSkill?.source.text).toContain('no slash-command argument mechanism');
 
     // skill-reviewer pass (2026-09-02): description discloses the optional step and the automatic
@@ -356,13 +352,16 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // AC9: reuses the existing Level-2 fan-out - no bespoke dispatch mechanism for Step 6.
     expect(mapSkill?.source.text).toContain('orchestrate-swarm.mjs --phase=plan');
 
-    // Mode Resolution: create-on-existing-file and update-with-no-file are both explicit and
-    // transparent (Fail loud, never silently guess), not silent redirects.
+    // Mode Resolution: deterministically resolved by scripts/map-site-status.mjs (not re-derived
+    // in prose), whose noticeMessage the skill must print verbatim, never paraphrased.
     expect(mapSkill?.source.text).toContain('## Mode Resolution');
-    expect(mapSkill?.source.text).toContain(
-      'No existing artifacts/site-map/site-map.json found - running a full create pass instead.',
-    );
-    expect(mapSkill?.source.text).toContain('routeId identity resets for every route');
+    expect(mapSkill?.source.text).toContain('node scripts/map-site-status.mjs');
+    expect(mapSkill?.source.text).toContain('resolvedMode');
+    expect(mapSkill?.source.text).toContain('noticeMessage');
+    expect(mapSkill?.source.text).toContain('never paraphrase or shorten it');
+    // The routeId-reset consequence itself is still documented in the Purpose section.
+    expect(mapSkill?.source.text).toContain("every route's");
+    expect(mapSkill?.source.text).toContain('identity resets too');
 
     // routeId generation/stability rule: generated once at first discovery, never derived from
     // the path template, and update mode never reassigns it for an already-known route.
@@ -379,13 +378,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('<=100 char');
     expect(mapSkill?.source.text).toContain('[REDACTED]');
 
-    // AC7: Step 6's marker text renders identically into all 8 map-site-bearing generated paths.
+    // AC7: Step 6's marker text renders identically into every map-site-bearing generated path.
     const mapSiteBearingPaths = [
       '.agents/skills/map-site/SKILL.md',
       '.claude/skills/map-site/SKILL.md',
       '.cursor/skills/map-site/SKILL.md',
-      '.windsurf/workflows/map-site.md',
-      '.windsurf/workflows/map-site-update.md',
       '.codex/skills/map-site/SKILL.md',
       '.github/prompts/map-site.prompt.md',
       '.github/skills/map-site/SKILL.md',
@@ -413,9 +410,9 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(claudeHealSkill?.source.text).not.toContain('disable-model-invocation');
 
     const pomSkill = files.find((f) => f.path === '.agents/skills/scan-and-generate-pom/SKILL.md');
-    // scan-and-generate-pom declares no `arguments`, so it must NOT get the Antigravity
-    // invocation-mechanism note - only skills with real argument-based mode selection need it.
-    expect(pomSkill?.source.text).not.toContain('Antigravity note:');
+    // scan-and-generate-pom declares no `arguments`, so it must NOT get the no-argument-mechanism
+    // note - only skills with real argument-based mode selection need it.
+    expect(pomSkill?.source.text).not.toContain('> **Note:**');
     expect(pomSkill?.source.text).not.toContain('tests/pom-sanity');
     expect(pomSkill?.source.text).toContain('Tier 1 (Actionable Visibility');
     expect(pomSkill?.source.text).toContain('locator.click({ trial: true })');
@@ -524,8 +521,8 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).toContain('.mcp.json');
     expect(paths).toContain('.vscode/mcp.json');
     expect(paths).toContain('.codex/config.toml');
+    expect(paths).toContain('.devin/mcp_config.json');
     expect(paths).not.toContain('.claude/mcp.json');
-    expect(paths).not.toContain('.windsurf/mcp.json');
     expect(paths).not.toContain('.codex/mcp.json');
 
     // Site map (artifacts/site-map/ subfolder, not the old flat docs/ paths from before either
@@ -542,17 +539,24 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // Root Context & Layer 1
     expect(paths).toContain('AGENTS.md');
     expect(paths).toContain('CLAUDE.md');
-    expect(paths).toContain('.windsurfrules');
     expect(paths).toContain('.github/copilot-instructions.md');
     expect(paths).toContain('CONVENTIONS.md');
     expect(paths).not.toContain('custom-instructions.md');
+
+    // Path/glob-scoped rule files (Cursor, Devin Desktop, Copilot path-scoped supplements)
+    expect(paths).toContain('.cursor/rules/harmonize.mdc');
+    expect(paths).toContain('.cursor/rules/api.mdc');
+    expect(paths).toContain('.devin/rules/harmonize.md');
+    expect(paths).toContain('.devin/rules/api.md');
+    expect(paths).toContain('.github/instructions/harmonize.instructions.md');
+    expect(paths).toContain('.github/instructions/api.instructions.md');
 
     // Agents
     expect(paths).toContain('.agents/agents/sdet-orchestrator/agent.md');
     expect(paths).toContain('.agents/agents/pom-engineer/agent.md');
     expect(paths).toContain('.cursor/skills/sdet-orchestrator/SKILL.md');
     expect(paths).toContain('.claude/agents/sdet-orchestrator.md');
-    expect(paths).toContain('.windsurf/rules/agent-sdet-orchestrator.md');
+    expect(paths).toContain('.devin/rules/agent-sdet-orchestrator.md');
     expect(paths).toContain('.codex/agents/sdet-orchestrator.toml');
     expect(paths).toContain('.github/agents/sdet-orchestrator.agent.md');
 
@@ -566,7 +570,6 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // Negative assertions: ensure NO legacy duplicate skills are emitted
     expect(paths).not.toContain('.claude/skills/framework-harmonizer/SKILL.md');
     expect(paths).not.toContain('.cursor/skills/harmonize/SKILL.md');
-    expect(paths).not.toContain('.windsurf/rules/harmonize.md');
     expect(paths).not.toContain('.agents/skills/framework-harmonizer/SKILL.md');
     expect(paths).not.toContain('.codex/skills/framework-harmonizer/SKILL.md');
   });
@@ -583,10 +586,10 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).toContain('.cursor/mcp.json');
     expect(paths).toContain('.mcp.json');
     expect(paths).not.toContain('.claude/mcp.json');
-    expect(paths).not.toContain('.windsurf/mcp.json');
     expect(paths).not.toContain('.codex/mcp.json');
     expect(paths).not.toContain('.codex/config.toml');
     expect(paths).not.toContain('.vscode/mcp.json');
+    expect(paths).not.toContain('.devin/mcp_config.json');
     expect(paths).toContain('.agents/agents/sdet-orchestrator/agent.md');
     expect(paths).toContain('.agents/skills/auth-setup/SKILL.md');
     expect(paths).toContain('.cursor/skills/pom-engineer/SKILL.md');
@@ -606,12 +609,11 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(paths).not.toContain('.codex/config.toml');
     expect(paths).not.toContain('CLAUDE.md');
     expect(paths).not.toContain('AGENTS.md');
-    expect(paths).not.toContain('.windsurfrules');
     expect(paths).not.toContain('.github/copilot-instructions.md');
     expect(paths.some((p) => p.startsWith('.agents/'))).toBe(false);
     expect(paths.some((p) => p.startsWith('.cursor/'))).toBe(false);
     expect(paths.some((p) => p.startsWith('.claude/'))).toBe(false);
-    expect(paths.some((p) => p.startsWith('.windsurf/'))).toBe(false);
+    expect(paths.some((p) => p.startsWith('.devin/'))).toBe(false);
     expect(paths.some((p) => p.startsWith('.codex/'))).toBe(false);
   });
 });

@@ -9,7 +9,7 @@ import { renderAuthSetupTs } from '../../engine/src/plan/templates/auth-setup.js
 import { renderGitHooks } from '../../engine/src/plan/templates/git-hooks.js';
 
 describe('Master Batch: Complete SDET & Enterprise Enhancements', () => {
-  const assistants = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
+  const assistants = ['antigravity', 'claude', 'cursor', 'devin', 'codex', 'copilot'] as const;
 
   it('AC-2: eitr doctor --ai diagnostic check function is available', async () => {
     expect(typeof checkAiTooling).toBe('function');

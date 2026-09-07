@@ -70,7 +70,7 @@ one-line reason rather than omitting it.
 ### Group B — AI ecosystem (8 categories + 1 explicit gap check)
 
 11. **Паритет ассистентов (N шт.)** — for every AI assistant EITR claims to support (Claude Code,
-    Cursor, Windsurf, Codex, Copilot, Antigravity, Aider — update the count if the supported list
+    Cursor, Devin Desktop, Codex, Copilot, Antigravity, Aider — update the count if the supported list
     changes), confirm real non-placeholder generated config exists, note any assistant that's
     thinner than the rest.
 12. **Качество агентов** — read at least 1-2 generated agent definitions fully: concrete/measurable

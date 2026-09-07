@@ -48,7 +48,7 @@ npx @onlytests/eitr new
 The wizard inspects your target URL and prompts for your project stack:
 
 - **Language & test framework:** TypeScript, Python, C#, Java (Playwright)
-- **AI-assistant tooling:** Cursor, Claude Code, Windsurf, Copilot, Antigravity, Aider, Codex
+- **AI-assistant tooling:** Cursor, Claude Code, Devin Desktop, Copilot, Antigravity, Aider, Codex
 - **CI/CD pipeline:** GitHub Actions, GitLab CI, Jenkins, TeamCity
 - **Task tracker:** Jira, Azure DevOps (Work Items), or None / Skip
 - **Test Management System (TMS):** Jira Xray, Azure DevOps (Test Plans), TestRail, Zephyr Scale
@@ -59,7 +59,7 @@ Fill in credentials (app login, TMS tokens) in the generated `.env`. If your app
 
 ### 3. Open in your AI editor
 
-Open the generated directory in **Cursor**, **Claude Code**, **Windsurf**, **Antigravity**, or your assistant of choice.
+Open the generated directory in **Cursor**, **Claude Code**, **Devin Desktop**, **Antigravity**, or your assistant of choice.
 
 ### 4. Run a workflow
 
@@ -80,7 +80,13 @@ npx playwright test
 - Reusable Page Objects and primitives (`Button`, `TextInput`, `Table`, `Dialog`, and more) – the building blocks your tests, and any Page Objects your AI assistant writes later, extend directly instead of hand-rolling from scratch.
 - CI/CD pipeline files for GitHub Actions, GitLab CI, Jenkins, or TeamCity, matched to your stack. Push the repo and the pipeline runs – nothing else to wire up.
 - Optional TMS integration (Jira Xray, Azure DevOps, TestRail, Zephyr) to pull test cases and post results back.
-- Native slash-commands and rules built for your AI assistant – Claude Code, Cursor, Windsurf, Copilot, Antigravity, Aider, Codex – that drive the whole workflow above, from `/ground-zero-setup` down to individual test authoring.
+- Native slash-commands and rules built for your AI assistant – Claude Code, Cursor, Devin Desktop, Copilot, Antigravity, Aider, Codex – that drive the whole workflow above, from `/ground-zero-setup` down to individual test authoring.
+
+---
+
+## Updating
+
+Re-running the scaffolder on an existing project with the same stack never touches your own work – it only adds files that weren't there before (new skills, agents, etc.). One limitation: it can't safely patch files it already wrote, including the global rule files (CLAUDE.md, AGENTS.md, CONVENTIONS.md) – whatever you've since edited there stays untouched. If you want a project caught up on newer rules anyway, point your AI assistant at this repo's [CHANGELOG.md](CHANGELOG.md) and have it copy over what's relevant – a manual workaround, not something the CLI does for you.
 
 ---
 
@@ -96,7 +102,7 @@ npx playwright test
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). If you're an AI assistant working on EITR itself, also read [AGENTS.md](./AGENTS.md) and [docs/architecture/](./docs/architecture/README.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). If you're an AI assistant working on EITR itself, also read [AGENTS.md](./AGENTS.md) and [docs/architecture/](./docs/architecture/README.md). See [MANIFESTO.md](MANIFESTO.md) for the values this is built on.
 
 ---
 

@@ -140,7 +140,7 @@ const AI_ASSISTANT_CHOICES: readonly Choice[] = [
   { label: 'Antigravity (.agents/skills)', value: 'antigravity' },
   { label: 'Cursor (.cursor/rules)', value: 'cursor' },
   { label: 'Claude Code (.claude/skills)', value: 'claude' },
-  { label: 'Windsurf (.windsurf)', value: 'windsurf' },
+  { label: 'Devin Desktop (.devin)', value: 'devin' },
   { label: 'Codex CLI (.codex/skills)', value: 'codex' },
   { label: 'GitHub Copilot (.github/copilot)', value: 'copilot' },
   { label: 'Aider (.aider.conf.yml)', value: 'aider' },

@@ -19,7 +19,7 @@ import { renderCypressApiClient } from '../src/plan/templates/cypress/project.js
 import type { StackProfile } from '../src/types/stack-profile.js';
 
 describe('DX Scaffolding Parity & Bugfix Suite', () => {
-  const assistants = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
+  const assistants = ['antigravity', 'claude', 'cursor', 'devin', 'codex', 'copilot'] as const;
 
   describe('AC-1: sdet-architect Worked Example & CPOM primitives', () => {
     it('uses CPOM primitives, textNow(), and valid constructor arguments without non-existent BasePage methods', () => {

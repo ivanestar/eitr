@@ -1,5 +1,7 @@
 // Centralized AI rules templates for all major coding assistants. create-if-absent.
 
+import { yamlSafeScalar } from './yaml-frontmatter.js';
+
 export function renderAiHarmonizeText(
   tool: string = 'playwright',
   language: string = 'typescript',
@@ -460,10 +462,14 @@ export function renderClaudeMd(
   tool: string = 'playwright',
   language: string = 'typescript',
 ): string {
-  return renderAgentsMd(tool, language).replace(
-    'Project Rules & Agent Instructions',
-    'Claude Code Project Instructions',
-  );
+  return `# Claude Code Project Instructions
+
+@CONVENTIONS.md
+
+---
+
+${renderSharedRuleBlocks(tool, language)}
+`;
 }
 
 export function renderConventionsMd(
@@ -695,330 +701,233 @@ auto-test: false
 ${hasCpomLinter ? 'lint-cmd: npm run lint:cpom\nauto-lint: false\n' : ''}`;
 }
 
+// The 7 task-workflow blocks shared verbatim by AGENTS.md and CLAUDE.md (Locator Strategy is
+// deliberately excluded here - CONVENTIONS.md already carries the canonical CPOM locator contract,
+// and duplicating it into every always-loaded root file wastes context for zero benefit; a reader
+// that needs it is pointed at CONVENTIONS.md instead, per each file's own header line/import).
+function renderSharedRuleBlocks(tool: string, language: string): string {
+  return `${renderAiHarmonizeText(tool, language)}
+
+---
+
+${renderAiGenerateText(tool, language)}
+
+---
+
+${renderAiDoctorText(tool)}
+
+---
+
+${renderAiUpdateText(tool, language)}
+
+---
+
+${renderAiAdapterBuilderText(tool)}
+
+---
+
+${renderAiFailureAnalystText(tool)}
+
+---
+
+${renderAiApiRulesText(tool)}`;
+}
+
 export function renderAgentsMd(
   tool: string = 'playwright',
   language: string = 'typescript',
 ): string {
   return `# Project Rules & Agent Instructions
 
-This project is configured with native rules for Cursor, Windsurf, Copilot, Aider, and Claude Code.
+This project is configured with native rules for Cursor, Devin Desktop, Copilot, Aider, and Claude Code. For the full CPOM component/locator contract (directory layout, assertion rules, locator priority, TDM helpers), see \`CONVENTIONS.md\`.
 
 ---
 
-${renderAiHarmonizeText(tool, language)}
-
----
-
-${renderAiGenerateText(tool, language)}
-
----
-
-${renderAiDoctorText(tool)}
-
----
-
-${renderAiUpdateText(tool, language)}
-
----
-
-${renderAiLocatorStrategyText(tool, language)}
-
----
-
-${renderAiAdapterBuilderText(tool)}
-
----
-
-${renderAiFailureAnalystText(tool)}
-
----
-
-${renderAiApiRulesText(tool)}
+${renderSharedRuleBlocks(tool, language)}
 `;
 }
 
-export function renderCursorrulesHarmonize(tool?: string, language?: string): string {
-  const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
+// Path/glob-scoped rule files: Cursor (.cursor/rules/*.mdc), Devin Desktop (.devin/rules/*.md),
+// and GitHub Copilot (.github/instructions/*.instructions.md) each support the same underlying
+// idea - full rule content delivered only when a matching file is actually being touched - through
+// 3 different native frontmatter shapes. One task table plus one renderer per assistant replaces
+// what used to be ~23 near-duplicate one-off functions with no shared source of truth.
+export type RuleTaskKey =
+  | 'harmonize'
+  | 'generate'
+  | 'doctor'
+  | 'update'
+  | 'locator-strategy'
+  | 'adapter-builder'
+  | 'failure-analyst'
+  | 'api';
+
+export const RULE_TASK_KEYS: readonly RuleTaskKey[] = [
+  'harmonize',
+  'generate',
+  'doctor',
+  'update',
+  'locator-strategy',
+  'adapter-builder',
+  'failure-analyst',
+  'api',
+];
+
+function ruleTaskGlobs(task: RuleTaskKey, tool: string, language: string): string {
   const ext = language === 'python' ? 'py' : 'ts';
-  const configFile =
-    tool === 'cypress'
-      ? `cypress.config.${ext}`
-      : tool === 'pytest'
-        ? 'pyproject.toml'
-        : `playwright.config.${ext}`;
-  return `---
-description: Reconcile and align the ${toolName} CPOM framework configuration with the target app.
-globs: ${configFile}, .env*, package.json, components/primitives/**/*
----
-${renderAiHarmonizeText(tool, language)}
-`;
+  switch (task) {
+    case 'harmonize': {
+      const configFile =
+        tool === 'cypress'
+          ? `cypress.config.${ext}`
+          : tool === 'pytest'
+            ? 'pyproject.toml'
+            : `playwright.config.${ext}`;
+      return `${configFile}, .env*, package.json, components/primitives/**/*`;
+    }
+    case 'generate':
+      return 'tests/**/*, components/pages/**/*';
+    case 'doctor':
+      return 'components/**/*, tests/**/*';
+    case 'update':
+      return 'components/pages/**/*';
+    case 'locator-strategy':
+      return 'components/**/*, tests/**/*, shared/utils/**/*';
+    case 'adapter-builder':
+      return 'components/primitives/**/*, components/widgets/**/*';
+    case 'failure-analyst': {
+      const reportGlobs =
+        tool === 'cypress'
+          ? 'cypress/screenshots/**/*'
+          : tool === 'pytest'
+            ? '.pytest_cache/**/*'
+            : 'playwright-report/**/*, test-results/**/*';
+      return `${reportGlobs}, .github/workflows/**/*`;
+    }
+    case 'api':
+      return 'tests/api/**/*, tests/**/*, shared/utils/api-client.*';
+  }
 }
 
-export function renderCursorrulesGenerate(tool?: string, language?: string): string {
+function ruleTaskDescription(task: RuleTaskKey, toolName: string): string {
+  switch (task) {
+    case 'harmonize':
+      return `Reconcile and align the ${toolName} CPOM framework configuration with the target app.`;
+    case 'generate':
+      return `Generate Page Objects and ${toolName} tests for new pages.`;
+    case 'doctor':
+      return 'Diagnose and repair broken selectors or failing assertions.';
+    case 'update':
+      return 'Incrementally add new fields/properties/methods to an existing Page Object.';
+    case 'locator-strategy':
+      return 'Rules for choosing resilient, user-centric locators.';
+    case 'adapter-builder':
+      return 'Develop custom primitives or component adapters following the Method Safety Contract.';
+    case 'failure-analyst':
+      return 'Inspect and resolve CI/CD test run errors and crash tracebacks.';
+    case 'api':
+      return 'Perform API request testing or pre-test data setup using the ApiClient helper.';
+  }
+}
+
+function ruleTaskBody(task: RuleTaskKey, tool: string, language: string): string {
+  switch (task) {
+    case 'harmonize':
+      return renderAiHarmonizeText(tool, language);
+    case 'generate':
+      return renderAiGenerateText(tool, language);
+    case 'doctor':
+      return renderAiDoctorText(tool);
+    case 'update':
+      return renderAiUpdateText(tool, language);
+    case 'locator-strategy':
+      return renderAiLocatorStrategyText(tool, language);
+    case 'adapter-builder':
+      return renderAiAdapterBuilderText(tool);
+    case 'failure-analyst':
+      return renderAiFailureAnalystText(tool);
+    case 'api':
+      return renderAiApiRulesText(tool);
+  }
+}
+
+// Cursor: .cursor/rules/<task>.mdc - live-verified 2026: the .mdc extension is mandatory (a plain
+// .md file in .cursor/rules is silently ignored, no frontmatter parsed), frontmatter is
+// description/globs/alwaysApply. alwaysApply: false because every one of these is scoped to a
+// specific glob, never meant to load into every chat session regardless of what's open.
+export function renderCursorRuleFile(
+  task: RuleTaskKey,
+  tool: string = 'playwright',
+  language: string = 'typescript',
+): string {
   const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
   return `---
-description: Generate Page Objects and ${toolName} tests for new pages.
-globs: tests/**/*, components/pages/**/*
+description: ${yamlSafeScalar(ruleTaskDescription(task, toolName))}
+globs: ${yamlSafeScalar(ruleTaskGlobs(task, tool, language))}
+alwaysApply: false
 ---
-${renderAiGenerateText(tool, language)}
+${ruleTaskBody(task, tool, language)}
 `;
 }
 
-export function renderCursorrulesDoctor(tool?: string): string {
+// Devin Desktop (Windsurf's 2026 rebrand): .devin/rules/<task>.md - live-verified 2026: plain .md
+// (not .mdc), frontmatter is trigger/globs/description. trigger: glob activates the rule only when
+// a matching file is open/edited, mirroring Cursor's own glob-scoping via a different field name.
+export function renderDevinRuleFile(
+  task: RuleTaskKey,
+  tool: string = 'playwright',
+  language: string = 'typescript',
+): string {
+  const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
   return `---
-description: Diagnose and repair broken selectors or failing assertions.
-globs: components/**/*, tests/**/*
+trigger: glob
+globs: ${yamlSafeScalar(ruleTaskGlobs(task, tool, language))}
+description: ${yamlSafeScalar(ruleTaskDescription(task, toolName))}
 ---
-${renderAiDoctorText(tool)}
+${ruleTaskBody(task, tool, language)}
 `;
 }
 
-export function renderCursorrulesUpdate(tool?: string, language?: string): string {
+// GitHub Copilot: .github/instructions/<task>.instructions.md - live-verified 2026: the confirmed
+// required field is applyTo (one or more path globs); repo-wide .github/copilot-instructions.md
+// stays the always-loaded overview, these are the path-scoped supplements.
+export function renderCopilotPathInstructions(
+  task: RuleTaskKey,
+  tool: string = 'playwright',
+  language: string = 'typescript',
+): string {
   return `---
-description: Incrementally add new fields/properties/methods to an existing Page Object.
-globs: components/pages/**/*
+applyTo: ${yamlSafeScalar(ruleTaskGlobs(task, tool, language))}
 ---
-${renderAiUpdateText(tool, language)}
+${ruleTaskBody(task, tool, language)}
 `;
-}
-
-export function renderCursorrulesLocatorStrategy(tool?: string, language?: string): string {
-  return `---
-description: Rules for choosing resilient, user-centric locators.
-globs: components/**/*, tests/**/*, shared/utils/**/*
----
-${renderAiLocatorStrategyText(tool, language)}
-`;
-}
-
-export function renderCursorrulesAdapterBuilder(tool?: string): string {
-  return `---
-description: Develop custom primitives or component adapters following the Method Safety Contract.
-globs: components/primitives/**/*, components/widgets/**/*
----
-${renderAiAdapterBuilderText(tool)}
-`;
-}
-
-export function renderCursorrulesFailureAnalyst(tool?: string): string {
-  const isCypress = tool === 'cypress';
-  const isPytest = tool === 'pytest';
-  const reportGlobs = isCypress
-    ? 'cypress/screenshots/**/*'
-    : isPytest
-      ? '.pytest_cache/**/*'
-      : 'playwright-report/**/*, test-results/**/*';
-  return `---
-description: Inspect and resolve CI/CD test run errors and crash tracebacks.
-globs: ${reportGlobs}, .github/workflows/**/*
----
-${renderAiFailureAnalystText(tool)}
-`;
-}
-
-export function renderCursorrulesApi(tool?: string): string {
-  return `---
-description: Perform API request testing or pre-test data setup using the ApiClient helper.
-globs: tests/api/**/*, tests/**/*, shared/utils/api-client.*
----
-${renderAiApiRulesText(tool)}
-`;
-}
-
-export function renderWindsurfHarmonize(tool?: string, language?: string): string {
-  return renderAiHarmonizeText(tool, language);
-}
-
-export function renderWindsurfGenerate(tool?: string, language?: string): string {
-  return renderAiGenerateText(tool, language);
-}
-
-export function renderWindsurfDoctor(tool?: string): string {
-  return renderAiDoctorText(tool);
-}
-
-export function renderWindsurfUpdate(tool?: string, language?: string): string {
-  return renderAiUpdateText(tool, language);
-}
-
-export function renderWindsurfLocatorStrategy(tool?: string, language?: string): string {
-  return renderAiLocatorStrategyText(tool, language);
-}
-
-export function renderWindsurfAdapterBuilder(tool?: string): string {
-  return renderAiAdapterBuilderText(tool);
-}
-
-export function renderWindsurfFailureAnalyst(tool?: string): string {
-  return renderAiFailureAnalystText(tool);
-}
-
-export function renderWindsurfApi(tool?: string): string {
-  return renderAiApiRulesText(tool);
 }
 
 export function renderCopilotInstructions(tool?: string, language?: string): string {
+  const t = tool ?? 'playwright';
+  const l = language ?? 'typescript';
   return `# GitHub Copilot Workspace Instructions
 
+For the full CPOM component/locator contract (directory layout, assertion rules, locator priority, TDM helpers), see \`CONVENTIONS.md\`. Path-scoped rules for specific tasks (harmonize, generate, locator strategy, etc.) live under \`.github/instructions/*.instructions.md\`.
+
 ## Framework Harmonization
-${renderAiHarmonizeText(tool, language)}
+${renderAiHarmonizeText(t, l)}
 
 ## Page Object & Test Generation
-${renderAiGenerateText(tool, language)}
-
-## Locator Selection Strategy
-${renderAiLocatorStrategyText(tool)}
+${renderAiGenerateText(t, l)}
 
 ## Selector Self-Healing & Verification
-${renderAiDoctorText(tool)}
+${renderAiDoctorText(t)}
 
 ## Page Object Incremental Updates
-${renderAiUpdateText(tool, language)}
+${renderAiUpdateText(t, l)}
 
 ## Custom Adapter & Primitive Design
-${renderAiAdapterBuilderText(tool)}
+${renderAiAdapterBuilderText(t)}
 
 ## CI Failure Analysis
-${renderAiFailureAnalystText(tool)}
+${renderAiFailureAnalystText(t)}
 
 ## API Testing & Setup Rules
-${renderAiApiRulesText(tool)}`;
-}
-
-export function renderClaudeHarmonize(tool?: string, language?: string): string {
-  return renderGeminiHarmonize(tool, language);
-}
-
-export function renderClaudeGenerate(tool?: string, language?: string): string {
-  return renderGeminiGenerate(tool, language);
-}
-
-export function renderClaudeLocatorStrategy(tool?: string, language?: string): string {
-  return renderGeminiLocatorStrategy(tool, language);
-}
-
-export function renderClaudeDoctor(tool?: string): string {
-  return renderGeminiDoctor(tool);
-}
-
-export function renderClaudeUpdate(tool?: string, language?: string): string {
-  return renderGeminiUpdate(tool, language);
-}
-
-export function renderClaudeAdapterBuilder(tool?: string): string {
-  return renderGeminiAdapterBuilder(tool);
-}
-
-export function renderClaudeFailureAnalyst(tool?: string): string {
-  return renderGeminiFailureAnalyst(tool);
-}
-
-export function renderClaudeApi(tool?: string): string {
-  return renderGeminiApi(tool);
-}
-
-export function renderGeminiHarmonize(tool?: string, language?: string): string {
-  const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
-  return `---
-name: framework-harmonizer
-description: Reconciles and aligns the ${toolName} CPOM framework with the actual target application.
----
-${renderAiHarmonizeText(tool, language)}
-`;
-}
-
-export function renderGeminiGenerate(tool?: string, language?: string): string {
-  const toolName = tool === 'cypress' ? 'Cypress' : tool === 'pytest' ? 'pytest' : 'Playwright';
-  return `---
-name: cpom-generator
-description: Generates component-based Page Objects and ${toolName} tests.
----
-${renderAiGenerateText(tool, language)}
-`;
-}
-
-export function renderGeminiLocatorStrategy(tool?: string, language?: string): string {
-  return `---
-name: locator-strategy
-description: Rules for choosing resilient, user-centric locators.
----
-${renderAiLocatorStrategyText(tool, language)}
-`;
-}
-
-export function renderGeminiDoctor(tool?: string): string {
-  return `---
-name: selector-doctor
-description: Repairs broken selectors and assertions using live page DOM insights.
----
-${renderAiDoctorText(tool)}
-`;
-}
-
-export function renderGeminiUpdate(tool?: string, language?: string): string {
-  return `---
-name: cpom-updater
-description: Performs incremental Page Object additions safely preserving manual code.
----
-${renderAiUpdateText(tool, language)}
-`;
-}
-
-export function renderGeminiAdapterBuilder(tool?: string): string {
-  return `---
-name: adapter-builder
-description: Builds custom widget adapters complying with Method Safety rules.
----
-${renderAiAdapterBuilderText(tool)}
-`;
-}
-
-export function renderGeminiFailureAnalyst(tool?: string): string {
-  return `---
-name: ci-analyst
-description: Diagnoses and debugs CI/CD failure tracebacks, screenshots, and logs.
----
-${renderAiFailureAnalystText(tool)}
-`;
-}
-
-export function renderGeminiApi(tool?: string): string {
-  return `---
-name: api-testing
-description: Develops API tests and handles pre-test data preparation via HTTP/GraphQL.
----
-${renderAiApiRulesText(tool)}
-`;
-}
-
-export function renderCodexHarmonize(tool?: string, language?: string): string {
-  return renderGeminiHarmonize(tool, language);
-}
-
-export function renderCodexGenerate(tool?: string, language?: string): string {
-  return renderGeminiGenerate(tool, language);
-}
-
-export function renderCodexLocatorStrategy(tool?: string, language?: string): string {
-  return renderGeminiLocatorStrategy(tool, language);
-}
-
-export function renderCodexDoctor(tool?: string): string {
-  return renderGeminiDoctor(tool);
-}
-
-export function renderCodexUpdate(tool?: string, language?: string): string {
-  return renderGeminiUpdate(tool, language);
-}
-
-export function renderCodexAdapterBuilder(tool?: string): string {
-  return renderGeminiAdapterBuilder(tool);
-}
-
-export function renderCodexFailureAnalyst(tool?: string): string {
-  return renderGeminiFailureAnalyst(tool);
-}
-
-export function renderCodexApi(tool?: string): string {
-  return renderGeminiApi(tool);
+${renderAiApiRulesText(t)}`;
 }

@@ -9,7 +9,7 @@ Every generated test repository is structured with four dedicated AI layers:
 
 ```
 Generated Test Repository
-├── 1. Actors Layer (.agents/agents/, .claude/agents/, .cursor/skills/, .windsurf/rules/, .codex/agents/, .github/agents/)
+├── 1. Actors Layer (.agents/agents/, .claude/agents/, .cursor/skills/, .devin/rules/, .codex/agents/, .github/agents/)
 │   ├── sdet-orchestrator     -- Single facade & DAG task router
 │   ├── tms-validator         -- TMS requirements quality gate, atomicity check & GIGO guard
 │   ├── sdet-architect        -- Architecture governance, DI fixtures & CPOM validation
@@ -17,7 +17,7 @@ Generated Test Repository
 │   ├── test-data-engineer    -- Structured/bulk datasets & minimal-valid file fixtures on request
 │   └── assertion-auditor     -- Web-first anti-fake-green guard & mutation verification
 │
-├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/skills/, .windsurf/workflows/, .codex/skills/, .github/)
+├── 2. Workflows Layer (.agents/skills/, .claude/skills/, .cursor/skills/, .codex/skills/, .github/)
 │   ├── /auth-setup           -- Session capture (auth.json) and state re-use with SSO fallback
 │   ├── /scan-and-generate-pom-- Live DOM exploration + live-DOM Page Object verification
 │   ├── /automate-test        -- End-to-end flow: TMS ticket OR a locally-drafted journey ->
@@ -40,7 +40,8 @@ Generated Test Repository
 │   └── TMS Bridge MCP        -- TestRail / Zephyr / Jira Xray / ADO test case extraction (.mcp/tms-bridge/)
 │
 └── 4. Lifecycle Guards, Hooks & Rules Layer
-    ├── Root Context          -- AGENTS.md, CLAUDE.md, .windsurfrules, copilot-instructions.md
+    ├── Root Context          -- AGENTS.md, CLAUDE.md, copilot-instructions.md
+    ├── Path/Glob-Scoped Rules-- .cursor/rules/*.mdc, .devin/rules/*.md, .github/instructions/*.instructions.md
     └── CPOM Contract         -- CONVENTIONS.md (Method Safety Contract & locator hierarchy)
 ```
 
@@ -56,15 +57,29 @@ than one shared format every assistant has to interpret:
 
 - **Cursor:** `.cursor/skills/*/SKILL.md` (agents auto-invocable; operational skills carry
   `disable-model-invocation: true` to keep them explicit-only, per Cursor's own agent-vs-skill
-  distinction - `.cursor/rules/*.mdc` is auto-injected context, not a command/skill primitive)
-- **Windsurf:** `.windsurf/rules/*.md`
-- **Claude Code:** `CLAUDE.md` and `.claude/skills/*/SKILL.md`
-- **GitHub Copilot:** `.github/copilot-instructions.md`
+  distinction), `AGENTS.md` (read natively - confirmed 2026), and `.cursor/rules/*.mdc`
+  (`description`/`globs`/`alwaysApply` frontmatter - the .mdc extension is mandatory, a plain `.md`
+  file here is silently ignored)
+- **Devin Desktop** (Windsurf's 2026 rebrand): skills at the same shared `.agents/skills/*/SKILL.md`
+  path as Antigravity (confirmed in Devin's own skills documentation), `AGENTS.md` (read natively at
+  project root), agent personas at `.devin/rules/agent-*.md` and task rules at `.devin/rules/*.md`
+  (`trigger`/`globs`/`description` frontmatter - `.windsurfrules` and `.windsurf/rules/` still work
+  as legacy fallbacks but are no longer generated), and project-scoped MCP via
+  `.devin/mcp_config.json` (the old Windsurf/Cascade had no project-scoped MCP mechanism at all)
+- **Claude Code:** `CLAUDE.md` (imports `CONVENTIONS.md` via Claude Code's own `@path` syntax
+  instead of duplicating its CPOM contract) and `.claude/skills/*/SKILL.md`
+- **GitHub Copilot:** `.github/copilot-instructions.md` (repo-wide overview) plus path-scoped
+  `.github/instructions/*.instructions.md` (`applyTo` frontmatter) for task-specific rules
 - **Antigravity:** `.agents/agents/*/agent.md` and `.agents/skills/*/SKILL.md` (folder per skill,
   live-verified 2026-09-03 against the installed Antigravity CLI's own bundled documentation - a
   flat `.agents/skills/<name>.md` file is silently never discovered at all) and `AGENTS.md`
-- **OpenAI Codex:** `.codex/skills/*/SKILL.md`
+- **OpenAI Codex:** `.codex/skills/*/SKILL.md` and `AGENTS.md` (its own native root convention)
 - **Aider:** `.aider.conf.yml`, `CONVENTIONS.md`, and `AGENTS.md`
+
+`AGENTS.md` itself carries only the 7 task-workflow rule blocks shared across every assistant that
+reads it - it deliberately excludes the Locator Priority Hierarchy, which lives solely in
+`CONVENTIONS.md` (a one-line pointer sends the reader there instead of duplicating it verbatim in
+every always-loaded root file).
 
 ## Anti-fake-green assertion engine
 

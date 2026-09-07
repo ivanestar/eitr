@@ -2,10 +2,8 @@
 
 ## Supported Versions
 
-| Version | Supported |
-| ------- | --------- |
-| 0.4.x   | Yes       |
-| < 0.4.0 | No        |
+EITR has not reached a 1.0 release yet. Only the latest published version is supported -
+please upgrade before reporting a vulnerability.
 
 ## Reporting a Vulnerability
 

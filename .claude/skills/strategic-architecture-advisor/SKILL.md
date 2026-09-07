@@ -68,12 +68,13 @@ can be built on a foundation that's already shifted. Check current changelogs an
 at least: **Anthropic (mandatory - Claude models, Claude Code, the Agent SDK, MCP itself)**, then as
 many of the following as time allows - OpenAI (Codex CLI, Agents SDK, API deprecations), xAI (Grok
 models, Grok Build), Google (Gemini models, Antigravity CLI), and the tools this project's own
-generated skills target or could target (Cursor, Windsurf, Copilot, Aider, and newer entrants like
-Cline/Roo Code/Kilo Code/opencode/Grok Build that may not be in EITR's current 7-assistant list -
-check `ai-agent-integration.md` against the current list before assuming it's complete). Also check
-Playwright itself (not just MCP) - Microsoft's own guidance on agent-facing browser automation has
-changed direction before (e.g. recommending a CLI over MCP for a large agent-token-cost reduction)
-and a finding like that is exactly the kind of foundational shift this session exists to catch.
+generated skills target or could target (Cursor, Devin Desktop, Copilot, Aider, and newer entrants
+like Cline/Roo Code/Kilo Code/opencode/Grok Build that may not be in EITR's current 7-assistant
+list; check `ai-agent-integration.md` against the current list before assuming it's complete). Also
+check Playwright itself (not just MCP) - Microsoft's own guidance on agent-facing browser automation
+has changed direction before (e.g. recommending a CLI over MCP for a large agent-token-cost
+reduction) and a finding like that is exactly the kind of foundational shift this session exists to
+catch.
 
 Separately, scan public GitHub/GitLab repositories for patterns worth learning from - **ideas and
 approaches only, never copied code**. Note the license of anything cited (prefer MIT/Apache/BSD
