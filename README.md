@@ -55,7 +55,7 @@ The wizard inspects your target URL and prompts for your project stack:
 
 ### 2. Fill in `.env` and capture a session
 
-Fill in credentials (app login, TMS tokens) in the generated `.env`. If your app needs a login, run `npx @onlytests/eitr auth` (or `/auth-setup` in your AI editor) to log this in once – SSO/MFA included – and save an authenticated session to `.auth/user.json`. For multi-role apps, log in under the highest-access role (e.g. Admin) so later steps can map every area. Skip this step entirely for a public app.
+Fill in credentials (app login, TMS tokens) in the generated `.env`. If your app needs a login, run `npx @onlytests/eitr auth` (or `/auth-setup` in your AI editor) to log this in once – SSO/MFA included – and save an authenticated session to `.auth/user.json`. For a multi-role app, capture each role separately with `npx @onlytests/eitr auth --role admin`, which writes `.auth/admin.json`; `/auth-setup` also adds an `E2E_ADMIN_USERNAME`/`E2E_ADMIN_PASSWORD` slot per role to `.env`, and `/map-site` can then crawl as several roles to find where their access actually differs. Skip this step entirely for a public app.
 
 ### 3. Open in your AI editor
 
@@ -92,11 +92,11 @@ Re-running the scaffolder on an existing project with the same stack never touch
 
 ## CLI Commands
 
-| Command                      | Description                                               |
-| ---------------------------- | --------------------------------------------------------- |
-| `npx @onlytests/eitr new`    | Scaffold a new framework                                  |
-| `npx @onlytests/eitr auth`   | Capture an authenticated session into `.auth/user.json`   |
-| `npx @onlytests/eitr doctor` | Check your environment and installed AI-assistant tooling |
+| Command                      | Description                                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
+| `npx @onlytests/eitr new`    | Scaffold a new framework                                                                        |
+| `npx @onlytests/eitr auth`   | Capture an authenticated session into `.auth/user.json` (`--role admin` for `.auth/admin.json`) |
+| `npx @onlytests/eitr doctor` | Check your environment and installed AI-assistant tooling                                       |
 
 ---
 

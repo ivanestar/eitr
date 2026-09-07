@@ -300,30 +300,22 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     // Business-intent grounding track: confidence/criticality are evidence-anchored, not free
     // model inference, and the review artifact's label is scoped to the whole route.
-    expect(mapSkill?.source.text).toContain('Route criticality');
     expect(mapSkill?.source.text).toContain('payment/checkout/billing keyword');
     expect(mapSkill?.source.text).toContain('MAXIMUM tier found on the route');
     expect(mapSkill?.source.text).toContain('Confidence is computed from evidence signal strength');
     expect(mapSkill?.source.text).toContain('Self-verification pass');
-    expect(mapSkill?.source.text).not.toContain(
-      'Tier: <criticalityTier.value>  Confidence: <confidence>',
-    );
-    // DX pass (raised from a live /map-site run against a real site, 2026-09-04): confidence is
-    // an internal signal only - never shown to the human, since businessFeature.confidence and
-    // criticalityTier.confidence are independently computed and routinely disagree, and showing
-    // either one invited the exact same "which value is this?" confusion the earlier per-field-
-    // Confidence-line fix was meant to solve. criticality is explicitly labeled "draft" since it's
-    // unapproved until the Human Sign-Off Gateway, and drives real downstream automation
-    // (/define-test-conditions's checklist volume) once approved. Evidence is deduplicated once per
-    // route rather than repeated under both businessFeature and criticalityTier.
-    expect(mapSkill?.source.text).toContain('do not print a `Confidence:` line at all');
-    expect(mapSkill?.source.text).toContain('Feature: <businessFeature.value>');
-    expect(mapSkill?.source.text).toContain('Route criticality (draft): <TIER>');
-    expect(mapSkill?.source.text).toContain('tier value printed in uppercase');
-    expect(mapSkill?.source.text).toContain('Reasoning: <criticalityTier.reasoning>');
-    expect(mapSkill?.source.text).toContain('Evidence is deduplicated across both fields');
-    expect(mapSkill?.source.text).toContain('Evidences: "<excerpt>", "<excerpt>", ...');
-    expect(mapSkill?.source.text).not.toContain('Confidence: <confidence>');
+    // DX pass (raised from a live /map-site run against a real site, 2026-09-04): confidence is an
+    // internal signal only - never shown to the human, since businessFeature.confidence and
+    // criticalityTier.confidence are independently computed and routinely disagree. The Human
+    // Sign-Off Gateway's actual rendering (Feature:/Route criticality (draft): <TIER>/Reasoning:/
+    // Evidences: format, confidence deliberately omitted) is no longer composed in this skill's own
+    // prose - it moved to scripts/render-review-artifact.mjs (see review-artifact-renderer.test.ts
+    // for that format's own coverage), so what this skill's text must show is that it delegates to
+    // that script and does not reformat/duplicate what it prints.
+    expect(mapSkill?.source.text).toContain('render-review-artifact.mjs');
+    expect(mapSkill?.source.text).toContain('--kind=business-intent');
+    expect(mapSkill?.source.text).toContain('do not reformat, reorder, or add to what it prints');
+    expect(mapSkill?.source.text).toContain('never shown to the human');
     // Reasoning must read as a human explanation, not a mechanism trace naming the rule by name.
     expect(mapSkill?.source.text).toContain('not a mechanism trace');
     expect(mapSkill?.source.text).toContain(
@@ -344,8 +336,8 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain(
       'never automatically to `critical`, which stays reserved',
     );
-    expect(mapSkill?.source.text).toContain('Confirmed core purpose: <corePurpose.selected.value>');
-    expect(mapSkill?.source.text).toContain('Number each remaining route block');
+    // The confirmed-purpose recap line and route numbering are also rendered by
+    // render-review-artifact.mjs now (see review-artifact-renderer.test.ts), not composed here.
     expect(mapSkill?.source.text).toContain('high: 1, 4, 5-8, 15; critical: 2-3, 9');
     expect(mapSkill?.source.text).toContain('is a convenience, not the only way to reply');
 
@@ -446,9 +438,16 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     // Bracketed step text grounds the synthesized locator's accessible name - direct link from
     // /design-test-cases' bracket vocabulary to /automate-test's own locator code.
     expect(automateSkill?.source.text).toContain("locator's name, verbatim");
-    // Multi-source corroboration: UI+API is the floor, not the ceiling, when a toast or a
-    // secondary list/detail endpoint is genuinely available for a state-changing step.
-    expect(automateSkill?.source.text).toContain('every genuinely available independent signal');
+    // Multi-source corroboration: seven checkable assertion rules replaced the old free-form
+    // "corroborate with every genuinely available signal" prose - Rule 2 is the UI+API floor
+    // (now two independent channels), Rule 7 is "must be able to fail" (a mutation-testing-style
+    // check), both mechanically checkable by assertion-auditor rather than left to judgment.
+    expect(automateSkill?.source.text).toContain('The Assertion Rules');
+    expect(automateSkill?.source.text).toContain('Two independent channels for any state change');
+    expect(automateSkill?.source.text).toContain('Every assertion must be able to fail');
+    expect(automateSkill?.source.text).toContain(
+      'Corroboration is bounded by what the application actually provides',
+    );
     // Self-referential compliance narration ("CPOM contract strictly honored: ...") was reported
     // from a live final report - global rule, checked here since automate-test's own report step
     // is exactly where it appeared.

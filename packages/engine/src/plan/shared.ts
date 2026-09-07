@@ -46,6 +46,8 @@ import { renderPipelineStatus } from './templates/pipeline-status.js';
 import { renderAuthStatus } from './templates/auth-status.js';
 import { renderMapSiteStatus } from './templates/map-site-status.js';
 import { renderAutomateTestStatus } from './templates/automate-test-status.js';
+import { renderEnvRoleStubs } from './templates/env-role-stubs.js';
+import { renderReviewArtifactRenderer } from './templates/review-artifact-renderer.js';
 import { renderJourneysTypes } from './templates/journeys-types.js';
 import { renderJourneysEngine } from './templates/journeys-engine.js';
 import { renderApiContractsTypes } from './templates/api-contracts-types.js';
@@ -186,6 +188,18 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderAutomateTestStatus() },
+          },
+          {
+            path: 'scripts/env-role-stubs.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderEnvRoleStubs() },
+          },
+          {
+            path: 'scripts/render-review-artifact.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderReviewArtifactRenderer() },
           },
           {
             path: '.scaffold/schemas/test-cases.types.ts',

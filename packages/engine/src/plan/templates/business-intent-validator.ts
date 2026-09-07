@@ -188,6 +188,43 @@ function checkCorePurpose(corePurpose, errors) {
   }
 }
 
+// Optional block: absent on a single-session crawl, which is the common case. When present it must
+// be complete, since a half-written roles map is worse than none - a downstream reader cannot tell
+// "this role has no exclusive routes" from "nobody filled this in".
+function checkRoles(roles, errors) {
+  if (roles === undefined) return;
+  if (!roles || typeof roles !== 'object' || Array.isArray(roles)) {
+    errors.push('roles must be an object keyed by role name when present.');
+    return;
+  }
+  for (const [name, profile] of Object.entries(roles)) {
+    const label = 'roles["' + name + '"]';
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+      errors.push(label + ' must be an object.');
+      continue;
+    }
+    if (profile.name !== name) {
+      errors.push(label + '.name must equal its own key (found ' + JSON.stringify(profile.name) + ').');
+    }
+    isField(profile.purpose, label + '.purpose', errors);
+    if (!Array.isArray(profile.exclusiveRoutes)) {
+      errors.push(
+        label + '.exclusiveRoutes must be an array (use [] when this role reached nothing others did not).',
+      );
+    }
+    if (typeof profile.reviewed !== 'boolean') {
+      errors.push(label + '.reviewed must be a boolean.');
+    }
+    if (
+      profile.reviewed === true &&
+      profile.reviewedBy !== 'human' &&
+      profile.reviewedBy !== 'auto-pilot'
+    ) {
+      errors.push(label + '.reviewedBy must be "human" or "auto-pilot" when reviewed is true.');
+    }
+  }
+}
+
 function validate() {
   const errors = [];
   const report = loadJson(REPORT_PATH, 'artifacts/analysis/business-intent.json');
@@ -221,6 +258,7 @@ function validate() {
   }
 
   checkCorePurpose(data.corePurpose, errors);
+  checkRoles(data.roles, errors);
 
   const siteMap = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
   const knownRouteIds = new Set();

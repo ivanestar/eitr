@@ -13,6 +13,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * CPOM Contract & Anti-Fake-Green Linter (Java)
@@ -37,6 +38,10 @@ import java.util.List;
  *      browserContext.route()/routeFromHAR() calls in test specs. A "// @allow-mock: <reason>"
  *      comment on the flagged line, the line before, or the line after suppresses it (legitimate
  *      3rd-party isolation like analytics or Sentry).
+ *   7. Hardcoded Credential Literal - rejects a non-empty string literal filled into a
+ *      credential-shaped field (password/username/email/token) in a test spec. A
+ *      "// @allow-credential-literal: <reason>" comment suppresses it, for the one legitimate
+ *      case: a deliberately wrong value in a rejection test.
  */
 public class LintCpom {
 
@@ -69,6 +74,17 @@ public class LintCpom {
     private static final List<String> MOCK_CALL_NEEDLES = Arrays.asList(
         "page.route(", "context.route(", "browserContext.route(",
         "page.routeFromHAR(", "context.routeFromHAR(", "browserContext.routeFromHAR("
+    );
+
+    private static final Pattern CREDENTIAL_TARGET_PATTERN = Pattern.compile(
+        "(?i)(?:password|passwd|pwd|username|user_?name|email|login|token|secret|api_?key)"
+    );
+
+    // Group 1 is the receiver immediately before .fill()/.type(); group 2 is the selector in the
+    // page-level two-argument form. Matching the receiver rather than the whole line is what keeps
+    // loginPage.searchInput.fill("shoes") clean - a line-wide match would flag it for "loginPage".
+    private static final Pattern CREDENTIAL_LITERAL_PATTERN = Pattern.compile(
+        "([A-Za-z0-9_$]+)\\\\s*\\\\.(?:fill|type)\\\\s*\\\\(\\\\s*(?:\\"([^\\"]*)\\"\\\\s*,\\\\s*)?\\"[^\\"]+\\""
     );
 
     private static final class Violation {
@@ -229,7 +245,48 @@ public class LintCpom {
                     }
                 }
             }
+
+            java.util.regex.Matcher credentialMatcher = CREDENTIAL_LITERAL_PATTERN.matcher(line);
+            if (isTest && !isFixtureOrSetup
+                && credentialMatcher.find()
+                && CREDENTIAL_TARGET_PATTERN.matcher(
+                    credentialMatcher.group(1)
+                        + (credentialMatcher.group(2) == null ? "" : " " + credentialMatcher.group(2))
+                ).find()
+                && !hasAllowCredentialSuppression(lines, i)) {
+                VIOLATIONS.add(new Violation(relPath, lineNum, "Rule 7: Hardcoded Credential Literal",
+                    "Credential-shaped literal typed into a credential field in a test spec. Read a real "
+                        + "account's value from an environment variable (E2E_PASSWORD, or the per-role "
+                        + "E2E_<ROLE>_PASSWORD), or generate one via the project's test-data helpers. If this "
+                        + "literal is deliberately invalid test data for a rejection case, annotate with "
+                        + "\\"// @allow-credential-literal: <reason>\\".",
+                    trimmed));
+            }
         }
+    }
+
+    private static boolean hasAllowCredentialSuppression(List<String> lines, int idx) {
+        for (int i = idx - 1; i <= idx + 1; i++) {
+            if (i < 0 || i >= lines.size()) {
+                continue;
+            }
+            if (lineHasMarker(lines.get(i), "@allow-credential-literal:")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean lineHasMarker(String candidate, String marker) {
+        int markerIdx = candidate.indexOf(marker);
+        if (markerIdx < 0) {
+            return false;
+        }
+        int slashIdx = candidate.lastIndexOf("//", markerIdx);
+        if (slashIdx < 0 || !candidate.substring(slashIdx + 2, markerIdx).trim().isEmpty()) {
+            return false;
+        }
+        return !candidate.substring(markerIdx + marker.length()).trim().isEmpty();
     }
 
     private static boolean hasAllowMockSuppression(List<String> lines, int idx) {

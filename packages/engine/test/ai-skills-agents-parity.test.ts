@@ -11,7 +11,15 @@ describe('Polymorphic AI Operational Skills & AI Agents Parity (AC-5, AC-6, AC-7
       expect(authText).toContain('fixtures/auth.setup.ts');
       expect(authText).toContain('.auth/user.json');
       expect(authText).toContain('process.env');
-      expect(authText).toContain('playwright codegen --save-storage');
+      // The TS/Playwright path routes capture through this project's own CLI wrapper, which
+      // resolves the URL and the per-role session file itself, with the raw Playwright command
+      // named as the equivalent for a project that does not have the CLI installed.
+      expect(authText).toContain('npx eitr auth --role <role>');
+      expect(authText).toContain('playwright open --save-storage');
+      // Printing the command for the human is the default, not a fallback - the assistant cannot
+      // verify a browser window it launches is visible on the human's screen.
+      expect(authText).toContain('Default: print the command and let the human run it');
+      expect(authText).toContain('scripts/env-role-stubs.mjs');
 
       const automateSkill = skills.find((s) => s.path.includes('automate-test'))!;
       const autoText = (automateSkill.source as { text: string }).text;

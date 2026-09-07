@@ -5,6 +5,19 @@ All notable changes to this project are documented here, newest release first, f
 
 ## [0.1.0] - 2026-09-06
 
+- **Added**: role-aware crawling — `/map-site` can crawl as several captured role sessions, records `crawledAsRoles` and a per-route `access` map in the site map, confirms what each role is actually for with the human, and turns an observed access difference into a `permission_denied` test condition instead of a guessed one.
+- **Added**: seven checkable assertion rules in `/automate-test` and `assertion-auditor` — two independent channels for any state change, the negative space on any rejection, a direct request to a protected resource on any auth boundary, and a real `response.status()` where the behavior under test is an HTTP outcome.
+- **Added**: `scripts/render-review-artifact.mjs` — every stage's review artifact is rendered from its own JSON rather than composed by the model, and anything past 10 entries is written to a file instead of scrolling past the top of the terminal.
+- **Added**: CPOM linter Rule 7 across TypeScript, Python, Java, and C# — a credential literal typed into a credential field in a spec fails the lint, with `@allow-credential-literal: <reason>` for the one legitimate case, a deliberately wrong value in a rejection test.
+- **Added**: `scripts/env-role-stubs.mjs` and `eitr auth --role <name>` — one `E2E_<ROLE>_USERNAME`/`E2E_<ROLE>_PASSWORD` slot per role in `.env`, and that role's own session file.
+- **Changed**: `/auth-setup` asks whether the app has a login at all before explaining and asking approval for the capture procedure, and its role question offers the real options (no separate roles, one role, all of them now, some of them now).
+- **Changed**: the browser capture step prints the command for the human to run by default — an assistant cannot verify that a window it opens reaches the human's screen, and the command blocks for the whole login. `@playwright/cli`'s non-blocking session model is offered for the case where the assistant does drive it.
+- **Changed**: the pipeline roadmap names four stages instead of interleaving a context-free "Review" between each of them, and the pre-flight notice is a readable block rather than one wrapped line.
+- **Fixed**: `/map-site`, `/define-test-conditions`, `/design-test-cases`, and `/heal-test` now say what they are about to do even when running inside a longer chain, where a caller's own pre-flight never covered the individual stage.
+- **Fixed**: core-purpose inference treats `/` as the home route rather than whichever URL the crawl started from, weighs the whole route set, and cross-checks the captured screenshots — a crawl started at `/login` no longer describes the whole application as an authentication system.
+- **Fixed**: `/map-site create` prunes screenshots from earlier crawls, which were orphaned every time route identities were regenerated.
+- **Fixed**: the crawl always visits the origin root even when the start URL is a deep link, and reports a two-route-or-fewer result as a finding to confirm rather than carrying it forward as the whole application.
+- **Fixed**: `/automate-test` reports how many of the approved batch it actually automated and how to resume, dispatches journeys in parallel from the swarm plan's own worker list, and runs its cross-Page-Object consolidation pass at the end of every run including one that stopped early.
 - **Added**: deterministic CPOM scaffolder for Playwright across TypeScript, Python, C#, and Java (Cypress, TypeScript-only), with React/Vue/Angular/Svelte and MUI/Ant Design/Radix adapters.
 - **Added**: native CI/CD generation (GitHub Actions, GitLab CI, Jenkins, TeamCity) with per-language sharding, CPOM contract linting, and dependency-vulnerability scanning.
 - **Added**: TMS integration (Jira Xray, Azure DevOps, TestRail, Zephyr) through an embedded MCP bridge — ticket CRUD, result posting, attachments.

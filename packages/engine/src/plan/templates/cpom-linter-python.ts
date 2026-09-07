@@ -25,6 +25,10 @@ Rules enforced (parity with scripts/lint-cpom.js for TypeScript/Cypress):
      calls in test files. A "# @allow-mock: <reason>" comment on the flagged line, the line
      before, or the line after suppresses it (legitimate 3rd-party isolation like analytics or
      Sentry), mirroring the TS/Java/C# rule.
+  7. Hardcoded Credential Literal - rejects a non-empty string literal filled into a
+     credential-shaped field (password/username/email/token) in a test file. A
+     "# @allow-credential-literal: <reason>" comment suppresses it, for the one legitimate case:
+     a deliberately wrong value in a rejection test. Mirrors the TS/Java/C# rule.
 """
 import ast
 import os
@@ -75,6 +79,13 @@ MOCK_RECEIVER_NAMES = {"page", "context", "browser_context"}
 
 ALLOW_MOCK_PATTERN = re.compile(r"#\\s*@allow-mock:\\s*\\S")
 
+FILL_CALL_NAMES = {"fill", "type"}
+CREDENTIAL_TARGET_PATTERN = re.compile(
+    r"(?:password|passwd|pwd|username|user_?name|email|login|token|secret|api_?key)",
+    re.IGNORECASE,
+)
+ALLOW_CREDENTIAL_PATTERN = re.compile(r"#\\s*@allow-credential-literal:\\s*\\S")
+
 
 class CpomVisitor(ast.NodeVisitor):
     """Walks one file's AST, collecting CPOM contract violations."""
@@ -92,6 +103,34 @@ class CpomVisitor(ast.NodeVisitor):
             if 1 <= candidate <= len(self.lines) and ALLOW_MOCK_PATTERN.search(self.lines[candidate - 1]):
                 return True
         return False
+
+    def _has_allow_credential_suppression(self, lineno: int) -> bool:
+        for candidate in (lineno, lineno - 1, lineno + 1):
+            if 1 <= candidate <= len(self.lines) and ALLOW_CREDENTIAL_PATTERN.search(
+                self.lines[candidate - 1]
+            ):
+                return True
+        return False
+
+    def _fill_target(self, node: ast.Call) -> str:
+        """What is being filled: the receiver of .fill()/.type(), plus the selector in the
+        page-level two-argument form. Deliberately NOT the whole source line - a page object named
+        login_page would otherwise make every fill() call on it look credential-shaped."""
+        parts: list[str] = []
+        func = node.func
+        if isinstance(func, ast.Attribute):
+            receiver = func.value
+            if isinstance(receiver, ast.Attribute):
+                parts.append(receiver.attr)
+            elif isinstance(receiver, ast.Name):
+                parts.append(receiver.id)
+        if (
+            len(node.args) >= 2
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            parts.append(node.args[0].value)
+        return " ".join(parts)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.class_depth += 1
@@ -187,6 +226,27 @@ class CpomVisitor(ast.NodeVisitor):
                 "can mask a real backend defect behind a fake-green test. If this is legitimate "
                 '3rd-party isolation (e.g. analytics, Sentry), annotate with '
                 '"# @allow-mock: <reason>".',
+            ))
+
+        if (
+            self.is_test
+            and not self.is_fixture
+            and attr_name in FILL_CALL_NAMES
+            and node.args
+            and isinstance(node.args[-1], ast.Constant)
+            and isinstance(node.args[-1].value, str)
+            and node.args[-1].value != ""
+            and CREDENTIAL_TARGET_PATTERN.search(self._fill_target(node))
+            and not self._has_allow_credential_suppression(node.lineno)
+        ):
+            self.violations.append((
+                node.lineno,
+                "Rule 7: Hardcoded Credential Literal",
+                "Credential-shaped literal typed into a credential field in a test file. Read a "
+                "real account's value from an environment variable (E2E_PASSWORD, or the per-role "
+                "E2E_<ROLE>_PASSWORD), or generate one via the project's test-data helpers. If this "
+                "literal is deliberately invalid test data for a rejection case, annotate with "
+                '"# @allow-credential-literal: <reason>".',
             ))
 
         self.generic_visit(node)

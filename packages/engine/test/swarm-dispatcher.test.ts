@@ -86,6 +86,108 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
     }
   });
 
+  it('--phase=plan Level 3 emits one worker per drafted journey that is not yet automated', () => {
+    const dir = setupProject();
+    try {
+      mkdirSync(join(dir, 'artifacts', 'test-cases'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: '2026-09-07T10:00:00.000Z',
+          routes: {
+            'route-login': {
+              journeys: [
+                {
+                  journeyId: 'aaaaaaaaaaaa1111',
+                  routeId: 'route-login',
+                  layer: 'e2e',
+                  reviewed: false,
+                  testCase: { title: 'Sign in with valid credentials' },
+                },
+                {
+                  // Already automated - never re-dispatched.
+                  journeyId: 'bbbbbbbbbbbb2222',
+                  routeId: 'route-login',
+                  layer: 'api',
+                  reviewed: true,
+                  testCase: { title: 'Already done' },
+                },
+                {
+                  // Drafted-but-empty journey: no testCase yet, nothing to automate.
+                  journeyId: 'cccccccccccc3333',
+                  routeId: 'route-login',
+                  layer: 'e2e',
+                  reviewed: false,
+                },
+              ],
+            },
+          },
+        }),
+        'utf8',
+      );
+
+      const output = JSON.parse(run(dir, ['--phase=plan']).stdout);
+      const journeyWorkers = output.dag_waves[3].workers;
+      expect(output.dag_waves[3].name).toBe('journeys');
+      expect(journeyWorkers).toHaveLength(1);
+      expect(journeyWorkers[0]).toEqual({
+        workerId: 'journey-aaaaaaaaaaaa',
+        journeyId: 'aaaaaaaaaaaa1111',
+        routeId: 'route-login',
+        path: '/login',
+        layer: 'e2e',
+        title: 'Sign in with valid credentials',
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('--phase=plan scopes Level 3 journeys with the same --routes filter as pages', () => {
+    const dir = setupProject();
+    try {
+      mkdirSync(join(dir, 'artifacts', 'test-cases'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: '2026-09-07T10:00:00.000Z',
+          routes: {
+            'route-login': {
+              journeys: [
+                {
+                  journeyId: 'aaaaaaaaaaaa1111',
+                  routeId: 'route-login',
+                  reviewed: false,
+                  testCase: { title: 'Login journey' },
+                },
+              ],
+            },
+            'route-user-detail': {
+              journeys: [
+                {
+                  journeyId: 'dddddddddddd4444',
+                  routeId: 'route-user-detail',
+                  reviewed: false,
+                  testCase: { title: 'User detail journey' },
+                },
+              ],
+            },
+          },
+        }),
+        'utf8',
+      );
+
+      const output = JSON.parse(run(dir, ['--phase=plan', '--routes=/login']).stdout);
+      const journeyWorkers = output.dag_waves[3].workers;
+      expect(journeyWorkers).toHaveLength(1);
+      expect(journeyWorkers[0].routeId).toBe('route-login');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('--phase=plan slugifies the bare root route "/" as "root" rather than an empty string', () => {
     const dir = mkdtempSync(join(tmpdir(), 'eitr-swarm-root-'));
     try {
