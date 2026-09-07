@@ -81,17 +81,18 @@ function argumentFrontmatter(skill: SkillDefinition): string {
   return lines.length > 0 ? '\n' + lines.join('\n') : '';
 }
 
-// Antigravity has no slash-command argument-substitution mechanism at all - live-verified
-// 2026-09-03 via the installed Antigravity CLI's own bundled documentation: skills are
-// autonomously activated by the agent from their `description`, or explicitly requested by name
-// in chat, never invoked as `/name arg`. A skill whose shared `content` body talks about "the
-// argument this skill was invoked with" (map-site's create/update mode selection) is therefore
-// describing a mechanism that does not exist on this assistant - mirrors the same real gap
-// Windsurf's map-site split already works around with its own inline caveat, generalized here for
-// any current or future skill that declares `arguments` rather than special-cased per skill name.
-function antigravityInvocationNote(skill: SkillDefinition): string {
+// Neither Antigravity nor Devin Desktop has a slash-command argument-substitution mechanism -
+// live-verified 2026-09-03 via the installed Antigravity CLI's own bundled documentation, and via
+// Devin's own skills documentation (same open Agent Skills standard: skills are discovered and
+// activated autonomously from their `description`, never invoked as `/name arg`) - both assistants
+// read skills from the same shared `.agents/skills/<name>/SKILL.md` path. A skill whose shared
+// `content` body talks about "the argument this skill was invoked with" (map-site's create/update
+// mode selection) is therefore describing a mechanism that does not exist for either assistant -
+// generalized here for any current or future skill that declares `arguments` rather than
+// special-cased per skill name.
+function noArgumentSkillInvocationNote(skill: SkillDefinition): string {
   if (!skill.arguments) return '';
-  return `> **Antigravity note:** this assistant has no slash-command argument mechanism - skills are activated autonomously from their description, or by explicitly asking for them in chat. Wherever the text below refers to "the argument this skill was invoked with," state the mode directly instead (e.g. "run ${skill.name} in create mode").
+  return `> **Note:** this assistant has no slash-command argument mechanism - skills are activated autonomously from their description, or by explicitly asking for them in chat. Wherever the text below refers to "the argument this skill was invoked with," state the mode directly instead (e.g. "run ${skill.name} in create mode").
 
 `;
 }
@@ -449,7 +450,7 @@ Transforms a test case - from Jira, TestRail, Zephyr, Azure DevOps, or drafted l
 ## Workflow
 1. **Intake (source resolution, before anything else):**
    * **Self-introduction, every time this skill runs, standalone or as Stage 4 of a chain**: state in one plain sentence what happens now, before anything else - "This writes real, running test code for your reviewed test case(s) and executes it - the step that turns a reviewed plan into a working test suite." A user reaching this stage for the first time (via \`/ground-zero-setup\` or directly) has no other way to know what this command actually does before it does it.
-   * Compute, deterministically, before asking anything: whether the user named an explicit case/ticket ID; whether at least one TMS/task-tracker provider is available right now (the \`mcp__tms__*\` tools are present in this conversation); whether \`artifacts/test-cases/test-cases.json\` exists with at least one journey carrying a \`testCase\` and \`reviewed: false\`.
+   * Run \`node scripts/automate-test-status.mjs\` before asking anything. Its \`providers\`/\`providerCount\`/\`tmsConfigured\` tell you which TMS/task-tracker provider(s) are actually configured (read from whichever MCP config this project generated, never guessed from which \`mcp__tms__*\` tools happen to be visible in this conversation - a project can have a provider configured but its MCP server not currently loaded, or vice versa on a stale config); its \`localDraftsCount\`/\`localDraftsExist\` tell you how many un-automated local drafts exist in \`artifacts/test-cases/test-cases.json\`. Whether the user named an explicit case/ticket ID is the one fact only the live conversation can answer - read that from the user's own message, never from this script.
    * **General principle governing every branch below**: ask a clarifying question only when at least two genuinely different sources are actually possible. When exactly one source could plausibly be meant, proceed with it directly instead of asking a question with only one real answer - a question that cannot change the outcome only adds friction.
    * **Arrived directly from \`/ground-zero-setup\`'s own chain**: skip every question below entirely - it already established there is nothing else to automate but the test cases \`/design-test-cases\` just drafted. Use them directly.
    * **An explicit case/ticket ID was named** (e.g. "automate T001", "automate AZURE-789"):
@@ -581,11 +582,10 @@ Crawls the application page graph with authenticated session, builds the complet
 - \`create\` (default if no argument given): full fresh crawl of every route. **If \`artifacts/site-map/site-map.json\` already exists, this discards it entirely** - every route's \`routeId\` identity resets too (only \`update\` preserves \`routeId\` - see Mode Resolution below and Step 3b), so anything keyed by \`routeId\` in a downstream artifact (e.g. \`artifacts/analysis/business-intent.json\`) becomes orphaned.
 - \`update\`: incremental pass over already-known routes plus discovery of new ones - see Step 3b. **If \`artifacts/site-map/site-map.json\` does not exist yet, there is nothing to update against** - see Mode Resolution below.
 
-Playwright browser access for this crawl comes from this project's MCP configuration (\`.mcp.json\`, \`.agents/mcp_config.json\`, \`.codex/config.toml\`, or \`.vscode/mcp.json\`, whichever your assistant reads). **Windsurf is the one exception**: Cascade has no per-project MCP mechanism at all - its MCP servers are configured once, globally, via Windsurf's own Settings -> Cascade -> MCP Servers (or by editing \`~/.codeium/windsurf/mcp_config.json\` directly). If you're running this in Windsurf and browser tools aren't available, that one-time global step is what's missing, not something this repo can provide.
+Playwright browser access for this crawl comes from this project's MCP configuration (\`.mcp.json\`, \`.agents/mcp_config.json\`, \`.codex/config.toml\`, \`.devin/mcp_config.json\`, or \`.vscode/mcp.json\`, whichever your assistant reads).
 
 ## Mode Resolution
-- \`update\` requested but \`artifacts/site-map/site-map.json\` does not exist: print "No existing artifacts/site-map/site-map.json found - running a full create pass instead." and proceed exactly as \`create\` - never silently redirect without saying so.
-- \`create\` requested and \`artifacts/site-map/site-map.json\` already exists and parses validly: before doing anything else, print "Found an existing site-map.json with <N> routes (last touched <lastUpdatedAt or generatedAt>). create starts fresh: routeId identity resets for every route, so any downstream artifact keyed by routeId (e.g. artifacts/analysis/business-intent.json) will need re-review. Use /map-site update instead to refresh in place and preserve routeId/history." Then proceed.
+Run \`node scripts/map-site-status.mjs <create|update>\` (the argument this skill was invoked with, \`create\` if none given) before doing anything else. Its \`resolvedMode\` is the mode to actually run - never re-derive it yourself by separately checking whether the file exists. When its \`noticeMessage\` is non-null, print it to the user verbatim, exactly as the script wrote it, before proceeding - never paraphrase or shorten it, the routeId-reset warning in particular is a real, load-bearing consequence a shortened version could silently drop.
 
 ## Reporting to the User
 Every mechanical gate in this skill (\`validate-site-map.mjs\`, \`validate-business-intent.mjs\`, the coverage cross-check) is implementation detail, not user-facing signal - it exists so a malformed artifact never reaches a human or a downstream skill, not to be narrated. When summarizing what this run did, describe outcomes in plain terms a non-technical reader would understand ("site crawled - 28 routes found", "business-intent analysis complete, ready for your review") - never name an internal script file or report that something "passed validation" as if that fact means something to the person reading it. If a gate actually fails, that's a real problem to surface and fix per its own step below - this rule is about routine success, not about hiding real failures.
@@ -688,7 +688,7 @@ Every mechanical gate in this skill (\`validate-site-map.mjs\`, \`validate-busin
       content: `# Skill: Test Analysis (/define-test-conditions)
 
 ## Purpose
-Second stage of the app-analysis pipeline, run after \`/map-site\`'s automatic business-intent analysis (Step 6) - defines and prioritizes test conditions from the test basis. Consumes \`artifacts/analysis/business-intent.json\` and \`artifacts/site-map/site-map.json\`, defines typed test conditions per route - equivalence-partitioned parameters, 2-way combinatorial coverage, 3-value boundary conditions - into \`artifacts/analysis/test-conditions.json\` per \`.scaffold/schemas/test-conditions.types.ts\`, gated by a mechanical validator and a Human Sign-Off Gateway before any downstream stage may treat it as ground truth. This skill performs live DOM reads (plus a narrow, bounded, always-reset set of non-submitting probes - see Step 2) and writes an analysis artifact - at least the same risk profile as \`/map-site\`, if not slightly more given the probing exception - so it should never run from autonomous model judgment, only an explicit user command. Only Claude Code, Cursor, and Codex have a frontmatter mechanism for this at all (\`disable-model-invocation: true\`, present in this skill's own frontmatter on those three) - and even there treat it as a strong hint, not a guarantee: this exact field has open, live 2026 reliability bugs on more than one of them (ignored in some configurations, or requiring extra assistant-specific config this project doesn't generate). Windsurf, Copilot, and Antigravity have no such mechanism whatsoever - every skill there can be triggered by the model's own judgment based on its description alone, with no way to distinguish that from an explicit user ask. On every assistant, honoring "explicit command only" here is the model's own responsibility, not something the tooling reliably enforces.
+Second stage of the app-analysis pipeline, run after \`/map-site\`'s automatic business-intent analysis (Step 6) - defines and prioritizes test conditions from the test basis. Consumes \`artifacts/analysis/business-intent.json\` and \`artifacts/site-map/site-map.json\`, defines typed test conditions per route - equivalence-partitioned parameters, 2-way combinatorial coverage, 3-value boundary conditions - into \`artifacts/analysis/test-conditions.json\` per \`.scaffold/schemas/test-conditions.types.ts\`, gated by a mechanical validator and a Human Sign-Off Gateway before any downstream stage may treat it as ground truth. This skill performs live DOM reads (plus a narrow, bounded, always-reset set of non-submitting probes - see Step 2) and writes an analysis artifact - at least the same risk profile as \`/map-site\`, if not slightly more given the probing exception - so it should never run from autonomous model judgment, only an explicit user command. Only Claude Code, Cursor, and Codex have a frontmatter mechanism for this at all (\`disable-model-invocation: true\`, present in this skill's own frontmatter on those three) - and even there treat it as a strong hint, not a guarantee: this exact field has open, live 2026 reliability bugs on more than one of them (ignored in some configurations, or requiring extra assistant-specific config this project doesn't generate). Devin Desktop, Copilot, and Antigravity have no such mechanism whatsoever - every skill there can be triggered by the model's own judgment based on its description alone, with no way to distinguish that from an explicit user ask. On every assistant, honoring "explicit command only" here is the model's own responsibility, not something the tooling reliably enforces.
 
 ## Workflow
 0. **Standalone Entry Check (skip entirely when invoked as part of \`/ground-zero-setup\`'s own chain - its Pre-Flight and per-stage gate already cover this):** state in one plain sentence what this does - "Reads your reviewed site map and infers test conditions - positive and negative scenarios - for each page, for you to review." - then ask: **Continue, or stop here?** ${INTERACTIVE_CHOICE_NOTE} Stop on anything but an explicit yes; nothing has run yet at this point.
@@ -852,7 +852,7 @@ export function planAiOperationalSkills(
 ): FileDescriptor[] {
   const assistants =
     aiAssistants === undefined
-      ? ['antigravity', 'cursor', 'claude', 'windsurf', 'codex', 'copilot']
+      ? ['antigravity', 'cursor', 'claude', 'devin', 'codex', 'copilot']
       : aiAssistants;
 
   if (!assistants || assistants.length === 0) {
@@ -861,11 +861,17 @@ export function planAiOperationalSkills(
 
   const descriptors: FileDescriptor[] = [];
   const skills = buildOperationalSkills(automationTool, language).map(withGlobalConventions);
+  // Antigravity and Devin Desktop both discover skills from the exact same shared
+  // .agents/skills/<name>/SKILL.md path (Devin's own skills docs name this path directly) - a
+  // single guard flag stops the identical descriptor set from being emitted twice when both are
+  // selected together, rather than tracking per-assistant duplication ad hoc.
+  let agentsSkillsEmitted = false;
 
   for (const rawAssistant of assistants) {
     const assistant = rawAssistant.toLowerCase();
 
-    if (assistant === 'antigravity') {
+    if ((assistant === 'antigravity' || assistant === 'devin') && !agentsSkillsEmitted) {
+      agentsSkillsEmitted = true;
       for (const skill of skills) {
         descriptors.push({
           // Folder-per-skill with a SKILL.md file, not a flat <name>.md file - live-verified
@@ -885,7 +891,7 @@ name: ${skill.name}
 description: ${yamlSafeScalar(skill.description)}
 ---
 
-${antigravityInvocationNote(skill)}${skill.content}`,
+${noArgumentSkillInvocationNote(skill)}${skill.content}`,
           },
         });
       }
@@ -919,67 +925,6 @@ name: ${skill.name}
 description: ${yamlSafeScalar(skill.description)}${argumentFrontmatter(skill)}
 disable-model-invocation: true
 ---
-
-${skill.content}`,
-          },
-        });
-      }
-    } else if (assistant === 'windsurf') {
-      for (const skill of skills) {
-        if (skill.name === 'map-site') {
-          // Windsurf workflows have no confirmed argument-substitution mechanism - ship create
-          // and update as two separate, self-contained files instead of relying on a shared
-          // $mode variable the way Claude Code/Cursor/Codex CLI's `arguments` field allows.
-          descriptors.push({
-            path: `.windsurf/workflows/map-site.md`,
-            writePolicy: 'create-if-absent',
-            provenance: { origin: 'project' },
-            source: {
-              kind: 'inline',
-              text: `---
-name: map-site
-description: ${yamlSafeScalar(skill.description)}
----
-
-# Workflow: map-site (create mode)
-
-This workflow always runs in CREATE mode: a fresh, full crawl. For an incremental update of an existing site map instead, use the separate \`/map-site-update\` workflow. (Windsurf workflows don't take arguments, unlike Claude Code/Cursor/Codex CLI - ignore the "chosen by the argument this skill was invoked with" line below; this file's mode is fixed by which workflow you ran, not a parameter.)
-
-${skill.content}`,
-            },
-          });
-          descriptors.push({
-            path: `.windsurf/workflows/map-site-update.md`,
-            writePolicy: 'create-if-absent',
-            provenance: { origin: 'project' },
-            source: {
-              kind: 'inline',
-              text: `---
-name: map-site-update
-description: ${yamlSafeScalar('Incremental update of an existing artifacts/site-map/site-map.json using content-hash comparison - cheaper than a full re-crawl.')}
----
-
-# Workflow: map-site-update (update mode)
-
-This workflow always runs in UPDATE mode: the incremental, content-hash-gated pass (Step 3b below), not a full fresh crawl. For a full fresh crawl instead, use the separate \`/map-site\` workflow. (Windsurf workflows don't take arguments, unlike Claude Code/Cursor/Codex CLI - ignore the "chosen by the argument this skill was invoked with" line below; this file's mode is fixed by which workflow you ran, not a parameter.)
-
-${skill.content}`,
-            },
-          });
-          continue;
-        }
-        descriptors.push({
-          path: `.windsurf/workflows/${skill.name}.md`,
-          writePolicy: 'create-if-absent',
-          provenance: { origin: 'project' },
-          source: {
-            kind: 'inline',
-            text: `---
-name: ${skill.name}
-description: ${yamlSafeScalar(skill.description)}
----
-
-# Workflow: ${skill.name}
 
 ${skill.content}`,
           },

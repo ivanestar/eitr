@@ -2,6 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { planAiAgents } from '../src/plan/templates/ai-agents.js';
 import { planAiOperationalSkills } from '../src/plan/templates/ai-operational-skills.js';
+import {
+  renderCursorRuleFile,
+  renderDevinRuleFile,
+  renderCopilotPathInstructions,
+  RULE_TASK_KEYS,
+} from '../src/plan/templates/ai-rules.js';
 
 // Real YAML-parse verification, not content-string assertions: two real generation bugs already
 // shipped from an unescaped free-text field (a skill/agent description, an argument hint)
@@ -12,7 +18,7 @@ import { planAiOperationalSkills } from '../src/plan/templates/ai-operational-sk
 // - the text is still present, it just breaks the YAML document it's embedded in. Only actually
 // parsing every generated frontmatter block with a real YAML parser proves this.
 
-const ALL_ASSISTANTS = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
+const ALL_ASSISTANTS = ['antigravity', 'claude', 'cursor', 'devin', 'codex', 'copilot'] as const;
 
 function extractFrontmatter(text: string): string | undefined {
   const match = text.match(/^---\n([\s\S]*?)\n---/);
@@ -66,5 +72,37 @@ describe('every generated agent/skill frontmatter block is valid YAML', () => {
     const parsed = parseYaml(frontmatter!);
     expect(typeof parsed['argument-hint']).toBe('string');
     expect(parsed['argument-hint']).toBe('[create|update]');
+  });
+
+  it('every path/glob-scoped rule file (Cursor .mdc, Devin .md, Copilot .instructions.md) has valid frontmatter', () => {
+    for (const task of RULE_TASK_KEYS) {
+      const cursorFrontmatter = extractFrontmatter(
+        renderCursorRuleFile(task, 'playwright', 'typescript'),
+      );
+      expect(cursorFrontmatter, `cursor/${task}.mdc should have frontmatter`).toBeDefined();
+      const cursorParsed = parseYaml(cursorFrontmatter!);
+      expect(typeof cursorParsed.description).toBe('string');
+      expect(typeof cursorParsed.globs).toBe('string');
+      expect(cursorParsed.alwaysApply).toBe(false);
+
+      const devinFrontmatter = extractFrontmatter(
+        renderDevinRuleFile(task, 'playwright', 'typescript'),
+      );
+      expect(devinFrontmatter, `devin/${task}.md should have frontmatter`).toBeDefined();
+      const devinParsed = parseYaml(devinFrontmatter!);
+      expect(devinParsed.trigger).toBe('glob');
+      expect(typeof devinParsed.globs).toBe('string');
+      expect(typeof devinParsed.description).toBe('string');
+
+      const copilotFrontmatter = extractFrontmatter(
+        renderCopilotPathInstructions(task, 'playwright', 'typescript'),
+      );
+      expect(
+        copilotFrontmatter,
+        `copilot/${task}.instructions.md should have frontmatter`,
+      ).toBeDefined();
+      const copilotParsed = parseYaml(copilotFrontmatter!);
+      expect(typeof copilotParsed.applyTo).toBe('string');
+    }
   });
 });

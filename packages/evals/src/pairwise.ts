@@ -34,7 +34,7 @@ export const TEST_COMBINATIONS: TestCombination[] = [
     framework: 'angular',
     uiLibrary: 'radix',
     ciCd: 'jenkins',
-    aiAssistants: ['windsurf'],
+    aiAssistants: ['devin'],
   },
   {
     id: 'combo-04-cs-pw-svelte-chakra-teamcity',
@@ -152,7 +152,7 @@ export function verifyFullCoverage(): { ok: boolean; missing: string[] } {
   const frameworks = ['react', 'vue', 'angular', 'svelte', 'unknown'];
   const uiLibs = ['mui', 'antd', 'radix', 'chakra', 'tailwind', 'unknown'];
   const ciCds = ['github', 'gitlab', 'jenkins', 'teamcity', 'none'];
-  const aiAssistants = ['antigravity', 'cursor', 'claude', 'windsurf', 'codex', 'copilot'];
+  const aiAssistants = ['antigravity', 'cursor', 'claude', 'devin', 'codex', 'copilot'];
 
   for (const l of languages) {
     if (!TEST_COMBINATIONS.some((c) => c.language === l)) missing.push(`language:${l}`);

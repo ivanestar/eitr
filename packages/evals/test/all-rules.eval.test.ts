@@ -3,11 +3,10 @@ import {
   renderClaudeMd,
   renderAgentsMd,
   renderConventionsMd,
-  renderCursorrulesGenerate,
-  renderWindsurfGenerate,
+  renderCursorRuleFile,
+  renderDevinRuleFile,
   renderCopilotInstructions,
-  renderGeminiGenerate,
-  renderCodexGenerate,
+  renderCopilotPathInstructions,
 } from '../../engine/src/plan/templates/ai-rules.js';
 import { gradeRulesParity } from '../src/graders/rules-parity-grader.js';
 
@@ -24,7 +23,7 @@ describe('All AI Assistant Rules Parity Evaluation Benchmark', () => {
     expect(grade.score).toBe(100);
   });
 
-  // 2. AGENTS.md
+  // 2. AGENTS.md - read natively by Antigravity, Aider, Codex CLI, Cursor, and Devin Desktop
   it('2. Evaluates AGENTS.md rule template compliance', () => {
     const agentsMd = renderAgentsMd('playwright', 'typescript');
     const grade = gradeRulesParity(agentsMd);
@@ -48,9 +47,9 @@ describe('All AI Assistant Rules Parity Evaluation Benchmark', () => {
     expect(grade.score).toBe(100);
   });
 
-  // 4. Cursor Rules (.cursor/rules)
+  // 4. Cursor Rules (.cursor/rules/*.mdc)
   it('4. Evaluates Cursor rules template compliance', () => {
-    const cursorRules = renderCursorrulesGenerate('playwright', 'typescript');
+    const cursorRules = renderCursorRuleFile('generate', 'playwright', 'typescript');
     const grade = gradeRulesParity(cursorRules);
     expect(grade.hasZeroEmoji).toBe(true);
     expect(grade.hasZeroLockIn).toBe(true);
@@ -60,10 +59,10 @@ describe('All AI Assistant Rules Parity Evaluation Benchmark', () => {
     expect(grade.score).toBe(100);
   });
 
-  // 5. Windsurf Rules
-  it('5. Evaluates Windsurf rules template compliance', () => {
-    const windsurfRules = renderWindsurfGenerate('playwright', 'typescript');
-    const grade = gradeRulesParity(windsurfRules);
+  // 5. Devin Desktop Rules (.devin/rules/*.md) - Windsurf's 2026 rebrand
+  it('5. Evaluates Devin Desktop rules template compliance', () => {
+    const devinRules = renderDevinRuleFile('generate', 'playwright', 'typescript');
+    const grade = gradeRulesParity(devinRules);
     expect(grade.hasZeroEmoji).toBe(true);
     expect(grade.hasZeroLockIn).toBe(true);
     expect(grade.has3TierLocators).toBe(true);
@@ -72,7 +71,7 @@ describe('All AI Assistant Rules Parity Evaluation Benchmark', () => {
     expect(grade.score).toBe(100);
   });
 
-  // 6. GitHub Copilot Instructions
+  // 6. GitHub Copilot Instructions (repo-wide overview)
   it('6. Evaluates Copilot instructions template compliance', () => {
     const copilotRules = renderCopilotInstructions('playwright', 'typescript');
     const grade = gradeRulesParity(copilotRules);
@@ -84,22 +83,10 @@ describe('All AI Assistant Rules Parity Evaluation Benchmark', () => {
     expect(grade.score).toBe(100);
   });
 
-  // 7. Gemini CLI Rules
-  it('7. Evaluates Gemini CLI rules template compliance', () => {
-    const geminiRules = renderGeminiGenerate('playwright', 'typescript');
-    const grade = gradeRulesParity(geminiRules);
-    expect(grade.hasZeroEmoji).toBe(true);
-    expect(grade.hasZeroLockIn).toBe(true);
-    expect(grade.has3TierLocators).toBe(true);
-    expect(grade.hasCpomMethodSafety).toBe(true);
-    expect(grade.passed).toBe(true);
-    expect(grade.score).toBe(100);
-  });
-
-  // 8. OpenAI Codex Rules
-  it('8. Evaluates Codex rules template compliance', () => {
-    const codexRules = renderCodexGenerate('playwright', 'typescript');
-    const grade = gradeRulesParity(codexRules);
+  // 7. GitHub Copilot path-scoped instructions (.github/instructions/*.instructions.md)
+  it('7. Evaluates Copilot path-scoped instructions template compliance', () => {
+    const copilotPathRules = renderCopilotPathInstructions('generate', 'playwright', 'typescript');
+    const grade = gradeRulesParity(copilotPathRules);
     expect(grade.hasZeroEmoji).toBe(true);
     expect(grade.hasZeroLockIn).toBe(true);
     expect(grade.has3TierLocators).toBe(true);

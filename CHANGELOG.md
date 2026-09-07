@@ -8,10 +8,13 @@ All notable changes to this project are documented here, newest release first, f
 - **Added**: deterministic CPOM scaffolder for Playwright across TypeScript, Python, C#, and Java (Cypress, TypeScript-only), with React/Vue/Angular/Svelte and MUI/Ant Design/Radix adapters.
 - **Added**: native CI/CD generation (GitHub Actions, GitLab CI, Jenkins, TeamCity) with per-language sharding, CPOM contract linting, and dependency-vulnerability scanning.
 - **Added**: TMS integration (Jira Xray, Azure DevOps, TestRail, Zephyr) through an embedded MCP bridge — ticket CRUD, result posting, attachments.
-- **Added**: native AI-agent/skill layer for 6 assistants (Claude Code, Cursor, Windsurf, Copilot, Antigravity, Aider, Codex).
+- **Added**: native AI-agent/skill layer for 6 assistants (Claude Code, Cursor, Devin Desktop, Copilot, Antigravity, Aider, Codex).
 - **Added**: `/ground-zero-setup` — a guided greenfield pipeline (site mapping, business-intent inference, test-condition derivation, test-case design, test synthesis) with a human sign-off gateway at every stage, ending in a running test suite.
 - **Added**: session/auth capture (`eitr auth`) with SSO/MFA support, self-healing (`/heal-test`), and swarm-based parallel route processing.
 - **Added**: token-based API authentication (`ApiClient.setAuthToken`) alongside cookie-shared browser sessions across TypeScript, Python, C#, Java, and Cypress, with `/auth-setup` observing the login request itself for an access token.
 - **Added**: contract-grounded API-layer test generation — `/map-site` and `/auth-setup` record observed network contracts, and `/design-test-cases`/`/automate-test` draft and synthesize real API test cases from them instead of guessing endpoints.
 - **Added**: Page Object getter/action synchronization and a bounded cross-Page-Object consolidation pass in `pom-engineer`, plus a closed-set post-automation self-review step in `/automate-test`.
+- **Changed**: Windsurf support renamed to Devin Desktop (its 2026 rebrand) with native `.devin/` conventions — shared skills discovery with Antigravity, `.devin/rules/*.md` task/agent rules, and project-scoped MCP config (`.devin/mcp_config.json`), a capability the old Windsurf never had.
+- **Changed**: `CLAUDE.md`/`AGENTS.md` no longer duplicate `CONVENTIONS.md`'s locator-priority contract — Claude Code's version imports it natively (`@CONVENTIONS.md`), others point at it instead. Cursor and Copilot gained path-scoped rule files (`.cursor/rules/*.mdc`, `.github/instructions/*.instructions.md`) alongside their existing always-loaded ones.
+- **Removed**: ~30 unused rule-template functions (Gemini, and one-off Claude/Windsurf/Codex wrappers) that duplicated logic already covered by the shared renderers above.
 - **Security**: non-root generated Docker images, argv-based MCP tool execution, dependency CVE patches.

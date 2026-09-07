@@ -21,6 +21,10 @@ import {
   renderAiderConf,
   renderAgentsMd,
   renderCopilotInstructions,
+  renderCursorRuleFile,
+  renderDevinRuleFile,
+  renderCopilotPathInstructions,
+  RULE_TASK_KEYS,
 } from './templates/ai-rules.js';
 import { renderCpomLinter } from './templates/cpom-linter.js';
 import { renderCpomLinterPython } from './templates/cpom-linter-python.js';
@@ -40,6 +44,8 @@ import { renderTestConditionsEngine } from './templates/test-conditions-engine.j
 import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
 import { renderPipelineStatus } from './templates/pipeline-status.js';
 import { renderAuthStatus } from './templates/auth-status.js';
+import { renderMapSiteStatus } from './templates/map-site-status.js';
+import { renderAutomateTestStatus } from './templates/automate-test-status.js';
 import { renderJourneysTypes } from './templates/journeys-types.js';
 import { renderJourneysEngine } from './templates/journeys-engine.js';
 import { renderApiContractsTypes } from './templates/api-contracts-types.js';
@@ -170,6 +176,18 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             source: { kind: 'inline', text: renderAuthStatus() },
           },
           {
+            path: 'scripts/map-site-status.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderMapSiteStatus() },
+          },
+          {
+            path: 'scripts/automate-test-status.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderAutomateTestStatus() },
+          },
+          {
             path: '.scaffold/schemas/test-cases.types.ts',
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
@@ -272,10 +290,14 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
       provenance: { origin: 'project' },
       source: { kind: 'inline', text: renderConventionsMd(opts.automationTool, opts.language) },
     },
+    // AGENTS.md is read natively by Antigravity, Aider, Codex CLI, Cursor, and Devin Desktop (all
+    // live-verified 2026) - a shared root file every one of them discovers with zero config.
     ...(opts.aiAssistants === undefined ||
     opts.aiAssistants.includes('antigravity') ||
     opts.aiAssistants.includes('aider') ||
-    opts.aiAssistants.includes('codex')
+    opts.aiAssistants.includes('codex') ||
+    opts.aiAssistants.includes('cursor') ||
+    opts.aiAssistants.includes('devin')
       ? ([
           {
             path: 'AGENTS.md',
@@ -285,15 +307,33 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
           },
         ] as FileDescriptor[])
       : []),
-    ...(opts.aiAssistants === undefined || opts.aiAssistants.includes('windsurf')
-      ? ([
-          {
-            path: '.windsurfrules',
-            writePolicy: 'create-if-absent',
-            provenance: { origin: 'project' },
-            source: { kind: 'inline', text: renderAgentsMd(opts.automationTool, opts.language) },
-          },
-        ] as FileDescriptor[])
+    ...(opts.aiAssistants === undefined || opts.aiAssistants.includes('cursor')
+      ? RULE_TASK_KEYS.map(
+          (task) =>
+            ({
+              path: `.cursor/rules/${task}.mdc`,
+              writePolicy: 'create-if-absent',
+              provenance: { origin: 'project' },
+              source: {
+                kind: 'inline',
+                text: renderCursorRuleFile(task, opts.automationTool, opts.language),
+              },
+            }) as FileDescriptor,
+        )
+      : []),
+    ...(opts.aiAssistants === undefined || opts.aiAssistants.includes('devin')
+      ? RULE_TASK_KEYS.map(
+          (task) =>
+            ({
+              path: `.devin/rules/${task}.md`,
+              writePolicy: 'create-if-absent',
+              provenance: { origin: 'project' },
+              source: {
+                kind: 'inline',
+                text: renderDevinRuleFile(task, opts.automationTool, opts.language),
+              },
+            }) as FileDescriptor,
+        )
       : []),
     ...(opts.aiAssistants === undefined || opts.aiAssistants.includes('copilot')
       ? ([
@@ -306,6 +346,18 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
               text: renderCopilotInstructions(opts.automationTool, opts.language),
             },
           },
+          ...RULE_TASK_KEYS.map(
+            (task) =>
+              ({
+                path: `.github/instructions/${task}.instructions.md`,
+                writePolicy: 'create-if-absent',
+                provenance: { origin: 'project' },
+                source: {
+                  kind: 'inline',
+                  text: renderCopilotPathInstructions(task, opts.automationTool, opts.language),
+                },
+              }) as FileDescriptor,
+          ),
         ] as FileDescriptor[])
       : []),
     ...(opts.aiAssistants === undefined || opts.aiAssistants.includes('aider')

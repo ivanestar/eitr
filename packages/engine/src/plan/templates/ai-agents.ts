@@ -1070,7 +1070,7 @@ export function planAiAgents(
 ): FileDescriptor[] {
   const assistants =
     aiAssistants === undefined
-      ? ['antigravity', 'cursor', 'claude', 'windsurf', 'codex', 'copilot']
+      ? ['antigravity', 'cursor', 'claude', 'devin', 'codex', 'copilot']
       : aiAssistants;
 
   if (!assistants || assistants.length === 0) {
@@ -1142,10 +1142,10 @@ ${agent.systemPrompt}`,
           },
         });
       }
-    } else if (assistant === 'windsurf') {
+    } else if (assistant === 'devin') {
       for (const agent of agents) {
         descriptors.push({
-          path: `.windsurf/rules/agent-${agent.name}.md`,
+          path: `.devin/rules/agent-${agent.name}.md`,
           writePolicy: 'create-if-absent',
           provenance: { origin: 'project' },
           source: {

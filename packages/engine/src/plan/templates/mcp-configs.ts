@@ -12,9 +12,9 @@
 //   - A bare "vscode" assistant selection (VS Code without Copilot) gets the same .vscode/mcp.json
 //     on its own, since that file belongs to VS Code's native MCP support, not Copilot specifically.
 //   - Codex CLI reads .codex/config.toml (TOML, not JSON) under [mcp_servers.<name>] tables.
-//   - Windsurf has NO project-scoped MCP mechanism at all - its config is purely global
-//     (~/.codeium/windsurf/mcp_config.json, shared across every workspace on the machine), so no
-//     file is written for it here; see the /map-site skill for the one-time global-install note.
+//   - Devin Desktop (Windsurf's 2026 rebrand) reads project-scoped .devin/mcp_config.json (the
+//     same "mcpServers" shape as Claude's .mcp.json) - unlike the old Windsurf/Cascade, which had
+//     no project-scoped MCP mechanism at all (global-only, ~/.codeium/windsurf/mcp_config.json).
 //   - Aider has no MCP support as of mid-2026 (official config reference lists no MCP options,
 //     MCP PRs closed unmerged) - correctly no branch for it below.
 import type { FileDescriptor } from '../../types/generation-plan.js';
@@ -146,7 +146,7 @@ export function planMcpConfigs(
 
   const assistants =
     aiAssistants === undefined
-      ? ['antigravity', 'cursor', 'claude', 'windsurf', 'codex', 'copilot']
+      ? ['antigravity', 'cursor', 'claude', 'devin', 'codex', 'copilot']
       : aiAssistants;
 
   if (!assistants || assistants.length === 0) {
@@ -172,8 +172,9 @@ export function planMcpConfigs(
       needsVscodeJson = true;
     } else if (assistant === 'codex') {
       needsCodexToml = true;
+    } else if (assistant === 'devin') {
+      jsonTargetPaths.add('.devin/mcp_config.json');
     }
-    // windsurf: intentionally no file - see the module doc comment above.
   }
 
   if (jsonTargetPaths.size === 0 && !needsCodexToml && !needsVscodeJson) {

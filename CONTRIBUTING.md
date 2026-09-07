@@ -9,14 +9,6 @@ Thank you for your interest in contributing to EITR!
 
 ---
 
-## Contribution Guidelines
-
-1. **Targeted Tests:** Every feature or bug fix must include isolated unit/eval tests under `packages/*/test/`.
-2. **Zero Lock-in:** Generator templates must never inject `@eitr/engine` as a runtime dependency into generated user projects.
-3. **Code Style & Type Safety:** Run `npm run format:check` and `npm run typecheck` before submitting your PR.
-
----
-
 ## Development Setup
 
 ### Prerequisites

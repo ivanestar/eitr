@@ -9,7 +9,7 @@ import {
 } from '../../engine/src/plan/templates/ai-rules.js';
 
 describe('AC-1 to AC-6: Protocol 123 SDET Engine, Review Arbiter & Polyglot Frameworks', () => {
-  const assistants = ['antigravity', 'claude', 'cursor', 'windsurf', 'codex', 'copilot'] as const;
+  const assistants = ['antigravity', 'claude', 'cursor', 'devin', 'codex', 'copilot'] as const;
 
   it('AC-1: protocol-123 skill defines Ground Truth adjudication & False Positive filtering rules directly (no separate review-arbiter agent is generated - folded into the skill itself)', () => {
     const skillFiles = planAiOperationalSkills(assistants, 'playwright', 'typescript');

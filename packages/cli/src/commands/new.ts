@@ -16,7 +16,7 @@ Options:
   --framework <id>       Framework hint: react|vue|angular|svelte|other
   --ui-library <id>      UI library hint: mui|antd|radix|chakra|tailwind|none|other
   --ci-cd <id>           CI/CD pipeline template: github|gitlab|jenkins|teamcity|none
-  --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,windsurf,codex,copilot
+  --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,devin,codex,copilot
   --task-tracker <id>    Task/issue tracker: jira|azure-devops|none
   --tms-providers <ids>  Test Management System(s) (comma-separated): azure-devops,testrail,xray,zephyr
                           (xray/zephyr require --task-tracker jira)

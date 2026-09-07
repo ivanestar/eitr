@@ -21,7 +21,7 @@ Options:
   --yes                Non-interactive: take flags as-is, ask nothing
   --language <id>      Programming language: typescript|python|java|csharp
   --automation-tool <id> E2E automation tool
-  --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,windsurf,codex,copilot
+  --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,devin,codex,copilot
   --task-tracker <id>    Task/issue tracker: jira|azure-devops|none
   --tms-providers <ids>  Test Management System(s) (comma-separated): azure-devops,testrail,xray,zephyr
                           (xray/zephyr require --task-tracker jira)
