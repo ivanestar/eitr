@@ -78,12 +78,35 @@ function readCiProvider() {
   return readCiProviderFromInitJson();
 }
 
+// Which roles the project has DECLARED, read from the per-role credential slots scripts/
+// env-role-stubs.mjs writes into .env during /auth-setup ("E2E_ADMIN_USERNAME" -> "admin"). This is
+// the durable record of "how many roles does this app have" - the answer the human gave once, still
+// on disk afterwards - so a later stage can compare it against what was actually captured instead
+// of asking again. Slot presence is what counts, filled or not: a slot exists because a role was
+// named, and an empty one means "declared, not filled in yet".
+function readDeclaredRoles() {
+  if (!fs.existsSync(ENV_PATH)) return [];
+  const content = fs.readFileSync(ENV_PATH, 'utf8');
+  const roles = new Set();
+  for (const rawLine of content.split('\\n')) {
+    const line = rawLine.trim().replace(/^#\\s*/, '');
+    const match = line.match(/^E2E_([A-Z0-9_]+)_USERNAME\\s*=/);
+    if (match) roles.add(match[1].toLowerCase());
+  }
+  return Array.from(roles).sort();
+}
+
 function main() {
   const filledEnvKeys = readFilledEnvKeys();
   const sessionFiles = listSessionFiles();
   const ciProvider = readCiProvider();
+  const declaredRoles = readDeclaredRoles();
 
   const hasSession = sessionFiles.length > 0;
+  const capturedRoles = sessionFiles.map((f) => f.replace(/\\.json$/, '')).sort();
+  // A role is only "missing" when it was explicitly declared and has no session file of its own.
+  // The flat single-user case declares no roles at all, so this is empty there by construction.
+  const rolesMissingSession = declaredRoles.filter((r) => !capturedRoles.includes(r));
   const authEnvFilled = ['E2E_USERNAME', 'E2E_API_TOKEN', 'AUTH_TOKEN'].some((k) =>
     filledEnvKeys.includes(k),
   );
@@ -91,10 +114,17 @@ function main() {
   const result = {
     sessionFiles,
     hasSession,
+    capturedRoles,
+    declaredRoles,
+    rolesMissingSession,
     filledEnvKeys,
     authEnvFilled,
     ciProvider,
-    nextStep: hasSession ? 'session-exists' : 'capture-needed',
+    nextStep: hasSession
+      ? rolesMissingSession.length > 0
+        ? 'roles-incomplete'
+        : 'session-exists'
+      : 'capture-needed',
   };
 
   process.stdout.write(JSON.stringify(result, null, 2) + '\\n');

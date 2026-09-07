@@ -133,6 +133,36 @@ describe('scripts/map-site-status.mjs (real execution)', () => {
     }
   });
 
+  it('matches the routeId after the last "--" in a slug-prefixed screenshot name, and still recognises the older bare-routeId form', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, {
+        schemaVersion: 2,
+        generatedAt: '2026-09-03T10:00:00.000Z',
+        routes: {
+          '/': { routeId: 'keep-root' },
+          '/add-remove-elements': { routeId: 'keep-slugged' },
+        },
+      });
+      const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+      mkdirSync(shots, { recursive: true });
+      // Current naming: the slug itself contains single hyphens, so the routeId is what follows
+      // the LAST "--" - the slug rule can never produce a double hyphen of its own.
+      writeFileSync(join(shots, 'add-remove-elements--keep-slugged.jpg'), 'referenced', 'utf8');
+      // Older projects wrote a bare "<routeId>.jpg" - upgrading must not wipe their screenshots.
+      writeFileSync(join(shots, 'keep-root.jpg'), 'referenced', 'utf8');
+      writeFileSync(join(shots, 'gone--stale-id.jpg'), 'stale', 'utf8');
+
+      const output = run(dir, 'prune-screenshots');
+      expect(output.pruned).toBe(1);
+      expect(existsSync(join(shots, 'add-remove-elements--keep-slugged.jpg'))).toBe(true);
+      expect(existsSync(join(shots, 'keep-root.jpg'))).toBe(true);
+      expect(existsSync(join(shots, 'gone--stale-id.jpg'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('prune-screenshots deletes nothing when the site map is missing - every file would look stale', () => {
     const dir = setupProject();
     try {

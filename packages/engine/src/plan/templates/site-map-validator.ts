@@ -161,6 +161,15 @@ function validate() {
     if (!STATUS_VALUES.has(entry.status)) {
       errors.push(label + '.status must be one of active|removed.');
     }
+    if ('httpStatus' in entry) {
+      if (
+        !Number.isInteger(entry.httpStatus) ||
+        entry.httpStatus < 100 ||
+        entry.httpStatus > 599
+      ) {
+        errors.push(label + '.httpStatus, when present, must be an integer between 100 and 599.');
+      }
+    }
     if ('screenshot' in entry) {
       if (typeof entry.screenshot !== 'string' || entry.screenshot.length === 0) {
         errors.push(label + '.screenshot, when present, must be a non-empty string.');
@@ -213,9 +222,44 @@ function validate() {
               label +
                 '.visualTriage.flags, when present, must contain at most 10 alphanumeric/kebab-case tokens (<=50 chars each).',
             );
+          } else {
+            checkPhantomEvidence(entry, triage, label, errors);
           }
         }
       }
+    }
+  }
+
+  // "This route probably isn't real" is the one triage claim that deletes a route from a human's
+  // attention, so it is the one that must carry its own evidence. Two justifications exist and no
+  // third: the server itself said the page does not exist (404/410), or the cross-route
+  // content-hash heuristic matched - and that heuristic is only allowed to touch a route nothing
+  // ever navigated to. Live-observed failure this catches: 8 nav-reachable routes (including real
+  // 401-protected ones like /basic_auth) flagged as phantom off the hash heuristic alone, with no
+  // httpStatus recorded anywhere in the file.
+  function checkPhantomEvidence(entry, triage, label, errors) {
+    if (!triage.flags.includes('likely-phantom-route')) return;
+
+    const status = entry.httpStatus;
+    const saysNotFound = status === 404 || status === 410;
+
+    if (status === 401 || status === 403) {
+      errors.push(
+        label +
+          '.visualTriage.flags must not contain "likely-phantom-route" when httpStatus is ' +
+          status +
+          ' - that status means the route exists and is protected. Use visualTriage.state "auth_wall" (401) or "access_denied" (403) instead.',
+      );
+      return;
+    }
+
+    if (entry.discoveryMethod === 'navigation' && !saysNotFound) {
+      errors.push(
+        label +
+          '.visualTriage.flags contains "likely-phantom-route" on a navigation-discovered route without a recorded httpStatus of 404/410 (found ' +
+          (status === undefined ? 'no httpStatus' : String(status)) +
+          '). Being reachable by clicking through the app is independent evidence the route is real; the cross-route content-hash heuristic may only downgrade an href-scan-only route.',
+      );
     }
   }
 

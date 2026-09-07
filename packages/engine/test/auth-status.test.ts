@@ -124,6 +124,79 @@ describe('scripts/auth-status.mjs (real execution)', () => {
       expect(output.hasSession).toBe(false);
       expect(output.authEnvFilled).toBe(false);
       expect(output.nextStep).toBe('capture-needed');
+      expect(output.declaredRoles).toEqual([]);
+      expect(output.rolesMissingSession).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads declared roles from the per-role .env slots, filled or not', () => {
+    const dir = setupProject();
+    try {
+      writeFileSync(
+        join(dir, '.env'),
+        [
+          'E2E_BASE_URL=https://example.test',
+          'E2E_ADMIN_USERNAME=someone',
+          'E2E_ADMIN_PASSWORD=',
+          '# E2E_CUSTOMER_USERNAME=',
+          '# E2E_CUSTOMER_PASSWORD=',
+        ].join('\n'),
+        'utf8',
+      );
+      const output = run(dir);
+      // A commented-out slot still means the role was declared - it just has not been filled in.
+      expect(output.declaredRoles).toEqual(['admin', 'customer']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports roles-incomplete when a declared role has no captured session of its own', () => {
+    const dir = setupProject();
+    try {
+      mkdirSync(join(dir, '.auth'), { recursive: true });
+      writeFileSync(join(dir, '.auth', 'admin.json'), '{}', 'utf8');
+      writeFileSync(join(dir, '.env'), 'E2E_ADMIN_USERNAME=\nE2E_CUSTOMER_USERNAME=\n', 'utf8');
+
+      const output = run(dir);
+      expect(output.capturedRoles).toEqual(['admin']);
+      expect(output.declaredRoles).toEqual(['admin', 'customer']);
+      expect(output.rolesMissingSession).toEqual(['customer']);
+      expect(output.nextStep).toBe('roles-incomplete');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports session-exists once every declared role has its own session', () => {
+    const dir = setupProject();
+    try {
+      mkdirSync(join(dir, '.auth'), { recursive: true });
+      writeFileSync(join(dir, '.auth', 'admin.json'), '{}', 'utf8');
+      writeFileSync(join(dir, '.auth', 'customer.json'), '{}', 'utf8');
+      writeFileSync(join(dir, '.env'), 'E2E_ADMIN_USERNAME=\nE2E_CUSTOMER_USERNAME=\n', 'utf8');
+
+      const output = run(dir);
+      expect(output.rolesMissingSession).toEqual([]);
+      expect(output.nextStep).toBe('session-exists');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a flat single-user project declares no roles, so it never reports roles-incomplete', () => {
+    const dir = setupProject();
+    try {
+      mkdirSync(join(dir, '.auth'), { recursive: true });
+      writeFileSync(join(dir, '.auth', 'user.json'), '{}', 'utf8');
+      writeFileSync(join(dir, '.env'), 'E2E_USERNAME=someone\nE2E_PASSWORD=secret\n', 'utf8');
+
+      const output = run(dir);
+      expect(output.declaredRoles).toEqual([]);
+      expect(output.rolesMissingSession).toEqual([]);
+      expect(output.nextStep).toBe('session-exists');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

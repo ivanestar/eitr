@@ -76,6 +76,111 @@ function run(dir: string) {
   return spawnSync('node', ['validate-site-map.mjs'], { cwd: dir, encoding: 'utf8' });
 }
 
+// "This route probably isn't real" is the one triage claim that removes a route from a human's
+// attention, so the validator requires it to carry its own evidence. Live-observed regression this
+// covers: 8 nav-reachable routes (including real 401-protected ones) flagged as phantom off the
+// content-hash heuristic alone, with no httpStatus recorded anywhere in the file.
+function siteMapWithPhantom(overrides: Record<string, unknown>) {
+  const map = minimalSiteMap() as unknown as {
+    routes: Record<string, Record<string, unknown>>;
+  };
+  map.routes['/maybe-real'] = {
+    routeId: 'route-maybe-real',
+    sampleUrls: ['https://example.com/maybe-real'],
+    discoveredAt: '2026-09-03T10:00:00.000Z',
+    lastCheckedAt: '2026-09-03T10:00:00.000Z',
+    contentHash: 'shell-hash',
+    status: 'active',
+    visualTriage: { state: 'error_page', flags: ['likely-phantom-route'] },
+    ...overrides,
+  };
+  return map;
+}
+
+describe('validate-site-map.mjs phantom-route evidence invariant', () => {
+  it('rejects a phantom flag on a navigation-discovered route with no recorded httpStatus', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, siteMapWithPhantom({ discoveryMethod: 'navigation' }));
+      const result = run(dir);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('likely-phantom-route');
+      expect(result.stdout).toContain('without a recorded httpStatus of 404/410');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts a phantom flag on a navigation-discovered route that recorded a real 404', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, siteMapWithPhantom({ discoveryMethod: 'navigation', httpStatus: 404 }));
+      expect(run(dir).status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts a phantom flag on an href-scan-only route - the content-hash heuristic owns that case', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, siteMapWithPhantom({ discoveryMethod: 'href-scan-only' }));
+      expect(run(dir).status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a phantom flag on a 401/403 route - that status means the route exists and is protected', () => {
+    for (const status of [401, 403]) {
+      const dir = setupProject();
+      try {
+        writeSiteMap(
+          dir,
+          siteMapWithPhantom({ discoveryMethod: 'href-scan-only', httpStatus: status }),
+        );
+        const result = run(dir);
+        expect(result.status).toBe(1);
+        expect(result.stdout).toContain('the route exists and is protected');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('rejects an httpStatus that is not a plausible HTTP status code', () => {
+    const dir = setupProject();
+    try {
+      const map = minimalSiteMap() as unknown as {
+        routes: Record<string, Record<string, unknown>>;
+      };
+      map.routes['/'].httpStatus = 99;
+      writeSiteMap(dir, map);
+      const result = run(dir);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain(
+        'httpStatus, when present, must be an integer between 100 and 599',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts a route recording a 200 with no triage flags at all', () => {
+    const dir = setupProject();
+    try {
+      const map = minimalSiteMap() as unknown as {
+        routes: Record<string, Record<string, unknown>>;
+      };
+      map.routes['/'].httpStatus = 200;
+      writeSiteMap(dir, map);
+      expect(run(dir).status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('scripts/validate-site-map.mjs (real execution)', () => {
   it('passes validation for a well-formed multi-route fixture with every optional field present', () => {
     const dir = setupProject();
@@ -683,7 +788,10 @@ describe('crawler screenshot feature integration & prompt invariants', () => {
     expect(content).toContain(".first().waitFor({ state: 'detached', timeout: 1200 })");
     expect(content).toContain('requestAnimationFrame');
     expect(content).toContain('Safe-Fail Boundary');
-    expect(content).toContain('artifacts/site-map/screenshots/<routeId>.jpg');
+    // Screenshots carry a human-readable path slug ahead of the stable routeId, so a directory
+    // listing can be matched to pages by eye instead of being a wall of UUIDs.
+    expect(content).toContain('artifacts/site-map/screenshots/<slug>--<routeId>.jpg');
+    expect(content).toContain('Never use the slug alone');
 
     // Visual triage states
     expect(content).toContain('Selective Visual Triage Gate');

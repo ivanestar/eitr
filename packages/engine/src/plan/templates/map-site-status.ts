@@ -56,7 +56,19 @@ function knownRouteIds(siteMap) {
   return ids;
 }
 
-// A screenshot is stale when its filename stem is not a routeId in the CURRENT site map. Anything
+// Screenshots are named "<path slug>--<routeId>.<ext>" so a human can tell which page a file shows
+// without cross-referencing UUIDs. The routeId is what identifies the file, so it is read from
+// after the last "--": the slug rule collapses every run of non-alphanumerics to a single "-", so a
+// double hyphen can never occur inside the slug itself and the split is unambiguous. The older
+// bare "<routeId>.<ext>" form is still recognised - a project generated before the rename must not
+// have its whole screenshot directory deleted by the first prune that runs after upgrading.
+function routeIdFromScreenshotName(fileName) {
+  const stem = path.basename(fileName, path.extname(fileName));
+  const separatorIndex = stem.lastIndexOf('--');
+  return separatorIndex === -1 ? stem : stem.slice(separatorIndex + 2);
+}
+
+// A screenshot is stale when the routeId in its filename is not in the CURRENT site map. Anything
 // that is not a recognised image extension is left alone rather than guessed about - this function
 // only ever proposes deleting files it can positively identify as this pipeline's own output.
 function listStaleScreenshots(siteMap) {
@@ -73,8 +85,7 @@ function listStaleScreenshots(siteMap) {
     if (!entry.isFile()) continue;
     const ext = path.extname(entry.name).toLowerCase();
     if (!SCREENSHOT_EXTENSIONS.includes(ext)) continue;
-    const stem = path.basename(entry.name, path.extname(entry.name));
-    if (ids.has(stem)) continue;
+    if (ids.has(routeIdFromScreenshotName(entry.name))) continue;
     stale.push(entry.name);
   }
   return stale;
