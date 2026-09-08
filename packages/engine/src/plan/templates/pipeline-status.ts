@@ -97,15 +97,11 @@ function countRoutesWithReviewedCondition(routes) {
   }).length;
 }
 
-function collectJourneys(routes) {
-  if (!routes || typeof routes !== 'object') return [];
-  const all = [];
-  for (const entry of Object.values(routes)) {
-    if (entry && Array.isArray(entry.journeys)) {
-      for (const j of entry.journeys) all.push(j);
-    }
+function collectJourneys(journeysData) {
+  if (!journeysData || typeof journeysData.journeys !== 'object' || journeysData.journeys === null) {
+    return [];
   }
-  return all;
+  return Object.values(journeysData.journeys).filter(Boolean);
 }
 
 function anyJourneyNeedsAutomation(journeys) {
@@ -120,8 +116,13 @@ function anyJourneyNeedsAutomation(journeys) {
 // journey with conditionAssignments but no testCase yet (the /design-test-cases LLM drafting step
 // was interrupted before reaching it). Either state must route back to /design-test-cases; treating
 // it as done would silently report 'complete' while a route was never even drafted.
-function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeysRoutes) {
+function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeys) {
   if (!testConditionRoutes || typeof testConditionRoutes !== 'object') return true;
+  const draftedRouteIds = new Set();
+  for (const journey of journeys) {
+    if (!journey || !journey.testCase) continue;
+    for (const routeId of journey.routeIds || []) draftedRouteIds.add(routeId);
+  }
   for (const [routeId, entry] of Object.entries(testConditionRoutes)) {
     const hasReviewedCondition =
       entry &&
@@ -130,13 +131,7 @@ function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeysRoute
         return c && c.reviewed === true;
       });
     if (!hasReviewedCondition) continue;
-    const routeJourneyEntry = journeysRoutes && journeysRoutes[routeId];
-    const routeJourneys =
-      routeJourneyEntry && Array.isArray(routeJourneyEntry.journeys) ? routeJourneyEntry.journeys : [];
-    const hasDraftedTestCase = routeJourneys.some(function (j) {
-      return j && j.testCase;
-    });
-    if (!hasDraftedTestCase) return false;
+    if (!draftedRouteIds.has(routeId)) return false;
   }
   return true;
 }
@@ -192,7 +187,7 @@ function formatRoadmap(stage) {
 
 // Route-level counters a human-facing report can print without re-deriving them from raw artifacts
 // itself - zero model involvement, same as every other computation in this script.
-function computeRouteCoverage(siteMap, businessIntent, featureMap, testConditions, journeysRoutes) {
+function computeRouteCoverage(siteMap, businessIntent, featureMap, testConditions, journeys) {
   const routes = siteMap && typeof siteMap.routes === 'object' ? Object.values(siteMap.routes) : [];
   const activeRoutes = routes.filter(function (r) {
     return r && r.status === 'active';
@@ -214,11 +209,16 @@ function computeRouteCoverage(siteMap, businessIntent, featureMap, testCondition
     entities: featureMap ? Object.keys(featureMap.entities || {}).length : 0,
     entitiesReviewed: countReviewedTrue(featureMap && featureMap.entities),
     testConditionsReviewed: countRoutesWithReviewedCondition(testConditions && testConditions.routes),
-    testCasesDrafted: collectJourneys(journeysRoutes).filter(function (j) {
+    testCasesDrafted: journeys.filter(function (j) {
       return j && j.testCase;
     }).length,
-    automated: collectJourneys(journeysRoutes).filter(function (j) {
+    automated: journeys.filter(function (j) {
       return j && j.testCase && j.reviewed === true;
+    }).length,
+    // A journey that walks a feature across routes rather than testing one screen. Counted on its
+    // own because it is the shape a route-keyed pipeline could not produce at all.
+    featureJourneys: journeys.filter(function (j) {
+      return j && j.breadth === 'e2e';
     }).length,
   };
 }
@@ -358,10 +358,9 @@ function computeStatus(siteMap, businessIntent, featureMap, testConditions, jour
     };
   }
 
-  const journeysRoutes = journeysData && typeof journeysData.routes === 'object' ? journeysData.routes : {};
-  const journeys = collectJourneys(journeysRoutes);
+  const journeys = collectJourneys(journeysData);
 
-  if (!everyReviewedRouteHasDraftedTestCase(testConditions.routes, journeysRoutes)) {
+  if (!everyReviewedRouteHasDraftedTestCase(testConditions.routes, journeys)) {
     return {
       stage: 'test-conditions-reviewed',
       nextCommand: '/design-test-cases',
@@ -393,11 +392,16 @@ function main() {
   const featureMap = loadJson(FEATURE_MAP_PATH);
   const testConditions = loadJson(TEST_CONDITIONS_PATH);
   const journeysData = loadJson(JOURNEYS_PATH);
-  const journeysRoutes = journeysData && typeof journeysData.routes === 'object' ? journeysData.routes : {};
 
   const status = computeStatus(siteMap, businessIntent, featureMap, testConditions, journeysData);
   const roadmap = formatRoadmap(status.stage);
-  const routeCoverage = computeRouteCoverage(siteMap, businessIntent, featureMap, testConditions, journeysRoutes);
+  const routeCoverage = computeRouteCoverage(
+    siteMap,
+    businessIntent,
+    featureMap,
+    testConditions,
+    collectJourneys(journeysData),
+  );
   const stageTimings = computeStageTimings(siteMap, businessIntent, featureMap, testConditions, journeysData);
   const preFlightNotice = computePreFlightNotice(status.stage, routeCoverage);
 

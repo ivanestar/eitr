@@ -25,14 +25,14 @@ export function renderFeatureMapTypes(): string {
 // traffic already observed during the crawl, markup already rendered, or a route path already
 // mapped - nothing here triggers a new request or a new interaction.
 export type FeatureMapSource =
-  | 'api-resource'          // a (method, pathTemplate) group in api-contracts.json
-  | 'api-payload-field'     // an id-shaped field name in a request payload
-  | 'api-response-nesting'  // a nested object/array in a response body shape
-  | 'route-convention'      // a path shape like /orders, /orders/new, /orders/{id}
-  | 'ui-form'               // a form on a route, and where its submit went
-  | 'ui-navigation'         // a navigation link between two routes
+  | 'api-resource' // a (method, pathTemplate) group in api-contracts.json
+  | 'api-payload-field' // an id-shaped field name in a request payload
+  | 'api-response-nesting' // a nested object/array in a response body shape
+  | 'route-convention' // a path shape like /orders, /orders/new, /orders/{id}
+  | 'ui-form' // a form on a route, and where its submit went
+  | 'ui-navigation' // a navigation link between two routes
   | 'business-intent-label' // an already-reviewed businessFeature value from business-intent.json
-  | 'human';                // stated by a person at sign-off
+  | 'human'; // stated by a person at sign-off
 
 export interface FeatureEvidence {
   signal: FeatureMapSource;

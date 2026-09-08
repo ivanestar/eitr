@@ -132,39 +132,35 @@ function writeJourneys(dir: string, opts: { withTestCase: boolean; reviewed: boo
   writeFileSync(
     join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: '2026-09-04T09:00:00.000Z',
-      routes: {
-        'route-checkout': {
-          routeId: 'route-checkout',
-          journeys: [
+      journeys: {
+        abc123def456abcd: {
+          journeyId: 'abc123def456abcd',
+          routeIds: ['route-checkout'],
+          testInterface: 'ui',
+          breadth: 'targeted',
+          level: 'system',
+          conditionAssignments: [
             {
-              journeyId: 'abc123def456abcd',
+              conditionId: 'a1b2c3d4e5f6a1b2',
               routeId: 'route-checkout',
-              conditionAssignments: [
-                {
-                  conditionId: 'a1b2c3d4e5f6a1b2',
-                  testLevel: 'e2e',
-                  reason: 'baseline-valid-vector',
-                },
-              ],
-              ...(opts.withTestCase
-                ? {
-                    testCase: {
-                      title: 'Checkout happy path',
-                      preconditions: [],
-                      steps: [
-                        { description: 'Submit checkout', expectedResult: 'Order confirmed' },
-                      ],
-                    },
-                  }
-                : {}),
-              reviewed: opts.reviewed,
-              ...(opts.reviewed ? { reviewedBy: 'human' } : {}),
-              sourceConditionsHash: 'hash123',
-              analyzedAt: '2026-09-04T09:00:00.000Z',
+              reason: 'baseline-valid-vector',
             },
           ],
+          ...(opts.withTestCase
+            ? {
+                testCase: {
+                  title: 'Checkout happy path',
+                  preconditions: [],
+                  steps: [{ description: 'Submit checkout', expectedResult: 'Order confirmed' }],
+                },
+              }
+            : {}),
+          reviewed: opts.reviewed,
+          ...(opts.reviewed ? { reviewedBy: 'human' } : {}),
+          sourceConditionsHash: 'hash123',
+          analyzedAt: '2026-09-04T09:00:00.000Z',
         },
       },
     }),
@@ -230,49 +226,49 @@ function writeTestConditionsTwoRoutes(dir: string) {
 // a journey but no testCase yet (the /design-test-cases drafting step was interrupted) - the two
 // distinct ways a reviewed route can be invisible to a "does any journey have a testCase" check.
 function writeJourneysCheckoutOnly(dir: string, opts: { cartHasJourneyWithoutTestCase: boolean }) {
-  const routes: Record<string, unknown> = {
-    'route-checkout': {
-      routeId: 'route-checkout',
-      journeys: [
+  const journeys: Record<string, unknown> = {
+    abc123def456abcd: {
+      journeyId: 'abc123def456abcd',
+      routeIds: ['route-checkout'],
+      testInterface: 'ui',
+      breadth: 'targeted',
+      level: 'system',
+      conditionAssignments: [
         {
-          journeyId: 'abc123def456abcd',
+          conditionId: 'a1b2c3d4e5f6a1b2',
           routeId: 'route-checkout',
-          conditionAssignments: [
-            { conditionId: 'a1b2c3d4e5f6a1b2', testLevel: 'e2e', reason: 'baseline-valid-vector' },
-          ],
-          testCase: {
-            title: 'Checkout happy path',
-            preconditions: [],
-            steps: [{ description: 'Submit checkout', expectedResult: 'Order confirmed' }],
-          },
-          reviewed: true,
-          reviewedBy: 'human',
-          sourceConditionsHash: 'hash123',
-          analyzedAt: '2026-09-04T09:00:00.000Z',
+          reason: 'baseline-valid-vector',
         },
       ],
+      testCase: {
+        title: 'Checkout happy path',
+        preconditions: [],
+        steps: [{ description: 'Submit checkout', expectedResult: 'Order confirmed' }],
+      },
+      reviewed: true,
+      reviewedBy: 'human',
+      sourceConditionsHash: 'hash123',
+      analyzedAt: '2026-09-04T09:00:00.000Z',
     },
   };
   if (opts.cartHasJourneyWithoutTestCase) {
-    routes['route-cart'] = {
-      routeId: 'route-cart',
-      journeys: [
-        {
-          journeyId: 'cartjourney0001a',
-          routeId: 'route-cart',
-          conditionAssignments: [
-            { conditionId: 'f6e5d4c3b2a1f6e5', testLevel: 'api', reason: 'non-baseline-vector' },
-          ],
-          reviewed: false,
-          sourceConditionsHash: 'hash456',
-          analyzedAt: '2026-09-04T09:00:00.000Z',
-        },
+    journeys['cartjourney0001a'] = {
+      journeyId: 'cartjourney0001a',
+      routeIds: ['route-cart'],
+      testInterface: 'api',
+      breadth: 'targeted',
+      level: 'integration',
+      conditionAssignments: [
+        { conditionId: 'f6e5d4c3b2a1f6e5', routeId: 'route-cart', reason: 'non-baseline-vector' },
       ],
+      reviewed: false,
+      sourceConditionsHash: 'hash456',
+      analyzedAt: '2026-09-04T09:00:00.000Z',
     };
   }
   writeFileSync(
     join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
-    JSON.stringify({ schemaVersion: 1, generatedAt: '2026-09-04T09:00:00.000Z', routes }),
+    JSON.stringify({ schemaVersion: 2, generatedAt: '2026-09-04T09:00:00.000Z', journeys }),
     'utf8',
   );
 }

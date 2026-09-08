@@ -185,40 +185,40 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
     try {
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
       writeJson(dir, 'artifacts/test-cases/test-cases.json', {
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt: '2026-09-07T00:00:00.000Z',
-        routes: {
-          'id-0': {
-            journeys: [
-              {
-                journeyId: 'j1',
-                routeId: 'id-0',
-                layer: 'e2e',
-                reviewed: true,
-                testCase: {
-                  title: 'Done one',
-                  preconditions: [],
-                  steps: [{ description: 'Do a thing', expectedResult: 'It happened' }],
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['id-0'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            level: 'system',
+            reviewed: true,
+            testCase: {
+              title: 'Done one',
+              preconditions: [],
+              steps: [{ description: 'Do a thing', expectedResult: 'It happened' }],
+            },
+          },
+          j2: {
+            journeyId: 'j2',
+            routeIds: ['id-0'],
+            testInterface: 'api',
+            breadth: 'targeted',
+            level: 'integration',
+            reviewed: false,
+            testCase: {
+              title: 'Pending one',
+              preconditions: [],
+              steps: [
+                {
+                  description: 'Call the endpoint',
+                  expectedResult: 'Status is 200',
+                  api: { contractGrounded: false },
                 },
-              },
-              {
-                journeyId: 'j2',
-                routeId: 'id-0',
-                layer: 'api',
-                reviewed: false,
-                testCase: {
-                  title: 'Pending one',
-                  preconditions: [],
-                  steps: [
-                    {
-                      description: 'Call the endpoint',
-                      expectedResult: 'Status is 200',
-                      api: { contractGrounded: false },
-                    },
-                  ],
-                },
-              },
-            ],
+              ],
+            },
           },
         },
       });
@@ -227,6 +227,10 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
       expect(output.summary).toContain('1 already automated');
       expect(output.summary).toContain('1 awaiting automation');
       expect(output.markdown).toContain('[NO OBSERVED API CONTRACT]');
+      // What drives the test and how far it reaches are on the heading, where a reviewer sees them
+      // before reading a single step.
+      expect(output.markdown).toContain('[targeted via ui]');
+      expect(output.markdown).toContain('[targeted via api]');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

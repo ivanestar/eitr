@@ -45,7 +45,9 @@ describe('Stage 2: 9-Category Negative Taxonomy & Defensive Oracle Polarity', ()
         expect(validatorCode).toContain(`'${cat}'`);
       }
       expect(validatorCode).toContain("'architectural-invariant'");
-      expect(validatorCode).toContain('checklist-based|architectural-invariant');
+      // The rejection message lists whatever the technique set actually holds, so a technique
+      // added to one and forgotten in the other cannot drift apart.
+      expect(validatorCode).toContain("Array.from(TECHNIQUE_VALUES).join('|')");
     });
 
     it('enforces validation rules for negativeCategory, scenario, and defensive oracles', () => {

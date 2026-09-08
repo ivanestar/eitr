@@ -312,24 +312,37 @@ function renderTestConditions(labels, data) {
   };
 }
 
-function collectJourneys(routes) {
-  const all = [];
-  if (!routes || typeof routes !== 'object') return all;
-  for (const entry of Object.values(routes)) {
-    const journeys = entry && Array.isArray(entry.journeys) ? entry.journeys : [];
-    for (const journey of journeys) {
-      if (journey) all.push(journey);
-    }
-  }
-  return all;
+
+// Route ids joined the way a person reads a walk: in the order the journey visits them.
+function journeyHeading(labels, journey) {
+  const routeIds = Array.isArray(journey.routeIds) ? journey.routeIds : [];
+  const routes = routeIds
+    .map(function (routeId) {
+      return labelFor(labels, routeId);
+    })
+    .join(' -> ');
+  // What drives the test and how far it reaches are the two things a reviewer needs before reading
+  // the steps - an API check and a browser walk are not corrected the same way.
+  const shape =
+    journey.breadth === 'e2e'
+      ? 'end-to-end via ' + journey.testInterface
+      : 'targeted via ' + journey.testInterface;
+  return '**' + (routes || '(no route)') + '** [' + shape + ']';
 }
 
 function renderTestCases(labels, data) {
-  const journeys = collectJourneys(data && data.routes).filter(function (journey) {
-    return journey.testCase;
+  const all =
+    data && typeof data.journeys === 'object' && data.journeys !== null
+      ? Object.values(data.journeys)
+      : [];
+  const journeys = all.filter(function (journey) {
+    return journey && journey.testCase;
   });
+  // Feature walks first: they are the ones a reviewer most needs to see, and they explain the
+  // targeted journeys underneath them.
   journeys.sort(function (a, b) {
-    return labelFor(labels, a.routeId).localeCompare(labelFor(labels, b.routeId));
+    if (a.breadth !== b.breadth) return a.breadth === 'e2e' ? -1 : 1;
+    return journeyHeading(labels, a).localeCompare(journeyHeading(labels, b));
   });
 
   const lines = [];
@@ -339,7 +352,7 @@ function renderTestCases(labels, data) {
 
   for (const journey of journeys) {
     if (journey.reviewed === true) automated += 1;
-    lines.push('**' + labelFor(labels, journey.routeId) + '**');
+    lines.push(journeyHeading(labels, journey));
     const testCase = journey.testCase || {};
     lines.push('Title: ' + (testCase.title || '(untitled)'));
     const preconditions = Array.isArray(testCase.preconditions) ? testCase.preconditions : [];

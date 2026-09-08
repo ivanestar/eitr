@@ -182,7 +182,10 @@ function planJourneyWorkers(routes, filter) {
   } catch {
     return [];
   }
-  const journeyRoutes = data && typeof data.routes === 'object' && data.routes !== null ? data.routes : {};
+  const allJourneys =
+    data && typeof data.journeys === 'object' && data.journeys !== null
+      ? Object.values(data.journeys)
+      : [];
 
   const routePathByRouteId = new Map();
   for (const [routePath, route] of Object.entries(routes)) {
@@ -190,25 +193,30 @@ function planJourneyWorkers(routes, filter) {
   }
 
   const workers = [];
-  for (const entry of Object.values(journeyRoutes)) {
-    const journeys = entry && Array.isArray(entry.journeys) ? entry.journeys : [];
-    for (const journey of journeys) {
-      if (!journey || !journey.testCase) continue;
-      // reviewed:true is what /automate-test sets once a journey's test is written and green.
-      if (journey.reviewed === true) continue;
-      const routePath = routePathByRouteId.get(journey.routeId) || null;
-      if (filter && !filter.has(journey.routeId) && (routePath === null || !filter.has(routePath))) {
-        continue;
-      }
-      workers.push({
-        workerId: 'journey-' + String(journey.journeyId || '').slice(0, 12),
-        journeyId: journey.journeyId || null,
-        routeId: journey.routeId || null,
-        path: routePath,
-        layer: journey.layer || null,
-        title: (journey.testCase && journey.testCase.title) || null,
-      });
+  for (const journey of allJourneys) {
+    if (!journey || !journey.testCase) continue;
+    // reviewed:true is what /automate-test sets once a journey's test is written and green.
+    if (journey.reviewed === true) continue;
+    const journeyRouteIds = Array.isArray(journey.routeIds) ? journey.routeIds : [];
+    const paths = journeyRouteIds.map((routeId) => routePathByRouteId.get(routeId) || null);
+    // A journey walking several routes belongs to the filter if any of them is named - filtering it
+    // out because its first route was not mentioned would drop the whole flow.
+    if (
+      filter &&
+      !journeyRouteIds.some((routeId) => filter.has(routeId)) &&
+      !paths.some((routePath) => routePath !== null && filter.has(routePath))
+    ) {
+      continue;
     }
+    workers.push({
+      workerId: 'journey-' + String(journey.journeyId || '').slice(0, 12),
+      journeyId: journey.journeyId || null,
+      routeIds: journeyRouteIds,
+      paths: paths,
+      testInterface: journey.testInterface || null,
+      breadth: journey.breadth || null,
+      title: (journey.testCase && journey.testCase.title) || null,
+    });
   }
   workers.sort((a, b) => String(a.workerId).localeCompare(String(b.workerId)));
   return workers;

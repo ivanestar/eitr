@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -93,34 +93,33 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
       writeFileSync(
         join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
         JSON.stringify({
-          schemaVersion: 1,
+          schemaVersion: 2,
           generatedAt: '2026-09-07T10:00:00.000Z',
-          routes: {
-            'route-login': {
-              journeys: [
-                {
-                  journeyId: 'aaaaaaaaaaaa1111',
-                  routeId: 'route-login',
-                  layer: 'e2e',
-                  reviewed: false,
-                  testCase: { title: 'Sign in with valid credentials' },
-                },
-                {
-                  // Already automated - never re-dispatched.
-                  journeyId: 'bbbbbbbbbbbb2222',
-                  routeId: 'route-login',
-                  layer: 'api',
-                  reviewed: true,
-                  testCase: { title: 'Already done' },
-                },
-                {
-                  // Drafted-but-empty journey: no testCase yet, nothing to automate.
-                  journeyId: 'cccccccccccc3333',
-                  routeId: 'route-login',
-                  layer: 'e2e',
-                  reviewed: false,
-                },
-              ],
+          journeys: {
+            aaaaaaaaaaaa1111: {
+              journeyId: 'aaaaaaaaaaaa1111',
+              routeIds: ['route-login'],
+              testInterface: 'ui',
+              breadth: 'targeted',
+              reviewed: false,
+              testCase: { title: 'Sign in with valid credentials' },
+            },
+            // Already automated - never re-dispatched.
+            bbbbbbbbbbbb2222: {
+              journeyId: 'bbbbbbbbbbbb2222',
+              routeIds: ['route-login'],
+              testInterface: 'api',
+              breadth: 'targeted',
+              reviewed: true,
+              testCase: { title: 'Already done' },
+            },
+            // Drafted-but-empty journey: no testCase yet, nothing to automate.
+            cccccccccccc3333: {
+              journeyId: 'cccccccccccc3333',
+              routeIds: ['route-login'],
+              testInterface: 'ui',
+              breadth: 'targeted',
+              reviewed: false,
             },
           },
         }),
@@ -134,9 +133,10 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
       expect(journeyWorkers[0]).toEqual({
         workerId: 'journey-aaaaaaaaaaaa',
         journeyId: 'aaaaaaaaaaaa1111',
-        routeId: 'route-login',
-        path: '/login',
-        layer: 'e2e',
+        routeIds: ['route-login'],
+        paths: ['/login'],
+        testInterface: 'ui',
+        breadth: 'targeted',
         title: 'Sign in with valid credentials',
       });
     } finally {
@@ -151,28 +151,24 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
       writeFileSync(
         join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
         JSON.stringify({
-          schemaVersion: 1,
+          schemaVersion: 2,
           generatedAt: '2026-09-07T10:00:00.000Z',
-          routes: {
-            'route-login': {
-              journeys: [
-                {
-                  journeyId: 'aaaaaaaaaaaa1111',
-                  routeId: 'route-login',
-                  reviewed: false,
-                  testCase: { title: 'Login journey' },
-                },
-              ],
+          journeys: {
+            aaaaaaaaaaaa1111: {
+              journeyId: 'aaaaaaaaaaaa1111',
+              routeIds: ['route-login'],
+              testInterface: 'ui',
+              breadth: 'targeted',
+              reviewed: false,
+              testCase: { title: 'Login journey' },
             },
-            'route-user-detail': {
-              journeys: [
-                {
-                  journeyId: 'dddddddddddd4444',
-                  routeId: 'route-user-detail',
-                  reviewed: false,
-                  testCase: { title: 'User detail journey' },
-                },
-              ],
+            dddddddddddd4444: {
+              journeyId: 'dddddddddddd4444',
+              routeIds: ['route-user-detail'],
+              testInterface: 'ui',
+              breadth: 'targeted',
+              reviewed: false,
+              testCase: { title: 'User detail journey' },
             },
           },
         }),
@@ -182,7 +178,7 @@ describe('scripts/orchestrate-swarm.mjs (real execution)', () => {
       const output = JSON.parse(run(dir, ['--phase=plan', '--routes=/login']).stdout);
       const journeyWorkers = output.dag_waves[3].workers;
       expect(journeyWorkers).toHaveLength(1);
-      expect(journeyWorkers[0].routeId).toBe('route-login');
+      expect(journeyWorkers[0].routeIds).toEqual(['route-login']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

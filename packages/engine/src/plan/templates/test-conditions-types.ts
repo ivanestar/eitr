@@ -89,11 +89,19 @@ export interface VerificationContract {
 // boundary-value, not a replacement for it.
 // 'architectural-invariant' covers systemic, route-level conditions (e.g. missing_precondition,
 // permission_denied, state_violation) not bound to form parameter inputs.
+// 'state-transition' and 'use-case' are the two flow-oriented techniques. Both need a model of what
+// an entity's life looks like, which no amount of per-page analysis can produce - they come from
+// artifacts/analysis/feature-map.json's reviewed entity lifecycles, and simply do not appear on a
+// project that has none. A 'state-transition' condition is either one defined transition or one
+// (state, trigger) pair the lifecycle leaves undefined; a 'use-case' condition is one entity's whole
+// main flow, which is what a cross-route journey gets built from.
 export type TestConditionTechnique =
   | 'combinatorial'
   | 'boundary-value'
   | 'equivalence-partition'
   | 'checklist-based'
+  | 'state-transition'
+  | 'use-case'
   | 'architectural-invariant';
 
 // Whether every parameter value in a TestCondition's vector is drawn from a 'valid' partition (or
