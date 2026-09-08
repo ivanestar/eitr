@@ -29,7 +29,7 @@ export function renderCrawlBudget(): string {
  * Usage:
  *   node scripts/crawl-budget.mjs start --base-url=<url> [--role=<slug>]
  *                                 [--max-pages=N] [--max-depth=N] [--max-per-template=N]
- *   node scripts/crawl-budget.mjs check --url=<url> --depth=<n>
+ *   node scripts/crawl-budget.mjs check --url=<url> --depth=<n> --visible=<true|false>
  *   node scripts/crawl-budget.mjs visited --url=<url> [--status=<n>] [--content-type=<mime>]
  *                                 [--content-hash=<hash>]
  *   node scripts/crawl-budget.mjs scroll --url=<url>
@@ -66,6 +66,13 @@ const DEFAULT_MAX_PER_TEMPLATE = 20;
 // single route entry anyway, so stopping early costs sample URLs, never a route. This is what
 // catches the trap on the third page instead of the twentieth.
 const DEFAULT_MAX_PER_CONTENT_HASH = 3;
+// The escape hatch every per-template cap has: siblings that do not collapse into one template.
+// /download/report.txt and /download/tmp8sk2.txt are separate templates by every id rule there is,
+// so a file listing, a tag cloud or a user directory can still spend the whole page budget one
+// distinct child at a time. Capping distinct children per parent path closes that without needing
+// a cleverer - and more wrong - canonicalization rule. Live-observed: a listing page contributed 95
+// of one crawl's 160 URLs, leaving 45 real routes out of 148 templates explored.
+const DEFAULT_MAX_PER_PARENT = 12;
 // The same structure appearing under SEVERAL different templates is a weaker signal - a generic
 // empty state, or a canonicalization that did not collapse what it should have (/blog/page-2 and
 // /blog/page-3 are separate templates on purpose, since collapsing every segment ending in a digit
@@ -97,6 +104,10 @@ const VOLATILE_QUERY_PARAMS = new Set([
 const NON_HTML_EXTENSIONS = new Set([
   'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf',
   'csv', 'tsv', 'json', 'ndjson', 'yaml', 'yml', 'sql',
+  // Plain-text and markup files read as pages to a naive crawler and are not pages. Live-observed:
+  // a file-listing page offered ~95 uploaded .txt files, and every one was admitted as its own
+  // route because a filename collapses under none of the id rules below.
+  'txt', 'md', 'markdown', 'log', 'xml', 'rss', 'atom', 'ics', 'vcf', 'srt', 'vtt',
   'zip', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'rar', '7z', 'iso', 'dmg', 'exe', 'msi', 'apk', 'deb', 'rpm',
   'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp', 'avif', 'ico', 'tif', 'tiff', 'psd',
   'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a',
@@ -145,7 +156,9 @@ function emptyState() {
       maxPerTemplate: DEFAULT_MAX_PER_TEMPLATE,
       maxPerContentHash: DEFAULT_MAX_PER_CONTENT_HASH,
       duplicateTemplateWarnAt: DEFAULT_DUPLICATE_TEMPLATE_WARN_AT,
+      maxPerParent: DEFAULT_MAX_PER_PARENT,
       maxScrolls: DEFAULT_MAX_SCROLLS,
+      allowInvisible: false,
     },
     pagesClaimed: 0,
     pagesVisited: 0,
@@ -153,12 +166,14 @@ function emptyState() {
     boundedBy: null,
     claimed: {},
     perTemplate: {},
+    perParent: {},
     skipped: {},
     droppedAfterVisit: 0,
     contentHashes: {},
     saturatedTemplates: {},
     scrolls: {},
     warnings: [],
+    warningKeys: [],
     lastAnnounceAt: null,
     lastAnnounceCount: 0,
   };
@@ -248,11 +263,21 @@ function bumpSkip(state, reason) {
   state.skipped[reason] = (state.skipped[reason] || 0) + 1;
 }
 
+// "/a/b/c" -> "/a/b", "/a" -> "/", "/" -> "/". Purely lexical: the parent of a path, not of a page.
+function parentPath(canonicalPath) {
+  const cut = canonicalPath.lastIndexOf('/');
+  if (cut <= 0) return '/';
+  return canonicalPath.slice(0, cut);
+}
+
 // Warnings are the crawler saying "this looks wrong" while there is still time to act on it, which
-// is the whole point of raising them early. Deduplicated by text so one trap produces one line the
-// human reads, not one line per page it would have walked.
-function addWarning(state, text) {
-  if (state.warnings.includes(text)) return null;
+// is the whole point of raising them early. Deduplicated by a stable KEY rather than by the message
+// text: the cross-template message names how many templates share a hash, so the text changed on
+// every occurrence and the same finding was emitted 40+ times in one live run, each line one number
+// different from the last.
+function addWarning(state, key, text) {
+  if (state.warningKeys.includes(key)) return null;
+  state.warningKeys.push(key);
   state.warnings.push(text);
   return text;
 }
@@ -368,7 +393,12 @@ function cmdStart(args) {
       args['duplicate-template-warn-at'],
       DEFAULT_DUPLICATE_TEMPLATE_WARN_AT,
     ),
+    maxPerParent: positiveInt(args['max-per-parent'], DEFAULT_MAX_PER_PARENT),
     maxScrolls: positiveInt(args['max-scrolls'], DEFAULT_MAX_SCROLLS),
+    // Opt-in, for the rare application whose real navigation genuinely is not visible markup (a
+    // canvas-driven UI, a keyboard-only admin). Never on by default: the ordinary case is that an
+    // invisible link is not a page a user can reach.
+    allowInvisible: args['allow-invisible'] === true || String(args['allow-invisible']) === 'true',
   };
   saveState(state);
 
@@ -407,6 +437,23 @@ function cmdCheck(args) {
 
   if (!rawUrl) return deny('unparseable-url');
 
+  // Visibility is the crawler's own observation - this script never touches a page - but the policy
+  // that acts on it lives here so it holds identically every run. A link that exists only in markup
+  // and is never rendered is not something a user can reach, and following it manufactures routes
+  // the application does not have: live-observed as /about, /contact-us, /portfolio and /gallery
+  // entering a crawl of a site that has none of them. Passing --visible is mandatory rather than
+  // defaulted, because a crawler that simply forgot to look would otherwise silently get the old
+  // behaviour back.
+  const visibleArg = args.visible;
+  if (visibleArg === undefined) {
+    return deny('visibility-not-reported', {
+      hint: 'pass --visible=true or --visible=false - whether this link is actually rendered and interactable on a page you loaded, not merely present in the markup',
+    });
+  }
+  if (String(visibleArg) !== 'true' && !state.limits.allowInvisible) {
+    return deny('not-visible');
+  }
+
   const canonical = canonicalize(rawUrl, state);
   if (!canonical.ok) return deny(canonical.reason);
 
@@ -436,8 +483,39 @@ function cmdCheck(args) {
     return deny('max-per-template', { canonicalPath: canonical.canonicalPath });
   }
 
+  // Counted per distinct child template, not per URL: a parent legitimately serves many pages under
+  // one templated child (/users/{id} is one child however many users exist), and only a parent whose
+  // children refuse to collapse - a file listing, a tag index - accumulates them.
+  //
+  // The root is exempt, and that exemption is load-bearing rather than tidy: every top-level page a
+  // site has shares "/" as its parent, so capping it would cap the site's own navigation. Caught by
+  // a test whose 25 top-level pages were cut to 12 - the same shape as a real application with 30
+  // sections, and as the sandbox this was built against, whose 45 routes are almost all top-level.
+  // A listing that needs this guard always lives one segment deep or more.
+  const parent = parentPath(canonical.canonicalPath);
+  const childrenOfParent = state.perParent[parent] || [];
+  const isNewChild = !childrenOfParent.includes(canonical.canonicalPath);
+  if (parent !== '/' && isNewChild && childrenOfParent.length >= state.limits.maxPerParent) {
+    state.boundedBy = state.boundedBy || 'maxPerParent';
+    return deny('max-per-parent', {
+      canonicalPath: canonical.canonicalPath,
+      parentPath: parent,
+      warning: addWarning(
+        state,
+        'per-parent:' + parent,
+        'Stopping new pages under "' +
+          parent +
+          '": it already has ' +
+          childrenOfParent.length +
+          ' distinct child routes. That is a listing of items rather than a set of features - the ' +
+          'ones already crawled are enough to know its shape.',
+      ),
+    });
+  }
+
   state.claimed[canonical.normalizedUrl] = canonical.canonicalPath;
   state.perTemplate[canonical.canonicalPath] = seenForTemplate + 1;
+  if (isNewChild) state.perParent[parent] = [...childrenOfParent, canonical.canonicalPath];
   state.pagesClaimed += 1;
   if (normalizedDepth > state.maxDepthSeen) state.maxDepthSeen = normalizedDepth;
 
@@ -445,6 +523,7 @@ function cmdCheck(args) {
   if (seenForTemplate + 1 === TEMPLATE_WARN_AT) {
     warning = addWarning(
       state,
+      'template-filling:' + canonical.canonicalPath,
       'Template "' +
         canonical.canonicalPath +
         '" has now taken ' +
@@ -518,6 +597,7 @@ function cmdVisited(args) {
         trapDetected = true;
         warning = addWarning(
           state,
+          'saturated:' + template,
           'Stopping "' +
             template +
             '": ' +
@@ -534,6 +614,9 @@ function cmdVisited(args) {
       // so this reports and lets a person judge rather than cutting the crawl off on a guess.
       warning = addWarning(
         state,
+        // Keyed by the shared hash, so one generic shell reports once no matter how many templates
+        // eventually land on it.
+        'duplicate-across-templates:' + contentHash,
         Object.keys(entry.templates).length +
           ' different route templates are rendering identical structure (' +
           Object.keys(entry.templates).sort().slice(0, 5).join(', ') +
@@ -573,6 +656,7 @@ function cmdScroll(args) {
     bumpSkip(state, 'max-scrolls');
     const warning = addWarning(
       state,
+      'scroll-ceiling:' + key,
       'Reached the ' +
         state.limits.maxScrolls +
         '-scroll ceiling on ' +
