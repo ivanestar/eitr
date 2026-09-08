@@ -20,8 +20,8 @@ function writeSiteMap(dir: string, data: unknown) {
   );
 }
 
-function run(dir: string, requestedMode: string) {
-  const result = spawnSync('node', ['map-site-status.mjs', requestedMode], {
+function run(dir: string, requestedMode: string, ...extra: string[]) {
+  const result = spawnSync('node', ['map-site-status.mjs', requestedMode, ...extra], {
     cwd: dir,
     encoding: 'utf8',
   });
@@ -42,6 +42,7 @@ describe('scripts/map-site-status.mjs (real execution)', () => {
         modeRedirected: false,
         noticeMessage: null,
         staleScreenshotCount: 0,
+        orphanedScreenshotCount: 0,
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -172,8 +173,71 @@ describe('scripts/map-site-status.mjs (real execution)', () => {
 
       const output = run(dir, 'prune-screenshots');
       expect(output.pruned).toBe(0);
-      expect(output.skippedReason).toContain('nothing was deleted');
+      expect(output.orphanedScreenshotCount).toBe(1);
+      expect(output.orphanedBytes).toBe(1);
+      expect(output.skippedReason).toContain('--orphaned');
       expect(existsSync(join(shots, 'a.jpg'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('--orphaned clears screenshots stranded by a crawl that died before writing a site map', () => {
+    const dir = setupProject();
+    try {
+      const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+      mkdirSync(shots, { recursive: true });
+      writeFileSync(join(shots, 'root--abc.jpg'), 'x', 'utf8');
+      writeFileSync(join(shots, 'infinite-scroll-5440--def.jpg'), 'yy', 'utf8');
+      // Still only ever touches files this pipeline itself produces.
+      writeFileSync(join(shots, 'notes.txt'), 'unrelated', 'utf8');
+
+      const output = run(dir, 'prune-screenshots', '--orphaned');
+      expect(output.mode).toBe('orphaned');
+      expect(output.pruned).toBe(2);
+      expect(output.freedBytes).toBe(3);
+      expect(output.failures).toEqual([]);
+      expect(existsSync(join(shots, 'root--abc.jpg'))).toBe(false);
+      expect(existsSync(join(shots, 'infinite-scroll-5440--def.jpg'))).toBe(false);
+      expect(existsSync(join(shots, 'notes.txt'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('--orphaned is refused while a readable site map exists, where the evidence-based prune applies', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, {
+        schemaVersion: 2,
+        generatedAt: '2026-09-03T10:00:00.000Z',
+        routes: { '/': { routeId: 'keep-me' } },
+      });
+      const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+      mkdirSync(shots, { recursive: true });
+      writeFileSync(join(shots, 'root--keep-me.jpg'), 'x', 'utf8');
+
+      const output = run(dir, 'prune-screenshots', '--orphaned');
+      expect(output.pruned).toBe(0);
+      expect(output.skippedReason).toContain('--orphaned was refused');
+      expect(existsSync(join(shots, 'root--keep-me.jpg'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('mode resolution reports orphaned screenshots instead of a bare zero when no site map exists', () => {
+    const dir = setupProject();
+    try {
+      const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+      mkdirSync(shots, { recursive: true });
+      writeFileSync(join(shots, 'a--1.jpg'), 'x', 'utf8');
+      writeFileSync(join(shots, 'b--2.jpg'), 'x', 'utf8');
+
+      const output = run(dir, 'create');
+      expect(output.siteMapExists).toBe(false);
+      expect(output.staleScreenshotCount).toBe(0);
+      expect(output.orphanedScreenshotCount).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -45,13 +45,13 @@ export function renderSiteMapSchema(): string {
     },
     "coverage": {
       "type": "object",
-      "description": "Present only when the most recent crawl pass hit its own depth/page-count ceiling before exhausting every discoverable link - absence means the crawl completed on its own and the route list is not known to be truncated.",
+      "description": "Present only when the most recent crawl pass hit one of its own traversal ceilings before exhausting every discoverable link - absence means the crawl completed on its own and the route list is not known to be truncated. Written from scripts/crawl-budget.mjs report's own coverage field.",
       "required": ["boundedBy", "pagesVisited"],
       "additionalProperties": false,
       "properties": {
         "boundedBy": {
           "type": "string",
-          "enum": ["maxDepth", "maxPages"],
+          "enum": ["maxDepth", "maxPages", "maxPerTemplate"],
           "description": "Which traversal limit actually stopped this crawl pass."
         },
         "pagesVisited": {
