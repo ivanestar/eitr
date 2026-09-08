@@ -40,6 +40,18 @@ export interface Fact<T> {
 export type ApplicationKind =
   'production' | 'sandbox-demo' | 'internal-tool' | 'staging-of-production' | 'unknown';
 
+// How this application talks to its backend. A person answers this in a second; a crawler has to
+// infer it from traffic it may or may not have seen enough of, and inferring it wrong is expensive
+// - a GraphQL API read as REST records one contract for the entire backend. Recorded here so the
+// answer is given once rather than re-derived on every pass.
+// 'mixed' is a real answer, not a hedge: a backend-for-frontend serving GraphQL over REST
+// microservices is the common enterprise shape. 'none-observable' is the honest answer for an
+// application whose server interaction is not a readable API at all - Next.js Server Actions,
+// Remix actions, classic form posts, or a Phoenix LiveView / Blazor Server app where everything
+// travels over one stateful WebSocket. On such an application the feature map is built from routes
+// and UI forms alone, and saying so up front is better than presenting a thin map as a full one.
+export type ApiStyle = 'rest' | 'graphql' | 'rpc' | 'mixed' | 'none-observable' | 'unknown';
+
 export type CrawlBoundary = 'read-only' | 'safe-interactions' | 'full' | 'full-except';
 
 export interface CrawlBoundaryFact extends Fact<CrawlBoundary> {
@@ -91,6 +103,7 @@ export interface AppProfile {
   generatedAt: string;
   lastUpdatedAt?: string;
   applicationKind?: Fact<ApplicationKind>;
+  apiStyle?: Fact<ApiStyle>;
   crawlBoundary?: CrawlBoundaryFact;
   domainNotes?: DomainNote[];
   // Absent means the default: functional only. Present means somebody decided, and what they

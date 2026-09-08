@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -505,5 +505,239 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // Every one of these produced fabricated entities before the transport was read: gRPC-Web gave
+  // one entity per method name, tRPC turned a batched request into an entity called
+  // "order.byid,customer.all", and GraphQL contributed nothing at all while its whole API
+  // collapsed onto one contract.
+  describe('transports other than REST', () => {
+    function rpc(name: string, method = 'POST', overrides: Record<string, unknown> = {}) {
+      return contract({
+        method,
+        pathTemplate: '/rpc/' + name.replace(/\//g, '.'),
+        operation: { style: 'rpc', name },
+        observedFromRouteIds: ['route-orders'],
+        ...overrides,
+      });
+    }
+
+    function graphql(
+      name: string,
+      documentType: 'query' | 'mutation',
+      overrides: Record<string, unknown> = {},
+    ) {
+      return contract({
+        method: 'POST',
+        pathTemplate: '/graphql',
+        operation: { style: 'graphql', name, documentType },
+        observedFromRouteIds: ['route-orders'],
+        ...overrides,
+      });
+    }
+
+    function seedRoutes(dir: string) {
+      writeSiteMap(dir, [{ path: '/orders', routeId: 'route-orders' }]);
+      writeBusinessIntent(dir, [{ routeId: 'route-orders', feature: 'Ordering' }]);
+    }
+
+    it('reads a gRPC-Web service and method into one entity with real operations', () => {
+      const dir = setupProject();
+      try {
+        seedRoutes(dir);
+        writeApiContracts(dir, [
+          rpc('orders.v1.OrderService/CreateOrder'),
+          rpc('orders.v1.OrderService/DeleteOrder'),
+          rpc('customers.v1.CustomerService/ListCustomers'),
+        ]);
+        expect(run(dir).status).toBe(0);
+        const map = readFeatureMap(dir);
+        const names = Object.values(map.entities).map((e: any) => e.name.toLowerCase());
+        expect(names.sort()).toEqual(['customer', 'order']);
+        const order = Object.values(map.entities).find(
+          (e: any) => e.name.toLowerCase() === 'order',
+        ) as any;
+        // `list` also appears, contributed by the /orders route shape rather than by any contract -
+        // only the observed half is what this test is about.
+        expect(
+          order.operations
+            .filter((o: { confidence: string }) => o.confidence === 'observed')
+            .map((o: { kind: string }) => o.kind)
+            .sort(),
+        ).toEqual(['create', 'delete']);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('keeps the entity from an RPC service name even when the method verb is unknown', () => {
+      const dir = setupProject();
+      try {
+        seedRoutes(dir);
+        writeApiContracts(dir, [rpc('orders.v1.OrderService/ReticulateOrder')]);
+        run(dir);
+        const order = Object.values(readFeatureMap(dir).entities).find(
+          (e: any) => e.name.toLowerCase() === 'order',
+        ) as any;
+        expect(order).toBeDefined();
+        // The service says what it is about; the method does not say what it does to it, and
+        // nothing here invents an answer - so the contract contributes no observed operation, and
+        // only the route shape does.
+        expect(
+          order.operations.filter((o: { confidence: string }) => o.confidence === 'observed'),
+        ).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('splits a batched tRPC request into one operation per procedure', () => {
+      const dir = setupProject();
+      try {
+        seedRoutes(dir);
+        writeApiContracts(dir, [rpc('order.byId,customer.all', 'GET')]);
+        run(dir);
+        const names = Object.values(readFeatureMap(dir).entities).map((e: any) =>
+          e.name.toLowerCase(),
+        );
+        expect(names.sort()).toEqual(['customer', 'order']);
+        for (const name of names) expect(name).not.toContain(',');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('reads a GraphQL mutation root field as a verb and a noun', () => {
+      const dir = setupProject();
+      try {
+        seedRoutes(dir);
+        writeApiContracts(dir, [graphql('createOrder', 'mutation')]);
+        run(dir);
+        const order = Object.values(readFeatureMap(dir).entities).find(
+          (e: any) => e.name.toLowerCase() === 'order',
+        ) as any;
+        expect(
+          order.operations
+            .filter((o: { confidence: string }) => o.confidence === 'observed')
+            .map((o: { kind: string }) => o.kind),
+        ).toEqual(['create']);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('reads a verbless GraphQL query field from its own document type, which provably does not mutate', () => {
+      const dir = setupProject();
+      try {
+        seedRoutes(dir);
+        writeApiContracts(dir, [graphql('orders', 'query'), graphql('orderById', 'query')]);
+        run(dir);
+        const order = Object.values(readFeatureMap(dir).entities).find(
+          (e: any) => e.name.toLowerCase() === 'order' || e.name.toLowerCase() === 'orders',
+        ) as any;
+        expect(
+          order.operations
+            .filter((o: { confidence: string }) => o.confidence === 'observed')
+            .map((o: { kind: string }) => o.kind)
+            .sort(),
+        ).toEqual(['list', 'read']);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('leaves a GraphQL mutation with an unrecognised verb unclassified rather than inventing an entity', () => {
+      const dir = setupProject();
+      try {
+        seedRoutes(dir);
+        writeApiContracts(dir, [graphql('reticulateSplines', 'mutation')]);
+        const output = JSON.parse(run(dir).stdout);
+        expect(output.unclassifiedOperations).toEqual(['reticulateSplines']);
+        const names = Object.values(readFeatureMap(dir).entities).map((e: any) => e.name);
+        expect(names).not.toContain('reticulatesplines');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('attaches a GraphQL payload relation to the entity its root field named, not to the shared path', () => {
+      const dir = setupProject();
+      try {
+        writeSiteMap(dir, [
+          { path: '/orders', routeId: 'route-orders' },
+          { path: '/customers', routeId: 'route-customers' },
+        ]);
+        writeBusinessIntent(dir, [
+          { routeId: 'route-orders', feature: 'Ordering' },
+          { routeId: 'route-customers', feature: 'Customers' },
+        ]);
+        writeApiContracts(dir, [
+          graphql('createOrder', 'mutation', {
+            sampleRequestPayload: { customerId: '[REDACTED]' },
+          }),
+          graphql('customers', 'query'),
+        ]);
+        run(dir);
+        const map = readFeatureMap(dir);
+        const order = Object.values(map.entities).find(
+          (e: any) => e.name.toLowerCase() === 'order',
+        ) as any;
+        expect(order.relations).toHaveLength(1);
+        expect(order.relations[0].viaField).toBe('customerId');
+        expect(order.relations[0].kind).toBe('references');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('records an opaque call as read-but-undecodable and lets it contribute nothing', () => {
+      const dir = setupProject();
+      try {
+        seedRoutes(dir);
+        writeApiContracts(dir, [
+          contract({
+            method: 'POST',
+            pathTemplate: '/orders',
+            operation: {
+              style: 'opaque',
+              reason: 'Next.js Server Action - the action id is encrypted and changes every build',
+            },
+            observedFromRouteIds: ['route-orders'],
+          }),
+        ]);
+        const output = JSON.parse(run(dir).stdout);
+        expect(output.opaqueContracts).toEqual(['POST /orders']);
+        // /orders alone is one route, below the floor a route shape needs to become an entity, so
+        // the opaque call leaves the map genuinely empty rather than inventing "orders".
+        expect(Object.keys(readFeatureMap(dir).entities)).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('still treats a contract with no operation field as REST, the shape most applications use', () => {
+      const dir = setupProject();
+      try {
+        seedRoutes(dir);
+        writeApiContracts(dir, [
+          contract({
+            method: 'POST',
+            pathTemplate: '/api/orders',
+            observedFromRouteIds: ['route-orders'],
+          }),
+        ]);
+        run(dir);
+        const order = Object.values(readFeatureMap(dir).entities).find(
+          (e: any) => e.name.toLowerCase() === 'orders',
+        ) as any;
+        expect(
+          order.operations
+            .filter((o: { confidence: string }) => o.confidence === 'observed')
+            .map((o: { kind: string }) => o.kind),
+        ).toEqual(['create']);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });

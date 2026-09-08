@@ -36,6 +36,7 @@ const APPLICATION_KINDS = [
   'staging-of-production',
   'unknown',
 ];
+const API_STYLES = ['rest', 'graphql', 'rpc', 'mixed', 'none-observable', 'unknown'];
 const CRAWL_BOUNDARIES = ['read-only', 'safe-interactions', 'full', 'full-except'];
 const FACT_SOURCES = ['human', 'observed'];
 
@@ -103,6 +104,10 @@ function validate(data, parseError) {
 
   if ('applicationKind' in data) {
     checkFact(data.applicationKind, 'applicationKind', APPLICATION_KINDS, errors);
+  }
+
+  if ('apiStyle' in data) {
+    checkFact(data.apiStyle, 'apiStyle', API_STYLES, errors);
   }
 
   if ('crawlBoundary' in data) {

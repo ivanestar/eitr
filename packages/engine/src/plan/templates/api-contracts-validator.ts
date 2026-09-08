@@ -41,6 +41,12 @@ const BODILESS_STATUSES = new Set([204, 205, 304]);
 const OBSERVATION_FLOOR_RATIO = 0.1;
 const OBSERVATION_MIN_ROUTES = 10;
 
+const API_STYLES = new Set(['rest', 'graphql', 'rpc', 'opaque']);
+const DOCUMENT_TYPES = new Set(['query', 'mutation', 'subscription']);
+// Styles whose operation identity lives somewhere other than the path. Without a name, every call
+// in the whole API collapses onto one contractId.
+const NAMED_STYLES = new Set(['graphql', 'rpc']);
+
 // Same digit-shaped thresholds as every other PII/session-data guard in this pipeline (map-site
 // Step 6, define-test-conditions Step 2): a run of 6+ consecutive digits, or an 8+-char token where
 // digits are the majority, gets masked - never left as a literal value in a checked artifact.
@@ -112,6 +118,59 @@ function isApiContractEntry(value, label, errors, warnings, seenIds) {
   }
   if (typeof value.pathTemplate !== 'string' || value.pathTemplate.length === 0) {
     errors.push(label + '.pathTemplate must be a non-empty string.');
+  } else if (value.pathTemplate.indexOf('?') !== -1) {
+    // A retained query string is where real input values reach this file. tRPC serialises a call's
+    // whole input into an 'input' parameter, so an unstripped path is a payload in disguise - and
+    // the redaction backstop below only ever looked at sampleRequestPayload.
+    errors.push(
+      label +
+        '.pathTemplate still carries a query string ("' +
+        value.pathTemplate +
+        '") - strip it during canonicalization; a call\\'s own input can be encoded there.',
+    );
+  } else if (DIGIT_RUN.test(value.pathTemplate)) {
+    // Only the digit-shaped check applies to a path. A resource genuinely called /password/reset or
+    // /api/tokens is ordinary, so the sensitive-NAME check that guards payload fields would reject
+    // correct paths here; a 6+ digit run, on the other hand, is a concrete id that canonicalization
+    // should already have collapsed into a {template} segment.
+    errors.push(
+      label +
+        '.pathTemplate contains a raw ' +
+        'id-shaped value (6+ consecutive digits) - canonicalization should have collapsed it into a {template} segment.',
+    );
+  }
+  if (value.operation !== undefined) {
+    const operation = value.operation;
+    const operationLabel = label + '.operation';
+    if (!operation || typeof operation !== 'object' || Array.isArray(operation)) {
+      errors.push(operationLabel + ' must be an object when present.');
+    } else {
+      if (!API_STYLES.has(operation.style)) {
+        errors.push(operationLabel + '.style must be one of: ' + Array.from(API_STYLES).join(', ') + '.');
+      }
+      if (operation.name !== undefined && (typeof operation.name !== 'string' || operation.name.length === 0)) {
+        errors.push(operationLabel + '.name must be a non-empty string when present.');
+      }
+      if (NAMED_STYLES.has(operation.style) && typeof operation.name !== 'string') {
+        errors.push(
+          operationLabel +
+            '.name is required for style "' +
+            operation.style +
+            '" - the whole API is served from one path under it, so a contract without an operation name would be the only one ever recorded.',
+        );
+      }
+      // An unreadable call is a legitimate outcome, but only when it says what stopped the read -
+      // otherwise it is indistinguishable from one nobody looked at.
+      if (operation.style === 'opaque' && (typeof operation.reason !== 'string' || operation.reason.length === 0)) {
+        errors.push(operationLabel + '.reason is required for style "opaque" - say what could not be read.');
+      }
+      if (operation.documentType !== undefined && !DOCUMENT_TYPES.has(operation.documentType)) {
+        errors.push(operationLabel + '.documentType must be "query", "mutation", or "subscription".');
+      }
+      if (operation.documentType !== undefined && operation.style !== 'graphql') {
+        errors.push(operationLabel + '.documentType only applies to style "graphql".');
+      }
+    }
   }
   if (!Array.isArray(value.observedFromRouteIds)) {
     errors.push(label + '.observedFromRouteIds must be an array (empty is fine for a login call).');
@@ -154,7 +213,10 @@ function isApiContractEntry(value, label, errors, warnings, seenIds) {
     value.responseStatus >= 200 &&
     value.responseStatus < 300 &&
     !BODILESS_STATUSES.has(value.responseStatus) &&
-    String(value.method).toUpperCase() !== 'HEAD'
+    String(value.method).toUpperCase() !== 'HEAD' &&
+    // An opaque call already says its body could not be read; asking for its response shape would
+    // be asking the same question twice and inviting someone to answer it with a guess.
+    !(value.operation && value.operation.style === 'opaque')
   ) {
     warnings.push(
       label +
@@ -220,6 +282,30 @@ function validate() {
   data.contracts.forEach(function (c, i) {
     isApiContractEntry(c, 'contracts[' + i + ']', errors, warnings, seenIds);
   });
+
+  // An unreadable call is a fact worth stating once, plainly, rather than a defect to fix. The
+  // count belongs in front of a human because it is the honest ceiling on what any later stage can
+  // know about this application's API.
+  const opaque = data.contracts.filter(function (contract) {
+    return contract && contract.operation && contract.operation.style === 'opaque';
+  });
+  if (opaque.length > 0) {
+    const reasons = Array.from(
+      new Set(
+        opaque.map(function (contract) {
+          return contract.operation.reason;
+        }),
+      ),
+    ).filter(Boolean);
+    warnings.push(
+      opaque.length +
+        ' of ' +
+        data.contracts.length +
+        ' observed call(s) could not be decoded, so they name no operation and contribute no entity: ' +
+        reasons.join('; ') +
+        '. This is a limit of what is visible from the browser, not something to fill in by guessing.',
+    );
+  }
 
   const observationCoverage = computeObservationCoverage(data.contracts);
   if (

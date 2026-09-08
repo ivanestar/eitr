@@ -603,9 +603,9 @@ recorded. These files are written by the analysis workflows and are the project'
 
 | Artifact | Holds | Read it with |
 |---|---|---|
-| \`artifacts/analysis/app-profile.json\` | What kind of application this is (production / sandbox-demo / internal tool), the crawl boundary a human set, domain knowledge a person volunteered, which test types are in scope | \`node scripts/app-profile.mjs\` |
+| \`artifacts/analysis/app-profile.json\` | What kind of application this is (production / sandbox-demo / internal tool), how it talks to its backend (\`apiStyle\`), the crawl boundary a human set, domain knowledge a person volunteered, which test types are in scope | \`node scripts/app-profile.mjs\` |
 | \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, and per-role access | \`node scripts/validate-site-map.mjs\` to check shape |
-| \`artifacts/site-map/api-contracts.json\` | Endpoints actually observed in traffic - method, path template, response shape | \`node scripts/validate-api-contracts.mjs\` |
+| \`artifacts/site-map/api-contracts.json\` | Operations actually observed in traffic - method, path template, the operation name for a GraphQL or RPC call, and the response shape | \`node scripts/validate-api-contracts.mjs\` |
 | \`artifacts/analysis/business-intent.json\` | Per-route business feature and impact tier (\`high\`/\`medium\`/\`low\`), the confirmed application purpose, and confirmed role purposes | \`node scripts/validate-business-intent.mjs\` |
 | \`artifacts/analysis/feature-map.json\` | Features and the routes they span, the entities this application works with, what can happen to each one, its lifecycle, and the links between them | \`node scripts/derive-feature-map.mjs\` to draft, \`node scripts/validate-feature-map.mjs\` to check shape |
 | \`artifacts/analysis/test-conditions.json\` | Typed test conditions per route | \`node scripts/validate-test-conditions.mjs\` |
@@ -638,6 +638,11 @@ to exist before this entity can be created, so a test that creates one has to cr
 first. \`contains\` means the two live and die together and needs no separate setup. Check the
 relation's \`confidence\` before leaning on it - \`inferred\` means it was read off a field name, and a
 human confirmed it at sign-off rather than a machine observing it.
+
+An entry in \`api-contracts.json\` whose \`operation.style\` is \`opaque\` means the call was seen and
+could not be decoded - a server action, a form post, a binary payload. It names no operation on
+purpose. Treat it as a known limit rather than a hole to fill: never write a test against an
+endpoint reconstructed from what an opaque call's path looked like it probably meant.
 
 ## CPOM Architecture Rules
 

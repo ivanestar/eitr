@@ -135,6 +135,118 @@ function operationKind(method, addressesOne) {
 }
 
 // ---------------------------------------------------------------------------
+// Operation names that are not paths
+// ---------------------------------------------------------------------------
+
+// GraphQL root fields and RPC procedures are named, by overwhelming convention, as a verb followed
+// by the thing it acts on: createOrder, order.create, OrderService/DeleteOrder. The convention is
+// strong enough to read, and weak enough that an unrecognised verb has to stay unrecognised - see
+// the null return below, which is the whole point of this table.
+const OPERATION_VERBS = {
+  create: 'create',
+  add: 'create',
+  insert: 'create',
+  register: 'create',
+  submit: 'create',
+  update: 'update',
+  edit: 'update',
+  modify: 'update',
+  patch: 'update',
+  change: 'update',
+  set: 'update',
+  save: 'update',
+  delete: 'delete',
+  remove: 'delete',
+  destroy: 'delete',
+  archive: 'delete',
+  list: 'list',
+  search: 'list',
+  find: 'list',
+  all: 'list',
+  get: 'read',
+  read: 'read',
+  fetch: 'read',
+  load: 'read',
+  show: 'read',
+  view: 'read',
+  by: 'read',
+};
+
+// Splits a camelCase, snake_case or kebab-case identifier into lowercase words. 'createOrder' and
+// 'create_order' and 'CreateOrder' all become ['create', 'order'].
+function words(identifier) {
+  return String(identifier || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .join(' ')
+    .split(/\\s+/)
+    .filter(function (word) {
+      return word.length > 0;
+    })
+    .map(function (word) {
+      return word.toLowerCase();
+    });
+}
+
+// Reads an operation name into a kind and the thing it acts on. Returns null for the kind - never a
+// guess - when the leading word is not a verb this table knows: an operation whose effect cannot be
+// read is recorded as an entity nobody could classify, not as a plausible-looking 'update'.
+function readOperationName(operationName) {
+  const parts = words(operationName);
+  if (parts.length === 0) return null;
+  const kind = Object.prototype.hasOwnProperty.call(OPERATION_VERBS, parts[0])
+    ? OPERATION_VERBS[parts[0]]
+    : null;
+  const nounWords = kind === null ? parts : parts.slice(1);
+  if (nounWords.length === 0) return { kind: kind, noun: null };
+  const noun = nounWords.join('');
+  // 'getAll', 'getOrders', 'listOrder' - a read whose subject is plural or explicitly collective is
+  // a list. This refines a kind already read from the verb; it never invents one.
+  const collective =
+    nounWords[nounWords.length - 1] === 'all' ||
+    nounWords[nounWords.length - 1] === 'many' ||
+    nounWords[nounWords.length - 1] === 'list' ||
+    noun.endsWith('s');
+  if (kind === 'read' && collective) return { kind: 'list', noun: noun };
+  return { kind: kind, noun: noun };
+}
+
+// An RPC name carries the thing it acts on in one of two shapes, and both are unambiguous:
+//   'orders.v1.OrderService/CreateOrder' - gRPC-Web and Connect, holder before the slash
+//   'order.create'                       - tRPC, holder before the first dot
+// A bare name with neither separator has no holder, and the noun then comes from the name itself.
+const SERVICE_SUFFIX = /(service|api|controller|handler)$/i;
+
+function splitRpcName(operationName) {
+  const name = String(operationName || '');
+  const slash = name.indexOf('/');
+  if (slash !== -1) {
+    const holderPath = name.slice(0, slash);
+    const segments = holderPath.split('.');
+    return { holder: segments[segments.length - 1], member: name.slice(slash + 1) };
+  }
+  const dot = name.indexOf('.');
+  if (dot !== -1) {
+    return { holder: name.slice(0, dot), member: name.slice(dot + 1) };
+  }
+  return { holder: null, member: name };
+}
+
+// A tRPC batch request names several procedures in one path, comma-separated. Each is its own
+// operation; treating the joined string as one name produced an entity literally called
+// 'order.byid,customer.all'.
+function splitBatchedNames(operationName) {
+  return String(operationName || '')
+    .split(',')
+    .map(function (part) {
+      return part.trim();
+    })
+    .filter(function (part) {
+      return part.length > 0;
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Entities
 // ---------------------------------------------------------------------------
 
@@ -163,32 +275,131 @@ function addEvidenceOnce(target, entry) {
   if (!exists) target.evidence.push(entry);
 }
 
-function entitiesFromContracts(contracts, entities) {
+function isPlural(word) {
+  return typeof word === 'string' && word.length > 1 && word.endsWith('s');
+}
+
+// Reads one observed call into the entities and operations it describes. A call can describe more
+// than one (a tRPC batch names several procedures in one request) or none at all, and the three
+// ways it can describe none are kept apart on purpose:
+//   opaque       - nothing about the call could be decoded, and it says so itself.
+//   unclassified - something was decoded, but not enough to say what it does to what.
+//   (silent)     - a REST path with no domain segment, which has always been a normal outcome.
+// Nothing here falls through to a plausible-looking default. An entity invented out of a method
+// name costs a reviewer more than a missing one: they have to recognise it as false and delete it,
+// and any test condition built on it tests something that does not exist.
+function readContract(contract) {
+  const style =
+    contract.operation && typeof contract.operation.style === 'string'
+      ? contract.operation.style
+      : 'rest';
+  const signature = contract.method + ' ' + contract.pathTemplate;
+
+  if (style === 'opaque') return { entries: [], unclassified: [], opaque: true };
+
+  if (style === 'rest') {
+    const resource = resourceOf(contract.pathTemplate);
+    if (!resource) return { entries: [], unclassified: [], opaque: false };
+    const kind = operationKind(contract.method, resource.addressesOne);
+    if (!kind) return { entries: [], unclassified: [], opaque: false };
+    return {
+      entries: [{ entityName: resource.name, kind: kind, signal: 'api-resource', excerpt: signature }],
+      unclassified: [],
+      opaque: false,
+    };
+  }
+
+  const rawName = contract.operation && contract.operation.name;
+  if (typeof rawName !== 'string' || rawName.length === 0) {
+    return { entries: [], unclassified: [], opaque: false };
+  }
+
+  const entries = [];
+  const unclassified = [];
+  const documentType = contract.operation.documentType;
+  for (const name of splitBatchedNames(rawName)) {
+    const excerpt = signature + ' ' + name;
+    if (style === 'rpc') {
+      const parts = splitRpcName(name);
+      const read = readOperationName(parts.member);
+      // A service or router name identifies the entity on its own, whatever the method is called -
+      // OrderService/RefundOrder is unambiguously about orders even though 'refund' is not a verb
+      // this project knows.
+      const holderName = parts.holder ? String(parts.holder).replace(SERVICE_SUFFIX, '') : null;
+      const entityName = holderName || (read && read.kind !== null ? read.noun : null);
+      if (!entityName) {
+        unclassified.push(name);
+        continue;
+      }
+      entries.push({
+        entityName: entityName,
+        kind: read ? read.kind : null,
+        signal: 'api-resource',
+        excerpt: excerpt,
+      });
+      continue;
+    }
+
+    // GraphQL: the root field is the operation. A leading verb reads directly; a query field
+    // without one is named after its own type by long-standing convention ('orders', 'orderById'),
+    // and a query provably does not mutate, so its effect is readable from the document type
+    // rather than guessed. A mutation whose verb is unknown is left unclassified - there is no
+    // safe reading of what an unrecognised mutation does.
+    const read = readOperationName(name);
+    if (read && read.kind !== null && read.noun) {
+      entries.push({ entityName: read.noun, kind: read.kind, signal: 'api-resource', excerpt: excerpt });
+      continue;
+    }
+    if (documentType === 'query') {
+      const head = words(name)[0];
+      if (head) {
+        entries.push({
+          entityName: head,
+          kind: isPlural(head) ? 'list' : 'read',
+          signal: 'api-resource',
+          excerpt: excerpt,
+        });
+        continue;
+      }
+    }
+    unclassified.push(name);
+  }
+  return { entries: entries, unclassified: unclassified, opaque: false };
+}
+
+function entitiesFromContracts(contracts, entities, report) {
   for (const contract of contracts) {
     if (!contract || typeof contract.pathTemplate !== 'string') continue;
-    const resource = resourceOf(contract.pathTemplate);
-    if (!resource) continue;
-    const kind = operationKind(contract.method, resource.addressesOne);
-    if (!kind) continue;
-    const entity = upsertEntity(entities, resource.name);
+    const result = readContract(contract);
+    if (result.opaque) {
+      report.opaqueContracts.push(contract.method + ' ' + contract.pathTemplate);
+      continue;
+    }
+    for (const name of result.unclassified) report.unclassifiedOperations.push(name);
+
     const routeIds = Array.isArray(contract.observedFromRouteIds)
       ? contract.observedFromRouteIds.slice()
       : [];
-    const signature = contract.method + ' ' + contract.pathTemplate;
-    addEvidenceOnce(entity, evidence('api-resource', signature));
-    const existing = entity.operations.find(function (op) {
-      return op.kind === kind && op.contractId === contract.contractId;
-    });
-    if (existing) continue;
-    entity.operations.push({
-      kind: kind,
-      contractId: contract.contractId,
-      routeIds: routeIds,
-      // An operation seen in real traffic is the one thing in this whole file that was actually
-      // observed rather than worked out.
-      confidence: 'observed',
-      evidence: [evidence('api-resource', signature)],
-    });
+    for (const entry of result.entries) {
+      const entity = upsertEntity(entities, entry.entityName);
+      addEvidenceOnce(entity, evidence(entry.signal, entry.excerpt));
+      // An entity whose operation could not be classified is still a real entity - it just gains
+      // no operation, and therefore no lifecycle transition, from this call.
+      if (entry.kind === null) continue;
+      const existing = entity.operations.find(function (op) {
+        return op.kind === entry.kind && op.contractId === contract.contractId;
+      });
+      if (existing) continue;
+      entity.operations.push({
+        kind: entry.kind,
+        contractId: contract.contractId,
+        routeIds: routeIds,
+        // An operation seen in real traffic is the one thing in this whole file that was actually
+        // observed rather than worked out.
+        confidence: 'observed',
+        evidence: [evidence(entry.signal, entry.excerpt)],
+      });
+    }
   }
 }
 
@@ -257,9 +468,14 @@ function addRelationOnce(entity, relation) {
 function relationsFromContracts(contracts, entities) {
   for (const contract of contracts) {
     if (!contract || typeof contract.pathTemplate !== 'string') continue;
-    const resource = resourceOf(contract.pathTemplate);
-    if (!resource) continue;
-    const selfKey = normalizeName(resource.name);
+    // Which entity this call is about comes from the same reading that produced the operations, so
+    // a GraphQL mutation's payload fields attach to the entity its root field named rather than to
+    // whatever the shared /graphql path would have suggested. A batched call names several - the
+    // first one owns the payload, since a batch shares one request body only in tRPC's own
+    // input map, which is keyed per procedure and not something this file tries to split.
+    const read = readContract(contract);
+    if (read.entries.length === 0) continue;
+    const selfKey = normalizeName(read.entries[0].entityName);
     const entity = entities[selfKey];
     if (!entity) continue;
 
@@ -553,7 +769,8 @@ function derive() {
   }
 
   const entities = {};
-  entitiesFromContracts(contracts, entities);
+  const readingReport = { opaqueContracts: [], unclassifiedOperations: [] };
+  entitiesFromContracts(contracts, entities, readingReport);
   entitiesFromRoutes(siteMap.routes, entities);
   relationsFromContracts(contracts, entities);
   for (const entity of Object.values(entities)) {
@@ -613,6 +830,12 @@ function derive() {
     entities: Object.keys(entitiesById).length,
     unreviewedRelations: unreviewedRelations,
     orphanEntities: orphanEntities,
+    // Calls this pass could not read, kept separate from calls it read as nothing. Both are
+    // reported rather than quietly dropped, because the honest answer to "why is this feature map
+    // thin" is usually one of these two numbers, and the alternative to reporting them is a map
+    // padded with entities nobody can trace back to anything.
+    opaqueContracts: readingReport.opaqueContracts,
+    unclassifiedOperations: readingReport.unclassifiedOperations,
   };
 }
 
