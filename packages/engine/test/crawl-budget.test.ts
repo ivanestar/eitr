@@ -59,7 +59,8 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
         maxPerTemplate: 20,
         maxPerContentHash: 3,
         duplicateTemplateWarnAt: 3,
-        maxPerParent: 12,
+        maxPerParent: 50,
+        maxPerQueryBase: 8,
         maxScrolls: 2,
         allowInvisible: false,
       });
@@ -434,6 +435,42 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
       expect(group.truncated).toBe(true);
 
       expect(run(dir, ['rejected']).groups[0].urls).toHaveLength(9);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Faceted navigation, which Google's own crawling guidance names as the way a site generates an
+  // infinite URL space. The parameters cannot be stripped - ?color=red really is a different page
+  // from ?color=blue - and every variant shares one path and one parent, so no other cap sees it.
+  it('caps filter combinations on one path without touching the unfiltered page', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--max-per-query-base=3']);
+      expect(check(dir, `${BASE}/products`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/products?color=red`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/products?color=blue`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/products?color=green`).decision).toBe('visit');
+      const stopped = check(dir, `${BASE}/products?color=red&size=xl`);
+      expect(stopped.decision).toBe('skip');
+      expect(stopped.reason).toBe('max-per-query-base');
+      expect(stopped.warning).toContain('faceted navigation');
+      // A different path keeps its own allowance.
+      expect(check(dir, `${BASE}/orders?status=open`).decision).toBe('visit');
+      expect(run(dir, ['report']).coverage.boundedBy).toBe('maxPerQueryBase');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('never counts a plain URL against the filter cap', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--max-per-query-base=1']);
+      for (const slug of ['a', 'b', 'c', 'd', 'e']) {
+        expect(check(dir, `${BASE}/${slug}`).decision).toBe('visit');
+      }
+      expect(run(dir, ['report']).coverage).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

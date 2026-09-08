@@ -20,6 +20,7 @@ export function renderReviewArtifactRenderer(): string {
  * involvement, so what the human reviews is exactly what was stored.
  *
  * Usage:
+ *   node scripts/render-review-artifact.mjs --kind=site-map
  *   node scripts/render-review-artifact.mjs --kind=business-intent
  *   node scripts/render-review-artifact.mjs --kind=feature-map
  *   node scripts/render-review-artifact.mjs --kind=test-conditions [--threshold=10]
@@ -36,6 +37,10 @@ import process from 'node:process';
 
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
+// The crawl's own state, read for the list of links it refused. Absent on a project whose map was
+// written by something other than a crawl, which the renderer treats as "nothing to show" rather
+// than an error.
+const CRAWL_BUDGET_PATH = path.join(CWD, 'artifacts', 'site-map', '.crawl-budget.json');
 const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
@@ -529,7 +534,175 @@ function renderFeatureMap(labels, data) {
   };
 }
 
+// The stage whose whole deliverable is a route list had no review artifact of its own, so the one
+// thing a human is meant to approve at the end of a crawl was the only thing never rendered for
+// them. Two halves, and the second is the point: what was kept, each with the path to its own
+// screenshot, and what was refused, so a route someone recognises can be caught before every later
+// stage is built on a map missing it.
+function renderSiteMap(labels, data) {
+  const routes =
+    data && data.routes && typeof data.routes === 'object' ? Object.entries(data.routes) : [];
+  routes.sort(function (a, b) {
+    return String(a[0]).localeCompare(String(b[0]));
+  });
+
+  const lines = [];
+  const active = routes.filter(function (entry) {
+    return !entry[1] || entry[1].status !== 'removed';
+  });
+
+  lines.push('**Routes found (' + active.length + ')**');
+  lines.push('');
+  active.forEach(function (entry, i) {
+    const routePath = entry[0];
+    const route = entry[1] || {};
+    const status = route.httpStatus ? ' [' + route.httpStatus + ']' : '';
+    lines.push(i + 1 + '. \`' + routePath + '\`' + status + (route.title ? ' - ' + route.title : ''));
+    if (route.screenshot) {
+      // A relative link, so it opens straight from the artifact in any editor or file browser.
+      lines.push('   Screenshot: [' + route.screenshot + '](../../' + route.screenshot + ')');
+    } else {
+      lines.push('   Screenshot: none captured');
+    }
+    const triage = route.visualTriage || {};
+    if (triage.state && triage.state !== 'ready') {
+      lines.push('   Looked like: ' + triage.state.split('_').join(' '));
+    }
+    if (route.access && typeof route.access === 'object') {
+      const perRole = Object.entries(route.access).map(function (pair) {
+        return pair[0] + ': ' + (pair[1] && pair[1].outcome ? pair[1].outcome.split('_').join(' ') : '?');
+      });
+      if (perRole.length > 0) lines.push('   Per role: ' + perRole.join('; '));
+    }
+    lines.push('');
+  });
+
+  const removed = routes.filter(function (entry) {
+    return entry[1] && entry[1].status === 'removed';
+  });
+  if (removed.length > 0) {
+    lines.push('**No longer resolving (' + removed.length + ')** - kept so the removal is visible');
+    for (const entry of removed) lines.push('- \`' + entry[0] + '\`');
+    lines.push('');
+  }
+
+  // Read straight from the crawl's own state file rather than recomputed, so what a human reviews
+  // is what the crawl actually decided.
+  const budget = loadJson(CRAWL_BUDGET_PATH);
+  const crawled = new Set(
+    active.map(function (entry) {
+      return entry[0];
+    }),
+  );
+  const groups =
+    budget && Array.isArray(budget.rejected) ? groupRejections(budget.rejected, crawled) : [];
+  const worthReading = groups.filter(function (group) {
+    return group.reviewWorthy;
+  });
+  if (worthReading.length > 0) {
+    lines.push('**Links the crawl refused**');
+    lines.push('');
+    lines.push(
+      'Scan these for anything you recognise. A route you know is real appearing here means a limit ' +
+        'was too strict, and the crawl should be run again with it raised.',
+    );
+    lines.push('');
+    for (const group of worthReading) {
+      lines.push('- **' + group.reason + '** (' + group.count + ')');
+      for (const url of group.urls.slice(0, 25)) lines.push('  - ' + url);
+      if (group.count > 25) {
+        lines.push(
+          '  - ...and ' +
+            (group.count - 25) +
+            ' more - \`node scripts/crawl-budget.mjs rejected --reason=' +
+            group.reason +
+            '\`',
+        );
+      }
+    }
+    lines.push('');
+  }
+
+  if (data && data.coverage) {
+    lines.push(
+      '**This crawl stopped early** - bounded by \`' +
+        data.coverage.boundedBy +
+        '\` after ' +
+        data.coverage.pagesVisited +
+        ' pages. The route list may be incomplete.',
+    );
+  }
+
+  return {
+    markdown: lines.join('\\n'),
+    entryCount: active.length,
+    summary:
+      active.length +
+      ' route(s) found' +
+      (worthReading.length > 0
+        ? ', ' +
+          worthReading.reduce(function (sum, group) {
+            return sum + group.count;
+          }, 0) +
+          ' refused link(s) to scan'
+        : ''),
+  };
+}
+
+// Same ordering rule the crawl budget itself uses: the refusals where a real route can hide come
+// first. Duplicated deliberately rather than imported - these generated scripts share no runtime.
+// Two filters, both about not wasting the reader's attention on links that were never lost.
+//
+// A URL is dropped from this list when its canonical route ended up in the map anyway: the same
+// link is commonly invisible in a collapsed mobile menu on one page and perfectly visible in the
+// desktop nav on another, so it gets refused several times and crawled once. Reporting it as
+// "refused" is not just noise, it is wrong. Live-observed at 818 entries on a 28-route application,
+// with one route listed seven times while sitting in the map.
+//
+// And each remaining URL appears once, however many pages linked to it.
+function groupRejections(rejected, crawledPaths) {
+  const inMap = crawledPaths || new Set();
+  const reviewWorthy = [
+    'not-visible',
+    'not-found',
+    'non-html-asset',
+    'non-html-response',
+    'max-per-parent',
+    'max-per-template',
+    'max-per-query-base',
+    'max-pages',
+    'max-depth',
+    'duplicate-content-template',
+    'visibility-not-reported',
+  ];
+  const groups = {};
+  const seen = new Set();
+  for (const entry of rejected) {
+    if (!entry || typeof entry.reason !== 'string') continue;
+    if (entry.canonicalPath && inMap.has(entry.canonicalPath)) continue;
+    const key = entry.reason + '\\u0000' + entry.url;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const group =
+      groups[entry.reason] ||
+      (groups[entry.reason] = {
+        reason: entry.reason,
+        reviewWorthy: reviewWorthy.indexOf(entry.reason) !== -1,
+        count: 0,
+        urls: [],
+      });
+    group.count += 1;
+    group.urls.push(entry.url);
+  }
+  for (const group of Object.values(groups)) group.urls.sort();
+  return Object.values(groups).sort(function (a, b) {
+    if (a.reviewWorthy !== b.reviewWorthy) return a.reviewWorthy ? -1 : 1;
+    return a.reason < b.reason ? -1 : 1;
+  });
+}
+
 const KINDS = {
+  'site-map': { source: SITE_MAP_PATH, render: renderSiteMap },
   'business-intent': { source: BUSINESS_INTENT_PATH, render: renderBusinessIntent },
   'feature-map': { source: FEATURE_MAP_PATH, render: renderFeatureMap },
   'test-conditions': { source: TEST_CONDITIONS_PATH, render: renderTestConditions },

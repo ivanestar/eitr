@@ -73,7 +73,21 @@ const DEFAULT_MAX_PER_CONTENT_HASH = 3;
 // distinct child at a time. Capping distinct children per parent path closes that without needing
 // a cleverer - and more wrong - canonicalization rule. Live-observed: a listing page contributed 95
 // of one crawl's 160 URLs, leaving 45 real routes out of 148 templates explored.
-const DEFAULT_MAX_PER_PARENT = 12;
+//
+// It is a runaway backstop, not the primary guard, and its default reflects that. At 12 it cut a
+// real application's /tools section - seventeen distinct tools, every one a genuine feature - down
+// to twelve, which is exactly the "too blunt to be safe" outcome a deterministic rule has to avoid.
+// A listing large enough to matter is caught earlier and on better evidence: by the extension rule
+// when its items are files, and by content-hash saturation when its items render the same page as
+// each other. This only has to stop the case where neither applies.
+const DEFAULT_MAX_PER_PARENT = 50;
+// Faceted navigation, which Google's own crawling guidance names as the way a site generates an
+// infinite URL space: /products?color=red&size=xl is a different page from ?color=blue, so the
+// parameters cannot be stripped, and N filters with M values each multiply out. Neither the
+// per-template nor the per-parent cap sees it - every variant shares one path and one parent.
+// Capping distinct query-string variants per path closes it without deciding which parameters
+// "matter", which is a judgment no script can make correctly for an arbitrary application.
+const DEFAULT_MAX_PER_QUERY_BASE = 8;
 // The same structure appearing under SEVERAL different templates is a weaker signal - a generic
 // empty state, or a canonicalization that did not collapse what it should have (/blog/page-2 and
 // /blog/page-3 are separate templates on purpose, since collapsing every segment ending in a digit
@@ -184,6 +198,7 @@ function emptyState() {
       maxPerContentHash: DEFAULT_MAX_PER_CONTENT_HASH,
       duplicateTemplateWarnAt: DEFAULT_DUPLICATE_TEMPLATE_WARN_AT,
       maxPerParent: DEFAULT_MAX_PER_PARENT,
+      maxPerQueryBase: DEFAULT_MAX_PER_QUERY_BASE,
       maxScrolls: DEFAULT_MAX_SCROLLS,
       allowInvisible: false,
     },
@@ -201,6 +216,7 @@ function emptyState() {
     // of them were four missing pages and a Python script.
     keptTemplates: {},
     perParent: {},
+    perQueryBase: {},
     skipped: {},
     droppedAfterVisit: 0,
     contentHashes: {},
@@ -463,6 +479,7 @@ function cmdStart(args) {
       DEFAULT_DUPLICATE_TEMPLATE_WARN_AT,
     ),
     maxPerParent: positiveInt(args['max-per-parent'], DEFAULT_MAX_PER_PARENT),
+    maxPerQueryBase: positiveInt(args['max-per-query-base'], DEFAULT_MAX_PER_QUERY_BASE),
     maxScrolls: positiveInt(args['max-scrolls'], DEFAULT_MAX_SCROLLS),
     // Opt-in, for the rare application whose real navigation genuinely is not visible markup (a
     // canvas-driven UI, a keyboard-only admin). Never on by default: the ordinary case is that an
@@ -513,18 +530,24 @@ function cmdCheck(args) {
   // entering a crawl of a site that has none of them. Passing --visible is mandatory rather than
   // defaulted, because a crawler that simply forgot to look would otherwise silently get the old
   // behaviour back.
+  // Canonicalized first, even though the visibility rule below is what usually refuses the link.
+  // Canonicalization is pure, and knowing the route a refused URL belongs to is what lets a review
+  // drop the ones that were reached anyway from some other page - the same link is routinely hidden
+  // in a collapsed menu on one page and visible in the nav on another. It also means a cross-origin
+  // link is reported as cross-origin rather than as invisible, which is the more useful answer.
+  const canonical = canonicalize(rawUrl, state);
+  if (!canonical.ok) return deny(canonical.reason);
+
   const visibleArg = args.visible;
   if (visibleArg === undefined) {
     return deny('visibility-not-reported', {
+      canonicalPath: canonical.canonicalPath,
       hint: 'pass --visible=true or --visible=false - whether this link is actually rendered and interactable on a page you loaded, not merely present in the markup',
     });
   }
   if (String(visibleArg) !== 'true' && !state.limits.allowInvisible) {
-    return deny('not-visible');
+    return deny('not-visible', { canonicalPath: canonical.canonicalPath });
   }
-
-  const canonical = canonicalize(rawUrl, state);
-  if (!canonical.ok) return deny(canonical.reason);
 
   if (state.claimed[canonical.normalizedUrl]) {
     return deny('already-claimed', {
@@ -580,6 +603,31 @@ function cmdCheck(args) {
           'ones already crawled are enough to know its shape.',
       ),
     });
+  }
+
+  // Faceted navigation. Counted only for URLs that actually carry a query string, so a site without
+  // filters never meets this bound at all.
+  if (canonical.normalizedUrl.indexOf('?') !== -1) {
+    const queryBase = canonical.normalizedUrl.slice(0, canonical.normalizedUrl.indexOf('?'));
+    const variants = state.perQueryBase[queryBase] || 0;
+    if (variants >= state.limits.maxPerQueryBase) {
+      state.boundedBy = state.boundedBy || 'maxPerQueryBase';
+      return deny('max-per-query-base', {
+        canonicalPath: canonical.canonicalPath,
+        warning: addWarning(
+          state,
+          'query-base:' + queryBase,
+          'Stopping new filter combinations on "' +
+            queryBase +
+            '": ' +
+            variants +
+            ' distinct query strings have already been crawled there. That is faceted navigation, ' +
+            'whose combinations multiply without limit - the ones already seen are enough to know ' +
+            'the page. The unfiltered page itself is unaffected.',
+        ),
+      });
+    }
+    state.perQueryBase[queryBase] = variants + 1;
   }
 
   state.claimed[canonical.normalizedUrl] = canonical.canonicalPath;
@@ -705,9 +753,18 @@ function cmdVisited(args) {
   let trapDetected = false;
 
   if (contentHash && template) {
-    const entry = state.contentHashes[contentHash] || { count: 0, templates: {}, firstUrl: rawUrl };
+    const entry = state.contentHashes[contentHash] || {
+      count: 0,
+      templates: {},
+      firstUrl: rawUrl,
+      // Per template, because the global first URL for a hash frequently belongs to a different
+      // route entirely - naming it in a message about THIS template reads as an error in the tool.
+      firstUrlByTemplate: {},
+    };
     entry.count += 1;
     entry.templates[template] = (entry.templates[template] || 0) + 1;
+    if (!entry.firstUrlByTemplate) entry.firstUrlByTemplate = {};
+    if (!entry.firstUrlByTemplate[template]) entry.firstUrlByTemplate[template] = rawUrl;
     state.contentHashes[contentHash] = entry;
 
     if (entry.templates[template] >= state.limits.maxPerContentHash) {
@@ -722,8 +779,8 @@ function cmdVisited(args) {
             template +
             '": ' +
             entry.templates[template] +
-            ' pages under it rendered identical structure (first seen at ' +
-            entry.firstUrl +
+            ' pages under it rendered identical structure (first at ' +
+            (entry.firstUrlByTemplate[template] || rawUrl) +
             '). That is a pagination chain, an infinite feed, or a generic shell - not distinct ' +
             'routes. No further URL under this template will be crawled; the route itself is kept.',
         );
