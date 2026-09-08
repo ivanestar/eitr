@@ -621,11 +621,16 @@ Two rules govern all of them:
 
 Other deterministic helpers worth knowing about, so you never re-derive by hand what a script
 already computes: \`scripts/pipeline-status.mjs\` (which analysis stage this project is at and what
-runs next), \`scripts/auth-status.mjs\` (saved sessions, declared vs captured roles, configured CI
-provider), \`scripts/map-site-status.mjs\` (crawl mode resolution, screenshot pruning),
-\`scripts/render-review-artifact.mjs\` (renders any review artifact from its own stored JSON),
-\`scripts/env-role-stubs.mjs\` (per-role credential slots in \`.env\`), and
-\`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).
+runs next), \`scripts/coverage-status.mjs\` (whether the suite meets its exit criteria, and exactly
+which routes, test cases or endpoints are still uncovered), \`scripts/auth-status.mjs\` (saved
+sessions, declared vs captured roles, configured CI provider), \`scripts/map-site-status.mjs\`
+(crawl mode resolution, screenshot pruning), \`scripts/render-review-artifact.mjs\` (renders any
+review artifact from its own stored JSON), \`scripts/env-role-stubs.mjs\` (per-role credential slots
+in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).
+
+Ask \`coverage-status\` before claiming a suite is finished, and order any large batch of test
+work by route impact (\`criticalityTier\` in business-intent.json, \`high\` first) - a batch that
+runs out of room mid-way leaves whatever the ordering put first.
 
 ## CPOM Architecture Rules
 

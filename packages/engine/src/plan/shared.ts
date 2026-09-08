@@ -50,6 +50,7 @@ import { renderEnvRoleStubs } from './templates/env-role-stubs.js';
 import { renderReviewArtifactRenderer } from './templates/review-artifact-renderer.js';
 import { renderAppProfile } from './templates/app-profile.js';
 import { renderAppProfileTypes } from './templates/app-profile-types.js';
+import { renderCoverageStatus } from './templates/coverage-status.js';
 import { renderJourneysTypes } from './templates/journeys-types.js';
 import { renderJourneysEngine } from './templates/journeys-engine.js';
 import { renderApiContractsTypes } from './templates/api-contracts-types.js';
@@ -214,6 +215,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderAppProfile() },
+          },
+          {
+            path: 'scripts/coverage-status.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderCoverageStatus() },
           },
           {
             path: '.scaffold/schemas/test-cases.types.ts',
