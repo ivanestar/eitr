@@ -266,6 +266,57 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
     }
   });
 
+  // Live-observed: /about, /contact-us, /gallery and /portfolio entered a crawl of a site that
+  // returns 404 for all four. Their links are rendered, so visibility does not catch them - only
+  // the status does, and it was already being passed in.
+  it('drops a route the server says does not exist', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (const missing of ['/about', '/contact-us', '/gallery', '/portfolio']) {
+        check(dir, `${BASE}${missing}`);
+        const visited = run(dir, [
+          'visited',
+          `--url=${BASE}${missing}`,
+          '--status=404',
+          '--content-type=text/html',
+        ]);
+        expect(visited.keep, `${missing} was kept`).toBe(false);
+        expect(visited.reason).toBe('not-found');
+      }
+      expect(run(dir, ['report']).budget.pagesVisited).toBe(0);
+      expect(run(dir, ['report']).skipped['not-found']).toBe(4);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('drops a 410 the same way, and nothing else in the 4xx range', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      const visitWith = (path: string, status: number) => {
+        check(dir, `${BASE}${path}`);
+        return run(dir, [
+          'visited',
+          `--url=${BASE}${path}`,
+          `--status=${status}`,
+          '--content-type=text/html',
+        ]);
+      };
+      expect(visitWith('/gone', 410).keep).toBe(false);
+      // A protected route is the opposite of an absent one - something real is behind it, and
+      // dropping it would delete the only evidence of an auth boundary a crawl can produce.
+      expect(visitWith('/basic_auth', 401).keep).toBe(true);
+      expect(visitWith('/download_secure', 403).keep).toBe(true);
+      // A route that exists and is erroring is a finding, not a non-route.
+      expect(visitWith('/broken', 500).keep).toBe(true);
+      expect(visitWith('/teapot', 418).keep).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('keeps a route whose content type carries a charset suffix', () => {
     const dir = setupProject();
     try {

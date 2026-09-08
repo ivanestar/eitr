@@ -574,6 +574,32 @@ function cmdVisited(args) {
     };
   }
 
+  // The server's own answer that this page does not exist. Unambiguous, and it was already being
+  // passed in - live-observed keeping /about, /contact-us, /gallery and /portfolio as routes of a
+  // site that returns 404 for all four, because only the content type was being read. Visibility
+  // does not catch these: the links are rendered, they simply lead nowhere.
+  //
+  // 401 and 403 are deliberately NOT included. Those say the route exists and is protected, which is
+  // the opposite of absent - /basic_auth and /download_secure are real pages behind a challenge, and
+  // dropping them would delete the only evidence of an auth boundary the crawl can produce. Any
+  // other 4xx/5xx is kept too: a route that exists and is erroring is a finding, not a non-route.
+  const status = args.status === undefined ? null : Number.parseInt(String(args.status), 10);
+  if (status === 404 || status === 410) {
+    state.droppedAfterVisit += 1;
+    bumpSkip(state, 'not-found');
+    saveState(state);
+    return {
+      action: 'visited',
+      keep: false,
+      reason: 'not-found',
+      status,
+      canonicalPath: canonical.ok ? canonical.canonicalPath : null,
+      budget: budgetView(state),
+      warning: null,
+      announce: null,
+    };
+  }
+
   state.pagesVisited += 1;
 
   // The repetition check. contentHash is this route's normalized structural signature (title plus
@@ -634,7 +660,7 @@ function cmdVisited(args) {
     keep: true,
     reason: null,
     canonicalPath: template,
-    status: args.status === undefined ? null : Number.parseInt(String(args.status), 10),
+    status,
     trapDetected,
     budget: budgetView(state),
     warning,
