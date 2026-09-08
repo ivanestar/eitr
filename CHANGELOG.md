@@ -5,6 +5,7 @@ All notable changes to this project are documented here, newest release first, f
 
 ## [0.1.0] - 2026-09-06
 
+- **Fixed**: generation no longer fails with `No matching version found for playwright@<version>` when npm's cached package listing predates the pinned Playwright release. `--prefer-offline` served that stale listing; a failed install now retries once with `--prefer-online`.
 - **Fixed**: the crawl's traversal bounds are enforced by `scripts/crawl-budget.mjs` instead of by skill prose. A live run followed a pagination chain 5441 times past a documented 500-page ceiling, wrote 657 MB of screenshots over 31 minutes, and produced no site map at all.
 - **Added**: `scripts/crawl-budget.mjs` — URL canonicalization, a cap on concrete URLs per canonical route template, rejection of cross-origin links, non-`http(s)` schemes and links to files rather than pages, and the crawl's own progress line so a long crawl stops looking hung.
 - **Added**: the crawl recognises a trap on its third page instead of at the page ceiling. Three pages rendering identical structure under one route template stop that template outright; the same structure under several different templates warns instead, since canonicalization deliberately keeps `/blog/page-2` and `/blog/page-3` apart and that shape can also be a legitimate generic empty state. Warnings surface to the human as they happen, not in the final summary.

@@ -99,12 +99,51 @@ describe('runInstall (spawn injected) - Node.js', () => {
       expect(calls[0].args[0]).toMatch(/npm-cli\.js$/);
       expect(calls[0].cwd).toBe(proj);
       expect(calls[0].env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD).toBe('1');
+      expect(calls[0].args).toContain('--prefer-offline');
       // step 2: node <playwright cli> install chromium
       expect(calls[1].file).toBe(process.execPath);
       expect(calls[1].args.slice(-2)).toEqual(['install', 'chromium']);
       expect(calls[1].args[0]).toMatch(/playwright[\\/]cli\.js$/);
     },
   );
+
+  // package.json pins @playwright/test to an exact version, and --prefer-offline reuses whatever
+  // package listing npm already has cached. Generate a project shortly after a Playwright release
+  // and that cached listing predates the pinned version, so npm reports it as nonexistent - live
+  // observed as "No matching version found for playwright@1.63.0" on a machine where the same
+  // install succeeded moments later.
+  it.skipIf(!npmPresent)(
+    'retries npm install with fresh registry metadata when the cached one failed',
+    async () => {
+      const proj = makeProject(true);
+      const { run, calls } = recorder([{ code: 1 }, { code: 0 }, { code: 0 }]);
+      const outcome = await runInstall(proj, { run });
+
+      expect(outcome).toEqual({ installedDeps: true, installedBrowsers: true });
+      expect(calls).toHaveLength(3);
+      expect(calls[0].args).toContain('--prefer-offline');
+      expect(calls[1].args).toContain('--prefer-online');
+      expect(calls[1].args).not.toContain('--prefer-offline');
+      expect(calls[1].env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD).toBe('1');
+      expect(calls[2].args.slice(-2)).toEqual(['install', 'chromium']);
+    },
+  );
+
+  it.skipIf(!npmPresent)('does not retry when the first npm install succeeded', async () => {
+    const proj = makeProject(true);
+    const { run, calls } = recorder([{ code: 0 }, { code: 0 }]);
+    await runInstall(proj, { run });
+    expect(calls.filter((call) => call.args.includes('--prefer-online'))).toHaveLength(0);
+  });
+
+  it.skipIf(!npmPresent)('gives up after the retry also fails, rather than looping', async () => {
+    const proj = makeProject(true);
+    const { run, calls } = recorder([{ code: 1 }, { code: 1 }]);
+    const outcome = await runInstall(proj, { run });
+    expect(outcome.installedDeps).toBe(false);
+    expect(outcome.message).toBeTruthy();
+    expect(calls).toHaveLength(2); // never reached the browser step
+  });
 
   it.skipIf(!npmPresent)(
     'reports a browser-step failure as installedBrowsers:false (deps still ok)',
@@ -125,6 +164,8 @@ describe('runInstall (spawn injected) - Node.js', () => {
       const { run, calls } = recorder([{ code: null, error: new Error('spawn ENOENT') }]);
       const outcome = await runInstall(proj, { run });
       expect(outcome.installedDeps).toBe(false);
+      // Not retried, unlike a non-zero exit: npm never started, and fresher registry metadata
+      // cannot fix a binary that would not launch.
       expect(calls).toHaveLength(1); // never reached the browser step
     },
   );
