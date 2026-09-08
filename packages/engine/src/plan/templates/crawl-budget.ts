@@ -33,6 +33,7 @@ export function renderCrawlBudget(): string {
  *   node scripts/crawl-budget.mjs visited --url=<url> [--status=<n>] [--content-type=<mime>]
  *                                 [--content-hash=<hash>]
  *   node scripts/crawl-budget.mjs scroll --url=<url>
+ *   node scripts/crawl-budget.mjs rejected [--reason=<reason>]
  *   node scripts/crawl-budget.mjs progress
  *   node scripts/crawl-budget.mjs report
  *
@@ -85,6 +86,29 @@ const TEMPLATE_WARN_AT = 4;
 const DEFAULT_MAX_SCROLLS = 2;
 const ANNOUNCE_EVERY_PAGES = 25;
 const ANNOUNCE_EVERY_MS = 120000;
+// Every refused link is kept, not just counted, so a human can scan the list and catch a route
+// they recognise being thrown out by mistake. A count alone ("161 non-page assets") is a number
+// nobody can check; the URLs are the evidence. Capped so a pathological site cannot grow the state
+// file without bound - the overflow is reported rather than silently dropped.
+const REJECTION_LOG_LIMIT = 1000;
+
+// Which refusals are worth a human's eyes. The split is a judgment made once, here, instead of
+// per run: a link refused for being on another origin or already claimed is never a surprise, while
+// a link refused for being invisible, missing, or over a cap is exactly where a real route gets
+// lost by mistake - and an over-eager extension list is how a route named /reports.xml would
+// disappear without anyone noticing.
+const REVIEW_WORTHY_REASONS = new Set([
+  'not-visible',
+  'not-found',
+  'non-html-asset',
+  'non-html-response',
+  'max-per-parent',
+  'max-per-template',
+  'max-pages',
+  'max-depth',
+  'duplicate-content-template',
+  'visibility-not-reported',
+]);
 
 // Query parameters that change what a page shows without making it a different page. Stripping them
 // is what collapses a feed into one route instead of one route per cursor position.
@@ -184,6 +208,8 @@ function emptyState() {
     scrolls: {},
     warnings: [],
     warningKeys: [],
+    rejected: [],
+    rejectedOverflow: 0,
     lastAnnounceAt: null,
     lastAnnounceCount: 0,
   };
@@ -269,8 +295,40 @@ function canonicalize(rawUrl, state) {
   return { ok: true, canonicalPath, normalizedUrl };
 }
 
-function bumpSkip(state, reason) {
+function bumpSkip(state, reason, url, canonicalPath) {
   state.skipped[reason] = (state.skipped[reason] || 0) + 1;
+  if (!url) return;
+  if (state.rejected.length < REJECTION_LOG_LIMIT) {
+    state.rejected.push({ url: url, reason: reason, canonicalPath: canonicalPath || null });
+  } else {
+    state.rejectedOverflow += 1;
+  }
+}
+
+// Grouped by reason, each group flagged with whether it is worth reading. Sorted so the same crawl
+// produces the same list twice, which is what makes two runs comparable by eye.
+function rejectionsByReason(state, limitPerReason) {
+  const groups = {};
+  for (const entry of state.rejected) {
+    const group =
+      groups[entry.reason] ||
+      (groups[entry.reason] = {
+        reason: entry.reason,
+        reviewWorthy: REVIEW_WORTHY_REASONS.has(entry.reason),
+        count: 0,
+        urls: [],
+      });
+    group.count += 1;
+    if (limitPerReason === null || group.urls.length < limitPerReason) group.urls.push(entry.url);
+  }
+  for (const group of Object.values(groups)) {
+    group.urls.sort();
+    group.truncated = group.count > group.urls.length;
+  }
+  return Object.values(groups).sort(function (a, b) {
+    if (a.reviewWorthy !== b.reviewWorthy) return a.reviewWorthy ? -1 : 1;
+    return a.reason < b.reason ? -1 : 1;
+  });
 }
 
 // "/a/b/c" -> "/a/b", "/a" -> "/", "/" -> "/". Purely lexical: the parent of a path, not of a page.
@@ -430,7 +488,7 @@ function cmdCheck(args) {
   const normalizedDepth = Number.isFinite(rawDepth) && rawDepth >= 0 ? rawDepth : 0;
 
   const deny = (reason, extra) => {
-    bumpSkip(state, reason);
+    bumpSkip(state, reason, rawUrl, (extra && extra.canonicalPath) || null);
     saveState(state);
     return Object.assign(
       {
@@ -596,7 +654,7 @@ function cmdVisited(args) {
 
   if (contentType && !HTML_CONTENT_TYPES.some((type) => contentType.includes(type))) {
     state.droppedAfterVisit += 1;
-    bumpSkip(state, 'non-html-response');
+    bumpSkip(state, 'non-html-response', rawUrl, canonical.ok ? canonical.canonicalPath : null);
     saveState(state);
     return {
       action: 'visited',
@@ -621,7 +679,7 @@ function cmdVisited(args) {
   // other 4xx/5xx is kept too: a route that exists and is erroring is a finding, not a non-route.
   if (status === 404 || status === 410) {
     state.droppedAfterVisit += 1;
-    bumpSkip(state, 'not-found');
+    bumpSkip(state, 'not-found', rawUrl, canonical.ok ? canonical.canonicalPath : null);
     saveState(state);
     return {
       action: 'visited',
@@ -715,7 +773,7 @@ function cmdScroll(args) {
   const used = state.scrolls[key] || 0;
 
   if (used >= state.limits.maxScrolls) {
-    bumpSkip(state, 'max-scrolls');
+    bumpSkip(state, 'max-scrolls', key, null);
     const warning = addWarning(
       state,
       'scroll-ceiling:' + key,
@@ -749,6 +807,23 @@ function cmdScroll(args) {
   };
 }
 
+// Every link the crawl refused, in full, so a human can scan for one they recognise. This is the
+// only view that can answer "did it throw away something real" - a count cannot.
+function cmdRejected(args) {
+  const state = requireState();
+  const only = typeof args.reason === 'string' ? args.reason : null;
+  const groups = rejectionsByReason(state, null).filter(function (group) {
+    return only === null || group.reason === only;
+  });
+  return {
+    action: 'rejected',
+    reason: only,
+    groups: groups,
+    totalLogged: state.rejected.length,
+    notLogged: state.rejectedOverflow,
+  };
+}
+
 function cmdProgress() {
   const state = requireState();
   return {
@@ -774,6 +849,11 @@ function cmdReport() {
     line: progressLine(state),
     skipped: state.skipped,
     droppedAfterVisit: state.droppedAfterVisit,
+    // Up to five URLs per reason here, so a run summary stays readable; "rejected" returns the
+    // complete list for anything that looks wrong.
+    rejections: rejectionsByReason(state, 5),
+    rejectedLogged: state.rejected.length,
+    rejectedOverflow: state.rejectedOverflow,
     warnings: state.warnings,
     stoppedTemplates: Object.keys(state.saturatedTemplates).sort(),
     canonicalRoutes: Object.keys(state.keptTemplates).sort(),
@@ -801,6 +881,9 @@ function main() {
       break;
     case 'scroll':
       result = cmdScroll(args);
+      break;
+    case 'rejected':
+      result = cmdRejected(args);
       break;
     case 'progress':
       result = cmdProgress();

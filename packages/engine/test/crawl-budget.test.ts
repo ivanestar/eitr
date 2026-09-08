@@ -361,6 +361,84 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
     }
   });
 
+  // A count nobody can check ("161 non-page assets") is not evidence. The URLs are, and they are
+  // the only way a human spots a route they recognise being thrown out by mistake.
+  it('keeps every refused URL, not just a count of them', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      check(dir, `${BASE}/admin/settings`, 1, false);
+      check(dir, `${BASE}/reports.xml`);
+      check(dir, 'https://twitter.com/example');
+
+      const rejected = run(dir, ['rejected']);
+      const byReason: Record<string, string[]> = {};
+      for (const group of rejected.groups) byReason[group.reason] = group.urls;
+
+      expect(byReason['not-visible']).toEqual([`${BASE}/admin/settings`]);
+      expect(byReason['non-html-asset']).toEqual([`${BASE}/reports.xml`]);
+      expect(byReason['cross-origin']).toEqual(['https://twitter.com/example']);
+      expect(rejected.totalLogged).toBe(3);
+      expect(rejected.notLogged).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('puts the refusals worth reading first, and flags them as such', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      check(dir, 'https://elsewhere.example/page');
+      check(dir, `${BASE}/a`);
+      check(dir, `${BASE}/a`); // already-claimed
+      check(dir, `${BASE}/hidden`, 1, false);
+
+      const groups = run(dir, ['rejected']).groups;
+      // A link on another origin, or one already claimed, is never a surprise. An invisible one is
+      // exactly where a real route gets lost.
+      expect(groups[0].reason).toBe('not-visible');
+      expect(groups[0].reviewWorthy).toBe(true);
+      for (const group of groups.slice(1)) expect(group.reviewWorthy).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('filters to one reason on request', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      check(dir, `${BASE}/one`, 1, false);
+      check(dir, `${BASE}/two`, 1, false);
+      check(dir, 'mailto:a@b.c');
+
+      const only = run(dir, ['rejected', '--reason=not-visible']);
+      expect(only.groups).toHaveLength(1);
+      expect(only.groups[0].urls).toEqual([`${BASE}/one`, `${BASE}/two`]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('samples in the run report and keeps the full list behind its own command', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (let i = 0; i < 9; i += 1) check(dir, `${BASE}/hidden-${i}`, 1, false);
+
+      const report = run(dir, ['report']);
+      const group = report.rejections.find((g: { reason: string }) => g.reason === 'not-visible');
+      expect(group.count).toBe(9);
+      expect(group.urls).toHaveLength(5);
+      expect(group.truncated).toBe(true);
+
+      expect(run(dir, ['rejected']).groups[0].urls).toHaveLength(9);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects source files a site offers for download', () => {
     const dir = setupProject();
     try {
