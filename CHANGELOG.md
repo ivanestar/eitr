@@ -5,6 +5,12 @@ All notable changes to this project are documented here, newest release first, f
 
 ## [0.1.0] - 2026-09-06
 
+- **Fixed**: the crawl's traversal bounds are enforced by `scripts/crawl-budget.mjs` instead of by skill prose. A live run followed a pagination chain 5441 times past a documented 500-page ceiling, wrote 657 MB of screenshots over 31 minutes, and produced no site map at all.
+- **Added**: `scripts/crawl-budget.mjs` — URL canonicalization, a cap on concrete URLs per canonical route template, rejection of cross-origin links, non-`http(s)` schemes and links to files rather than pages, and the crawl's own progress line so a long crawl stops looking hung.
+- **Added**: `scripts/artifact-journal.mjs` — any stage that fans out over many units now commits each one to an append-only journal as it finishes and folds the artifact from it at the end, so an interrupted run keeps its work and resumes instead of restarting.
+- **Added**: `E2E_DEBUG=1` records what each helper script was asked and answered to `artifacts/.debug/`, readable with `node scripts/debug-log.mjs tail`. Off by default.
+- **Added**: `map-site-status.mjs prune-screenshots --orphaned` clears screenshots stranded by a crawl that died before writing a site map, which the evidence-based prune cannot touch. Mode resolution now reports that count instead of a bare zero.
+- **Changed**: the TypeScript stack pins Playwright 1.63.0. Python, Java and .NET stay at 1.62.0 until their own registries publish 1.63.
 - **Added**: `/map-features` and `artifacts/analysis/feature-map.json` — a stage between the site map and test conditions that groups routes into features and records the entities an application works with, what can happen to each one, its lifecycle, and the links between them. Everything derived from a path or a field name is marked as inferred, and nothing downstream treats the file as ground truth until every feature and entity has been approved.
 - **Added**: state transition testing and use case testing. Both need a model of what an entity's life looks like, which no per-page analysis can produce; they generate from reviewed entity lifecycles and are simply absent on a project without one.
 - **Changed**: a test case's `layer` (`e2e`/`api`/`ui-only`) is now three separate fields — `testInterface` (`ui`/`api`), `breadth` (`targeted`/`e2e`), and `level` (`integration`/`system`). The old field mixed an interface, a breadth and a reason into one vocabulary, so "is this an API test?" could not be answered without parsing it.
