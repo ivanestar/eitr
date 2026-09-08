@@ -156,18 +156,15 @@ function positionFor(stage) {
   return STAGE_POSITION[stage] || { index: 0, phase: 'run' };
 }
 
+// The current stage is marked by brackets alone - the same convention the test-case artifacts use
+// for a value under discussion. An earlier version appended "<- you are here", which restated in
+// four words what the brackets already say and pushed the line past the terminal's width.
 function formatRoadmap(stage) {
   const position = STAGE_POSITION[stage];
-  const marker =
-    position && position.phase === 'review'
-      ? ' <- awaiting your review'
-      : position && position.phase === 'done'
-        ? ' <- done'
-        : ' <- you are here';
   return ROADMAP_STEPS.map(function (step, i) {
     const label = 'S' + (i + 1) + ' ' + step.short;
     if (!position || i !== position.index) return label;
-    return '[' + label + marker + ']';
+    return '[' + label + ']';
   }).join(' -> ');
 }
 
@@ -252,11 +249,11 @@ function computePreFlightNotice(stage, coverage) {
   }, 0);
   const lines = ['Four stages, each one ending with your review:', ''];
   ROADMAP_STEPS.forEach(function (step, i) {
-    const isHere = i === position.index;
+    // A leading marker rather than a trailing "<- you are here": it keeps the stage names in one
+    // aligned column and does not grow the line past the terminal's width.
+    const marker = i === position.index ? '> ' : '  ';
     const padded = step.short + ' '.repeat(widest - step.short.length);
-    lines.push(
-      '  ' + (i + 1) + '. ' + padded + '  ' + step.blurb + (isHere ? '   <- you are here' : ''),
-    );
+    lines.push(marker + (i + 1) + '. ' + padded + '  ' + step.blurb);
   });
   lines.push('');
   lines.push('Time and cost: ' + COST_WARNING);
