@@ -373,14 +373,35 @@ export async function runInstall(
     // network. Real, measured contributor to install latency for a heavy dependency tree
     // (React/MUI) on a cold CI cache - not a substitute for the E2E test's own generous timeout
     // budget, a genuine reduction in the actual work every real generated project also pays for.
-    const deps = await run(
-      process.execPath,
-      [npmCli, 'install', '--no-audit', '--no-fund', '--prefer-offline'],
-      {
+    const npmEnv = { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' };
+    const npmInstall = (freshness: '--prefer-offline' | '--prefer-online') =>
+      run(process.execPath, [npmCli, 'install', '--no-audit', '--no-fund', freshness], {
         cwd: projectDir,
-        env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' },
-      },
-    );
+        env: npmEnv,
+      });
+
+    let deps = await npmInstall('--prefer-offline');
+
+    // --prefer-offline trades metadata freshness for speed, and that trade has one failure mode
+    // this project walks into by construction: package.json pins @playwright/test to an exact
+    // version, so anyone generating a project shortly after a Playwright release has a cached
+    // package listing that predates it and npm reports the version as nonexistent. Live-observed as
+    // "No matching version found for playwright@1.63.0" on a machine where that version installed
+    // fine seconds later - @playwright/test depends on the bare playwright package at the exact
+    // same version, which is why the error names a package nothing asked for directly.
+    //
+    // Retrying with --prefer-online revalidates the listing against the registry and resolves it.
+    // The retry costs nothing in the normal case because it only runs after a failure, and it is
+    // not matched against the error text: stdout is inherited by the terminal rather than captured
+    // here, so there is nothing to match on, and a second attempt with fresher metadata is a
+    // reasonable answer to a failed install whatever caused it.
+    //
+    // A spawn error is the one failure not retried: it means npm never started (a missing binary, a
+    // blocked executable), which no amount of registry freshness fixes.
+    if (!deps.error && deps.code !== 0) {
+      deps = await npmInstall('--prefer-online');
+    }
+
     if (deps.error || deps.code !== 0) {
       const message = deps.error ? deps.error.message : `npm install exited with code ${deps.code}`;
       return { installedDeps: false, installedBrowsers: false, message };
