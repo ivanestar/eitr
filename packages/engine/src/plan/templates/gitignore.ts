@@ -6,6 +6,8 @@ obj/
 TestResults/
 test-results/
 artifacts/site-map/screenshots/
+artifacts/.journal/
+artifacts/.debug/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -28,6 +30,8 @@ build/
 .gradle/
 test-results/
 artifacts/site-map/screenshots/
+artifacts/.journal/
+artifacts/.debug/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -52,6 +56,8 @@ cypress/videos/
 cypress/downloads/
 test-results/
 artifacts/site-map/screenshots/
+artifacts/.journal/
+artifacts/.debug/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -77,6 +83,8 @@ __pycache__/
 .pytest_cache/
 test-results/
 artifacts/site-map/screenshots/
+artifacts/.journal/
+artifacts/.debug/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -99,6 +107,8 @@ test-results/
 playwright-report/
 blob-report/
 artifacts/site-map/screenshots/
+artifacts/.journal/
+artifacts/.debug/
 .idea/
 .vscode/*
 !.vscode/extensions.json

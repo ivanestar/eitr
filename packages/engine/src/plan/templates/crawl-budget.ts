@@ -41,6 +41,7 @@ export function renderCrawlBudget(): string {
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { debugLog } from './debug-log.mjs';
 
 const CWD = process.cwd();
 const STATE_DIR = path.join(CWD, 'artifacts', 'site-map');
@@ -494,6 +495,11 @@ function main() {
       );
       process.exit(1);
   }
+
+  // Every frontier decision, recorded when E2E_DEBUG=1 is set. A crawl that produced a wrong route
+  // set is otherwise unexplainable after the fact: the skipped links leave no trace anywhere else,
+  // and re-running to watch it happen costs another full pass against a live application.
+  debugLog('crawl-budget', action, { args, result });
 
   process.stdout.write(JSON.stringify(result, null, 2) + '\\n');
 }

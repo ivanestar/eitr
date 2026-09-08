@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderCrawlBudget } from '../src/plan/templates/crawl-budget.js';
+import { renderDebugLog } from '../src/plan/templates/debug-log.js';
 
 const BASE = 'https://app.example.com';
 
@@ -11,13 +12,15 @@ function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-crawl-budget-'));
   mkdirSync(join(dir, 'scripts'), { recursive: true });
   writeFileSync(join(dir, 'scripts', 'crawl-budget.mjs'), renderCrawlBudget(), 'utf8');
+  writeFileSync(join(dir, 'scripts', 'debug-log.mjs'), renderDebugLog(), 'utf8');
   return dir;
 }
 
-function run(dir: string, args: string[]): any {
+function run(dir: string, args: string[], env: NodeJS.ProcessEnv = {}): any {
   const result = spawnSync('node', [join('scripts', 'crawl-budget.mjs'), ...args], {
     cwd: dir,
     encoding: 'utf8',
+    env: { ...process.env, ...env },
   });
   return { ...JSON.parse(result.stdout), exitCode: result.status };
 }
@@ -326,6 +329,28 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
     try {
       expect(run(dir, ['start']).exitCode).toBe(1);
       expect(run(dir, ['start', '--base-url=not-a-url']).exitCode).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('records every frontier decision under E2E_DEBUG, and nothing without it', () => {
+    const dir = setupProject();
+    const logPath = join(dir, 'artifacts', '.debug', 'crawl-budget.ndjson');
+    try {
+      start(dir);
+      check(dir, `${BASE}/a`);
+      expect(existsSync(logPath)).toBe(false);
+
+      run(dir, ['check', `--url=${BASE}/b.pdf`, '--depth=1'], { E2E_DEBUG: '1' });
+      const entries = readFileSync(logPath, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      expect(entries).toHaveLength(1);
+      expect(entries[0].source).toBe('crawl-budget');
+      expect(entries[0].event).toBe('check');
+      expect(entries[0].payload.result.reason).toBe('non-html-asset');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
