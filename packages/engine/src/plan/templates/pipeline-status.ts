@@ -30,6 +30,7 @@ import process from 'node:process';
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
+const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 
@@ -54,6 +55,20 @@ function countReviewedTrue(routes) {
   return Object.values(routes).filter(function (entry) {
     return entry && entry.reviewed === true;
   }).length;
+}
+
+// A feature map is only past its own gate once every feature AND every entity in it is reviewed -
+// unlike business-intent, where a single reviewed route is enough to move on. Entity relations are
+// the one thing in this pipeline that a later stage builds preconditions out of, so a half-reviewed
+// map would hand a downstream stage a link nobody confirmed.
+function featureMapFullyReviewed(featureMap) {
+  if (!featureMap) return false;
+  const features = Object.values(featureMap.features || {});
+  const entities = Object.values(featureMap.entities || {});
+  if (features.length === 0) return false;
+  return features.concat(entities).every(function (record) {
+    return record && record.reviewed === true;
+  });
 }
 
 function anyRouteHasReviewedCondition(routes) {
@@ -135,9 +150,11 @@ function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeysRoute
 // it is stated once in the pre-flight notice instead of being fake-staged four times here.
 const ROADMAP_STEPS = [
   { short: 'Site map', blurb: 'crawl the app, and work out what each page is for' },
-  { short: 'Test conditions', blurb: 'decide what should be tested on each page' },
+  { short: 'Feature map', blurb: 'group those pages into features, and work out what the app is made of' },
+  { short: 'Test conditions', blurb: 'decide what should be tested' },
   { short: 'Test cases', blurb: 'turn those into concrete, readable test cases' },
   { short: 'Automated tests', blurb: 'write the real test code and run it' },
+  { short: 'Test closure', blurb: 'check what is covered, and decide whether that is enough' },
 ];
 
 // Each stage has two distinguishable positions - being worked on, and waiting for the human's
@@ -146,10 +163,15 @@ const STAGE_POSITION = {
   'not-started': { index: 0, phase: 'run' },
   'business-intent-pending-review': { index: 0, phase: 'review' },
   'business-intent-reviewed': { index: 1, phase: 'run' },
-  'test-conditions-pending-review': { index: 1, phase: 'review' },
-  'test-conditions-reviewed': { index: 2, phase: 'run' },
-  'test-cases-drafted': { index: 3, phase: 'run' },
-  complete: { index: 3, phase: 'done' },
+  'feature-map-pending-review': { index: 1, phase: 'review' },
+  'feature-map-reviewed': { index: 2, phase: 'run' },
+  'test-conditions-pending-review': { index: 2, phase: 'review' },
+  'test-conditions-reviewed': { index: 3, phase: 'run' },
+  'test-cases-drafted': { index: 4, phase: 'run' },
+  // The last stage is a stage, not a finish line. Whether the suite may actually be closed is
+  // scripts/coverage-status.mjs's answer, computed from exit criteria; duplicating that judgment
+  // here would give the project two places to disagree about whether it is done.
+  'test-closure': { index: 5, phase: 'run' },
 };
 
 function positionFor(stage) {
@@ -170,7 +192,7 @@ function formatRoadmap(stage) {
 
 // Route-level counters a human-facing report can print without re-deriving them from raw artifacts
 // itself - zero model involvement, same as every other computation in this script.
-function computeRouteCoverage(siteMap, businessIntent, testConditions, journeysRoutes) {
+function computeRouteCoverage(siteMap, businessIntent, featureMap, testConditions, journeysRoutes) {
   const routes = siteMap && typeof siteMap.routes === 'object' ? Object.values(siteMap.routes) : [];
   const activeRoutes = routes.filter(function (r) {
     return r && r.status === 'active';
@@ -187,6 +209,10 @@ function computeRouteCoverage(siteMap, businessIntent, testConditions, journeysR
     activeRoutes: activeRoutes.length,
     likelyPhantomRoutes: likelyPhantomRoutes.length,
     businessIntentReviewed: countReviewedTrue(businessIntent && businessIntent.routes),
+    features: featureMap ? Object.keys(featureMap.features || {}).length : 0,
+    featuresReviewed: countReviewedTrue(featureMap && featureMap.features),
+    entities: featureMap ? Object.keys(featureMap.entities || {}).length : 0,
+    entitiesReviewed: countReviewedTrue(featureMap && featureMap.entities),
     testConditionsReviewed: countRoutesWithReviewedCondition(testConditions && testConditions.routes),
     testCasesDrafted: collectJourneys(journeysRoutes).filter(function (j) {
       return j && j.testCase;
@@ -210,7 +236,7 @@ function formatDuration(ms) {
 // never the model's own guess at how long a session felt. This measures wall-clock time between
 // artifacts being written, which includes any human review wait folded into the gap after it - it
 // is not a claim about pure agent working time.
-function computeStageTimings(siteMap, businessIntent, testConditions, journeysData) {
+function computeStageTimings(siteMap, businessIntent, featureMap, testConditions, journeysData) {
   const points = [];
   if (siteMap && siteMap.generatedAt) {
     points.push({ label: 'Stage 1: Site map crawled', timestamp: siteMap.generatedAt });
@@ -218,14 +244,17 @@ function computeStageTimings(siteMap, businessIntent, testConditions, journeysDa
   if (businessIntent && businessIntent.generatedAt) {
     points.push({ label: 'Stage 1: Business-intent analysis', timestamp: businessIntent.generatedAt });
   }
+  if (featureMap && featureMap.generatedAt) {
+    points.push({ label: 'Stage 2: Feature map derived', timestamp: featureMap.generatedAt });
+  }
   if (testConditions && testConditions.generatedAt) {
-    points.push({ label: 'Stage 2: Test conditions defined', timestamp: testConditions.generatedAt });
+    points.push({ label: 'Stage 3: Test conditions defined', timestamp: testConditions.generatedAt });
   }
   if (journeysData && journeysData.generatedAt) {
-    points.push({ label: 'Stage 3: Test cases drafted', timestamp: journeysData.generatedAt });
+    points.push({ label: 'Stage 4: Test cases drafted', timestamp: journeysData.generatedAt });
   }
   if (journeysData && journeysData.lastUpdatedAt) {
-    points.push({ label: 'Stage 4: Test cases automated', timestamp: journeysData.lastUpdatedAt });
+    points.push({ label: 'Stage 5: Test cases automated', timestamp: journeysData.lastUpdatedAt });
   }
   return points.map(function (point, i) {
     if (i === 0) return { label: point.label, timestamp: point.timestamp, sincePrevious: null };
@@ -247,7 +276,7 @@ function computePreFlightNotice(stage, coverage) {
   const widest = ROADMAP_STEPS.reduce(function (max, step) {
     return Math.max(max, step.short.length);
   }, 0);
-  const lines = ['Four stages, each one ending with your review:', ''];
+  const lines = [ROADMAP_STEPS.length + ' stages, each one ending with your review:', ''];
   ROADMAP_STEPS.forEach(function (step, i) {
     // A leading marker rather than a trailing "<- you are here": it keeps the stage names in one
     // aligned column and does not grow the line past the terminal's width.
@@ -269,7 +298,7 @@ function computePreFlightNotice(stage, coverage) {
   return lines.join('\\n');
 }
 
-function computeStatus(siteMap, businessIntent, testConditions, journeysData) {
+function computeStatus(siteMap, businessIntent, featureMap, testConditions, journeysData) {
   if (!siteMap) {
     return {
       stage: 'not-started',
@@ -295,11 +324,28 @@ function computeStatus(siteMap, businessIntent, testConditions, journeysData) {
     };
   }
 
-  if (!testConditions) {
+  if (!featureMap) {
     return {
       stage: 'business-intent-reviewed',
+      nextCommand: '/map-features',
+      nextCommandDescription:
+        'Business-intent is reviewed. Run /map-features to group the routes into features and work out the application\\'s entities and their lifecycles.',
+    };
+  }
+  if (!featureMapFullyReviewed(featureMap)) {
+    return {
+      stage: 'feature-map-pending-review',
+      nextCommand: null,
+      nextCommandDescription:
+        'A feature map exists, but not every feature and entity in it is reviewed yet. Review the Feature-Map Review Artifact from /map-features, then approve entries in conversation.',
+    };
+  }
+
+  if (!testConditions) {
+    return {
+      stage: 'feature-map-reviewed',
       nextCommand: '/define-test-conditions',
-      nextCommandDescription: 'Business-intent is reviewed. Run /define-test-conditions next.',
+      nextCommandDescription: 'The feature map is reviewed. Run /define-test-conditions next.',
     };
   }
 
@@ -334,24 +380,25 @@ function computeStatus(siteMap, businessIntent, testConditions, journeysData) {
   }
 
   return {
-    stage: 'complete',
+    stage: 'test-closure',
     nextCommand: null,
     nextCommandDescription:
-      'Every drafted test case has been automated. Run /map-site update to discover new routes, or /define-test-conditions to cover changed ones.',
+      'Every drafted test case has been automated. Run node scripts/coverage-status.mjs for the exit-criteria verdict - it names what is still uncovered and why. Closing a gap means going back to the stage that owns it (/map-site update for new routes, /map-features for a changed domain, /define-test-conditions for changed ones); closing the suite means deciding the remaining gaps are acceptable.',
   };
 }
 
 function main() {
   const siteMap = loadJson(SITE_MAP_PATH);
   const businessIntent = loadJson(BUSINESS_INTENT_PATH);
+  const featureMap = loadJson(FEATURE_MAP_PATH);
   const testConditions = loadJson(TEST_CONDITIONS_PATH);
   const journeysData = loadJson(JOURNEYS_PATH);
   const journeysRoutes = journeysData && typeof journeysData.routes === 'object' ? journeysData.routes : {};
 
-  const status = computeStatus(siteMap, businessIntent, testConditions, journeysData);
+  const status = computeStatus(siteMap, businessIntent, featureMap, testConditions, journeysData);
   const roadmap = formatRoadmap(status.stage);
-  const routeCoverage = computeRouteCoverage(siteMap, businessIntent, testConditions, journeysRoutes);
-  const stageTimings = computeStageTimings(siteMap, businessIntent, testConditions, journeysData);
+  const routeCoverage = computeRouteCoverage(siteMap, businessIntent, featureMap, testConditions, journeysRoutes);
+  const stageTimings = computeStageTimings(siteMap, businessIntent, featureMap, testConditions, journeysData);
   const preFlightNotice = computePreFlightNotice(status.stage, routeCoverage);
 
   process.stdout.write(

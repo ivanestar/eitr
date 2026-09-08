@@ -39,6 +39,9 @@ import { renderBusinessIntentTypes } from './templates/business-intent-types.js'
 import { renderBusinessIntentValidator } from './templates/business-intent-validator.js';
 import { renderSiteMapValidator } from './templates/site-map-validator.js';
 import { renderSitemapCoverageChecker } from './templates/sitemap-coverage-checker.js';
+import { renderFeatureMapTypes } from './templates/feature-map-types.js';
+import { renderFeatureMapEngine } from './templates/feature-map-engine.js';
+import { renderFeatureMapValidator } from './templates/feature-map-validator.js';
 import { renderTestConditionsTypes } from './templates/test-conditions-types.js';
 import { renderTestConditionsEngine } from './templates/test-conditions-engine.js';
 import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
@@ -149,6 +152,24 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderSitemapCoverageChecker() },
+          },
+          {
+            path: '.scaffold/schemas/feature-map.types.ts',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderFeatureMapTypes() },
+          },
+          {
+            path: 'scripts/derive-feature-map.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderFeatureMapEngine() },
+          },
+          {
+            path: 'scripts/validate-feature-map.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderFeatureMapValidator() },
           },
           {
             path: '.scaffold/schemas/test-conditions.types.ts',

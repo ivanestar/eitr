@@ -607,6 +607,7 @@ recorded. These files are written by the analysis workflows and are the project'
 | \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, and per-role access | \`node scripts/validate-site-map.mjs\` to check shape |
 | \`artifacts/site-map/api-contracts.json\` | Endpoints actually observed in traffic - method, path template, response shape | \`node scripts/validate-api-contracts.mjs\` |
 | \`artifacts/analysis/business-intent.json\` | Per-route business feature and impact tier (\`high\`/\`medium\`/\`low\`), the confirmed application purpose, and confirmed role purposes | \`node scripts/validate-business-intent.mjs\` |
+| \`artifacts/analysis/feature-map.json\` | Features and the routes they span, the entities this application works with, what can happen to each one, its lifecycle, and the links between them | \`node scripts/derive-feature-map.mjs\` to draft, \`node scripts/validate-feature-map.mjs\` to check shape |
 | \`artifacts/analysis/test-conditions.json\` | Typed test conditions per route | \`node scripts/validate-test-conditions.mjs\` |
 | \`artifacts/test-cases/test-cases.json\` | Drafted test cases, and which are already automated | \`node scripts/validate-journeys.mjs\` |
 
@@ -631,6 +632,12 @@ in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning
 Ask \`coverage-status\` before claiming a suite is finished, and order any large batch of test
 work by route impact (\`criticalityTier\` in business-intent.json, \`high\` first) - a batch that
 runs out of room mid-way leaves whatever the ordering put first.
+
+A relation in \`feature-map.json\` is a precondition, not a note: \`references\` means the target has
+to exist before this entity can be created, so a test that creates one has to create the other
+first. \`contains\` means the two live and die together and needs no separate setup. Check the
+relation's \`confidence\` before leaning on it - \`inferred\` means it was read off a field name, and a
+human confirmed it at sign-off rather than a machine observing it.
 
 ## CPOM Architecture Rules
 

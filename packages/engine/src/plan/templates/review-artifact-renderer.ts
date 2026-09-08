@@ -21,6 +21,7 @@ export function renderReviewArtifactRenderer(): string {
  *
  * Usage:
  *   node scripts/render-review-artifact.mjs --kind=business-intent
+ *   node scripts/render-review-artifact.mjs --kind=feature-map
  *   node scripts/render-review-artifact.mjs --kind=test-conditions [--threshold=10]
  *   node scripts/render-review-artifact.mjs --kind=test-cases
  *
@@ -36,6 +37,7 @@ import process from 'node:process';
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
+const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const TEST_CASES_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 const REVIEW_DIR = path.join(CWD, 'artifacts', 'review');
@@ -376,8 +378,147 @@ function renderTestCases(labels, data) {
   };
 }
 
+const OPERATION_PHRASE = {
+  create: 'created',
+  read: 'read',
+  list: 'listed',
+  update: 'updated',
+  delete: 'deleted',
+};
+
+// Entities are rendered as their own numbered section rather than nested under each feature: a
+// relation is the one claim in this artifact a wrong answer is expensive on, and burying the same
+// entity under three features would ask a person to approve it three times while showing them a
+// third of its links each time.
+function renderFeatureMap(labels, data) {
+  const features = data && data.features && typeof data.features === 'object' ? Object.values(data.features) : [];
+  const entities = data && data.entities && typeof data.entities === 'object' ? Object.values(data.entities) : [];
+  const entityNameById = new Map();
+  for (const entity of entities) entityNameById.set(entity.entityId, entity.name);
+
+  features.sort(function (a, b) {
+    return String(a.name).localeCompare(String(b.name));
+  });
+  entities.sort(function (a, b) {
+    return String(a.name).localeCompare(String(b.name));
+  });
+
+  const lines = [];
+  lines.push('**Features**');
+  features.forEach(function (feature, i) {
+    lines.push(
+      i + 1 + '. ' + feature.name + ' - **' + String(feature.impact).toUpperCase() + ' IMPACT**',
+    );
+    const routes = Array.isArray(feature.memberRouteIds) ? feature.memberRouteIds : [];
+    lines.push(
+      '   Pages: ' +
+        (routes.length > 0
+          ? routes
+              .map(function (routeId) {
+                return labelFor(labels, routeId);
+              })
+              .join('; ')
+          : '(none)'),
+    );
+    const names = (Array.isArray(feature.entityIds) ? feature.entityIds : [])
+      .map(function (entityId) {
+        return entityNameById.get(entityId) || entityId;
+      })
+      .sort();
+    lines.push('   Works with: ' + (names.length > 0 ? names.join(', ') : 'nothing this pass could tie to it'));
+    if (feature.impactSourceRouteId) {
+      lines.push('   Impact comes from: ' + labelFor(labels, feature.impactSourceRouteId));
+    } else {
+      lines.push(
+        '   Impact comes from: no reviewed page to draw it from, so it is assumed important until you say otherwise.',
+      );
+    }
+  });
+
+  if (entities.length > 0) {
+    lines.push('');
+    lines.push('**Things this application works with**');
+    entities.forEach(function (entity, i) {
+      lines.push('E' + (i + 1) + '. ' + entity.name);
+      const operations = Array.isArray(entity.operations) ? entity.operations : [];
+      const phrases = Array.from(
+        new Set(
+          operations.map(function (op) {
+            return OPERATION_PHRASE[op.kind] || op.kind;
+          }),
+        ),
+      );
+      const anyObserved = operations.some(function (op) {
+        return op.confidence === 'observed';
+      });
+      lines.push(
+        '   Can be: ' +
+          (phrases.length > 0 ? phrases.join(', ') : 'nothing was observed happening to it') +
+          (phrases.length > 0
+            ? anyObserved
+              ? ' (seen in real traffic)'
+              : ' (guessed from page addresses, not seen happening)'
+            : ''),
+      );
+      const transitions = entity.lifecycle && Array.isArray(entity.lifecycle.transitions)
+        ? entity.lifecycle.transitions
+        : [];
+      if (transitions.length > 0) {
+        lines.push(
+          '   Lifecycle: ' +
+            transitions
+              .map(function (t) {
+                return t.from + ' -> ' + t.to + ' (' + t.trigger + ')';
+              })
+              .join('; '),
+        );
+      }
+      const relations = Array.isArray(entity.relations) ? entity.relations : [];
+      for (const relation of relations) {
+        const target = entityNameById.get(relation.targetEntityId) || relation.targetEntityId;
+        const claim =
+          relation.kind === 'references'
+            ? 'Needs a ' + target + ' to already exist'
+            : 'Holds ' + target + ' inside it';
+        lines.push(
+          '   ' +
+            claim +
+            ' - via the field "' +
+            relation.viaField +
+            '"' +
+            (relation.confidence === 'observed' ? '.' : ', guessed from that name alone.'),
+        );
+      }
+      if (relations.length === 0) {
+        lines.push('   Nothing links it to anything else.');
+      }
+      const excerpts = dedupedEvidence([entity].concat(relations));
+      if (excerpts.length > 0) {
+        lines.push('   Evidences: ' + excerpts.join('; '));
+      }
+    });
+  }
+
+  const unreviewedRelations = entities.reduce(function (total, entity) {
+    return total + (Array.isArray(entity.relations) ? entity.relations.length : 0);
+  }, 0);
+
+  return {
+    entryCount: features.length + entities.length,
+    markdown: lines.join('\\n'),
+    summary:
+      features.length +
+      ' feature(s), ' +
+      entities.length +
+      ' thing(s), ' +
+      unreviewedRelations +
+      ' link(s) between them to confirm',
+  };
+}
+
 const KINDS = {
   'business-intent': { source: BUSINESS_INTENT_PATH, render: renderBusinessIntent },
+  'feature-map': { source: FEATURE_MAP_PATH, render: renderFeatureMap },
   'test-conditions': { source: TEST_CONDITIONS_PATH, render: renderTestConditions },
   'test-cases': { source: TEST_CASES_PATH, render: renderTestCases },
 };

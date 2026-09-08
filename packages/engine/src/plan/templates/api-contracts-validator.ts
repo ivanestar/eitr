@@ -3,6 +3,12 @@
 // site-map-validator.ts / test-conditions-validator.ts. Also mechanically re-checks the PII/
 // session-data redaction backstop on every sampleRequestPayload value, the same way
 // scripts/generate-test-conditions.mjs backstops evidence excerpts elsewhere in this pipeline.
+//
+// Beyond shape, it reports two non-fatal observation-quality warnings. Both exist because a crawl
+// that recorded almost no API traffic looks exactly like a crawl of an application that has almost
+// none, and the two were indistinguishable until something counted them: a live run produced one
+// contract across 62 routes, and nothing anywhere said whether that was the application or the
+// observer. A warning never fails the file - a static content site legitimately produces both.
 
 export function renderApiContractsValidator(): string {
   return `#!/usr/bin/env node
@@ -21,6 +27,19 @@ import process from 'node:process';
 
 const CWD = process.cwd();
 const CONTRACTS_PATH = path.join(CWD, 'artifacts', 'site-map', 'api-contracts.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
+
+// Statuses that carry no body by definition - a missing responseShape on one of these is correct,
+// not an omission.
+const BODILESS_STATUSES = new Set([204, 205, 304]);
+
+// Below this share of active routes having contributed at least one observed call, the crawl's
+// network observation is worth a second look. The threshold is deliberately low: it is meant to
+// catch an observer that was not listening at all, not to push a real content site toward an API
+// surface it does not have. Only applied once there are enough routes for the ratio to mean
+// anything.
+const OBSERVATION_FLOOR_RATIO = 0.1;
+const OBSERVATION_MIN_ROUTES = 10;
 
 // Same digit-shaped thresholds as every other PII/session-data guard in this pipeline (map-site
 // Step 6, define-test-conditions Step 2): a run of 6+ consecutive digits, or an 8+-char token where
@@ -76,7 +95,7 @@ function loadJson(filePath, label) {
   }
 }
 
-function isApiContractEntry(value, label, errors, seenIds) {
+function isApiContractEntry(value, label, errors, warnings, seenIds) {
   if (!value || typeof value !== 'object') {
     errors.push(label + ' must be an object.');
     return;
@@ -119,25 +138,73 @@ function isApiContractEntry(value, label, errors, seenIds) {
           errors.push(label + '.responseShape["' + k + '"] must be a type-hint string, not a concrete value.');
         }
       }
+      if (Object.keys(value.responseShape).length === 0) {
+        warnings.push(
+          label +
+            ' (' +
+            value.method +
+            ' ' +
+            value.pathTemplate +
+            ') has an empty responseShape - an observed JSON body with no fields recorded reads the same as one never looked at.',
+        );
+      }
     }
+  } else if (
+    typeof value.responseStatus === 'number' &&
+    value.responseStatus >= 200 &&
+    value.responseStatus < 300 &&
+    !BODILESS_STATUSES.has(value.responseStatus) &&
+    String(value.method).toUpperCase() !== 'HEAD'
+  ) {
+    warnings.push(
+      label +
+        ' (' +
+        value.method +
+        ' ' +
+        value.pathTemplate +
+        ') has no responseShape. Entity composition is derived from response body nesting, so a contract without one contributes nothing to it. Correct when the response was not JSON (HTML, an image, a redirect body); worth re-observing when it was.',
+    );
   }
   if (typeof value.observedAt !== 'string' || value.observedAt.length === 0) {
     errors.push(label + '.observedAt must be a non-empty string.');
   }
 }
 
+// How many active routes contributed at least one observed call. Reported as a plain pair of
+// numbers so a human can judge it directly; the warning below only fires when the ratio is low
+// enough that the observer itself is the likelier explanation.
+function computeObservationCoverage(contracts) {
+  const siteMap = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json').value;
+  if (!siteMap || !siteMap.routes || typeof siteMap.routes !== 'object') return null;
+  const activeRouteIds = new Set();
+  for (const route of Object.values(siteMap.routes)) {
+    if (route && route.status === 'active' && typeof route.routeId === 'string') {
+      activeRouteIds.add(route.routeId);
+    }
+  }
+  const observed = new Set();
+  for (const contract of contracts) {
+    if (!contract || !Array.isArray(contract.observedFromRouteIds)) continue;
+    for (const routeId of contract.observedFromRouteIds) {
+      if (activeRouteIds.has(routeId)) observed.add(routeId);
+    }
+  }
+  return { activeRoutes: activeRouteIds.size, routesWithObservedCalls: observed.size };
+}
+
 function validate() {
   const errors = [];
+  const warnings = [];
   const loaded = loadJson(CONTRACTS_PATH, 'artifacts/site-map/api-contracts.json');
   if (loaded.error) {
     // Absent entirely is fine - not every app has API traffic worth recording yet, and this file
     // is only ever consulted (never required) by later stages.
-    return { status: 'PASSED', errors: [], note: 'No api-contracts.json found - skipped.' };
+    return { status: 'PASSED', errors: [], warnings: [], note: 'No api-contracts.json found - skipped.' };
   }
   const data = loaded.value;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     errors.push('api-contracts.json must contain a JSON object.');
-    return { status: 'FAILED', errors };
+    return { status: 'FAILED', errors, warnings };
   }
   if (data.schemaVersion !== 1) {
     errors.push('schemaVersion must be exactly 1 (found ' + JSON.stringify(data.schemaVersion) + ').');
@@ -147,13 +214,35 @@ function validate() {
   }
   if (!Array.isArray(data.contracts)) {
     errors.push('contracts must be an array.');
-    return { status: 'FAILED', errors };
+    return { status: 'FAILED', errors, warnings };
   }
   const seenIds = new Set();
   data.contracts.forEach(function (c, i) {
-    isApiContractEntry(c, 'contracts[' + i + ']', errors, seenIds);
+    isApiContractEntry(c, 'contracts[' + i + ']', errors, warnings, seenIds);
   });
-  return { status: errors.length === 0 ? 'PASSED' : 'FAILED', errors };
+
+  const observationCoverage = computeObservationCoverage(data.contracts);
+  if (
+    observationCoverage &&
+    observationCoverage.activeRoutes >= OBSERVATION_MIN_ROUTES &&
+    observationCoverage.routesWithObservedCalls <
+      observationCoverage.activeRoutes * OBSERVATION_FLOOR_RATIO
+  ) {
+    warnings.push(
+      'Only ' +
+        observationCoverage.routesWithObservedCalls +
+        ' of ' +
+        observationCoverage.activeRoutes +
+        ' active routes contributed an observed API call. A server-rendered or static application genuinely looks like this; so does a crawl that never listened for network traffic. Worth confirming which one this is before later stages treat the API surface as fully mapped.',
+    );
+  }
+
+  return {
+    status: errors.length === 0 ? 'PASSED' : 'FAILED',
+    errors,
+    warnings,
+    observationCoverage: observationCoverage,
+  };
 }
 
 const result = validate();
