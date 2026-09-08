@@ -33,6 +33,7 @@ const BOUNDED_BY_VALUES = new Set([
   'maxPerTemplate',
   'maxPerParent',
   'maxPerQueryBase',
+  'maxMinutes',
   'duplicateContent',
 ]);
 const STATUS_VALUES = new Set(['active', 'removed']);

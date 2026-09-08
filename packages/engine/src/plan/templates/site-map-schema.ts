@@ -57,6 +57,7 @@ export function renderSiteMapSchema(): string {
             "maxPerTemplate",
             "maxPerParent",
             "maxPerQueryBase",
+            "maxMinutes",
             "duplicateContent"
           ],
           "description": "Which traversal limit actually stopped this crawl pass."
