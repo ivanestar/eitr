@@ -114,6 +114,9 @@ const NON_HTML_EXTENSIONS = new Set([
   'mp4', 'webm', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'm3u8',
   'woff', 'woff2', 'ttf', 'otf', 'eot',
   'css', 'js', 'mjs', 'cjs', 'map', 'wasm',
+  // Source files a site may serve for download. Live-observed: /download/get_ssh.py entered a crawl
+  // as a route, because a script file is text and nothing had said it is not a page.
+  'py', 'rb', 'pl', 'sh', 'bash', 'ps1', 'bat', 'cmd', 'jar', 'war', 'class', 'go', 'rs', 'java', 'php',
 ]);
 
 // A response the crawler did reach but that turned out not to be a page. Catches the extensionless
@@ -165,7 +168,14 @@ function emptyState() {
     maxDepthSeen: 0,
     boundedBy: null,
     claimed: {},
+    // Budget accounting: every template a URL was ever admitted for. Populated at check time, which
+    // is before anything is known about what the server will actually return.
     perTemplate: {},
+    // Reporting: templates that turned out to be real pages. A template is only added once a visit
+    // to it came back as a page, so a 404 or a downloaded file never inflates the route count. The
+    // two are separate on purpose - live-observed reporting 59 canonical routes for a site where 5
+    // of them were four missing pages and a Python script.
+    keptTemplates: {},
     perParent: {},
     skipped: {},
     droppedAfterVisit: 0,
@@ -304,7 +314,7 @@ function progressLine(state) {
     '/' +
     state.limits.maxPages +
     ' pages visited, ' +
-    Object.keys(state.perTemplate).length +
+    Object.keys(state.keptTemplates).length +
     ' canonical routes, depth ' +
     state.maxDepthSeen +
     '/' +
@@ -335,7 +345,8 @@ function budgetView(state) {
   return {
     pagesVisited: state.pagesVisited,
     pagesClaimed: state.pagesClaimed,
-    canonicalRoutes: Object.keys(state.perTemplate).length,
+    canonicalRoutes: Object.keys(state.keptTemplates).length,
+    templatesClaimed: Object.keys(state.perTemplate).length,
     maxDepthSeen: state.maxDepthSeen,
     limits: state.limits,
     boundedBy: state.boundedBy,
@@ -558,6 +569,31 @@ function cmdVisited(args) {
 
   // An extensionless endpoint that turned out to serve a file rather than a page. The route slot is
   // already spent, but the route itself must not enter the site map - a binary blob is not a page.
+  const status = args.status === undefined ? null : Number.parseInt(String(args.status), 10);
+
+  // Status is read BEFORE the content type, and the order is the whole point. An authentication
+  // challenge is a real route - something exists behind it - and it frequently answers with no HTML
+  // body at all, so a content-type test reached first discards it as "not a page". Live-observed:
+  // /digest_auth vanished from a crawl that kept /basic_auth, purely because the two challenges
+  // answer with different content types.
+  if (status === 401 || status === 403) {
+    state.pagesVisited += 1;
+    if (canonical.ok) state.keptTemplates[canonical.canonicalPath] = true;
+    const announceNow = maybeAnnounce(state);
+    saveState(state);
+    return {
+      action: 'visited',
+      keep: true,
+      reason: null,
+      status,
+      canonicalPath: canonical.ok ? canonical.canonicalPath : null,
+      trapDetected: false,
+      budget: budgetView(state),
+      warning: null,
+      announce: announceNow,
+    };
+  }
+
   if (contentType && !HTML_CONTENT_TYPES.some((type) => contentType.includes(type))) {
     state.droppedAfterVisit += 1;
     bumpSkip(state, 'non-html-response');
@@ -583,7 +619,6 @@ function cmdVisited(args) {
   // the opposite of absent - /basic_auth and /download_secure are real pages behind a challenge, and
   // dropping them would delete the only evidence of an auth boundary the crawl can produce. Any
   // other 4xx/5xx is kept too: a route that exists and is erroring is a finding, not a non-route.
-  const status = args.status === undefined ? null : Number.parseInt(String(args.status), 10);
   if (status === 404 || status === 410) {
     state.droppedAfterVisit += 1;
     bumpSkip(state, 'not-found');
@@ -601,6 +636,7 @@ function cmdVisited(args) {
   }
 
   state.pagesVisited += 1;
+  if (canonical.ok) state.keptTemplates[canonical.canonicalPath] = true;
 
   // The repetition check. contentHash is this route's normalized structural signature (title plus
   // sorted regions plus sorted components) - the same value the site map records - so two pages
@@ -740,7 +776,7 @@ function cmdReport() {
     droppedAfterVisit: state.droppedAfterVisit,
     warnings: state.warnings,
     stoppedTemplates: Object.keys(state.saturatedTemplates).sort(),
-    canonicalRoutes: Object.keys(state.perTemplate).sort(),
+    canonicalRoutes: Object.keys(state.keptTemplates).sort(),
     coverage: state.boundedBy
       ? { boundedBy: state.boundedBy, pagesVisited: state.pagesVisited }
       : null,

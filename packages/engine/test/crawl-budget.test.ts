@@ -95,7 +95,9 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
         '/users/{id}',
       );
       expect(check(dir, `${BASE}/reports/2026-09-08`).canonicalPath).toBe('/reports/{date}');
-      expect(run(dir, ['report']).canonicalRoutes).toEqual(['/reports/{date}', '/users/{id}']);
+      // Five URLs, two templates. Asserted on the claimed count rather than canonicalRoutes, which
+      // only counts templates a visit confirmed to be a real page - nothing was visited here.
+      expect(run(dir, ['report']).budget.templatesClaimed).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -309,9 +311,63 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
       // dropping it would delete the only evidence of an auth boundary a crawl can produce.
       expect(visitWith('/basic_auth', 401).keep).toBe(true);
       expect(visitWith('/download_secure', 403).keep).toBe(true);
+      // And it stays a route whatever body the challenge answers with. Live-observed: /digest_auth
+      // vanished from a crawl that kept /basic_auth, because the content type was tested first.
+      check(dir, `${BASE}/digest_auth`);
+      const digest = run(dir, [
+        'visited',
+        `--url=${BASE}/digest_auth`,
+        '--status=401',
+        '--content-type=text/plain',
+      ]);
+      expect(digest.keep).toBe(true);
+      expect(run(dir, ['report']).canonicalRoutes).toContain('/digest_auth');
       // A route that exists and is erroring is a finding, not a non-route.
       expect(visitWith('/broken', 500).keep).toBe(true);
       expect(visitWith('/teapot', 418).keep).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The count a human reads must be the count of real pages. perTemplate is filled at check time,
+  // before anything is known about what the server returns, so reporting from it announced 59
+  // canonical routes for a crawl where four were missing pages and one was a Python script.
+  it('counts only templates that turned out to be pages', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      const visit = (path: string, status: number, contentType = 'text/html') => {
+        check(dir, `${BASE}${path}`);
+        return run(dir, [
+          'visited',
+          `--url=${BASE}${path}`,
+          `--status=${status}`,
+          `--content-type=${contentType}`,
+        ]);
+      };
+      visit('/real', 200);
+      visit('/also-real', 200);
+      visit('/about', 404);
+      visit('/export', 200, 'application/octet-stream');
+
+      const report = run(dir, ['report']);
+      expect(report.canonicalRoutes).toEqual(['/also-real', '/real']);
+      expect(report.budget.canonicalRoutes).toBe(2);
+      // The claimed count stays visible, because budget accounting genuinely did spend four slots.
+      expect(report.budget.templatesClaimed).toBe(4);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects source files a site offers for download', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (const asset of ['/download/get_ssh.py', '/scripts/deploy.sh', '/lib/app.jar']) {
+        expect(check(dir, `${BASE}${asset}`).reason).toBe('non-html-asset');
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
