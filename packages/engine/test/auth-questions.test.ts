@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,6 +25,7 @@ type Result = {
   plan?: {
     capture: boolean;
     roles: string[];
+    roleLabels: Record<string, string>;
     envRoleStubs: boolean;
     wireCi: boolean;
     ciProvider: string | null;
@@ -628,5 +629,106 @@ describe('scripts/auth-questions.mjs (real execution)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // The flow is English because its ids have to be stable, not because the conversation is. An
+  // answer given in another language still records an id, so nothing here depends on the language -
+  // except role names, which are recorded as words and become filenames and env variable names.
+  describe('answers given in another language', () => {
+    it('refuses a role name that cannot become a filename, naming it, instead of dropping it', () => {
+      const dir = setupProject();
+      try {
+        const result = ask(
+          dir,
+          {
+            'has-login': 'yes',
+            proceed: 'continue',
+            roles: 'all',
+            'role-names': 'Админ, Только чтение',
+          },
+          NO_CI,
+        );
+        expect(result.status).toBe('FAILED');
+        expect(result.errors!.some((e) => e.includes('"Админ"'))).toBe(true);
+        expect(result.errors!.some((e) => e.includes('"Только чтение"'))).toBe(true);
+        expect(result.errors!.some((e) => e.includes('do not transliterate'))).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    // The regression this exists for: the plan used to come back with roles: [] and
+    // envRoleStubs: false, and the flow carried on to capture one unnamed session, so a person who
+    // named two roles had no way to tell their answer had been discarded.
+    it('never returns a plan that silently lost a role the human named', () => {
+      const dir = setupProject();
+      try {
+        const result = ask(
+          dir,
+          { 'has-login': 'yes', proceed: 'continue', roles: 'all', 'role-names': '管理者' },
+          NO_CI,
+        );
+        expect(result.status).not.toBe('DONE');
+        expect(result.plan).toBeUndefined();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('refuses only the unusable name when the rest are fine', () => {
+      const dir = setupProject();
+      try {
+        const result = ask(
+          dir,
+          { 'has-login': 'yes', proceed: 'continue', roles: 'all', 'role-names': 'admin, Гость' },
+          NO_CI,
+        );
+        expect(result.status).toBe('FAILED');
+        expect(result.errors!).toHaveLength(1);
+        expect(result.errors![0]).toContain('"Гость"');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('keeps the human own wording alongside the machine name', () => {
+      const dir = setupProject();
+      try {
+        const { final } = walk(
+          dir,
+          {
+            'has-login': 'yes',
+            proceed: 'continue',
+            roles: 'all',
+            'role-names': 'Admin, Read Only',
+          },
+          NO_CI,
+        );
+        expect(final.plan!.roles).toEqual(['admin', 'read_only']);
+        expect(final.plan!.roleLabels).toEqual({ admin: 'Admin', read_only: 'Read Only' });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('accepts a latin name a human supplied for a role they named in their own language', () => {
+      const dir = setupProject();
+      try {
+        const { final } = walk(
+          dir,
+          {
+            'has-login': 'yes',
+            proceed: 'continue',
+            roles: 'all',
+            'role-names': 'admin, readonly',
+          },
+          NO_CI,
+        );
+        expect(final.status).toBe('DONE');
+        expect(final.plan!.roles).toEqual(['admin', 'readonly']);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });

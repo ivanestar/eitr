@@ -168,7 +168,7 @@ const QUESTIONS = [
     options: [],
     allowsFreeText: true,
     freeTextHint:
-      'A list of role names. Normalize each into a lowercase, filesystem-and-env-safe slug (Admin -> admin, Read Only -> read_only) and echo the normalized list back once before using it.',
+      'A list of role names, comma-separated, recorded in the human\\'s own words. Each becomes a session filename and an E2E_<ROLE>_USERNAME variable, so each needs latin letters or digits in it; a name written in another script is refused by name rather than dropped, and the answer is to ask that role for a latin name, never to transliterate it yourself.',
     applies: function (answers) {
       return answers.roles === 'all' || answers.roles === 'some';
     },
@@ -250,23 +250,51 @@ function outcomeFor(answers) {
   return null;
 }
 
+// A role name becomes a filename and an environment variable name, and POSIX environment names are
+// ASCII by definition - so a name written in any other script cannot pass through unchanged.
+// Transliterating it would mean choosing one romanisation out of several defensible ones, and for
+// most writing systems there is no obvious choice at all, so this returns null and the caller asks.
+// What it must never do is quietly return an empty string: a person who named two roles and got a
+// single unnamed session would have no way to tell that their answer was dropped.
+function slugifyRole(name) {
+  const slug = String(name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return slug.length > 0 ? slug : null;
+}
+
+function splitRoleNames(answers) {
+  if (answers.roles === 'single' || answers.roles === undefined) return [];
+  return String(answers['role-names'] || '')
+    .split(/[,\\n]/)
+    .map(function (name) {
+      return name.trim();
+    })
+    .filter(function (name) {
+      return name.length > 0;
+    });
+}
+
 // What the answers add up to, so the skill acts on a computed plan rather than on its own reading
 // of a conversation that may have run over many turns.
 function planFor(answers, status) {
-  const roles =
-    answers.roles === 'single' || answers.roles === undefined
-      ? []
-      : String(answers['role-names'] || '')
-          .split(/[,\\n]/)
-          .map(function (name) {
-            return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-          })
-          .filter(function (name) {
-            return name.length > 0;
-          });
+  const labels = splitRoleNames(answers);
+  const roles = [];
+  const roleLabels = {};
+  for (const label of labels) {
+    const slug = slugifyRole(label);
+    if (slug === null) continue;
+    roles.push(slug);
+    // The human's own wording is kept alongside the machine name, so a report can say "Admin"
+    // where the filesystem says "admin" without anyone re-deriving it.
+    roleLabels[slug] = label;
+  }
   return {
     capture: answers['existing-session'] !== 'reuse',
     roles: roles,
+    roleLabels: roleLabels,
     // The flat single-user case keeps the E2E_USERNAME/E2E_PASSWORD names that already exist.
     envRoleStubs: roles.length > 0,
     wireCi: answers.ci === 'yes',
@@ -281,6 +309,16 @@ function planFor(answers, status) {
 
 function checkAnswers(answers) {
   const errors = [];
+  // A name that cannot become a filename and an environment variable name is refused by name,
+  // rather than silently contributing nothing to the plan.
+  for (const label of splitRoleNames(answers)) {
+    if (slugifyRole(label) !== null) continue;
+    errors.push(
+      'The role name "' +
+        label +
+        '" has no letters or digits that can be used in a filename and an environment variable name (E2E_<ROLE>_USERNAME), so it cannot be used as one. Ask for a latin-alphabet name for this role and keep the original as its display label - do not transliterate it yourself.',
+    );
+  }
   for (const [id, value] of Object.entries(answers)) {
     const question = QUESTION_BY_ID[id];
     if (!question) {
