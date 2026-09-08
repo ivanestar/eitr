@@ -137,7 +137,9 @@ function emptyState() {
 function loadState() {
   if (!fs.existsSync(STATE_PATH)) return null;
   try {
-    const data = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+    // A leading byte order mark is not valid JSON, and on Windows it is what several ordinary ways
+    // of writing a text file produce by default.
+    const data = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8').replace(/^\\uFEFF/, ''));
     if (!data || typeof data !== 'object' || data.schemaVersion !== 1) return null;
     return data;
   } catch {

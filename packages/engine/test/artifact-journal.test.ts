@@ -234,6 +234,19 @@ describe('scripts/artifact-journal.mjs (real execution)', () => {
     }
   });
 
+  it('accepts a unit file carrying a UTF-8 byte order mark, which Windows writes by default', () => {
+    const dir = setupProject();
+    try {
+      run(dir, ['begin', '--stage=site-map']);
+      writeFileSync(join(dir, 'unit.json'), '﻿{"title":"With a BOM"}', 'utf8');
+      const output = run(dir, ['record', '--stage=site-map', '--id=/a', '--file=unit.json']);
+      expect(output.exitCode).toBe(0);
+      expect(output.recorded).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('status on a stage that never ran reports absence rather than failing', () => {
     const dir = setupProject();
     try {

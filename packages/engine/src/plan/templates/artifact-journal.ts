@@ -47,6 +47,24 @@ function fail(message) {
   process.exit(1);
 }
 
+// JSON.parse rejects a leading byte order mark, and on Windows a BOM is what several ordinary ways
+// of writing a text file produce by default (PowerShell's Set-Content among them). Tolerating it
+// costs one line and removes a failure whose error message points at the JSON rather than at the
+// encoding.
+function readJsonFile(file, describe) {
+  let raw;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    fail(describe + ': ' + err.message);
+  }
+  try {
+    return JSON.parse(raw.replace(/^\\uFEFF/, ''));
+  } catch (err) {
+    fail(describe + ': ' + err.message);
+  }
+}
+
 function parseArgs(argv) {
   const args = {};
   for (const raw of argv) {
@@ -78,7 +96,7 @@ function readJournal(stage) {
   if (!fs.existsSync(file)) return { exists: false, records: [], malformed: 0 };
   let raw;
   try {
-    raw = fs.readFileSync(file, 'utf8');
+    raw = fs.readFileSync(file, 'utf8').replace(/^\\uFEFF/, '');
   } catch (err) {
     fail('cannot read ' + path.relative(CWD, file) + ': ' + err.message);
   }
@@ -143,14 +161,10 @@ function cmdRecord(stage, args) {
 
   let data;
   if (typeof args.file === 'string') {
-    try {
-      data = JSON.parse(fs.readFileSync(path.resolve(CWD, args.file), 'utf8'));
-    } catch (err) {
-      fail('cannot read --file ' + args.file + ' as JSON: ' + err.message);
-    }
+    data = readJsonFile(path.resolve(CWD, args.file), 'cannot read --file ' + args.file + ' as JSON');
   } else if (typeof args.data === 'string') {
     try {
-      data = JSON.parse(args.data);
+      data = JSON.parse(args.data.replace(/^\\uFEFF/, ''));
     } catch (err) {
       fail('--data is not valid JSON: ' + err.message);
     }
@@ -217,12 +231,7 @@ function cmdFold(stage, args) {
         '".',
     );
   }
-  let artifact;
-  try {
-    artifact = JSON.parse(fs.readFileSync(target, 'utf8'));
-  } catch (err) {
-    fail('cannot read ' + into + ' as JSON: ' + err.message);
-  }
+  const artifact = readJsonFile(target, 'cannot read ' + into + ' as JSON');
   if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) {
     fail(into + ' must contain a JSON object to fold into.');
   }
