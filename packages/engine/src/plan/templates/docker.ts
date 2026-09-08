@@ -34,8 +34,11 @@ CMD ["pytest"]
   }
 
   if (lang === 'csharp') {
+    // -noble, not -jammy: playwright/dotnet publishes only noble and resolute variants, so the
+    // jammy tag every other language here uses has never existed for this one. Caught by
+    // scripts/check-playwright-version.mjs, which resolves each rendered tag against the registry.
     return `# Hermetic container configuration for C# .NET Playwright test automation.
-FROM mcr.microsoft.com/playwright/dotnet:v1.62.0-jammy
+FROM mcr.microsoft.com/playwright/dotnet:v1.62.0-noble
 
 # Non-root user, matching Microsoft's own documented convention for Playwright Docker images
 # (playwright.dev/docs/docker) - adduser is required when building FROM this image since pwuser
