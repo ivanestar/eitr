@@ -31,11 +31,18 @@ export function renderCrawlBudget(): string {
  *                                 [--max-pages=N] [--max-depth=N] [--max-per-template=N]
  *   node scripts/crawl-budget.mjs check --url=<url> --depth=<n>
  *   node scripts/crawl-budget.mjs visited --url=<url> [--status=<n>] [--content-type=<mime>]
+ *                                 [--content-hash=<hash>]
+ *   node scripts/crawl-budget.mjs scroll --url=<url>
  *   node scripts/crawl-budget.mjs progress
  *   node scripts/crawl-budget.mjs report
  *
  * 'check' is a reservation, not a question: a 'visit' decision immediately consumes budget for that
  * URL. Ask once per candidate link, then either visit it or drop it.
+ *
+ * Pass --content-hash on every 'visited'. It is what lets the script notice a pagination chain or an
+ * infinite feed on its third page rather than at the page ceiling: identical rendered structure
+ * repeating under one route template is not a set of distinct pages. Any result can carry a
+ * 'warning' string - show it to the human when it is not null.
  */
 
 import fs from 'node:fs';
@@ -53,6 +60,22 @@ const DEFAULT_MAX_DEPTH = 6;
 // route; visiting a few concrete URLs under it is enough to know its shape, and any number beyond
 // that is a pagination chain, a per-record listing, or a loop trap.
 const DEFAULT_MAX_PER_TEMPLATE = 20;
+// Identical rendered structure repeating under one canonical template is the earliest unambiguous
+// signal that the frontier is walking a chain rather than discovering pages. Three is enough to
+// establish it and cheap to be wrong about: every URL under one template collapses to the same
+// single route entry anyway, so stopping early costs sample URLs, never a route. This is what
+// catches the trap on the third page instead of the twentieth.
+const DEFAULT_MAX_PER_CONTENT_HASH = 3;
+// The same structure appearing under SEVERAL different templates is a weaker signal - a generic
+// empty state, or a canonicalization that did not collapse what it should have (/blog/page-2 and
+// /blog/page-3 are separate templates on purpose, since collapsing every segment ending in a digit
+// would merge real routes). Too ambiguous to stop the crawl on, so it warns and the human decides.
+const DEFAULT_DUPLICATE_TEMPLATE_WARN_AT = 3;
+// Warns while a template is still filling up, so a chain is visible before its hard cap lands.
+const TEMPLATE_WARN_AT = 4;
+// The anti-infinite-scroll ceiling, enforced rather than described. A page that appends content on
+// scroll never changes its URL, so nothing else in this script ever sees it.
+const DEFAULT_MAX_SCROLLS = 2;
 const ANNOUNCE_EVERY_PAGES = 25;
 const ANNOUNCE_EVERY_MS = 120000;
 
@@ -120,6 +143,9 @@ function emptyState() {
       maxPages: DEFAULT_MAX_PAGES,
       maxDepth: DEFAULT_MAX_DEPTH,
       maxPerTemplate: DEFAULT_MAX_PER_TEMPLATE,
+      maxPerContentHash: DEFAULT_MAX_PER_CONTENT_HASH,
+      duplicateTemplateWarnAt: DEFAULT_DUPLICATE_TEMPLATE_WARN_AT,
+      maxScrolls: DEFAULT_MAX_SCROLLS,
     },
     pagesClaimed: 0,
     pagesVisited: 0,
@@ -129,6 +155,10 @@ function emptyState() {
     perTemplate: {},
     skipped: {},
     droppedAfterVisit: 0,
+    contentHashes: {},
+    saturatedTemplates: {},
+    scrolls: {},
+    warnings: [],
     lastAnnounceAt: null,
     lastAnnounceCount: 0,
   };
@@ -216,6 +246,15 @@ function canonicalize(rawUrl, state) {
 
 function bumpSkip(state, reason) {
   state.skipped[reason] = (state.skipped[reason] || 0) + 1;
+}
+
+// Warnings are the crawler saying "this looks wrong" while there is still time to act on it, which
+// is the whole point of raising them early. Deduplicated by text so one trap produces one line the
+// human reads, not one line per page it would have walked.
+function addWarning(state, text) {
+  if (state.warnings.includes(text)) return null;
+  state.warnings.push(text);
+  return text;
 }
 
 function elapsedMs(state) {
@@ -324,6 +363,12 @@ function cmdStart(args) {
     maxPages: positiveInt(args['max-pages'], DEFAULT_MAX_PAGES),
     maxDepth: positiveInt(args['max-depth'], DEFAULT_MAX_DEPTH),
     maxPerTemplate: positiveInt(args['max-per-template'], DEFAULT_MAX_PER_TEMPLATE),
+    maxPerContentHash: positiveInt(args['max-per-content-hash'], DEFAULT_MAX_PER_CONTENT_HASH),
+    duplicateTemplateWarnAt: positiveInt(
+      args['duplicate-template-warn-at'],
+      DEFAULT_DUPLICATE_TEMPLATE_WARN_AT,
+    ),
+    maxScrolls: positiveInt(args['max-scrolls'], DEFAULT_MAX_SCROLLS),
   };
   saveState(state);
 
@@ -347,7 +392,15 @@ function cmdCheck(args) {
     bumpSkip(state, reason);
     saveState(state);
     return Object.assign(
-      { action: 'check', decision: 'skip', reason, url: rawUrl, budget: budgetView(state), announce: null },
+      {
+        action: 'check',
+        decision: 'skip',
+        reason,
+        url: rawUrl,
+        budget: budgetView(state),
+        warning: null,
+        announce: null,
+      },
       extra || {},
     );
   };
@@ -371,6 +424,12 @@ function cmdCheck(args) {
     state.boundedBy = state.boundedBy || 'maxPages';
     return deny('max-pages', { canonicalPath: canonical.canonicalPath });
   }
+  // Set by 'visited' once this template produced the same rendered structure maxPerContentHash
+  // times. Refusing here rather than there is what stops the navigations themselves.
+  if (state.saturatedTemplates[canonical.canonicalPath]) {
+    state.boundedBy = state.boundedBy || 'duplicateContent';
+    return deny('duplicate-content-template', { canonicalPath: canonical.canonicalPath });
+  }
   const seenForTemplate = state.perTemplate[canonical.canonicalPath] || 0;
   if (seenForTemplate >= state.limits.maxPerTemplate) {
     state.boundedBy = state.boundedBy || 'maxPerTemplate';
@@ -381,6 +440,21 @@ function cmdCheck(args) {
   state.perTemplate[canonical.canonicalPath] = seenForTemplate + 1;
   state.pagesClaimed += 1;
   if (normalizedDepth > state.maxDepthSeen) state.maxDepthSeen = normalizedDepth;
+
+  let warning = null;
+  if (seenForTemplate + 1 === TEMPLATE_WARN_AT) {
+    warning = addWarning(
+      state,
+      'Template "' +
+        canonical.canonicalPath +
+        '" has now taken ' +
+        TEMPLATE_WARN_AT +
+        ' separate URLs. If these are pages of one list rather than distinct routes, this is a ' +
+        'pagination chain - it will be cut off at ' +
+        state.limits.maxPerTemplate +
+        ' URLs, or sooner if their content turns out identical.',
+    );
+  }
   saveState(state);
 
   return {
@@ -392,6 +466,7 @@ function cmdCheck(args) {
     normalizedUrl: canonical.normalizedUrl,
     firstOfTemplate: seenForTemplate === 0,
     budget: budgetView(state),
+    warning,
     announce: null,
   };
 }
@@ -415,11 +490,59 @@ function cmdVisited(args) {
       contentType,
       canonicalPath: canonical.ok ? canonical.canonicalPath : null,
       budget: budgetView(state),
+      warning: null,
       announce: null,
     };
   }
 
   state.pagesVisited += 1;
+
+  // The repetition check. contentHash is this route's normalized structural signature (title plus
+  // sorted regions plus sorted components) - the same value the site map records - so two pages
+  // sharing one are rendering the same thing regardless of what their URLs look like.
+  const contentHash = typeof args['content-hash'] === 'string' ? args['content-hash'] : null;
+  const template = canonical.ok ? canonical.canonicalPath : null;
+  let warning = null;
+  let trapDetected = false;
+
+  if (contentHash && template) {
+    const entry = state.contentHashes[contentHash] || { count: 0, templates: {}, firstUrl: rawUrl };
+    entry.count += 1;
+    entry.templates[template] = (entry.templates[template] || 0) + 1;
+    state.contentHashes[contentHash] = entry;
+
+    if (entry.templates[template] >= state.limits.maxPerContentHash) {
+      if (!state.saturatedTemplates[template]) {
+        state.saturatedTemplates[template] = contentHash;
+        state.boundedBy = state.boundedBy || 'duplicateContent';
+        trapDetected = true;
+        warning = addWarning(
+          state,
+          'Stopping "' +
+            template +
+            '": ' +
+            entry.templates[template] +
+            ' pages under it rendered identical structure (first seen at ' +
+            entry.firstUrl +
+            '). That is a pagination chain, an infinite feed, or a generic shell - not distinct ' +
+            'routes. No further URL under this template will be crawled; the route itself is kept.',
+        );
+      }
+    } else if (Object.keys(entry.templates).length >= state.limits.duplicateTemplateWarnAt) {
+      // Several DIFFERENT templates rendering the same thing. Real cases pull both ways - a generic
+      // empty state, or a chain this script's own canonicalization deliberately did not collapse -
+      // so this reports and lets a person judge rather than cutting the crawl off on a guess.
+      warning = addWarning(
+        state,
+        Object.keys(entry.templates).length +
+          ' different route templates are rendering identical structure (' +
+          Object.keys(entry.templates).sort().slice(0, 5).join(', ') +
+          '). Either the application shows one generic shell for all of them, or these are pages of ' +
+          'one list that only look like separate routes. Worth a look before the crawl goes further.',
+      );
+    }
+  }
+
   const announce = maybeAnnounce(state);
   saveState(state);
 
@@ -427,10 +550,56 @@ function cmdVisited(args) {
     action: 'visited',
     keep: true,
     reason: null,
-    canonicalPath: canonical.ok ? canonical.canonicalPath : null,
+    canonicalPath: template,
     status: args.status === undefined ? null : Number.parseInt(String(args.status), 10),
+    trapDetected,
     budget: budgetView(state),
+    warning,
     announce,
+  };
+}
+
+// Makes the max-2-viewport-scrolls rule mechanical. A page that appends content as you scroll never
+// changes its URL, so every other guard in this script is blind to it: check is never called again,
+// no new template appears, no content hash is ever compared. Ask before each scroll.
+function cmdScroll(args) {
+  const state = requireState();
+  const rawUrl = typeof args.url === 'string' ? args.url : '';
+  const canonical = canonicalize(rawUrl, state);
+  const key = canonical.ok ? canonical.normalizedUrl : rawUrl;
+  const used = state.scrolls[key] || 0;
+
+  if (used >= state.limits.maxScrolls) {
+    bumpSkip(state, 'max-scrolls');
+    const warning = addWarning(
+      state,
+      'Reached the ' +
+        state.limits.maxScrolls +
+        '-scroll ceiling on ' +
+        key +
+        '. If content is still loading, this is an infinite feed: record it as a collection of ' +
+        'repeating items rather than trying to reach its end.',
+    );
+    saveState(state);
+    return {
+      action: 'scroll',
+      allowed: false,
+      reason: 'max-scrolls',
+      scrolls: used,
+      maxScrolls: state.limits.maxScrolls,
+      warning,
+    };
+  }
+
+  state.scrolls[key] = used + 1;
+  saveState(state);
+  return {
+    action: 'scroll',
+    allowed: true,
+    reason: null,
+    scrolls: used + 1,
+    maxScrolls: state.limits.maxScrolls,
+    warning: null,
   };
 }
 
@@ -441,6 +610,7 @@ function cmdProgress() {
     line: progressLine(state),
     elapsedMs: elapsedMs(state),
     skipped: state.skipped,
+    warnings: state.warnings,
     budget: budgetView(state),
   };
 }
@@ -458,6 +628,8 @@ function cmdReport() {
     line: progressLine(state),
     skipped: state.skipped,
     droppedAfterVisit: state.droppedAfterVisit,
+    warnings: state.warnings,
+    stoppedTemplates: Object.keys(state.saturatedTemplates).sort(),
     canonicalRoutes: Object.keys(state.perTemplate).sort(),
     coverage: state.boundedBy
       ? { boundedBy: state.boundedBy, pagesVisited: state.pagesVisited }
@@ -481,6 +653,9 @@ function main() {
     case 'visited':
       result = cmdVisited(args);
       break;
+    case 'scroll':
+      result = cmdScroll(args);
+      break;
     case 'progress':
       result = cmdProgress();
       break;
@@ -490,7 +665,12 @@ function main() {
     default:
       process.stdout.write(
         JSON.stringify(
-          { error: 'unknown action: ' + (action || '(none)') + ' - expected start|check|visited|progress|report' },
+          {
+            error:
+              'unknown action: ' +
+              (action || '(none)') +
+              ' - expected start|check|visited|scroll|progress|report',
+          },
           null,
           2,
         ) + '\\n',

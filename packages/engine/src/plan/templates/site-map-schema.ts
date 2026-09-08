@@ -51,7 +51,7 @@ export function renderSiteMapSchema(): string {
       "properties": {
         "boundedBy": {
           "type": "string",
-          "enum": ["maxDepth", "maxPages", "maxPerTemplate"],
+          "enum": ["maxDepth", "maxPages", "maxPerTemplate", "duplicateContent"],
           "description": "Which traversal limit actually stopped this crawl pass."
         },
         "pagesVisited": {

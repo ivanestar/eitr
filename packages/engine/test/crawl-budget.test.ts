@@ -51,7 +51,14 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
       const output = start(dir);
       expect(output.origin).toBe(BASE);
       expect(output.role).toBeNull();
-      expect(output.limits).toEqual({ maxPages: 500, maxDepth: 6, maxPerTemplate: 20 });
+      expect(output.limits).toEqual({
+        maxPages: 500,
+        maxDepth: 6,
+        maxPerTemplate: 20,
+        maxPerContentHash: 3,
+        duplicateTemplateWarnAt: 3,
+        maxScrolls: 2,
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -329,6 +336,137 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
     try {
       expect(run(dir, ['start']).exitCode).toBe(1);
       expect(run(dir, ['start', '--base-url=not-a-url']).exitCode).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The live incident: 5441 pages of one "next page" chain, every one rendering the same structure.
+  it('stops a template on the third identically-structured page, not at the page ceiling', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      const walk = (n: number) => {
+        const decision = check(dir, `${BASE}/infinite_scroll/${n}`);
+        if (decision.decision !== 'visit') return decision;
+        return run(dir, [
+          'visited',
+          `--url=${BASE}/infinite_scroll/${n}`,
+          '--status=200',
+          '--content-hash=same-lorem-ipsum-shell',
+        ]);
+      };
+
+      expect(walk(1).trapDetected).toBe(false);
+      expect(walk(2).trapDetected).toBe(false);
+      const tripped = walk(3);
+      expect(tripped.trapDetected).toBe(true);
+      expect(tripped.warning).toContain('/infinite_scroll/{id}');
+      expect(tripped.warning).toContain('identical structure');
+
+      // Every later URL under that template is now refused before any navigation happens.
+      const refused = check(dir, `${BASE}/infinite_scroll/4`);
+      expect(refused.decision).toBe('skip');
+      expect(refused.reason).toBe('duplicate-content-template');
+      expect(check(dir, `${BASE}/infinite_scroll/5441`).reason).toBe('duplicate-content-template');
+
+      const report = run(dir, ['report']);
+      expect(report.coverage.boundedBy).toBe('duplicateContent');
+      expect(report.stoppedTemplates).toEqual(['/infinite_scroll/{id}']);
+      expect(report.budget.pagesVisited).toBe(3);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves a template alone when its pages genuinely differ', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (const n of [1, 2, 3, 4, 5]) {
+        check(dir, `${BASE}/users/${n}`);
+        const visited = run(dir, [
+          'visited',
+          `--url=${BASE}/users/${n}`,
+          '--status=200',
+          `--content-hash=profile-${n}`,
+        ]);
+        expect(visited.trapDetected).toBe(false);
+      }
+      expect(check(dir, `${BASE}/users/6`).decision).toBe('visit');
+      expect(run(dir, ['report']).stoppedTemplates).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // /blog/page-2 and /blog/page-3 are separate templates on purpose - collapsing every segment
+  // ending in a digit would merge real routes - so only the content signature catches this shape.
+  it('warns when several different templates render the same structure, without stopping the crawl', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      let warning: string | null = null;
+      for (const slug of ['page-2', 'page-3', 'page-4']) {
+        check(dir, `${BASE}/blog/${slug}`);
+        const visited = run(dir, [
+          'visited',
+          `--url=${BASE}/blog/${slug}`,
+          '--status=200',
+          '--content-hash=one-generic-shell',
+        ]);
+        if (visited.warning) warning = visited.warning;
+        expect(visited.trapDetected).toBe(false);
+      }
+      expect(warning).toContain('3 different route templates');
+      // A weaker signal than same-template repetition, so it reports rather than cutting the crawl off.
+      expect(check(dir, `${BASE}/blog/page-5`).decision).toBe('visit');
+      expect(run(dir, ['report']).coverage).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('warns while a template is still filling up, before its hard cap lands', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      expect(check(dir, `${BASE}/items/1`).warning).toBeNull();
+      expect(check(dir, `${BASE}/items/2`).warning).toBeNull();
+      expect(check(dir, `${BASE}/items/3`).warning).toBeNull();
+      const warned = check(dir, `${BASE}/items/4`);
+      expect(warned.decision).toBe('visit');
+      expect(warned.warning).toContain('4 separate URLs');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('caps viewport scrolls per page, which is the only guard a same-URL infinite feed can hit', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      expect(run(dir, ['scroll', `--url=${BASE}/infinite_scroll`]).allowed).toBe(true);
+      expect(run(dir, ['scroll', `--url=${BASE}/infinite_scroll`]).allowed).toBe(true);
+      const stopped = run(dir, ['scroll', `--url=${BASE}/infinite_scroll`]);
+      expect(stopped.allowed).toBe(false);
+      expect(stopped.reason).toBe('max-scrolls');
+      expect(stopped.warning).toContain('infinite feed');
+      // The ceiling is per page, so another page starts fresh.
+      expect(run(dir, ['scroll', `--url=${BASE}/other-feed`]).allowed).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('repeats a warning once, however many pages would have produced it', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (const n of [1, 2, 3, 4, 5]) {
+        run(dir, ['scroll', `--url=${BASE}/feed`]);
+      }
+      expect(run(dir, ['report']).warnings).toHaveLength(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

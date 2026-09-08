@@ -27,7 +27,7 @@ import process from 'node:process';
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 
-const BOUNDED_BY_VALUES = new Set(['maxDepth', 'maxPages', 'maxPerTemplate']);
+const BOUNDED_BY_VALUES = new Set(['maxDepth', 'maxPages', 'maxPerTemplate', 'duplicateContent']);
 const STATUS_VALUES = new Set(['active', 'removed']);
 const TRIAGE_STATE_VALUES = new Set([
   'ready',
@@ -100,7 +100,7 @@ function validate() {
       errors.push('coverage, when present, must be an object.');
     } else {
       if (!BOUNDED_BY_VALUES.has(coverage.boundedBy)) {
-        errors.push('coverage.boundedBy must be one of maxDepth|maxPages|maxPerTemplate.');
+        errors.push('coverage.boundedBy must be one of maxDepth|maxPages|maxPerTemplate|duplicateContent.');
       }
       if (typeof coverage.pagesVisited !== 'number' || !Number.isInteger(coverage.pagesVisited)) {
         errors.push('coverage.pagesVisited must be an integer.');
