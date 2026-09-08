@@ -47,6 +47,7 @@ import { renderTestConditionsEngine } from './templates/test-conditions-engine.j
 import { renderTestConditionsValidator } from './templates/test-conditions-validator.js';
 import { renderPipelineStatus } from './templates/pipeline-status.js';
 import { renderAuthStatus } from './templates/auth-status.js';
+import { renderAuthQuestions } from './templates/auth-questions.js';
 import { renderMapSiteStatus } from './templates/map-site-status.js';
 import { renderAutomateTestStatus } from './templates/automate-test-status.js';
 import { renderEnvRoleStubs } from './templates/env-role-stubs.js';
@@ -200,6 +201,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderAuthStatus() },
+          },
+          {
+            path: 'scripts/auth-questions.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderAuthQuestions() },
           },
           {
             path: 'scripts/map-site-status.mjs',
