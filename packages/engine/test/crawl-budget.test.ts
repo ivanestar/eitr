@@ -29,8 +29,10 @@ function start(dir: string, extra: string[] = []) {
   return run(dir, ['start', `--base-url=${BASE}`, ...extra]);
 }
 
-function check(dir: string, url: string, depth = 1) {
-  return run(dir, ['check', `--url=${url}`, `--depth=${depth}`]);
+// Visibility is required on every check, so the default here is the ordinary case - a link actually
+// rendered on a page the crawler loaded. Tests about invisible links pass it explicitly.
+function check(dir: string, url: string, depth = 1, visible = true) {
+  return run(dir, ['check', `--url=${url}`, `--depth=${depth}`, `--visible=${visible}`]);
 }
 
 describe('scripts/crawl-budget.mjs (real execution)', () => {
@@ -57,7 +59,10 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
         maxPerTemplate: 20,
         maxPerContentHash: 3,
         duplicateTemplateWarnAt: 3,
+        maxPerParent: 50,
+        maxPerQueryBase: 8,
         maxScrolls: 2,
+        allowInvisible: false,
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -91,7 +96,9 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
         '/users/{id}',
       );
       expect(check(dir, `${BASE}/reports/2026-09-08`).canonicalPath).toBe('/reports/{date}');
-      expect(run(dir, ['report']).canonicalRoutes).toEqual(['/reports/{date}', '/users/{id}']);
+      // Five URLs, two templates. Asserted on the claimed count rather than canonicalRoutes, which
+      // only counts templates a visit confirmed to be a real page - nothing was visited here.
+      expect(run(dir, ['report']).budget.templatesClaimed).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -257,6 +264,225 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
       expect(output.keep).toBe(false);
       expect(output.reason).toBe('non-html-response');
       expect(run(dir, ['report']).budget.pagesVisited).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Live-observed: /about, /contact-us, /gallery and /portfolio entered a crawl of a site that
+  // returns 404 for all four. Their links are rendered, so visibility does not catch them - only
+  // the status does, and it was already being passed in.
+  it('drops a route the server says does not exist', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (const missing of ['/about', '/contact-us', '/gallery', '/portfolio']) {
+        check(dir, `${BASE}${missing}`);
+        const visited = run(dir, [
+          'visited',
+          `--url=${BASE}${missing}`,
+          '--status=404',
+          '--content-type=text/html',
+        ]);
+        expect(visited.keep, `${missing} was kept`).toBe(false);
+        expect(visited.reason).toBe('not-found');
+      }
+      expect(run(dir, ['report']).budget.pagesVisited).toBe(0);
+      expect(run(dir, ['report']).skipped['not-found']).toBe(4);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('drops a 410 the same way, and nothing else in the 4xx range', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      const visitWith = (path: string, status: number) => {
+        check(dir, `${BASE}${path}`);
+        return run(dir, [
+          'visited',
+          `--url=${BASE}${path}`,
+          `--status=${status}`,
+          '--content-type=text/html',
+        ]);
+      };
+      expect(visitWith('/gone', 410).keep).toBe(false);
+      // A protected route is the opposite of an absent one - something real is behind it, and
+      // dropping it would delete the only evidence of an auth boundary a crawl can produce.
+      expect(visitWith('/basic_auth', 401).keep).toBe(true);
+      expect(visitWith('/download_secure', 403).keep).toBe(true);
+      // And it stays a route whatever body the challenge answers with. Live-observed: /digest_auth
+      // vanished from a crawl that kept /basic_auth, because the content type was tested first.
+      check(dir, `${BASE}/digest_auth`);
+      const digest = run(dir, [
+        'visited',
+        `--url=${BASE}/digest_auth`,
+        '--status=401',
+        '--content-type=text/plain',
+      ]);
+      expect(digest.keep).toBe(true);
+      expect(run(dir, ['report']).canonicalRoutes).toContain('/digest_auth');
+      // A route that exists and is erroring is a finding, not a non-route.
+      expect(visitWith('/broken', 500).keep).toBe(true);
+      expect(visitWith('/teapot', 418).keep).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The count a human reads must be the count of real pages. perTemplate is filled at check time,
+  // before anything is known about what the server returns, so reporting from it announced 59
+  // canonical routes for a crawl where four were missing pages and one was a Python script.
+  it('counts only templates that turned out to be pages', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      const visit = (path: string, status: number, contentType = 'text/html') => {
+        check(dir, `${BASE}${path}`);
+        return run(dir, [
+          'visited',
+          `--url=${BASE}${path}`,
+          `--status=${status}`,
+          `--content-type=${contentType}`,
+        ]);
+      };
+      visit('/real', 200);
+      visit('/also-real', 200);
+      visit('/about', 404);
+      visit('/export', 200, 'application/octet-stream');
+
+      const report = run(dir, ['report']);
+      expect(report.canonicalRoutes).toEqual(['/also-real', '/real']);
+      expect(report.budget.canonicalRoutes).toBe(2);
+      // The claimed count stays visible, because budget accounting genuinely did spend four slots.
+      expect(report.budget.templatesClaimed).toBe(4);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A count nobody can check ("161 non-page assets") is not evidence. The URLs are, and they are
+  // the only way a human spots a route they recognise being thrown out by mistake.
+  it('keeps every refused URL, not just a count of them', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      check(dir, `${BASE}/admin/settings`, 1, false);
+      check(dir, `${BASE}/reports.xml`);
+      check(dir, 'https://twitter.com/example');
+
+      const rejected = run(dir, ['rejected']);
+      const byReason: Record<string, string[]> = {};
+      for (const group of rejected.groups) byReason[group.reason] = group.urls;
+
+      expect(byReason['not-visible']).toEqual([`${BASE}/admin/settings`]);
+      expect(byReason['non-html-asset']).toEqual([`${BASE}/reports.xml`]);
+      expect(byReason['cross-origin']).toEqual(['https://twitter.com/example']);
+      expect(rejected.totalLogged).toBe(3);
+      expect(rejected.notLogged).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('puts the refusals worth reading first, and flags them as such', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      check(dir, 'https://elsewhere.example/page');
+      check(dir, `${BASE}/a`);
+      check(dir, `${BASE}/a`); // already-claimed
+      check(dir, `${BASE}/hidden`, 1, false);
+
+      const groups = run(dir, ['rejected']).groups;
+      // A link on another origin, or one already claimed, is never a surprise. An invisible one is
+      // exactly where a real route gets lost.
+      expect(groups[0].reason).toBe('not-visible');
+      expect(groups[0].reviewWorthy).toBe(true);
+      for (const group of groups.slice(1)) expect(group.reviewWorthy).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('filters to one reason on request', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      check(dir, `${BASE}/one`, 1, false);
+      check(dir, `${BASE}/two`, 1, false);
+      check(dir, 'mailto:a@b.c');
+
+      const only = run(dir, ['rejected', '--reason=not-visible']);
+      expect(only.groups).toHaveLength(1);
+      expect(only.groups[0].urls).toEqual([`${BASE}/one`, `${BASE}/two`]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('samples in the run report and keeps the full list behind its own command', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (let i = 0; i < 9; i += 1) check(dir, `${BASE}/hidden-${i}`, 1, false);
+
+      const report = run(dir, ['report']);
+      const group = report.rejections.find((g: { reason: string }) => g.reason === 'not-visible');
+      expect(group.count).toBe(9);
+      expect(group.urls).toHaveLength(5);
+      expect(group.truncated).toBe(true);
+
+      expect(run(dir, ['rejected']).groups[0].urls).toHaveLength(9);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Faceted navigation, which Google's own crawling guidance names as the way a site generates an
+  // infinite URL space. The parameters cannot be stripped - ?color=red really is a different page
+  // from ?color=blue - and every variant shares one path and one parent, so no other cap sees it.
+  it('caps filter combinations on one path without touching the unfiltered page', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--max-per-query-base=3']);
+      expect(check(dir, `${BASE}/products`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/products?color=red`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/products?color=blue`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/products?color=green`).decision).toBe('visit');
+      const stopped = check(dir, `${BASE}/products?color=red&size=xl`);
+      expect(stopped.decision).toBe('skip');
+      expect(stopped.reason).toBe('max-per-query-base');
+      expect(stopped.warning).toContain('faceted navigation');
+      // A different path keeps its own allowance.
+      expect(check(dir, `${BASE}/orders?status=open`).decision).toBe('visit');
+      expect(run(dir, ['report']).coverage.boundedBy).toBe('maxPerQueryBase');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('never counts a plain URL against the filter cap', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--max-per-query-base=1']);
+      for (const slug of ['a', 'b', 'c', 'd', 'e']) {
+        expect(check(dir, `${BASE}/${slug}`).decision).toBe('visit');
+      }
+      expect(run(dir, ['report']).coverage).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects source files a site offers for download', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (const asset of ['/download/get_ssh.py', '/scripts/deploy.sh', '/lib/app.jar']) {
+        expect(check(dir, `${BASE}${asset}`).reason).toBe('non-html-asset');
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -472,6 +698,137 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
     }
   });
 
+  // A link present only in markup is not a page a user can reach. Live-observed adding /about,
+  // /contact-us, /portfolio and /gallery to a crawl of a site that has none of them.
+  it('refuses a link that is not actually rendered', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      const hidden = check(dir, `${BASE}/about`, 1, false);
+      expect(hidden.decision).toBe('skip');
+      expect(hidden.reason).toBe('not-visible');
+      expect(run(dir, ['report']).budget.pagesClaimed).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to decide at all when visibility was not reported', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      const unreported = run(dir, ['check', `--url=${BASE}/a`, '--depth=1']);
+      expect(unreported.decision).toBe('skip');
+      expect(unreported.reason).toBe('visibility-not-reported');
+      expect(unreported.hint).toContain('--visible');
+      // Not silently treated as visible, which is how the old behaviour would creep back.
+      expect(run(dir, ['report']).budget.pagesClaimed).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('--allow-invisible opts a canvas-style app back in, deliberately', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--allow-invisible=true']);
+      expect(check(dir, `${BASE}/about`, 1, false).decision).toBe('visit');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The gap every per-template cap leaves: siblings that do not collapse into one template.
+  // /download/report.txt and /download/tmp8sk2.txt are separate templates by every id rule.
+  it('caps distinct child routes under one parent, which is how a file listing eats a crawl', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--max-per-parent=3']);
+      expect(check(dir, `${BASE}/download/a.html`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/download/b.html`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/download/c.html`).decision).toBe('visit');
+      const stopped = check(dir, `${BASE}/download/d.html`);
+      expect(stopped.decision).toBe('skip');
+      expect(stopped.reason).toBe('max-per-parent');
+      expect(stopped.parentPath).toBe('/download');
+      expect(stopped.warning).toContain('/download');
+      expect(run(dir, ['report']).coverage.boundedBy).toBe('maxPerParent');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Every top-level page shares "/" as its parent, so capping the root would cap the site's own
+  // navigation. The sandbox this was built against has 45 routes, almost all top-level.
+  it('never caps the root, however many top-level pages a site has', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--max-per-parent=3']);
+      for (const slug of ['about', 'pricing', 'docs', 'blog', 'careers', 'legal', 'status']) {
+        expect(check(dir, `${BASE}/${slug}`).decision, `/${slug} was refused`).toBe('visit');
+      }
+      expect(run(dir, ['report']).coverage).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not count one templated child repeatedly against its parent', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--max-per-parent=2']);
+      // Every one of these collapses to /users/{id}, so the parent has one child, not five.
+      for (const n of [1, 2, 3, 4, 5]) {
+        expect(check(dir, `${BASE}/users/${n}`).decision).toBe('visit');
+      }
+      expect(check(dir, `${BASE}/users/profile`).decision).toBe('visit');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects plain-text and markup files, not only binaries', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (const asset of [
+        '/download/sample.txt',
+        '/download/tmpx8s.txt',
+        '/notes/readme.md',
+        '/feed.xml',
+        '/server.log',
+      ]) {
+        expect(check(dir, `${BASE}${asset}`).reason).toBe('non-html-asset');
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The message names how many templates share the hash, so deduplicating by message text emitted
+  // the same finding once per page, each line one number different - 40+ of them in a live run.
+  it('reports one duplicate-structure finding however many templates join it', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      for (const slug of ['a', 'b', 'c', 'd', 'e', 'f']) {
+        check(dir, `${BASE}/${slug}`);
+        run(dir, [
+          'visited',
+          `--url=${BASE}/${slug}`,
+          '--status=200',
+          '--content-hash=one-generic-shell',
+        ]);
+      }
+      const warnings = run(dir, ['report']).warnings;
+      expect(
+        warnings.filter((w: string) => w.includes('rendering identical structure')),
+      ).toHaveLength(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('records every frontier decision under E2E_DEBUG, and nothing without it', () => {
     const dir = setupProject();
     const logPath = join(dir, 'artifacts', '.debug', 'crawl-budget.ndjson');
@@ -480,7 +837,7 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
       check(dir, `${BASE}/a`);
       expect(existsSync(logPath)).toBe(false);
 
-      run(dir, ['check', `--url=${BASE}/b.pdf`, '--depth=1'], { E2E_DEBUG: '1' });
+      run(dir, ['check', `--url=${BASE}/b.pdf`, '--depth=1', '--visible=true'], { E2E_DEBUG: '1' });
       const entries = readFileSync(logPath, 'utf8')
         .trim()
         .split('\n')

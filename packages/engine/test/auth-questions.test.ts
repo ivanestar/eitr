@@ -76,6 +76,79 @@ const NO_CI: Status = { hasSession: false, ciProvider: null };
 const WITH_CI: Status = { hasSession: false, ciProvider: 'github' };
 const HAS_SESSION: Status = { hasSession: true, ciProvider: null };
 
+// A structured choice tool needs at least two options and rejects a call carrying one - live
+// observed as "each question requires at least 2 options, got 1", which killed a question before
+// the human ever saw it. Every question this script emits is therefore either a real choice with
+// two or more options, or an open question with none at all and allowsFreeText set. Exactly one
+// option is the shape that has no valid way to be asked, so it must never be emitted.
+describe('scripts/auth-questions.mjs - every emitted question is askable', () => {
+  const STATUSES: Array<[string, Status]> = [
+    ['no session, no CI', { hasSession: false, ciProvider: null }],
+    ['no session, CI configured', { hasSession: false, ciProvider: 'github' }],
+    ['session exists', { hasSession: true, ciProvider: 'github' }],
+    [
+      'roles declared but not captured',
+      { hasSession: true, ciProvider: 'gitlab', rolesMissingSession: ['viewer'] },
+    ],
+  ];
+
+  // Every question is reached by driving the flow down each of its own branches, so a question that
+  // only appears under one combination of answers is still checked.
+  function collectQuestions(dir: string, status: Status) {
+    const seen = new Map<string, NonNullable<Result['question']>>();
+    const explore = (answers: Record<string, string>, depth: number) => {
+      if (depth > 8) return;
+      const result = ask(dir, answers, status);
+      if (result.status !== 'ASK' || !result.question) return;
+      const question = result.question;
+      seen.set(question.id, question);
+      const replies = question.options.length > 0 ? question.options.map((o) => o.id) : ['admin'];
+      for (const reply of replies) {
+        explore({ ...answers, [question.id]: reply }, depth + 1);
+      }
+    };
+    explore({}, 0);
+    return [...seen.values()];
+  }
+
+  it.each(STATUSES)('never emits a single-option question (%s)', (_label, status) => {
+    const dir = setupProject();
+    try {
+      const questions = collectQuestions(dir, status);
+      expect(questions.length).toBeGreaterThan(0);
+      for (const question of questions) {
+        expect(
+          question.options.length,
+          `question "${question.id}" has exactly one option, which no choice tool accepts`,
+        ).not.toBe(1);
+        if (question.options.length === 0) {
+          expect(
+            question.allowsFreeText,
+            `question "${question.id}" offers no options and no free text, so it cannot be answered`,
+          ).toBe(true);
+        }
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('gives every option a distinct id and a non-empty label', () => {
+    const dir = setupProject();
+    try {
+      for (const [, status] of STATUSES) {
+        for (const question of collectQuestions(dir, status)) {
+          const ids = question.options.map((o) => o.id);
+          expect(new Set(ids).size, `duplicate option ids in "${question.id}"`).toBe(ids.length);
+          for (const option of question.options) expect(option.label.trim()).not.toBe('');
+        }
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('scripts/auth-questions.mjs (real execution)', () => {
   describe('ordering', () => {
     // Whether to approve a login-capture procedure is not a question anyone has a basis to answer

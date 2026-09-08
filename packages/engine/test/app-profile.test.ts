@@ -51,6 +51,150 @@ function validProfile() {
   };
 }
 
+function validCorePurpose() {
+  return {
+    candidates: [
+      {
+        value: 'A practice sandbox of isolated UI patterns for test automation.',
+        reasoning:
+          'Every route demonstrates one widget in isolation, with no shared data between them.',
+        evidence: [{ signal: 'heading-text', excerpt: 'Available Examples' }],
+      },
+    ],
+    mostLikelyIndex: 0,
+    reviewed: false,
+  };
+}
+
+// The failure that put corePurpose in this file: a human answered the purpose question, and their
+// answer went somewhere other than where the very next question's answer (applicationKind) went, so
+// they could not find it afterwards.
+describe('scripts/app-profile.mjs - core purpose lives with the other app-level facts', () => {
+  it('accepts a confirmed purpose alongside applicationKind', () => {
+    const dir = setupProject();
+    try {
+      writeProfile(dir, {
+        ...validProfile(),
+        corePurpose: {
+          ...validCorePurpose(),
+          selected: {
+            value: 'A practice sandbox of isolated UI patterns for test automation.',
+            source: 'human',
+            recordedAt: '2026-09-08T10:05:00.000Z',
+          },
+          reviewed: true,
+          reviewedBy: 'human',
+        },
+      });
+      const { result, output } = run(dir, '--validate');
+      expect(output.errors).toEqual([]);
+      expect(output.status).toBe('PASSED');
+      expect(result.status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts candidates that nobody has answered yet', () => {
+    const dir = setupProject();
+    try {
+      writeProfile(dir, { ...validProfile(), corePurpose: validCorePurpose() });
+      expect(run(dir, '--validate').output.status).toBe('PASSED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Recording the approval without recording the answer loses exactly the thing the question was
+  // asked to obtain.
+  it('rejects a purpose marked reviewed with nothing selected', () => {
+    const dir = setupProject();
+    try {
+      writeProfile(dir, {
+        ...validProfile(),
+        corePurpose: { ...validCorePurpose(), reviewed: true, reviewedBy: 'human' },
+      });
+      const { output } = run(dir, '--validate');
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.join(' ')).toContain('corePurpose.selected is absent');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a candidate with no evidence behind it', () => {
+    const dir = setupProject();
+    try {
+      const purpose = validCorePurpose();
+      purpose.candidates[0].evidence = [];
+      writeProfile(dir, { ...validProfile(), corePurpose: purpose });
+      const { output } = run(dir, '--validate');
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.join(' ')).toContain('evidence must be a non-empty array');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a mostLikelyIndex that points outside the candidate list', () => {
+    const dir = setupProject();
+    try {
+      writeProfile(dir, {
+        ...validProfile(),
+        corePurpose: { ...validCorePurpose(), mostLikelyIndex: 3 },
+      });
+      expect(run(dir, '--validate').output.errors.join(' ')).toContain('mostLikelyIndex');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts role profiles, including a role that turned out to be no different', () => {
+    const dir = setupProject();
+    try {
+      writeProfile(dir, {
+        ...validProfile(),
+        roles: {
+          admin: {
+            name: 'admin',
+            purpose: {
+              value: 'Reached nothing the other crawled roles could not.',
+              source: 'observed',
+              recordedAt: '2026-09-08T10:05:00.000Z',
+            },
+            exclusiveRoutes: [],
+            reviewed: true,
+            reviewedBy: 'human',
+          },
+        },
+      });
+      expect(run(dir, '--validate').output.status).toBe('PASSED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a role whose name disagrees with its own key', () => {
+    const dir = setupProject();
+    try {
+      writeProfile(dir, {
+        ...validProfile(),
+        roles: {
+          admin: {
+            name: 'administrator',
+            purpose: { value: 'x', source: 'observed', recordedAt: '2026-09-08T10:05:00.000Z' },
+            exclusiveRoutes: [],
+            reviewed: false,
+          },
+        },
+      });
+      expect(run(dir, '--validate').output.errors.join(' ')).toContain('must equal its own key');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('scripts/app-profile.mjs (real execution)', () => {
   it('returns a well-formed empty profile when the file does not exist yet', () => {
     const dir = setupProject();

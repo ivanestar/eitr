@@ -59,6 +59,45 @@ export interface CrawlBoundaryFact extends Fact<CrawlBoundary> {
   offLimits?: string[];
 }
 
+// What this application is FOR, in one sentence, once a person has confirmed it.
+//
+// This lives here rather than beside the per-route analysis that first proposes it, and the reason
+// is a live failure: a human answered the purpose question and then could not find their answer,
+// because it had been written into a different file from applicationKind - the other app-level
+// fact, established by the very next question in the same conversation. Two answers to two adjacent
+// questions about the same application belong in the same record.
+//
+// "candidates" is what the analysis proposed; "selected" is what a person actually settled on, and
+// only "selected" is authoritative. Absence of "selected" means the question was asked and never
+// answered, which is different from never having been asked at all.
+export interface CorePurposeCandidate {
+  value: string;
+  reasoning: string;
+  // What in the application supports this reading. Free-form signal name plus a short excerpt,
+  // matching how every other inferred field in this project cites itself.
+  evidence: Array<{ signal: string; excerpt: string }>;
+}
+
+export interface CorePurpose {
+  candidates: CorePurposeCandidate[];
+  // Index into "candidates" the evidence supports most strongly. Always 0 when there is only one.
+  mostLikelyIndex: number;
+  selected?: Fact<string>;
+  reviewed: boolean;
+  reviewedBy?: 'human' | 'auto-pilot';
+}
+
+// What one role is actually for, derived from the routes it could reach that others could not -
+// never from its name. A role called "admin" that reaches nothing others cannot is the finding
+// worth surfacing, and naming it "administrative access" would bury it.
+export interface RoleProfile {
+  name: string;
+  purpose: Fact<string>;
+  exclusiveRoutes: string[];
+  reviewed: boolean;
+  reviewedBy?: 'human' | 'auto-pilot';
+}
+
 // A piece of domain knowledge a person volunteered - a business rule, a past incident, an edge
 // case. This is the single highest-value input in the whole pipeline and the one a crawl can never
 // recover on its own ("refunds are processed by a nightly batch job" is not visible in any DOM),
@@ -103,6 +142,9 @@ export interface AppProfile {
   generatedAt: string;
   lastUpdatedAt?: string;
   applicationKind?: Fact<ApplicationKind>;
+  corePurpose?: CorePurpose;
+  // Keyed by role name. Present only once a crawl actually ran as more than one role.
+  roles?: Record<string, RoleProfile>;
   apiStyle?: Fact<ApiStyle>;
   crawlBoundary?: CrawlBoundaryFact;
   domainNotes?: DomainNote[];
