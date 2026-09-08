@@ -61,6 +61,8 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
         duplicateTemplateWarnAt: 3,
         maxPerParent: 50,
         maxPerQueryBase: 8,
+        maxMinutes: 30,
+        exclude: [],
         maxScrolls: 2,
         allowInvisible: false,
       });
@@ -471,6 +473,70 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
         expect(check(dir, `${BASE}/${slug}`).decision).toBe('visit');
       }
       expect(run(dir, ['report']).coverage).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Three normalizations Scrapy's canonicalize_url performs and the WHATWG URL parser does not.
+  // Each is a way to crawl one page twice, or without limit.
+  it('normalizes what the URL parser leaves alone', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      // Repeated slashes: /a//b and /a///b are one page, and joining a base to a path makes them
+      // endlessly.
+      expect(check(dir, `${BASE}/a//b///c`).canonicalPath).toBe('/a/b/c');
+      expect(check(dir, `${BASE}/a/b/c`).reason).toBe('already-claimed');
+      // A trailing dot on the host is a valid absolute form, and parses as a different origin - one
+      // such link would crawl the whole site a second time.
+      expect(check(dir, 'https://app.example.com./p').decision).toBe('visit');
+      expect(check(dir, `${BASE}/p`).reason).toBe('already-claimed');
+      // %2F and %2f are the same octet.
+      expect(check(dir, `${BASE}/x/%2Fy`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/x/%2fy`).reason).toBe('already-claimed');
+      // The parser already resolves dot segments; asserted so a future change cannot regress it.
+      expect(check(dir, `${BASE}/one/two/../three`).canonicalPath).toBe('/one/three');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Both Crawlee and katana make exclusion a first-class crawler option rather than something the
+  // crawler is asked to remember for every candidate link.
+  it('enforces the off-limits areas a human named, as patterns', () => {
+    const dir = setupProject();
+    try {
+      start(dir, ['--exclude=/billing/**,/contact']);
+      const billing = check(dir, `${BASE}/billing/invoices/2026`);
+      expect(billing.decision).toBe('skip');
+      expect(billing.reason).toBe('off-limits');
+      expect(billing.pattern).toBe('/billing/**');
+      expect(check(dir, `${BASE}/contact`).reason).toBe('off-limits');
+      // "*" stays within one segment, so a deeper path under it is not matched by /contact alone.
+      expect(check(dir, `${BASE}/contact/thanks`).decision).toBe('visit');
+      expect(check(dir, `${BASE}/products`).decision).toBe('visit');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('stops on elapsed time, not only on pages, so a slow app cannot run forever', () => {
+    const dir = setupProject();
+    try {
+      // Zero would be rejected as a non-positive value, so the smallest real ceiling is used and
+      // the recorded start time is moved back to simulate a long-running crawl.
+      start(dir, ['--max-minutes=1']);
+      const statePath = join(dir, 'artifacts', 'site-map', '.crawl-budget.json');
+      const state = JSON.parse(readFileSync(statePath, 'utf8'));
+      state.startedAt = new Date(Date.now() - 5 * 60000).toISOString();
+      writeFileSync(statePath, JSON.stringify(state), 'utf8');
+
+      const stopped = check(dir, `${BASE}/anything`);
+      expect(stopped.decision).toBe('skip');
+      expect(stopped.reason).toBe('max-minutes');
+      expect(stopped.warning).toContain('run for over 1 minutes');
+      expect(run(dir, ['report']).coverage.boundedBy).toBe('maxMinutes');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

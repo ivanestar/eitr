@@ -98,6 +98,12 @@ const TEMPLATE_WARN_AT = 4;
 // The anti-infinite-scroll ceiling, enforced rather than described. A page that appends content on
 // scroll never changes its URL, so nothing else in this script ever sees it.
 const DEFAULT_MAX_SCROLLS = 2;
+// A page ceiling is not a time ceiling. 500 pages of a fast application is minutes; 500 pages of a
+// slow one, or one behind a saturated test environment, is most of an afternoon - a live crawl here
+// averaged four seconds a page. katana bounds a crawl by duration as well as by depth for exactly
+// this reason, and a human waiting on a stage needs the wait to be bounded by something they can
+// predict. Generous by default: this is a runaway stop, not a schedule.
+const DEFAULT_MAX_MINUTES = 30;
 const ANNOUNCE_EVERY_PAGES = 25;
 const ANNOUNCE_EVERY_MS = 120000;
 // Every refused link is kept, not just counted, so a human can scan the list and catch a route
@@ -199,6 +205,12 @@ function emptyState() {
       duplicateTemplateWarnAt: DEFAULT_DUPLICATE_TEMPLATE_WARN_AT,
       maxPerParent: DEFAULT_MAX_PER_PARENT,
       maxPerQueryBase: DEFAULT_MAX_PER_QUERY_BASE,
+      maxMinutes: DEFAULT_MAX_MINUTES,
+      // Glob patterns the human asked to stay out of, translated from their own words by the skill
+      // and confirmed back to them before the crawl starts. Enforced here rather than remembered
+      // per link - both Crawlee and katana make exclusion a first-class crawler option, and a rule
+      // the crawler has to recall for every candidate is one it will eventually forget.
+      exclude: [],
       maxScrolls: DEFAULT_MAX_SCROLLS,
       allowInvisible: false,
     },
@@ -273,11 +285,32 @@ function canonicalize(rawUrl, state) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return { ok: false, reason: 'unsupported-scheme' };
   }
+  // Stripped before the origin comparison, not after: "a.example." is a valid absolute form of
+  // "a.example" and parses as a different origin, so leaving it until later would reject a
+  // same-site link as cross-origin instead of normalizing it.
+  parsed.hostname = parsed.hostname.replace(/\\.$/, '');
+
   if (state.origin && parsed.origin !== state.origin) {
     return { ok: false, reason: 'cross-origin' };
   }
 
   parsed.hash = '';
+
+  // Three normalizations the WHATWG URL parser does not do, each verified against this project's
+  // own runtime rather than assumed. Scrapy's canonicalize_url does all of them, and every one is a
+  // way to crawl the same page twice or without limit:
+  //
+  //  - Repeated slashes. /a//b and /a///b are the same page on every server that resolves them at
+  //    all, and a link built by joining a base and a path produces them endlessly.
+  //  - Percent-encoding case. %2F and %2f are the same octet.
+  //
+  // The trailing dot on a host is handled above, before the origin check. Dot segments need no
+  // handling at all: the parser already resolves /x/y/../z to /x/z.
+  parsed.pathname = parsed.pathname
+    .replace(/\\/{2,}/g, '/')
+    .replace(/%[0-9a-fA-F]{2}/g, function (match) {
+      return match.toUpperCase();
+    });
 
   const kept = [];
   for (const [key, value] of parsed.searchParams.entries()) {
@@ -348,6 +381,41 @@ function rejectionsByReason(state, limitPerReason) {
 }
 
 // "/a/b/c" -> "/a/b", "/a" -> "/", "/" -> "/". Purely lexical: the parent of a path, not of a page.
+// Deliberately the smallest glob dialect that covers what a human means by "the billing pages":
+// "*" matches within one path segment, "**" crosses segments. Anything richer would be a pattern
+// language nobody asked for, and the patterns are confirmed back to the human before the crawl
+// starts rather than inferred silently.
+function globToRegExp(pattern) {
+  let out = '';
+  for (let i = 0; i < pattern.length; i += 1) {
+    const ch = pattern[i];
+    if (ch === '*') {
+      if (pattern[i + 1] === '*') {
+        out += '.*';
+        i += 1;
+      } else {
+        out += '[^/]*';
+      }
+    } else if ('\\\\^$.|?+()[]{}'.indexOf(ch) !== -1) {
+      out += '\\\\' + ch;
+    } else {
+      out += ch;
+    }
+  }
+  return new RegExp('^' + out + '$');
+}
+
+function matchesExclusion(state, canonicalPath) {
+  for (const pattern of state.limits.exclude) {
+    try {
+      if (globToRegExp(pattern).test(canonicalPath)) return pattern;
+    } catch {
+      // An unusable pattern excludes nothing rather than failing the crawl.
+    }
+  }
+  return null;
+}
+
 function parentPath(canonicalPath) {
   const cut = canonicalPath.lastIndexOf('/');
   if (cut <= 0) return '/';
@@ -480,6 +548,8 @@ function cmdStart(args) {
     ),
     maxPerParent: positiveInt(args['max-per-parent'], DEFAULT_MAX_PER_PARENT),
     maxPerQueryBase: positiveInt(args['max-per-query-base'], DEFAULT_MAX_PER_QUERY_BASE),
+    maxMinutes: positiveInt(args['max-minutes'], DEFAULT_MAX_MINUTES),
+    exclude: typeof args.exclude === 'string' && args.exclude !== '' ? args.exclude.split(',') : [],
     maxScrolls: positiveInt(args['max-scrolls'], DEFAULT_MAX_SCROLLS),
     // Opt-in, for the rare application whose real navigation genuinely is not visible markup (a
     // canvas-driven UI, a keyboard-only admin). Never on by default: the ordinary case is that an
@@ -537,6 +607,28 @@ function cmdCheck(args) {
   // link is reported as cross-origin rather than as invisible, which is the more useful answer.
   const canonical = canonicalize(rawUrl, state);
   if (!canonical.ok) return deny(canonical.reason);
+
+  const excluded = matchesExclusion(state, canonical.canonicalPath);
+  if (excluded !== null) {
+    return deny('off-limits', { canonicalPath: canonical.canonicalPath, pattern: excluded });
+  }
+
+  // Elapsed time is checked here rather than only counted, so a slow application cannot turn a
+  // bounded stage into an unbounded wait.
+  if (elapsedMs(state) > state.limits.maxMinutes * 60000) {
+    state.boundedBy = state.boundedBy || 'maxMinutes';
+    return deny('max-minutes', {
+      canonicalPath: canonical.canonicalPath,
+      warning: addWarning(
+        state,
+        'max-minutes',
+        'Stopping: this crawl has run for over ' +
+          state.limits.maxMinutes +
+          ' minutes. The route list is whatever was reached by now, and is incomplete - re-run with ' +
+          '--max-minutes raised if the application really is this large or this slow.',
+      ),
+    });
+  }
 
   const visibleArg = args.visible;
   if (visibleArg === undefined) {
