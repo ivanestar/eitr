@@ -48,6 +48,9 @@ import { renderTestConditionsValidator } from './templates/test-conditions-valid
 import { renderPipelineStatus } from './templates/pipeline-status.js';
 import { renderAuthStatus } from './templates/auth-status.js';
 import { renderAuthQuestions } from './templates/auth-questions.js';
+import { renderArtifactJournal } from './templates/artifact-journal.js';
+import { renderCrawlBudget } from './templates/crawl-budget.js';
+import { renderDebugLog } from './templates/debug-log.js';
 import { renderMapSiteStatus } from './templates/map-site-status.js';
 import { renderAutomateTestStatus } from './templates/automate-test-status.js';
 import { renderEnvRoleStubs } from './templates/env-role-stubs.js';
@@ -213,6 +216,24 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderMapSiteStatus() },
+          },
+          {
+            path: 'scripts/crawl-budget.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderCrawlBudget() },
+          },
+          {
+            path: 'scripts/artifact-journal.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderArtifactJournal() },
+          },
+          {
+            path: 'scripts/debug-log.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderDebugLog() },
           },
           {
             path: 'scripts/automate-test-status.mjs',

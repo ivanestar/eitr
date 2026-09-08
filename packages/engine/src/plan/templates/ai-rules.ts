@@ -628,9 +628,28 @@ sessions, declared vs captured roles, configured CI provider), \`scripts/auth-qu
 (which question the auth flow asks next given the answers so far, and what those answers add up
 to - the questions are computed, not composed at the point of asking),
 \`scripts/map-site-status.mjs\`
-(crawl mode resolution, screenshot pruning), \`scripts/render-review-artifact.mjs\` (renders any
+(crawl mode resolution, screenshot pruning), \`scripts/crawl-budget.mjs\` (whether a given URL may be
+crawled, what its canonical path template is, and the crawl's own progress line),
+\`scripts/render-review-artifact.mjs\` (renders any
 review artifact from its own stored JSON), \`scripts/env-role-stubs.mjs\` (per-role credential slots
 in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).
+
+**A stage that produces many units of work commits them one at a time.** \`scripts/artifact-journal.mjs\`
+is the shared mechanism: \`begin --stage=<slug>\` opens an append-only journal,
+\`record --stage=<slug> --id=<unit> --file=<json>\` commits one finished unit to disk immediately, and
+\`fold --stage=<slug> --into=<artifact> --key=<field>\` assembles the final artifact from what was
+recorded. Never hold a whole collection in memory and write it once at the end - a run that dies
+part-way then loses everything it had already done, and a long crawl or a large test-condition pass
+dies part-way more often than it finishes cleanly. Because the journal survives, \`begin\` also tells
+you what a previous interrupted run already finished, so the work resumes instead of restarting;
+recording the same id again supersedes the earlier record rather than duplicating it. Discard a
+journal only after the stage's own validator has passed on the folded artifact.
+
+Put \`E2E_DEBUG=1\` in \`.env\` (or export it in the shell for a single run - a real environment
+variable overrides the file) to have the helper scripts record what they were asked and what they
+answered to \`artifacts/.debug/<script>.ndjson\`; \`node scripts/debug-log.mjs tail\` reads it back,
+and \`node scripts/debug-log.mjs status\` says whether it is currently on. It is off by default and
+is for diagnosing a finished run without paying for another one - not something to leave on.
 
 Ask \`coverage-status\` before claiming a suite is finished, and order any large batch of test
 work by route impact (\`criticalityTier\` in business-intent.json, \`high\` first) - a batch that

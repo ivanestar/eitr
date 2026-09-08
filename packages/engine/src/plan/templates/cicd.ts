@@ -1,4 +1,4 @@
-﻿// CI/CD templates for E2E workflows. create-if-absent.
+// CI/CD templates for E2E workflows. create-if-absent.
 
 // A literal single quote inside a YAML single-quoted scalar is escaped by doubling it (''), not
 // by a backslash - YAML has no backslash-escape mechanism inside single-quoted strings. Applies
@@ -619,7 +619,7 @@ ${gitlabAuthVariablesBlock(baseUrl)}workflow:
 
 playwright-tests:
   stage: test
-  image: mcr.microsoft.com/playwright:v1.62.1-jammy
+  image: mcr.microsoft.com/playwright:v1.63.0-jammy
   parallel: 4
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
@@ -638,7 +638,7 @@ playwright-tests:
 
 merge-playwright-reports:
   stage: report
-  image: mcr.microsoft.com/playwright:v1.62.1-jammy
+  image: mcr.microsoft.com/playwright:v1.63.0-jammy
   needs:
     - job: playwright-tests
       artifacts: true
@@ -870,7 +870,7 @@ ${jenkinsAuthEnvironmentBlock(baseUrl)}    stages {
                     }
                 }
                 agent {
-                    docker { image 'mcr.microsoft.com/playwright:v1.62.1-jammy' }
+                    docker { image 'mcr.microsoft.com/playwright:v1.63.0-jammy' }
                 }
                 stages {
                     stage('Install') {
@@ -909,7 +909,7 @@ ${jenkinsAuthEnvironmentBlock(baseUrl)}    stages {
         }
         stage('Merge Reports') {
             agent {
-                docker { image 'mcr.microsoft.com/playwright:v1.62.1-jammy' }
+                docker { image 'mcr.microsoft.com/playwright:v1.63.0-jammy' }
             }
             steps {
                 sh 'npm ci'

@@ -23,6 +23,7 @@ export function renderMapSiteStatus(): string {
  * Usage:
  *   node scripts/map-site-status.mjs <create|update>
  *   node scripts/map-site-status.mjs prune-screenshots
+ *   node scripts/map-site-status.mjs prune-screenshots --orphaned
  */
 
 import fs from 'node:fs';
@@ -91,6 +92,21 @@ function listStaleScreenshots(siteMap) {
   return stale;
 }
 
+// Every file in the directory this script recognises as its own output, regardless of any site map.
+// Only meaningful when there is no site map to compare against - see pruneScreenshots.
+function listAllScreenshots() {
+  if (!fs.existsSync(SCREENSHOT_DIR)) return [];
+  try {
+    return fs
+      .readdirSync(SCREENSHOT_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .filter((entry) => SCREENSHOT_EXTENSIONS.includes(path.extname(entry.name).toLowerCase()))
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
 function fileSize(name) {
   try {
     return fs.statSync(path.join(SCREENSHOT_DIR, name)).size;
@@ -99,25 +115,17 @@ function fileSize(name) {
   }
 }
 
-// Refuses to delete anything when the site map is missing or unparseable: with no current route set
-// to compare against, EVERY file would look stale, which would silently wipe a directory whose
-// contents may be the only surviving evidence of the last crawl.
-function pruneScreenshots() {
-  const siteMap = loadSiteMap();
-  if (siteMap === null) {
-    return {
-      action: 'prune-screenshots',
-      pruned: 0,
-      freedBytes: 0,
-      skippedReason: 'no readable artifacts/site-map/site-map.json - nothing was deleted',
-    };
-  }
+function totalSize(names) {
+  let sum = 0;
+  for (const name of names) sum += fileSize(name);
+  return sum;
+}
 
-  const stale = listStaleScreenshots(siteMap);
+function deleteAll(names) {
   let freedBytes = 0;
   let pruned = 0;
   const failures = [];
-  for (const name of stale) {
+  for (const name of names) {
     const size = fileSize(name);
     try {
       fs.unlinkSync(path.join(SCREENSHOT_DIR, name));
@@ -127,13 +135,70 @@ function pruneScreenshots() {
       failures.push(name + ': ' + err.message);
     }
   }
+  return { pruned, freedBytes, failures };
+}
 
+// Refuses to delete anything when the site map is missing or unparseable: with no current route set
+// to compare against, EVERY file would look stale, which would silently wipe a directory whose
+// contents may be the only surviving evidence of the last crawl.
+//
+// --orphaned is the deliberate exception, for the one state that refusal strands: a crawl that died
+// before writing site-map.json leaves its whole screenshot directory referenced by nothing and
+// unreachable by any normal prune. Live-observed at 5507 files (657 MB) after a crawl that ran 31
+// minutes and produced no site map at all. It stays behind an explicit flag precisely because it
+// cannot check its work - it deletes on the operator's say-so, not on evidence - and it still
+// refuses whenever a readable site map exists, where the evidence-based prune is the right tool.
+function pruneScreenshots(orphanedRequested) {
+  const siteMap = loadSiteMap();
+
+  if (siteMap === null) {
+    const all = listAllScreenshots();
+    if (!orphanedRequested) {
+      return {
+        action: 'prune-screenshots',
+        pruned: 0,
+        freedBytes: 0,
+        orphanedScreenshotCount: all.length,
+        orphanedBytes: totalSize(all),
+        skippedReason:
+          all.length === 0
+            ? 'no readable artifacts/site-map/site-map.json - nothing was deleted'
+            : 'no readable artifacts/site-map/site-map.json, so ' +
+              all.length +
+              ' screenshot file(s) cannot be matched to any route. Re-run with --orphaned to delete ' +
+              'them, which is only correct if no crawl is currently in progress.',
+      };
+    }
+    const outcome = deleteAll(all);
+    return {
+      action: 'prune-screenshots',
+      mode: 'orphaned',
+      pruned: outcome.pruned,
+      freedBytes: outcome.freedBytes,
+      remaining: 0,
+      failures: outcome.failures,
+      skippedReason: null,
+    };
+  }
+
+  if (orphanedRequested) {
+    return {
+      action: 'prune-screenshots',
+      pruned: 0,
+      freedBytes: 0,
+      skippedReason:
+        'artifacts/site-map/site-map.json is readable, so --orphaned was refused - run without it ' +
+        'to prune only the files no current route references.',
+    };
+  }
+
+  const outcome = deleteAll(listStaleScreenshots(siteMap));
   return {
     action: 'prune-screenshots',
-    pruned,
-    freedBytes,
+    pruned: outcome.pruned,
+    freedBytes: outcome.freedBytes,
     remaining: knownRouteIds(siteMap).size,
-    failures,
+    failures: outcome.failures,
     skippedReason: null,
   };
 }
@@ -149,6 +214,11 @@ function resolveMode() {
       ? Object.keys(siteMap.routes).length
       : 0;
   const lastTouched = siteMapExists ? siteMap.lastUpdatedAt || siteMap.generatedAt || null : null;
+
+  // Reported separately from staleScreenshotCount, which can only ever be counted against a site map
+  // that exists. Collapsing both into one number reported 0 while 5507 files sat on disk after an
+  // aborted crawl, which read as "nothing to clean up" rather than "nothing can be checked."
+  const orphanedScreenshotCount = siteMapExists ? 0 : listAllScreenshots().length;
 
   let resolvedMode = requestedMode;
   let modeRedirected = false;
@@ -179,12 +249,15 @@ function resolveMode() {
     modeRedirected,
     noticeMessage,
     staleScreenshotCount: siteMapExists ? listStaleScreenshots(siteMap).length : 0,
+    orphanedScreenshotCount,
   };
 }
 
 function main() {
   const action = (process.argv[2] || '').toLowerCase();
-  const result = action === 'prune-screenshots' ? pruneScreenshots() : resolveMode();
+  const orphanedRequested = process.argv.slice(3).includes('--orphaned');
+  const result =
+    action === 'prune-screenshots' ? pruneScreenshots(orphanedRequested) : resolveMode();
   process.stdout.write(JSON.stringify(result, null, 2) + '\\n');
 }
 
