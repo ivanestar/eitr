@@ -59,6 +59,23 @@ export interface DomainNote {
   recordedAt: string;
 }
 
+// Which test types this project actually tests for. Functional is the only one in scope by
+// default, and that default is stated here rather than left implicit: "we only wrote functional
+// tests" is a scope decision, and an unstated scope decision is indistinguishable from an
+// oversight when someone later asks why nothing checks accessibility.
+//
+// The set is open by design. A new type is added by giving it an id here and a rule for what it
+// contributes at the test-condition stage - nothing in the pipeline branches on a closed list of
+// type names, so adding or removing one never means editing the stages themselves.
+export interface TestTypeScope {
+  id: string;
+  inScope: boolean;
+  // Why this type is or is not being tested for - the sentence a reader needs when they find a
+  // type switched off and want to know whether that was deliberate.
+  rationale?: string;
+  decidedAt: string;
+}
+
 // Where the rest of this project's knowledge actually lives. Pointers, not copies - each may
 // legitimately not exist yet, depending on how far the pipeline has run.
 export interface ArtifactIndex {
@@ -76,6 +93,9 @@ export interface AppProfile {
   applicationKind?: Fact<ApplicationKind>;
   crawlBoundary?: CrawlBoundaryFact;
   domainNotes?: DomainNote[];
+  // Absent means the default: functional only. Present means somebody decided, and what they
+  // decided is on the record.
+  testTypes?: TestTypeScope[];
   artifactIndex?: ArtifactIndex;
 }
 `;

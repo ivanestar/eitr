@@ -115,6 +115,39 @@ function validate(data, parseError) {
     }
   }
 
+  if ('testTypes' in data) {
+    if (!Array.isArray(data.testTypes)) {
+      errors.push('testTypes, when present, must be an array.');
+    } else {
+      const seen = new Set();
+      data.testTypes.forEach((entry, i) => {
+        const label = 'testTypes[' + i + ']';
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          errors.push(label + ' must be an object.');
+          return;
+        }
+        // Deliberately not checked against a fixed list of known type ids: the whole point of this
+        // field is that a new test type can be introduced without editing the pipeline.
+        if (typeof entry.id !== 'string' || !/^[a-z0-9-]+$/.test(entry.id)) {
+          errors.push(label + '.id must be a lowercase kebab-case string.');
+        } else if (seen.has(entry.id)) {
+          errors.push(label + '.id "' + entry.id + '" appears more than once.');
+        } else {
+          seen.add(entry.id);
+        }
+        if (typeof entry.inScope !== 'boolean') {
+          errors.push(label + '.inScope must be a boolean.');
+        }
+        if (typeof entry.decidedAt !== 'string' || entry.decidedAt.length === 0) {
+          errors.push(label + '.decidedAt must be a non-empty string.');
+        }
+        if ('rationale' in entry && typeof entry.rationale !== 'string') {
+          errors.push(label + '.rationale, when present, must be a string.');
+        }
+      });
+    }
+  }
+
   if ('domainNotes' in data) {
     if (!Array.isArray(data.domainNotes)) {
       errors.push('domainNotes, when present, must be an array.');

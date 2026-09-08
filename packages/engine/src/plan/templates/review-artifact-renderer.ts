@@ -200,7 +200,7 @@ function renderBusinessIntent(labels, data) {
   const routesSharingReasoning = repeatedReasonings.reduce(function (sum, count) {
     return sum + count;
   }, 0);
-  const tierSummary = ['critical', 'high', 'medium', 'low', 'unknown']
+  const tierSummary = ['high', 'medium', 'low', 'unknown']
     .filter(function (tier) {
       return tierCounts[tier];
     })

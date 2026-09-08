@@ -150,6 +150,49 @@ describe('scripts/app-profile.mjs (real execution)', () => {
     }
   });
 
+  it('accepts a test-type id it has never heard of - the registry is open by design', () => {
+    const dir = setupProject();
+    try {
+      const profile = validProfile() as Record<string, any>;
+      profile.testTypes = [
+        { id: 'functional', inScope: true, decidedAt: '2026-09-08T10:00:00.000Z' },
+        {
+          id: 'accessibility',
+          inScope: false,
+          rationale: 'not in scope for the first regression net',
+          decidedAt: '2026-09-08T10:00:00.000Z',
+        },
+        // A type nothing in this codebase knows about must still validate: adding one is meant to
+        // be a single entry here, never a change to the pipeline.
+        { id: 'chaos-resilience', inScope: false, decidedAt: '2026-09-08T10:00:00.000Z' },
+      ];
+      writeProfile(dir, profile);
+      const { result, output } = run(dir, '--validate');
+      expect(result.status).toBe(0);
+      expect(output.status).toBe('PASSED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a duplicated or badly-formed test-type id', () => {
+    const dir = setupProject();
+    try {
+      const profile = validProfile() as Record<string, any>;
+      profile.testTypes = [
+        { id: 'functional', inScope: true, decidedAt: '2026-09-08T10:00:00.000Z' },
+        { id: 'functional', inScope: false, decidedAt: '2026-09-08T10:00:00.000Z' },
+        { id: 'Load Testing', inScope: true, decidedAt: '2026-09-08T10:00:00.000Z' },
+      ];
+      writeProfile(dir, profile);
+      const { output } = run(dir, '--validate');
+      expect(output.errors.join(' ')).toContain('appears more than once');
+      expect(output.errors.join(' ')).toContain('must be a lowercase kebab-case string');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reports malformed JSON as a validation failure rather than crashing', () => {
     const dir = setupProject();
     try {

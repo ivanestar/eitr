@@ -19,9 +19,18 @@ export function renderBusinessIntentTypes(): string {
 
 export type Confidence = 'high' | 'medium' | 'low';
 
-// Four levels rather than the usual three (high/medium/low): a payment or auth route deserves its
-// own tier above a generic "high," not lumped in with it.
-export type CriticalityTier = 'critical' | 'high' | 'medium' | 'low';
+// Three levels, matching the qualitative scale risk-based testing conventionally uses. This is the
+// IMPACT axis - how much damage a failure here does - not a full risk level, which would also need
+// a likelihood axis this pipeline deliberately does not compute (see the crawl-stage notes: at
+// greenfield time there is no execution history to derive one from, and structural complexity is
+// already reflected in how many conditions a route's own parameters generate).
+//
+// A fourth "critical" tier used to sit above "high". It was removed because it changed nothing:
+// the only mechanical consumer, scripts/generate-test-conditions.mjs, gates its checklist on
+// "not medium and not low", so critical and high were literally indistinguishable in code, and
+// the drafting rules gave both the same condition volume. It cost inference effort and review
+// attention and bought no different behaviour anywhere.
+export type CriticalityTier = 'high' | 'medium' | 'low';
 
 // Which already-rendered, read-only signal grounded a Field<T>'s value. This analysis step
 // performs zero .click()/.fill()/.check()/.selectOption() calls, not even trial:true dry-runs -
