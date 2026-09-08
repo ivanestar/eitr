@@ -116,7 +116,7 @@ describe('apply() (runnable project)', () => {
     const cwd = makeTempCwd();
     await apply(plan(muiProfile(), planOptions()), cwd);
     const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'));
-    expect(pkg.devDependencies['@playwright/test']).toBe('1.62.1');
+    expect(pkg.devDependencies['@playwright/test']).toBe('1.63.0');
     expect(pkg.scripts.test).toBe('playwright test --project=chromium');
     expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
     expect(pkg.type).toBe('module');

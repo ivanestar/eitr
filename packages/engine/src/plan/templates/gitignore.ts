@@ -1,4 +1,4 @@
-﻿// .gitignore for the generated project. Ignores install/run outputs, temporary files, and .scaffold/ metadata.
+// .gitignore for the generated project. Ignores install/run outputs, temporary files, and .scaffold/ metadata.
 export function renderGitignore(tool: string = 'playwright', language?: string): string {
   if (language === 'csharp') {
     return `bin/
