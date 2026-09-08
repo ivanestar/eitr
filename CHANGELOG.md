@@ -5,6 +5,7 @@ All notable changes to this project are documented here, newest release first, f
 
 ## [0.1.0] - 2026-09-06
 
+- **Fixed**: a question offering a single choice no longer breaks the assistant's choice tool, which requires at least two options and rejects the call outright. `/map-site`'s core-purpose confirmation hit this routinely, since the step before it deliberately produces one candidate whenever the evidence supports one reading — it is now asked as a confirmation with an explicit "I will describe it myself" alternative.
 - **Fixed**: the generated C# `Dockerfile` referenced `mcr.microsoft.com/playwright/dotnet:v1.62.0-jammy`, which has never existed — that image publishes only `noble` and `resolute` variants. Now points at `-noble`.
 - **Added**: `npm run check:playwright` reports whether each language's pinned Playwright version has fallen behind its registry and whether a matching container image exists yet, and fails outright on a rendered image tag that does not resolve. The pins stay exact on purpose: Playwright's browser binaries are built for one specific release, so a floating range breaks the container image pairing.
 - **Fixed**: generation no longer fails with `No matching version found for playwright@<version>` when npm's cached package listing predates the pinned Playwright release. `--prefer-offline` served that stale listing; a failed install now retries once with `--prefer-online`.
