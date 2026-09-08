@@ -645,10 +645,11 @@ you what a previous interrupted run already finished, so the work resumes instea
 recording the same id again supersedes the earlier record rather than duplicating it. Discard a
 journal only after the stage's own validator has passed on the folded artifact.
 
-Set \`E2E_DEBUG=1\` to have the helper scripts record what they were asked and what they answered to
-\`artifacts/.debug/<script>.ndjson\`; \`node scripts/debug-log.mjs tail\` reads it back. It is off by
-default and is for diagnosing a finished run without paying for another one - not something to
-leave on.
+Put \`E2E_DEBUG=1\` in \`.env\` (or export it in the shell for a single run - a real environment
+variable overrides the file) to have the helper scripts record what they were asked and what they
+answered to \`artifacts/.debug/<script>.ndjson\`; \`node scripts/debug-log.mjs tail\` reads it back,
+and \`node scripts/debug-log.mjs status\` says whether it is currently on. It is off by default and
+is for diagnosing a finished run without paying for another one - not something to leave on.
 
 Ask \`coverage-status\` before claiming a suite is finished, and order any large batch of test
 work by route impact (\`criticalityTier\` in business-intent.json, \`high\` first) - a batch that

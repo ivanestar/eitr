@@ -84,6 +84,16 @@ E2E_BASE_URL=${baseUrl}
 # (Optional) Pre-issued API/session token — CI fast-path that skips interactive login.
 # E2E_API_TOKEN=
 # AUTH_TOKEN=
+
+# ==============================================================================
+# Diagnostics
+# ==============================================================================
+# Set to 1 to have the scripts/ helpers record what they were asked and what
+# they answered, one JSON line per call, to artifacts/.debug/<script>.ndjson.
+# Read it back with: node scripts/debug-log.mjs tail
+# Useful for working out afterwards why a long analysis run produced what it
+# did, instead of running it again. Leave it off for normal work.
+# E2E_DEBUG=1
 ${tmsSection}
 # ==============================================================================
 # AI-model provider tokens — NOT used by anything generated in this project.

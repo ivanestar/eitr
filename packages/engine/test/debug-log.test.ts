@@ -34,11 +34,11 @@ function callAsModule(dir: string, env: NodeJS.ProcessEnv = {}) {
     ].join('\n'),
     'utf8',
   );
-  const result = spawnSync('node', ['driver.mjs'], {
-    cwd: dir,
-    encoding: 'utf8',
-    env: { ...process.env, ...env },
-  });
+  const merged: NodeJS.ProcessEnv = { ...process.env, ...env };
+  // An explicitly-undefined key means "this variable is not set at all", which is what exercises
+  // the .env fallback - leaving it in the object would not reliably unset it.
+  for (const [key, value] of Object.entries(env)) if (value === undefined) delete merged[key];
+  const result = spawnSync('node', ['driver.mjs'], { cwd: dir, encoding: 'utf8', env: merged });
   return JSON.parse(result.stdout);
 }
 
@@ -101,6 +101,48 @@ describe('scripts/debug-log.mjs (real execution)', () => {
       callAsModule(dir, { E2E_DEBUG: '1' });
       expect(run(dir, ['clear']).removed).toBe(1);
       expect(run(dir, ['status'], { E2E_DEBUG: '1' }).sources).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads E2E_DEBUG from .env, which is where every other variable in the project lives', () => {
+    const dir = setupProject();
+    try {
+      writeFileSync(
+        join(dir, '.env'),
+        'E2E_BASE_URL=https://app.example.com\nE2E_DEBUG=1\n',
+        'utf8',
+      );
+      const output = callAsModule(dir, { E2E_DEBUG: undefined });
+      expect(output.enabled).toBe(true);
+      expect(output.wrote).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a real environment variable overrides .env in both directions', () => {
+    const dir = setupProject();
+    try {
+      writeFileSync(join(dir, '.env'), 'E2E_DEBUG=1\n', 'utf8');
+      expect(callAsModule(dir, { E2E_DEBUG: '0' }).enabled).toBe(false);
+
+      writeFileSync(join(dir, '.env'), 'E2E_DEBUG=0\n', 'utf8');
+      expect(callAsModule(dir, { E2E_DEBUG: '1' }).enabled).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores a commented-out or quoted .env entry correctly', () => {
+    const dir = setupProject();
+    try {
+      writeFileSync(join(dir, '.env'), '# E2E_DEBUG=1\n', 'utf8');
+      expect(callAsModule(dir, { E2E_DEBUG: undefined }).enabled).toBe(false);
+
+      writeFileSync(join(dir, '.env'), 'E2E_DEBUG="1"\n', 'utf8');
+      expect(callAsModule(dir, { E2E_DEBUG: undefined }).enabled).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
