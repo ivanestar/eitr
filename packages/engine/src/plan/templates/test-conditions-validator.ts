@@ -1,4 +1,4 @@
-// Template for generating scripts/validate-test-conditions.mjs. create-if-absent.
+﻿// Template for generating scripts/validate-test-conditions.mjs. create-if-absent.
 // The mechanical gate ADR 0012 Decision item 2 requires at every stage boundary for
 // artifacts/analysis/test-conditions.json (Stage 2). Zero dependencies, same style as
 // business-intent-validator.ts and site-map-validator.ts. Supports --stage=parameters to run only
@@ -57,6 +57,8 @@ const TECHNIQUE_VALUES = new Set([
   'boundary-value',
   'equivalence-partition',
   'checklist-based',
+  'state-transition',
+  'use-case',
   'architectural-invariant',
 ]);
 const NEGATIVE_CATEGORY_VALUES = new Set([
@@ -226,7 +228,7 @@ function isCondition(value, label, errors) {
   if (!TECHNIQUE_VALUES.has(value.technique)) {
     errors.push(
       label +
-        '.technique must be one of combinatorial|boundary-value|equivalence-partition|checklist-based|architectural-invariant.',
+        '.technique must be one of ' + Array.from(TECHNIQUE_VALUES).join('|') + '.',
     );
   }
   if (typeof value.description !== 'string' || value.description.length === 0) {

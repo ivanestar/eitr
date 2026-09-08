@@ -19,13 +19,59 @@ export function renderApiContractsTypes(): string {
 // disclosed gap (see JourneyEntry.testCase.steps[].api.contractGrounded in test-cases.types.ts), not
 // something to fill in with an invented endpoint.
 
+// How the application talks to its backend, from the point of view of someone watching the network
+// from inside the browser. The distinction that matters here is not which protocol is fashionable
+// but where the operation's identity actually lives:
+//
+//   'rest'    - the path is the operation. Also covers OData and JSON:API, which are path-shaped.
+//   'graphql' - one endpoint for the whole API, the operation named in the request body.
+//   'rpc'     - the path names a procedure rather than a resource: gRPC-Web and Connect
+//               (/package.Service/Method), tRPC (/api/trpc/entity.procedure), JSON-RPC (method in
+//               the body).
+//   'opaque'  - something was observed and nothing about it could be read. This is a real, common
+//               outcome, not a failure to try: Next.js Server Actions POST to the page's own URL
+//               with an encrypted, per-build action id; Remix actions and classic form posts carry
+//               no operation name at all; a gRPC-Web call with a binary protobuf body has a
+//               readable path but an unreadable payload.
+//
+// An 'opaque' entry exists so that a call nobody could decode is recorded as exactly that, rather
+// than being run through a REST-shaped reading that invents a resource out of whatever the last
+// path segment happened to be. A fabricated entity costs a reviewer more than a missing one: it
+// has to be recognised as false and deleted, and anything built on it tests something that does
+// not exist.
+export type ApiStyle = 'rest' | 'graphql' | 'rpc' | 'opaque';
+
+export interface ObservedOperation {
+  style: ApiStyle;
+  // The operation's name exactly as the application spells it - a GraphQL root field
+  // ('createOrder'), a gRPC-Web or Connect method ('orders.v1.OrderService/CreateOrder'), a tRPC
+  // procedure ('order.create'), a JSON-RPC method. Required for 'graphql' and 'rpc'. Absent for
+  // 'rest', where the path already is the name, and for 'opaque', where there is nothing to read.
+  name?: string;
+  // For GraphQL only: whether the document was a query or a mutation. Read off the document text,
+  // never inferred from the field name.
+  documentType?: 'query' | 'mutation' | 'subscription';
+  // Required on 'opaque': one plain sentence saying what stopped the read (e.g. "Next.js Server
+  // Action - the Next-Action id is encrypted and changes every build", "binary protobuf body").
+  // Recording why keeps an unreadable call distinguishable from one nobody looked at.
+  reason?: string;
+}
+
 export interface ApiContractEntry {
-  // sha256(method + '|' + pathTemplate).slice(0, 16) - stable across re-observation of the same call.
+  // sha256(method + '|' + pathTemplate + '|' + (operation.name || '')).slice(0, 16) - stable across
+  // re-observation of the same call. The operation name is part of the identity because a GraphQL
+  // or JSON-RPC API serves its entire surface from one path: without it, the first call observed
+  // would be the only one ever recorded for the whole API.
   contractId: string;
   method: string;
   // Canonicalized the same way site-map.json's routes are: a numeric ID/UUID/slug segment collapses
-  // to a template ({id}), never one entry per concrete record.
+  // to a template ({id}), never one entry per concrete record. Query strings are stripped, which
+  // matters beyond tidiness: tRPC puts a call's whole input in an "input" query parameter, so a
+  // path kept verbatim would carry real field values into an artifact that is read as evidence.
   pathTemplate: string;
+  // Absent means 'rest' - the shape every earlier version of this file assumed and the one most
+  // applications still use.
+  operation?: ObservedOperation;
   // Which route(s) in site-map.json this call was actually observed being made from - a login
   // request observed during /auth-setup's own capture names no routeId (auth happens before any
   // route is "current" yet); an in-app call observed during /map-site's own crawl names the route

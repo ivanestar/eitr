@@ -41,6 +41,7 @@ import crypto from 'node:crypto';
 const CWD = process.cwd();
 const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
+const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -117,10 +118,18 @@ function stableStringify(value) {
   return JSON.stringify(value);
 }
 
-function hashParams(entry) {
+function hashParams(entry, lifecycleBundle) {
   return crypto
     .createHash('sha256')
-    .update(stableStringify({ parameters: entry.parameters, constraints: entry.constraints || [] }))
+    .update(
+      stableStringify({
+        parameters: entry.parameters,
+        constraints: entry.constraints || [],
+        // A changed entity lifecycle changes which conditions this route should carry just as
+        // surely as a changed parameter does, so it belongs in the same cheap-skip hash.
+        lifecycle: lifecycleBundle || null,
+      }),
+    )
     .digest('hex');
 }
 
@@ -553,6 +562,164 @@ function shouldRunChecklist(criticalityTier) {
   return criticalityTier !== 'medium' && criticalityTier !== 'low';
 }
 
+// Lifecycle-derived conditions belong to a feature and its entities, not to a page - but this file
+// is keyed by route, so each feature's bundle is attached to one representative member route (the
+// lowest routeId) rather than repeated on every page the feature happens to touch. Only reviewed
+// features and reviewed entities count, for the same reason loadCriticalityMap only reads reviewed
+// entries: an unreviewed derivation is a draft, not ground truth.
+function loadFeatureLifecycles() {
+  const byRouteId = {};
+  const loaded = loadJson(FEATURE_MAP_PATH, 'artifacts/analysis/feature-map.json');
+  const data = loaded.value;
+  if (loaded.error || !data || typeof data.features !== 'object' || data.features === null) {
+    return byRouteId;
+  }
+  const entities = typeof data.entities === 'object' && data.entities !== null ? data.entities : {};
+  for (const feature of Object.values(data.features)) {
+    if (!feature || feature.reviewed !== true) continue;
+    const memberRouteIds = Array.isArray(feature.memberRouteIds) ? feature.memberRouteIds : [];
+    if (memberRouteIds.length === 0) continue;
+    const primaryRouteId = memberRouteIds.slice().sort()[0];
+    const featureEntities = (Array.isArray(feature.entityIds) ? feature.entityIds : [])
+      .map(function (entityId) {
+        return entities[entityId];
+      })
+      .filter(function (entity) {
+        return (
+          entity &&
+          entity.reviewed === true &&
+          entity.lifecycle &&
+          Array.isArray(entity.lifecycle.states) &&
+          entity.lifecycle.states.length > 0
+        );
+      })
+      .map(function (entity) {
+        return {
+          name: entity.name,
+          states: entity.lifecycle.states,
+          transitions: Array.isArray(entity.lifecycle.transitions) ? entity.lifecycle.transitions : [],
+        };
+      })
+      .sort(function (a, b) {
+        return String(a.name).localeCompare(String(b.name));
+      });
+    if (featureEntities.length === 0) continue;
+    byRouteId[primaryRouteId] = { featureName: feature.name, entities: featureEntities };
+  }
+  return byRouteId;
+}
+
+// State transition testing, the textbook construction: every defined transition is one positive
+// condition, and every (state, trigger) pair the lifecycle does NOT define is one negative
+// condition - "refunding an unpaid invoice" is exactly that shape. Bounded by states x triggers,
+// which stays small because the states come from what was actually observed plus whatever a person
+// added by hand.
+function buildStateTransitionConditions(routeId, bundle, criticalityTier) {
+  if (!bundle) return [];
+  const conditions = [];
+  for (const entity of bundle.entities) {
+    for (const transition of entity.transitions) {
+      const description =
+        'Verify a ' +
+        entity.name +
+        ' moves from "' +
+        transition.from +
+        '" to "' +
+        transition.to +
+        '" on ' +
+        transition.trigger +
+        '.';
+      conditions.push({
+        conditionId: conditionId(routeId, {}, 'state-transition|' + entity.name + '|' + description),
+        parameters: { entity: entity.name, from: transition.from, to: transition.to },
+        technique: 'state-transition',
+        description: description,
+        scenario: 'positive',
+        verification: {},
+        isSpeculative: true,
+        reviewed: false,
+      });
+    }
+    // Invalid transitions are the expensive half of this technique and mostly noise on a page
+    // nobody depends on - same reduction the checklist already applies, for the same reason.
+    if (!shouldRunChecklist(criticalityTier)) continue;
+    const triggers = Array.from(
+      new Set(
+        entity.transitions.map(function (transition) {
+          return transition.trigger;
+        }),
+      ),
+    ).sort();
+    for (const state of entity.states) {
+      for (const trigger of triggers) {
+        const defined = entity.transitions.some(function (transition) {
+          return transition.from === state.name && transition.trigger === trigger;
+        });
+        if (defined) continue;
+        const description =
+          'Verify a ' +
+          entity.name +
+          ' rejects ' +
+          trigger +
+          ' while it is "' +
+          state.name +
+          '", leaving it unchanged.';
+        conditions.push({
+          conditionId: conditionId(
+            routeId,
+            {},
+            'state-transition|' + entity.name + '|' + description,
+          ),
+          parameters: { entity: entity.name, from: state.name, trigger: trigger },
+          technique: 'state-transition',
+          description: description,
+          scenario: 'negative',
+          negativeCategory: 'state_violation',
+          verification: {},
+          isSpeculative: true,
+          reviewed: false,
+        });
+      }
+    }
+  }
+  return conditions;
+}
+
+// One condition per entity whose lifecycle actually goes somewhere: the main flow a person would
+// walk, named in the order the transitions define it. This is the condition a cross-route journey
+// is built from - a single-screen test cannot carry it.
+function buildUseCaseConditions(routeId, bundle) {
+  if (!bundle) return [];
+  const conditions = [];
+  for (const entity of bundle.entities) {
+    if (entity.transitions.length < 2) continue;
+    const flow = entity.transitions
+      .map(function (transition) {
+        return transition.trigger;
+      })
+      .join(', then ');
+    const description =
+      'Verify the main flow of ' +
+      bundle.featureName +
+      ': a ' +
+      entity.name +
+      ' can be ' +
+      flow +
+      ', and the result of each step is visible in the next.';
+    conditions.push({
+      conditionId: conditionId(routeId, {}, 'use-case|' + entity.name + '|' + description),
+      parameters: { entity: entity.name, feature: bundle.featureName },
+      technique: 'use-case',
+      description: description,
+      scenario: 'positive',
+      verification: {},
+      isSpeculative: true,
+      reviewed: false,
+    });
+  }
+  return conditions;
+}
+
 function buildChecklistConditions(routeId, parameters, criticalityTier) {
   if (!shouldRunChecklist(criticalityTier)) return [];
   const conditions = [];
@@ -590,9 +757,9 @@ function buildChecklistConditions(routeId, parameters, criticalityTier) {
   return conditions;
 }
 
-function generateForRoute(routeId, entry, criticalityTier) {
+function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle) {
   redactEntry(entry);
-  const currentHash = hashParams(entry);
+  const currentHash = hashParams(entry, lifecycleBundle);
   if (entry.conditions && entry.conditions.length > 0 && entry.sourceParamsHash === currentHash) {
     return;
   }
@@ -626,6 +793,12 @@ function generateForRoute(routeId, entry, criticalityTier) {
     entry.parameters,
   );
   const checklistConditions = buildChecklistConditions(routeId, entry.parameters, criticalityTier);
+  const stateTransitionConditions = buildStateTransitionConditions(
+    routeId,
+    lifecycleBundle,
+    criticalityTier,
+  );
+  const useCaseConditions = buildUseCaseConditions(routeId, lifecycleBundle);
   const invariantConditions = (entry.conditions || [])
     .filter(function (c) {
       return c.technique === 'architectural-invariant';
@@ -646,6 +819,8 @@ function generateForRoute(routeId, entry, criticalityTier) {
     boundaryConditions,
     equivalencePartitionConditions,
     checklistConditions,
+    stateTransitionConditions,
+    useCaseConditions,
     invariantConditions,
   )) {
     if (seen.has(c.conditionId)) continue;
@@ -699,8 +874,9 @@ function generate() {
     process.exit(1);
   }
   const criticalityByRoute = loadCriticalityMap();
+  const lifecyclesByRoute = loadFeatureLifecycles();
   for (const [routeId, entry] of Object.entries(data.routes)) {
-    generateForRoute(routeId, entry, criticalityByRoute[routeId]);
+    generateForRoute(routeId, entry, criticalityByRoute[routeId], lifecyclesByRoute[routeId]);
   }
   fs.writeFileSync(REPORT_PATH, JSON.stringify(data, null, 2) + '\\n', 'utf8');
   process.stdout.write(

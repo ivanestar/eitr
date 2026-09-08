@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -54,6 +54,47 @@ function writeBusinessIntent(dir: string, reviewed: boolean) {
   );
 }
 
+function writeFeatureMap(
+  dir: string,
+  opts: { featureReviewed: boolean; entityReviewed?: boolean } = { featureReviewed: true },
+) {
+  const entityReviewed = opts.entityReviewed ?? opts.featureReviewed;
+  writeFileSync(
+    join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: '2026-09-03T10:30:00.000Z',
+      features: {
+        feature0001aaaa: {
+          featureId: 'feature0001aaaa',
+          name: 'Checkout',
+          memberRouteIds: ['route-checkout'],
+          entityIds: ['entity0001aaaa'],
+          impact: 'high',
+          impactSourceRouteId: 'route-checkout',
+          evidence: [{ signal: 'business-intent-label', excerpt: '/checkout -> "Checkout"' }],
+          reviewed: opts.featureReviewed,
+          ...(opts.featureReviewed ? { reviewedBy: 'human' } : {}),
+        },
+      },
+      entities: {
+        entity0001aaaa: {
+          entityId: 'entity0001aaaa',
+          name: 'orders',
+          operations: [],
+          relations: [],
+          lifecycle: { states: [], transitions: [] },
+          evidence: [{ signal: 'route-convention', excerpt: '/orders' }],
+          reviewed: entityReviewed,
+          ...(entityReviewed ? { reviewedBy: 'human' } : {}),
+        },
+      },
+      sourceHash: 'featuremaphash',
+    }),
+    'utf8',
+  );
+}
+
 function writeTestConditions(dir: string, reviewed: boolean) {
   writeFileSync(
     join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
@@ -91,39 +132,35 @@ function writeJourneys(dir: string, opts: { withTestCase: boolean; reviewed: boo
   writeFileSync(
     join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: '2026-09-04T09:00:00.000Z',
-      routes: {
-        'route-checkout': {
-          routeId: 'route-checkout',
-          journeys: [
+      journeys: {
+        abc123def456abcd: {
+          journeyId: 'abc123def456abcd',
+          routeIds: ['route-checkout'],
+          testInterface: 'ui',
+          breadth: 'targeted',
+          level: 'system',
+          conditionAssignments: [
             {
-              journeyId: 'abc123def456abcd',
+              conditionId: 'a1b2c3d4e5f6a1b2',
               routeId: 'route-checkout',
-              conditionAssignments: [
-                {
-                  conditionId: 'a1b2c3d4e5f6a1b2',
-                  testLevel: 'e2e',
-                  reason: 'baseline-valid-vector',
-                },
-              ],
-              ...(opts.withTestCase
-                ? {
-                    testCase: {
-                      title: 'Checkout happy path',
-                      preconditions: [],
-                      steps: [
-                        { description: 'Submit checkout', expectedResult: 'Order confirmed' },
-                      ],
-                    },
-                  }
-                : {}),
-              reviewed: opts.reviewed,
-              ...(opts.reviewed ? { reviewedBy: 'human' } : {}),
-              sourceConditionsHash: 'hash123',
-              analyzedAt: '2026-09-04T09:00:00.000Z',
+              reason: 'baseline-valid-vector',
             },
           ],
+          ...(opts.withTestCase
+            ? {
+                testCase: {
+                  title: 'Checkout happy path',
+                  preconditions: [],
+                  steps: [{ description: 'Submit checkout', expectedResult: 'Order confirmed' }],
+                },
+              }
+            : {}),
+          reviewed: opts.reviewed,
+          ...(opts.reviewed ? { reviewedBy: 'human' } : {}),
+          sourceConditionsHash: 'hash123',
+          analyzedAt: '2026-09-04T09:00:00.000Z',
         },
       },
     }),
@@ -189,49 +226,49 @@ function writeTestConditionsTwoRoutes(dir: string) {
 // a journey but no testCase yet (the /design-test-cases drafting step was interrupted) - the two
 // distinct ways a reviewed route can be invisible to a "does any journey have a testCase" check.
 function writeJourneysCheckoutOnly(dir: string, opts: { cartHasJourneyWithoutTestCase: boolean }) {
-  const routes: Record<string, unknown> = {
-    'route-checkout': {
-      routeId: 'route-checkout',
-      journeys: [
+  const journeys: Record<string, unknown> = {
+    abc123def456abcd: {
+      journeyId: 'abc123def456abcd',
+      routeIds: ['route-checkout'],
+      testInterface: 'ui',
+      breadth: 'targeted',
+      level: 'system',
+      conditionAssignments: [
         {
-          journeyId: 'abc123def456abcd',
+          conditionId: 'a1b2c3d4e5f6a1b2',
           routeId: 'route-checkout',
-          conditionAssignments: [
-            { conditionId: 'a1b2c3d4e5f6a1b2', testLevel: 'e2e', reason: 'baseline-valid-vector' },
-          ],
-          testCase: {
-            title: 'Checkout happy path',
-            preconditions: [],
-            steps: [{ description: 'Submit checkout', expectedResult: 'Order confirmed' }],
-          },
-          reviewed: true,
-          reviewedBy: 'human',
-          sourceConditionsHash: 'hash123',
-          analyzedAt: '2026-09-04T09:00:00.000Z',
+          reason: 'baseline-valid-vector',
         },
       ],
+      testCase: {
+        title: 'Checkout happy path',
+        preconditions: [],
+        steps: [{ description: 'Submit checkout', expectedResult: 'Order confirmed' }],
+      },
+      reviewed: true,
+      reviewedBy: 'human',
+      sourceConditionsHash: 'hash123',
+      analyzedAt: '2026-09-04T09:00:00.000Z',
     },
   };
   if (opts.cartHasJourneyWithoutTestCase) {
-    routes['route-cart'] = {
-      routeId: 'route-cart',
-      journeys: [
-        {
-          journeyId: 'cartjourney0001a',
-          routeId: 'route-cart',
-          conditionAssignments: [
-            { conditionId: 'f6e5d4c3b2a1f6e5', testLevel: 'api', reason: 'non-baseline-vector' },
-          ],
-          reviewed: false,
-          sourceConditionsHash: 'hash456',
-          analyzedAt: '2026-09-04T09:00:00.000Z',
-        },
+    journeys['cartjourney0001a'] = {
+      journeyId: 'cartjourney0001a',
+      routeIds: ['route-cart'],
+      testInterface: 'api',
+      breadth: 'targeted',
+      level: 'integration',
+      conditionAssignments: [
+        { conditionId: 'f6e5d4c3b2a1f6e5', routeId: 'route-cart', reason: 'non-baseline-vector' },
       ],
+      reviewed: false,
+      sourceConditionsHash: 'hash456',
+      analyzedAt: '2026-09-04T09:00:00.000Z',
     };
   }
   writeFileSync(
     join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
-    JSON.stringify({ schemaVersion: 1, generatedAt: '2026-09-04T09:00:00.000Z', routes }),
+    JSON.stringify({ schemaVersion: 2, generatedAt: '2026-09-04T09:00:00.000Z', journeys }),
     'utf8',
   );
 }
@@ -250,14 +287,14 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       expect(output.stage).toBe('not-started');
       expect(output.nextCommand).toBe('/map-site create');
       // Roadmap: current stage bracketed, every other stage plain, printed in fixed order. Only
-      // the four real stages appear - the review pause belongs to every stage, so it is stated
-      // once in preFlightNotice rather than interleaved as four context-free 'Review' entries.
+      // the real stages appear - the review pause belongs to every stage, so it is stated
+      // once in preFlightNotice rather than interleaved as context-free 'Review' entries.
       // The brackets are the whole marker: no trailing "you are here", which restated them.
       expect(output.roadmap).toBe(
-        '[S1 Site map] -> S2 Test conditions -> S3 Test cases -> S4 Automated tests',
+        '[S1 Site map] -> S2 Feature map -> S3 Test conditions -> S4 Test cases -> S5 Automated tests -> S6 Test closure',
       );
       expect(output.roadmap).not.toContain('you are here');
-      expect(output.preFlightNotice).toContain('Four stages, each one ending with your review:');
+      expect(output.preFlightNotice).toContain('6 stages, each one ending with your review:');
       expect(output.preFlightNotice).not.toContain('you are here');
       expect(output.preFlightNotice).not.toContain('-> Review ->');
     } finally {
@@ -309,7 +346,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports business-intent-reviewed (next: /define-test-conditions) once reviewed, before test-conditions.json exists', () => {
+  it('reports business-intent-reviewed (next: /map-features) once reviewed, before feature-map.json exists', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
@@ -317,7 +354,75 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
       expect(output.stage).toBe('business-intent-reviewed');
+      expect(output.nextCommand).toBe('/map-features');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports feature-map-pending-review while a feature is still unreviewed', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeBusinessIntent(dir, true);
+    writeFeatureMap(dir, { featureReviewed: false });
+    try {
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.stage).toBe('feature-map-pending-review');
+      expect(output.nextCommand).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Entity relations are what downstream stages turn into preconditions, so a reviewed feature
+  // sitting on top of an unreviewed entity is not a reviewed feature map.
+  it('stays at feature-map-pending-review when features are approved but an entity is not', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeBusinessIntent(dir, true);
+    writeFeatureMap(dir, { featureReviewed: true, entityReviewed: false });
+    try {
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.stage).toBe('feature-map-pending-review');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports feature-map-reviewed (next: /define-test-conditions) once the whole map is approved', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeBusinessIntent(dir, true);
+    writeFeatureMap(dir, { featureReviewed: true });
+    try {
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.stage).toBe('feature-map-reviewed');
       expect(output.nextCommand).toBe('/define-test-conditions');
+      expect(output.routeCoverage.features).toBe(1);
+      expect(output.routeCoverage.featuresReviewed).toBe(1);
+      expect(output.routeCoverage.entities).toBe(1);
+      expect(output.routeCoverage.entitiesReviewed).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not crash on a malformed feature-map.json - degrades to feature-map-pending-review', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeBusinessIntent(dir, true);
+    writeFileSync(join(dir, 'artifacts', 'analysis', 'feature-map.json'), 'not valid json', 'utf8');
+    try {
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const output = JSON.parse(result.stdout);
+      // An unparseable file carries no review state to protect, so the honest answer is the same
+      // one an absent file gets: redraft it.
+      expect(output.stage).toBe('business-intent-reviewed');
+      expect(output.nextCommand).toBe('/map-features');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -327,6 +432,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
+    writeFeatureMap(dir);
     writeTestConditions(dir, false);
     try {
       const result = run(dir);
@@ -342,6 +448,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
+    writeFeatureMap(dir);
     writeTestConditions(dir, true);
     try {
       const result = run(dir);
@@ -357,6 +464,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
+    writeFeatureMap(dir);
     writeTestConditions(dir, true);
     writeJourneys(dir, { withTestCase: false, reviewed: false });
     try {
@@ -373,6 +481,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
+    writeFeatureMap(dir);
     writeTestConditions(dir, true);
     writeFileSync(
       join(dir, 'artifacts', 'test-cases', 'test-cases.json'),
@@ -393,6 +502,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
+    writeFeatureMap(dir);
     writeTestConditions(dir, true);
     writeJourneys(dir, { withTestCase: true, reviewed: false });
     try {
@@ -405,19 +515,24 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports complete (nextCommand null) once every drafted testCase is reviewed:true', () => {
+  // Automating everything drafted lands the project in Test closure, which is a stage rather than
+  // a finish line: whether the suite can actually be closed is coverage-status.mjs's answer, and
+  // duplicating that judgment here would give the project two places to disagree about it.
+  it('reports test-closure (nextCommand null) once every drafted testCase is reviewed:true', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
+    writeFeatureMap(dir);
     writeTestConditions(dir, true);
     writeJourneys(dir, { withTestCase: true, reviewed: true });
     try {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
-      expect(output.stage).toBe('complete');
+      expect(output.stage).toBe('test-closure');
       expect(output.nextCommand).toBeNull();
+      expect(output.nextCommandDescription).toContain('coverage-status.mjs');
       expect(output.roadmap).toBe(
-        'S1 Site map -> S2 Test conditions -> S3 Test cases -> [S4 Automated tests]',
+        'S1 Site map -> S2 Feature map -> S3 Test conditions -> S4 Test cases -> S5 Automated tests -> [S6 Test closure]',
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -428,6 +543,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
+    writeFeatureMap(dir);
     writeTestConditionsTwoRoutes(dir);
     writeJourneysCheckoutOnly(dir, { cartHasJourneyWithoutTestCase: false });
     try {
@@ -444,6 +560,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     writeBusinessIntent(dir, true);
+    writeFeatureMap(dir);
     writeTestConditionsTwoRoutes(dir);
     writeJourneysCheckoutOnly(dir, { cartHasJourneyWithoutTestCase: true });
     try {

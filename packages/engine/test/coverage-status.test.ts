@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -121,18 +121,16 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
         businessIntent({ 'r-checkout': 'high', 'r-help': 'low' }),
       );
       write(dir, 'artifacts/test-cases/test-cases.json', {
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt: '2026-09-08T10:00:00.000Z',
-        routes: {
-          'r-checkout': {
-            journeys: [
-              {
-                journeyId: 'j1',
-                routeId: 'r-checkout',
-                reviewed: true,
-                testCase: { title: 'Pay' },
-              },
-            ],
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['r-checkout'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            reviewed: true,
+            testCase: { title: 'Pay' },
           },
         },
       });
@@ -149,24 +147,24 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
     try {
       write(dir, 'artifacts/site-map/site-map.json', siteMap());
       write(dir, 'artifacts/test-cases/test-cases.json', {
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt: '2026-09-08T10:00:00.000Z',
-        routes: {
-          'r-checkout': {
-            journeys: [
-              {
-                journeyId: 'j1',
-                routeId: 'r-checkout',
-                reviewed: true,
-                testCase: { title: 'Done' },
-              },
-              {
-                journeyId: 'j2',
-                routeId: 'r-checkout',
-                reviewed: false,
-                testCase: { title: 'Abandoned' },
-              },
-            ],
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['r-checkout'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            reviewed: true,
+            testCase: { title: 'Done' },
+          },
+          j2: {
+            journeyId: 'j2',
+            routeIds: ['r-checkout'],
+            testInterface: 'api',
+            breadth: 'targeted',
+            reviewed: false,
+            testCase: { title: 'Abandoned' },
           },
         },
       });
@@ -194,19 +192,16 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
         ],
       });
       write(dir, 'artifacts/test-cases/test-cases.json', {
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt: '2026-09-08T10:00:00.000Z',
-        routes: {
-          'r-checkout': {
-            journeys: [
-              {
-                journeyId: 'j1',
-                routeId: 'r-checkout',
-                layer: 'api',
-                reviewed: true,
-                testCase: { title: 'Orders API' },
-              },
-            ],
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['r-checkout'],
+            testInterface: 'api',
+            breadth: 'targeted',
+            reviewed: true,
+            testCase: { title: 'Orders API' },
           },
         },
       });
@@ -271,18 +266,16 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
         businessIntent({ 'r-checkout': 'high', 'r-help': 'low' }),
       );
       write(dir, 'artifacts/test-cases/test-cases.json', {
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt: '2026-09-08T10:00:00.000Z',
-        routes: {
-          'r-checkout': {
-            journeys: [
-              {
-                journeyId: 'j1',
-                routeId: 'r-checkout',
-                reviewed: true,
-                testCase: { title: 'Pay' },
-              },
-            ],
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['r-checkout'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            reviewed: true,
+            testCase: { title: 'Pay' },
           },
         },
       });
@@ -295,5 +288,129 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // Route-level coverage is blind to this by construction: both routes can be individually green
+  // while nothing checks that what one screen creates turns up on the next.
+  describe('features walked end to end', () => {
+    function featureMap(impact: string) {
+      return {
+        schemaVersion: 1,
+        generatedAt: '2026-09-08T10:00:00.000Z',
+        features: {
+          f1: {
+            featureId: 'f1',
+            name: 'Checkout',
+            memberRouteIds: ['r-checkout', 'r-help'],
+            entityIds: [],
+            impact,
+            evidence: [{ signal: 'business-intent-label', excerpt: 'x' }],
+            reviewed: true,
+            reviewedBy: 'human',
+          },
+        },
+        entities: {},
+        sourceHash: 'hash',
+      };
+    }
+
+    function targetedOnly() {
+      return {
+        schemaVersion: 2,
+        generatedAt: '2026-09-08T10:00:00.000Z',
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['r-checkout'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            reviewed: true,
+            testCase: { title: 'Pay' },
+          },
+        },
+      };
+    }
+
+    it('flags a multi-route feature with no journey that walks it', () => {
+      const dir = setupProject();
+      try {
+        write(dir, 'artifacts/site-map/site-map.json', siteMap());
+        write(dir, 'artifacts/analysis/feature-map.json', featureMap('high'));
+        write(dir, 'artifacts/test-cases/test-cases.json', targetedOnly());
+        const check = criterion(run(dir).output, 'features-walked-end-to-end');
+        expect(check.met).toBe(false);
+        expect(check.gaps).toEqual(['Checkout (2 routes)']);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('does not flag a low-impact feature - the widest test shape is what low impact buys out of', () => {
+      const dir = setupProject();
+      try {
+        write(dir, 'artifacts/site-map/site-map.json', siteMap());
+        write(dir, 'artifacts/analysis/feature-map.json', featureMap('low'));
+        write(dir, 'artifacts/test-cases/test-cases.json', targetedOnly());
+        expect(criterion(run(dir).output, 'features-walked-end-to-end').met).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('is satisfied once a journey actually walks the feature', () => {
+      const dir = setupProject();
+      try {
+        write(dir, 'artifacts/site-map/site-map.json', siteMap());
+        write(dir, 'artifacts/analysis/feature-map.json', featureMap('high'));
+        write(dir, 'artifacts/test-cases/test-cases.json', {
+          schemaVersion: 2,
+          generatedAt: '2026-09-08T10:00:00.000Z',
+          journeys: {
+            j1: {
+              journeyId: 'j1',
+              routeIds: ['r-checkout', 'r-help'],
+              featureId: 'f1',
+              testInterface: 'ui',
+              breadth: 'e2e',
+              reviewed: true,
+              testCase: { title: 'Buy something and find it later' },
+            },
+          },
+        });
+        expect(criterion(run(dir).output, 'features-walked-end-to-end').met).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('counts every route a walk touches as covered, not just the first one', () => {
+      const dir = setupProject();
+      try {
+        write(dir, 'artifacts/site-map/site-map.json', siteMap());
+        write(
+          dir,
+          'artifacts/analysis/business-intent.json',
+          businessIntent({ 'r-checkout': 'high', 'r-help': 'medium' }),
+        );
+        write(dir, 'artifacts/test-cases/test-cases.json', {
+          schemaVersion: 2,
+          generatedAt: '2026-09-08T10:00:00.000Z',
+          journeys: {
+            j1: {
+              journeyId: 'j1',
+              routeIds: ['r-checkout', 'r-help'],
+              featureId: 'f1',
+              testInterface: 'ui',
+              breadth: 'e2e',
+              reviewed: true,
+              testCase: { title: 'Walk' },
+            },
+          },
+        });
+        expect(criterion(run(dir).output, 'important-routes-automated').met).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });

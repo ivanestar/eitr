@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -224,5 +224,40 @@ describe('scripts/app-profile.mjs (real execution)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe('apiStyle', () => {
+    it('accepts every style, including the two that admit a limit rather than name a protocol', () => {
+      for (const style of ['rest', 'graphql', 'rpc', 'mixed', 'none-observable', 'unknown']) {
+        const dir = setupProject();
+        try {
+          writeProfile(dir, {
+            schemaVersion: 1,
+            generatedAt: '2026-09-08T10:00:00.000Z',
+            apiStyle: { value: style, source: 'observed', recordedAt: '2026-09-08T10:00:00.000Z' },
+          });
+          const { output } = run(dir, '--validate');
+          expect(output.status, style + ': ' + JSON.stringify(output.errors)).toBe('PASSED');
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      }
+    });
+
+    it('rejects a style nobody defined', () => {
+      const dir = setupProject();
+      try {
+        writeProfile(dir, {
+          schemaVersion: 1,
+          generatedAt: '2026-09-08T10:00:00.000Z',
+          apiStyle: { value: 'soap', source: 'human', recordedAt: '2026-09-08T10:00:00.000Z' },
+        });
+        const { output } = run(dir, '--validate');
+        expect(output.status).toBe('FAILED');
+        expect(output.errors.some((e: string) => e.includes('apiStyle'))).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });

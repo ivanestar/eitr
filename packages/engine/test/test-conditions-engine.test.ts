@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -847,5 +847,213 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe('flow-oriented techniques from the feature map', () => {
+    function writeFeatureMap(
+      dir: string,
+      opts: {
+        routeIds: string[];
+        transitions: Array<{ from: string; to: string; trigger: string }>;
+        states: string[];
+        reviewed?: boolean;
+        entityReviewed?: boolean;
+      },
+    ) {
+      writeFileSync(
+        join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: '2026-09-08T10:00:00.000Z',
+          features: {
+            f1: {
+              featureId: 'f1',
+              name: 'Ordering',
+              memberRouteIds: opts.routeIds,
+              entityIds: ['e1'],
+              impact: 'high',
+              evidence: [{ signal: 'business-intent-label', excerpt: 'x' }],
+              reviewed: opts.reviewed ?? true,
+              ...(opts.reviewed === false ? {} : { reviewedBy: 'human' }),
+            },
+          },
+          entities: {
+            e1: {
+              entityId: 'e1',
+              name: 'orders',
+              operations: [],
+              relations: [],
+              lifecycle: {
+                states: opts.states.map((name, i) => ({
+                  name,
+                  initial: i === 0,
+                  terminal: i === opts.states.length - 1,
+                })),
+                transitions: opts.transitions.map((t) => ({
+                  ...t,
+                  confidence: 'inferred',
+                  evidence: [{ signal: 'api-resource', excerpt: 'x' }],
+                })),
+              },
+              evidence: [{ signal: 'route-convention', excerpt: '/orders' }],
+              reviewed: opts.entityReviewed ?? true,
+              ...(opts.entityReviewed === false ? {} : { reviewedBy: 'human' }),
+            },
+          },
+          sourceHash: 'hash',
+        }),
+        'utf8',
+      );
+    }
+
+    const fullLifecycle = {
+      states: ['absent', 'exists', 'removed'],
+      transitions: [
+        { from: 'absent', to: 'exists', trigger: 'create' },
+        { from: 'exists', to: 'exists', trigger: 'update' },
+        { from: 'exists', to: 'removed', trigger: 'delete' },
+      ],
+    };
+
+    function conditionsOf(dir: string, technique: string) {
+      return readReport(dir).routes['route-contact'].conditions.filter(
+        (c) => c.technique === technique,
+      );
+    }
+
+    it('generates one positive condition per defined transition', () => {
+      const dir = setupProject(singleTextParamRoute('route-contact'));
+      try {
+        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeFeatureMap(dir, { routeIds: ['route-contact', 'route-other'], ...fullLifecycle });
+        expect(run(dir).status).toBe(0);
+        const positives = conditionsOf(dir, 'state-transition').filter(
+          (c) => (c as unknown as { scenario: string }).scenario === 'positive',
+        );
+        expect(positives).toHaveLength(3);
+        expect(
+          positives.map((c) => (c as unknown as { description: string }).description),
+        ).toContain('Verify a orders moves from "absent" to "exists" on create.');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    // The textbook invalid-transition set: every (state, trigger) pair the lifecycle leaves
+    // undefined. Three states and three triggers give nine pairs, three of them defined.
+    it('generates one negative condition per state and trigger the lifecycle leaves undefined', () => {
+      const dir = setupProject(singleTextParamRoute('route-contact'));
+      try {
+        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeFeatureMap(dir, { routeIds: ['route-contact', 'route-other'], ...fullLifecycle });
+        run(dir);
+        const negatives = conditionsOf(dir, 'state-transition').filter(
+          (c) => (c as unknown as { scenario: string }).scenario === 'negative',
+        );
+        expect(negatives).toHaveLength(6);
+        expect(
+          negatives.every(
+            (c) =>
+              (c as unknown as { negativeCategory: string }).negativeCategory === 'state_violation',
+          ),
+        ).toBe(true);
+        expect(
+          negatives.map((c) => (c as unknown as { description: string }).description),
+        ).toContain('Verify a orders rejects create while it is "exists", leaving it unchanged.');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('drops the invalid-transition half on a low-impact route, the same reduction the checklist makes', () => {
+      const dir = setupProject(singleTextParamRoute('route-contact'));
+      try {
+        writeBusinessIntent(dir, 'route-contact', 'low');
+        writeFeatureMap(dir, { routeIds: ['route-contact', 'route-other'], ...fullLifecycle });
+        run(dir);
+        const transitions = conditionsOf(dir, 'state-transition');
+        expect(transitions).toHaveLength(3);
+        expect(
+          transitions.every((c) => (c as unknown as { scenario: string }).scenario === 'positive'),
+        ).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('generates one use-case condition naming the whole main flow', () => {
+      const dir = setupProject(singleTextParamRoute('route-contact'));
+      try {
+        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeFeatureMap(dir, { routeIds: ['route-contact', 'route-other'], ...fullLifecycle });
+        run(dir);
+        const useCases = conditionsOf(dir, 'use-case');
+        expect(useCases).toHaveLength(1);
+        expect((useCases[0] as unknown as { description: string }).description).toBe(
+          'Verify the main flow of Ordering: a orders can be create, then update, then delete, and the result of each step is visible in the next.',
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('writes a lifecycle only once, on the feature first member route rather than on every page it touches', () => {
+      const dir = setupProject(singleTextParamRoute('route-contact'));
+      try {
+        writeBusinessIntent(dir, 'route-contact', 'high');
+        // route-contact sorts after route-a, so the bundle lands there and not here.
+        writeFeatureMap(dir, { routeIds: ['route-a', 'route-contact'], ...fullLifecycle });
+        run(dir);
+        expect(conditionsOf(dir, 'state-transition')).toHaveLength(0);
+        expect(conditionsOf(dir, 'use-case')).toHaveLength(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('generates nothing flow-shaped when there is no feature map at all', () => {
+      const dir = setupProject(singleTextParamRoute('route-contact'));
+      try {
+        writeBusinessIntent(dir, 'route-contact', 'high');
+        expect(run(dir).status).toBe(0);
+        expect(conditionsOf(dir, 'state-transition')).toHaveLength(0);
+        expect(conditionsOf(dir, 'use-case')).toHaveLength(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('ignores an unreviewed entity - a derived lifecycle nobody confirmed is not a test basis', () => {
+      const dir = setupProject(singleTextParamRoute('route-contact'));
+      try {
+        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeFeatureMap(dir, {
+          routeIds: ['route-contact', 'route-other'],
+          ...fullLifecycle,
+          entityReviewed: false,
+        });
+        run(dir);
+        expect(conditionsOf(dir, 'state-transition')).toHaveLength(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('writes no use case for an entity whose life goes nowhere', () => {
+      const dir = setupProject(singleTextParamRoute('route-contact'));
+      try {
+        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeFeatureMap(dir, {
+          routeIds: ['route-contact', 'route-other'],
+          states: ['exists'],
+          transitions: [],
+        });
+        run(dir);
+        expect(conditionsOf(dir, 'use-case')).toHaveLength(0);
+        expect(conditionsOf(dir, 'state-transition')).toHaveLength(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });

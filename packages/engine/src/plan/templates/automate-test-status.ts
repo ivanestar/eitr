@@ -99,13 +99,12 @@ function findTmsConfig() {
 }
 
 function countLocalDrafts(journeysData) {
-  if (!journeysData || typeof journeysData.routes !== 'object') return 0;
+  if (!journeysData || typeof journeysData.journeys !== 'object' || journeysData.journeys === null) {
+    return 0;
+  }
   let count = 0;
-  for (const routeEntry of Object.values(journeysData.routes)) {
-    if (!routeEntry || !Array.isArray(routeEntry.journeys)) continue;
-    for (const journey of routeEntry.journeys) {
-      if (journey && journey.testCase && journey.reviewed !== true) count++;
-    }
+  for (const journey of Object.values(journeysData.journeys)) {
+    if (journey && journey.testCase && journey.reviewed !== true) count++;
   }
   return count;
 }

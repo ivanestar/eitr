@@ -180,22 +180,40 @@ TMS_PROVIDERS = "xray,zephyr"
     const dir = setupProject();
     try {
       writeJson(dir, join('artifacts', 'test-cases', 'test-cases.json'), {
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt: '2026-09-06T10:00:00.000Z',
-        routes: {
-          '/checkout': {
-            routeId: 'route-checkout',
-            journeys: [
-              { journeyId: 'j1', layer: 'e2e', testCase: { title: 'A' }, reviewed: false },
-              { journeyId: 'j2', layer: 'api', testCase: { title: 'B' }, reviewed: true },
-              { journeyId: 'j3', layer: 'ui-only', reviewed: false },
-            ],
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['route-checkout'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            testCase: { title: 'A' },
+            reviewed: false,
           },
-          '/account': {
-            routeId: 'route-account',
-            journeys: [
-              { journeyId: 'j4', layer: 'e2e', testCase: { title: 'C' }, reviewed: false },
-            ],
+          j2: {
+            journeyId: 'j2',
+            routeIds: ['route-checkout'],
+            testInterface: 'api',
+            breadth: 'targeted',
+            testCase: { title: 'B' },
+            reviewed: true,
+          },
+          j3: {
+            journeyId: 'j3',
+            routeIds: ['route-checkout'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            reviewed: false,
+          },
+          j4: {
+            journeyId: 'j4',
+            routeIds: ['route-checkout', 'route-account'],
+            featureId: 'feature-checkout',
+            testInterface: 'ui',
+            breadth: 'e2e',
+            testCase: { title: 'C' },
+            reviewed: false,
           },
         },
       });

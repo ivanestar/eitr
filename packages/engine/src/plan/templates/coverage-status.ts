@@ -33,6 +33,7 @@ const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-i
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const TEST_CASES_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 const API_CONTRACTS_PATH = path.join(CWD, 'artifacts', 'site-map', 'api-contracts.json');
+const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 
 function loadJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -51,15 +52,10 @@ function routeEntries(siteMap) {
 }
 
 function collectJourneys(journeysData) {
-  const out = [];
-  const routes = journeysData && typeof journeysData.routes === 'object' ? journeysData.routes : {};
-  for (const entry of Object.values(routes)) {
-    const journeys = entry && Array.isArray(entry.journeys) ? entry.journeys : [];
-    for (const journey of journeys) {
-      if (journey) out.push(journey);
-    }
+  if (!journeysData || typeof journeysData.journeys !== 'object' || journeysData.journeys === null) {
+    return [];
   }
-  return out;
+  return Object.values(journeysData.journeys).filter(Boolean);
 }
 
 // A criterion is a named question with a yes/no answer and, when the answer is no, the exact items
@@ -88,10 +84,19 @@ function main() {
   const pathByRouteId = new Map(routes.map((r) => [r.routeId, r.path]));
   const journeys = collectJourneys(journeysData);
 
-  const automatedRouteIds = new Set(
-    journeys.filter((j) => j.testCase && j.reviewed === true).map((j) => j.routeId),
-  );
-  const draftedRouteIds = new Set(journeys.filter((j) => j.testCase).map((j) => j.routeId));
+  // A journey can walk several routes, so route coverage is the union of what every journey
+  // touches - counting only a journey's first route would leave every later step of a feature walk
+  // reported as untested.
+  function routeIdsCovered(predicate) {
+    const covered = new Set();
+    for (const journey of journeys) {
+      if (!predicate(journey)) continue;
+      for (const routeId of journey.routeIds || []) covered.add(routeId);
+    }
+    return covered;
+  }
+  const automatedRouteIds = routeIdsCovered((j) => j.testCase && j.reviewed === true);
+  const draftedRouteIds = routeIdsCovered((j) => Boolean(j.testCase));
 
   const intentRoutes =
     businessIntent && typeof businessIntent.routes === 'object' ? businessIntent.routes : {};
@@ -126,7 +131,12 @@ function main() {
   // 2. Work that was drafted and then quietly abandoned - the 12-of-92 failure mode.
   const draftedNotAutomated = journeys
     .filter((j) => j.testCase && j.reviewed !== true)
-    .map((j) => (pathByRouteId.get(j.routeId) || j.routeId) + ': ' + (j.testCase.title || 'untitled'));
+    .map(
+      (j) =>
+        (j.routeIds || []).map((routeId) => pathByRouteId.get(routeId) || routeId).join(' -> ') +
+        ': ' +
+        (j.testCase.title || 'untitled'),
+    );
   criteria.push(
     criterion(
       'drafted-test-cases-automated',
@@ -159,9 +169,7 @@ function main() {
   // 4. An endpoint the crawl actually saw, that no test ever exercises, is free coverage left on
   // the floor - the contract is already recorded, so the test is cheap to write.
   const contracts = apiContracts && Array.isArray(apiContracts.contracts) ? apiContracts.contracts : [];
-  const apiCoveredRouteIds = new Set(
-    journeys.filter((j) => j.testCase && j.layer === 'api').map((j) => j.routeId),
-  );
+  const apiCoveredRouteIds = routeIdsCovered((j) => j.testCase && j.testInterface === 'api');
   const uncoveredContracts = contracts
     .filter((contract) => {
       const observedFrom = Array.isArray(contract.observedFromRouteIds)
@@ -181,7 +189,39 @@ function main() {
     ),
   );
 
-  // 5. A route nobody classified cannot be prioritised, so it silently falls out of every count
+  // 5. A feature spanning several routes with no test that walks them is the gap route-level
+  // coverage is blind to by construction: every one of its routes can be individually green while
+  // nothing checks that what one screen creates turns up on the next. Low-impact features are
+  // excluded - they are deliberately not given the most expensive test shape.
+  const featureMap = loadJson(FEATURE_MAP_PATH);
+  const featureEntries =
+    featureMap && typeof featureMap.features === 'object' && featureMap.features !== null
+      ? Object.values(featureMap.features)
+      : [];
+  const walkedFeatureIds = new Set(
+    journeys.filter((j) => j.breadth === 'e2e' && j.featureId).map((j) => j.featureId),
+  );
+  const unwalkedFeatures = featureEntries
+    .filter(
+      (feature) =>
+        feature &&
+        feature.reviewed === true &&
+        feature.impact !== 'low' &&
+        Array.isArray(feature.memberRouteIds) &&
+        feature.memberRouteIds.length >= 2 &&
+        !walkedFeatureIds.has(feature.featureId),
+    )
+    .map((feature) => feature.name + ' (' + feature.memberRouteIds.length + ' routes)');
+  criteria.push(
+    criterion(
+      'features-walked-end-to-end',
+      'Does every multi-route feature have a test that walks it end to end?',
+      unwalkedFeatures,
+      featureMap !== null && journeysData !== null,
+    ),
+  );
+
+  // 6. A route nobody classified cannot be prioritised, so it silently falls out of every count
   // above rather than showing up as uncovered.
   const unclassified = routes
     .filter((r) => !tierByRouteId.has(r.routeId))

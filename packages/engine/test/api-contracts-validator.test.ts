@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -61,6 +61,19 @@ function writeContracts(dir: string, data: unknown) {
   writeFileSync(
     join(dir, 'artifacts', 'site-map', 'api-contracts.json'),
     JSON.stringify(data, null, 2),
+    'utf8',
+  );
+}
+
+// Only the fields computeObservationCoverage actually reads - routeId and status.
+function writeSiteMap(dir: string, activeRouteCount: number, _observedRouteIds: string[]) {
+  const routes: Record<string, unknown> = {};
+  for (let i = 0; i < activeRouteCount; i += 1) {
+    routes['/r' + i] = { routeId: 'route-' + i, status: 'active' };
+  }
+  writeFileSync(
+    join(dir, 'artifacts', 'site-map', 'site-map.json'),
+    JSON.stringify({ schemaVersion: 2, generatedAt: '2026-09-06T10:00:00.000Z', routes }, null, 2),
     'utf8',
   );
 }
@@ -284,5 +297,250 @@ describe('scripts/validate-api-contracts.mjs (real execution)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe('observation-quality warnings (never fatal)', () => {
+    it('warns, without failing, on a 2xx contract that recorded no responseShape', () => {
+      const dir = setupProject();
+      try {
+        writeContracts(dir, minimalContracts());
+        const result = run(dir);
+        const output = JSON.parse(result.stdout);
+        expect(output.status).toBe('PASSED');
+        expect(result.status).toBe(0);
+        expect(output.warnings.some((w: string) => w.includes('has no responseShape'))).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('does not warn about a missing responseShape on a 204, which carries no body by definition', () => {
+      const dir = setupProject();
+      try {
+        const data = structuredClone(minimalContracts()) as Record<string, any>;
+        data.contracts[0].method = 'DELETE';
+        data.contracts[0].responseStatus = 204;
+        writeContracts(dir, data);
+        const result = run(dir);
+        const output = JSON.parse(result.stdout);
+        expect(output.status).toBe('PASSED');
+        expect(output.warnings).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('warns on an empty responseShape object, which reads the same as one never looked at', () => {
+      const dir = setupProject();
+      try {
+        const data = structuredClone(minimalContracts()) as Record<string, any>;
+        data.contracts[0].responseShape = {};
+        writeContracts(dir, data);
+        const result = run(dir);
+        const output = JSON.parse(result.stdout);
+        expect(output.status).toBe('PASSED');
+        expect(output.warnings.some((w: string) => w.includes('empty responseShape'))).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('warns when almost no active route contributed an observed call - the 1-contract-per-62-routes case', () => {
+      const dir = setupProject();
+      try {
+        writeSiteMap(dir, 62, ['route-0']);
+        const data = structuredClone(minimalContracts()) as Record<string, any>;
+        data.contracts[0].observedFromRouteIds = ['route-0'];
+        data.contracts[0].responseShape = { status: 'string' };
+        writeContracts(dir, data);
+        const result = run(dir);
+        const output = JSON.parse(result.stdout);
+        expect(output.status).toBe('PASSED');
+        expect(result.status).toBe(0);
+        expect(output.observationCoverage).toEqual({
+          activeRoutes: 62,
+          routesWithObservedCalls: 1,
+        });
+        expect(
+          output.warnings.some((w: string) => w.includes('contributed an observed API call')),
+        ).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('stays silent on a small site, where the ratio cannot mean anything yet', () => {
+      const dir = setupProject();
+      try {
+        writeSiteMap(dir, 4, []);
+        const data = structuredClone(minimalContracts()) as Record<string, any>;
+        data.contracts[0].responseShape = { status: 'string' };
+        writeContracts(dir, data);
+        const result = run(dir);
+        const output = JSON.parse(result.stdout);
+        expect(output.observationCoverage).toEqual({ activeRoutes: 4, routesWithObservedCalls: 0 });
+        expect(output.warnings).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('stays silent when observation is healthy across a large site', () => {
+      const dir = setupProject();
+      try {
+        writeSiteMap(
+          dir,
+          20,
+          Array.from({ length: 12 }, (_, i) => 'route-' + i),
+        );
+        const data = structuredClone(minimalContracts()) as Record<string, any>;
+        data.contracts[0].responseShape = { status: 'string' };
+        data.contracts[0].observedFromRouteIds = Array.from({ length: 12 }, (_, i) => 'route-' + i);
+        writeContracts(dir, data);
+        const result = run(dir);
+        const output = JSON.parse(result.stdout);
+        expect(output.warnings).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('reports no observationCoverage at all when there is no site map to count against', () => {
+      const dir = setupProject();
+      try {
+        writeContracts(dir, wellFormedContracts());
+        const result = run(dir);
+        const output = JSON.parse(result.stdout);
+        expect(output.observationCoverage).toBeNull();
+        expect(output.warnings).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('operation styles', () => {
+    function withOperation(operation: unknown, overrides: Record<string, unknown> = {}) {
+      const data = structuredClone(minimalContracts()) as any;
+      data.contracts[0].operation = operation;
+      data.contracts[0].responseShape = { status: 'string' };
+      Object.assign(data.contracts[0], overrides);
+      return data;
+    }
+
+    function check(data: unknown) {
+      const dir = setupProject();
+      try {
+        writeContracts(dir, data);
+        return JSON.parse(run(dir).stdout);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    it('accepts a rest contract with no operation field at all', () => {
+      const data = structuredClone(minimalContracts()) as any;
+      data.contracts[0].responseShape = { status: 'string' };
+      const output = check(data);
+      expect(output.status).toBe('PASSED');
+      expect(output.warnings).toEqual([]);
+    });
+
+    it('accepts a named graphql operation', () => {
+      const output = check(
+        withOperation({ style: 'graphql', name: 'createOrder', documentType: 'mutation' }),
+      );
+      expect(output.status).toBe('PASSED');
+    });
+
+    // Without a name every call in a single-endpoint API hashes to one contractId, so the first
+    // one observed would be the only one ever recorded.
+    it('rejects a graphql operation with no name', () => {
+      const output = check(withOperation({ style: 'graphql' }));
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.some((e: string) => e.includes('.name is required for style'))).toBe(
+        true,
+      );
+    });
+
+    it('rejects an rpc operation with no name', () => {
+      expect(check(withOperation({ style: 'rpc' })).status).toBe('FAILED');
+    });
+
+    it('rejects an unknown style', () => {
+      const output = check(withOperation({ style: 'soap-ish', name: 'x' }));
+      expect(output.errors.some((e: string) => e.includes('.style must be one of'))).toBe(true);
+    });
+
+    // An unreadable call is a legitimate outcome, but only when it says what stopped the read.
+    it('rejects an opaque operation that does not say why', () => {
+      const output = check(withOperation({ style: 'opaque' }));
+      expect(output.errors.some((e: string) => e.includes('.reason is required'))).toBe(true);
+    });
+
+    it('accepts an opaque operation with a reason, and warns about it without failing', () => {
+      const output = check(
+        withOperation({ style: 'opaque', reason: 'Next.js Server Action - encrypted action id' }),
+      );
+      expect(output.status).toBe('PASSED');
+      expect(output.warnings.some((w: string) => w.includes('could not be decoded'))).toBe(true);
+    });
+
+    it('does not ask an opaque call for a response shape it already said it could not read', () => {
+      const data = structuredClone(minimalContracts()) as any;
+      data.contracts[0].operation = { style: 'opaque', reason: 'binary protobuf body' };
+      const output = check(data);
+      expect(output.status).toBe('PASSED');
+      expect(output.warnings.some((w: string) => w.includes('has no responseShape'))).toBe(false);
+    });
+
+    it('rejects documentType on anything but graphql', () => {
+      const output = check(
+        withOperation({ style: 'rpc', name: 'order.create', documentType: 'mutation' }),
+      );
+      expect(output.errors.some((e: string) => e.includes('documentType only applies'))).toBe(true);
+    });
+  });
+
+  describe('path canonicalization guards', () => {
+    function pathed(pathTemplate: string) {
+      const data = structuredClone(minimalContracts()) as any;
+      data.contracts[0].pathTemplate = pathTemplate;
+      data.contracts[0].responseShape = { status: 'string' };
+      const dir = setupProject();
+      try {
+        writeContracts(dir, data);
+        return JSON.parse(run(dir).stdout);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    // tRPC serialises a call's whole input into an `input` query parameter, so a path kept verbatim
+    // is a payload in disguise - and the redaction backstop only ever looked at payloads.
+    it('rejects a path that still carries a query string', () => {
+      const output = pathed('/api/trpc/order.byId?batch=1&input=%7B%220%22%3A%7B%7D%7D');
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.some((e: string) => e.includes('still carries a query string'))).toBe(
+        true,
+      );
+    });
+
+    it('rejects a raw id left in a path instead of a {template} segment', () => {
+      const output = pathed('/api/orders/918273645');
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.some((e: string) => e.includes('id-shaped value'))).toBe(true);
+    });
+
+    // A resource genuinely called /password/reset or /api/tokens is ordinary; the sensitive-NAME
+    // rule that guards payload fields would reject correct paths.
+    it('accepts a credential-shaped resource name in a path', () => {
+      expect(pathed('/api/password/reset').status).toBe('PASSED');
+      expect(pathed('/api/tokens').status).toBe('PASSED');
+    });
+
+    it('accepts a properly templated path', () => {
+      expect(pathed('/api/orders/{id}').status).toBe('PASSED');
+    });
   });
 });

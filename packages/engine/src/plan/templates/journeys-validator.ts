@@ -1,4 +1,4 @@
-// Template for generating scripts/validate-journeys.mjs. create-if-absent.
+﻿// Template for generating scripts/validate-journeys.mjs. create-if-absent.
 // Mechanical shape gate for artifacts/test-cases/test-cases.json, zero dependencies, same style as
 // test-conditions-validator.ts. Supports --stage=structural to run only the pre-drafting subset of
 // checks (Gate 1, right after scripts/compose-journeys.mjs runs), or the full check set with no
@@ -30,7 +30,9 @@ const stageArg = args.find(function (a) {
 });
 const STRUCTURAL_ONLY = stageArg ? stageArg.slice('--stage='.length) === 'structural' : false;
 
-const TEST_LEVEL_VALUES = new Set(['e2e', 'api', 'ui-only']);
+const INTERFACE_VALUES = new Set(['ui', 'api']);
+const BREADTH_VALUES = new Set(['targeted', 'e2e']);
+const LEVEL_VALUES = new Set(['integration', 'system']);
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -61,7 +63,7 @@ function collectKnownConditionIds(testConditions) {
   return known;
 }
 
-function isConditionAssignment(value, label, errors, knownConditionIds) {
+function isConditionAssignment(value, label, errors, knownConditionIds, journeyRouteIds) {
   if (!value || typeof value !== 'object') {
     errors.push(label + ' must be an object.');
     return;
@@ -76,8 +78,12 @@ function isConditionAssignment(value, label, errors, knownConditionIds) {
         '" does not exist in artifacts/analysis/test-conditions.json.',
     );
   }
-  if (!TEST_LEVEL_VALUES.has(value.testLevel)) {
-    errors.push(label + ".testLevel must be one of 'e2e'|'api'|'ui-only'.");
+  if (typeof value.routeId !== 'string' || value.routeId.length === 0) {
+    errors.push(label + '.routeId must be a non-empty string.');
+  } else if (journeyRouteIds && journeyRouteIds.indexOf(value.routeId) === -1) {
+    errors.push(
+      label + '.routeId "' + value.routeId + '" is not one of the routes this journey walks.',
+    );
   }
   if (typeof value.reason !== 'string' || value.reason.length === 0) {
     errors.push(label + '.reason must be a non-empty string.');
@@ -141,36 +147,79 @@ function isApiStepDetail(value, label, errors) {
   }
 }
 
-function isJourneyEntry(value, label, errors, knownConditionIds, seenJourneyIds, expectedRouteId) {
+function isJourneyEntry(value, label, errors, knownConditionIds, expectedJourneyId) {
   if (!value || typeof value !== 'object') {
     errors.push(label + ' must be an object.');
     return;
   }
-  if (value.routeId !== expectedRouteId) {
-    errors.push(label + '.routeId must equal "' + expectedRouteId + '".');
-  }
-  if (!TEST_LEVEL_VALUES.has(value.layer)) {
-    errors.push(label + ".layer must be one of 'e2e'|'api'|'ui-only'.");
-  } else if (
-    Array.isArray(value.conditionAssignments) &&
-    !value.conditionAssignments.every(function (a) {
-      return a && a.testLevel === value.layer;
-    })
-  ) {
-    errors.push(label + '.conditionAssignments must all share this journey\\'s own .layer value.');
-  }
   if (typeof value.journeyId !== 'string' || value.journeyId.length === 0) {
     errors.push(label + '.journeyId must be a non-empty string.');
-  } else if (seenJourneyIds.has(value.journeyId)) {
-    errors.push(label + '.journeyId "' + value.journeyId + '" is a duplicate.');
-  } else {
-    seenJourneyIds.add(value.journeyId);
+  } else if (value.journeyId !== expectedJourneyId) {
+    errors.push(label + '.journeyId must equal its own key ("' + expectedJourneyId + '").');
+  }
+  if (!Array.isArray(value.routeIds) || value.routeIds.length === 0) {
+    errors.push(label + '.routeIds must be a non-empty array - a journey walks at least one route.');
+  }
+  if (!INTERFACE_VALUES.has(value.testInterface)) {
+    errors.push(label + ".testInterface must be 'ui' or 'api'.");
+  }
+  if (!BREADTH_VALUES.has(value.breadth)) {
+    errors.push(label + ".breadth must be 'targeted' or 'e2e'.");
+  }
+  if (!LEVEL_VALUES.has(value.level)) {
+    errors.push(label + ".level must be 'integration' or 'system'.");
+  }
+  // A browser-driven test exercises the assembled system, and so does any walk across a feature.
+  // Only an API call at a single endpoint is an integration test, so that is the only combination
+  // the level 'integration' can describe.
+  if (
+    value.level === 'integration' &&
+    !(value.testInterface === 'api' && value.breadth === 'targeted')
+  ) {
+    errors.push(
+      label +
+        ".level 'integration' only describes a targeted API journey; a UI journey or a feature walk exercises the assembled system.",
+    );
+  }
+  // 'e2e' means a walk across a feature, not a thorough test of one screen.
+  if (value.breadth === 'e2e') {
+    if (typeof value.featureId !== 'string' || value.featureId.length === 0) {
+      errors.push(label + ".breadth 'e2e' requires a featureId naming the feature being walked.");
+    }
+    if (Array.isArray(value.routeIds) && value.routeIds.length < 2) {
+      errors.push(
+        label + ".breadth 'e2e' requires at least 2 routes - a single-route journey is targeted.",
+      );
+    }
+  } else if (value.featureId !== undefined) {
+    errors.push(label + '.featureId is only meaningful on a journey walking a feature.');
+  }
+  if (value.acceptanceCriterion !== undefined) {
+    const criterion = value.acceptanceCriterion;
+    if (!criterion || typeof criterion !== 'object') {
+      errors.push(label + '.acceptanceCriterion must be an object when present.');
+    } else {
+      // Nothing in this pipeline can observe who signs a release off, so this field has exactly one
+      // legitimate origin.
+      if (criterion.statedBy !== 'human') {
+        errors.push(label + ".acceptanceCriterion.statedBy must be 'human' - nothing else can decide it.");
+      }
+      if (typeof criterion.statedAt !== 'string' || criterion.statedAt.length === 0) {
+        errors.push(label + '.acceptanceCriterion.statedAt must be a non-empty string.');
+      }
+    }
   }
   if (!Array.isArray(value.conditionAssignments) || value.conditionAssignments.length === 0) {
     errors.push(label + '.conditionAssignments must be a non-empty array.');
   } else {
     value.conditionAssignments.forEach(function (a, i) {
-      isConditionAssignment(a, label + '.conditionAssignments[' + i + ']', errors, knownConditionIds);
+      isConditionAssignment(
+        a,
+        label + '.conditionAssignments[' + i + ']',
+        errors,
+        knownConditionIds,
+        Array.isArray(value.routeIds) ? value.routeIds : null,
+      );
     });
   }
   if (typeof value.sourceConditionsHash !== 'string' || value.sourceConditionsHash.length === 0) {
@@ -204,14 +253,14 @@ function validate() {
     );
     return { status: 'FAILED', errors };
   }
-  if (data.schemaVersion !== 1) {
-    errors.push('schemaVersion must be exactly 1 (found ' + JSON.stringify(data.schemaVersion) + ').');
+  if (data.schemaVersion !== 2) {
+    errors.push('schemaVersion must be exactly 2 (found ' + JSON.stringify(data.schemaVersion) + ').');
   }
   if (typeof data.generatedAt !== 'string' || data.generatedAt.length === 0) {
     errors.push('generatedAt must be a non-empty string.');
   }
-  if (!data.routes || typeof data.routes !== 'object' || Array.isArray(data.routes)) {
-    errors.push('routes must be an object keyed by routeId.');
+  if (!data.journeys || typeof data.journeys !== 'object' || Array.isArray(data.journeys)) {
+    errors.push('journeys must be an object keyed by journeyId.');
     return { status: 'FAILED', errors };
   }
 
@@ -220,23 +269,29 @@ function validate() {
     ? null
     : collectKnownConditionIds(testConditionsLoaded.value);
 
-  const seenJourneyIds = new Set();
-  for (const [key, entry] of Object.entries(data.routes)) {
-    const label = 'routes["' + key + '"]';
-    if (!entry || typeof entry !== 'object') {
-      errors.push(label + ' must be an object.');
-      continue;
+  // One condition belongs to exactly one journey. Two journeys covering the same condition means
+  // the same check gets written twice as two separate tests, which nothing downstream would notice.
+  const conditionOwner = new Map();
+  for (const [key, entry] of Object.entries(data.journeys)) {
+    isJourneyEntry(entry, 'journeys["' + key + '"]', errors, knownConditionIds, key);
+    const assignments = entry && Array.isArray(entry.conditionAssignments) ? entry.conditionAssignments : [];
+    for (const assignment of assignments) {
+      if (!assignment || typeof assignment.conditionId !== 'string') continue;
+      const owner = conditionOwner.get(assignment.conditionId);
+      if (owner !== undefined && owner !== key) {
+        errors.push(
+          'condition "' +
+            assignment.conditionId +
+            '" is claimed by two journeys ("' +
+            owner +
+            '" and "' +
+            key +
+            '") - it would be tested twice.',
+        );
+      } else {
+        conditionOwner.set(assignment.conditionId, key);
+      }
     }
-    if (entry.routeId !== key) {
-      errors.push(label + '.routeId must equal its own key ("' + key + '").');
-    }
-    if (!Array.isArray(entry.journeys)) {
-      errors.push(label + '.journeys must be an array.');
-      continue;
-    }
-    entry.journeys.forEach(function (j, i) {
-      isJourneyEntry(j, label + '.journeys[' + i + ']', errors, knownConditionIds, seenJourneyIds, key);
-    });
   }
 
   return { status: errors.length === 0 ? 'PASSED' : 'FAILED', errors };

@@ -821,6 +821,7 @@ You serve as the Garbage-In Garbage-Out (GIGO) protection guard.
    - Check that all required test data preconditions (credentials, user roles, IDs, product SKUs) are clearly stated.
 4. Preconditions Feasibility:
    - Identify whether preconditions can be satisfied via fast-path API calls (\`apiClient\`) rather than slow UI setup.
+   - Cross-check against \`artifacts/analysis/feature-map.json\`, when the project has one. A reviewed entity's \`references\` relation says something has to exist before the entity under test can, so a test case that creates an order without a customer anywhere in its preconditions is missing one - and the file names the operation that would create it. A \`contains\` relation needs no separate setup: those come and go together. Ignore an entity with \`reviewed: false\`; it is a draft nobody has confirmed.
 
 ## Rejection Protocol & Output Contract
 - If the test case passes all checks (Quality Score >= 80%):
@@ -1023,6 +1024,7 @@ Single scalar values - a unique email, UUID, phone number, password, name, date,
 3. Write everything under \`fixtures/synthetic-data/\` (never the repo root, never a stray temp file elsewhere) so it is a visible, intentional part of the framework rather than clutter.
 
 ## Rules
+- **Read \`artifacts/analysis/feature-map.json\` before inventing a shape the application already told you.** An entity there names what it is called and, through its \`references\` relations, what has to exist before one of them can. A dataset of orders whose \`customerId\` points at customers you never generated is exactly the dangling reference rule below, and the feature map is where you find out that the link is there at all. Only trust a \`reviewed: true\` entity; an unreviewed one is a draft.
 - Deterministic on request: if the caller supplies a seed/count, the same seed/count MUST reproduce the same dataset - never silently randomize something the caller asked to pin down.
 - Never write PII-shaped real-looking data (real names, real addresses) - synthesize plausible-but-obviously-fake values the same way \`ApiClient\`'s own helpers do.
 - Never mutate or seed a live application/database directly - you produce files/values only; the requesting agent or skill (e.g. \`/automate-test\`) is responsible for using them against the app via \`ApiClient\` or the UI.

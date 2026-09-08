@@ -185,40 +185,40 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
     try {
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
       writeJson(dir, 'artifacts/test-cases/test-cases.json', {
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt: '2026-09-07T00:00:00.000Z',
-        routes: {
-          'id-0': {
-            journeys: [
-              {
-                journeyId: 'j1',
-                routeId: 'id-0',
-                layer: 'e2e',
-                reviewed: true,
-                testCase: {
-                  title: 'Done one',
-                  preconditions: [],
-                  steps: [{ description: 'Do a thing', expectedResult: 'It happened' }],
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['id-0'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            level: 'system',
+            reviewed: true,
+            testCase: {
+              title: 'Done one',
+              preconditions: [],
+              steps: [{ description: 'Do a thing', expectedResult: 'It happened' }],
+            },
+          },
+          j2: {
+            journeyId: 'j2',
+            routeIds: ['id-0'],
+            testInterface: 'api',
+            breadth: 'targeted',
+            level: 'integration',
+            reviewed: false,
+            testCase: {
+              title: 'Pending one',
+              preconditions: [],
+              steps: [
+                {
+                  description: 'Call the endpoint',
+                  expectedResult: 'Status is 200',
+                  api: { contractGrounded: false },
                 },
-              },
-              {
-                journeyId: 'j2',
-                routeId: 'id-0',
-                layer: 'api',
-                reviewed: false,
-                testCase: {
-                  title: 'Pending one',
-                  preconditions: [],
-                  steps: [
-                    {
-                      description: 'Call the endpoint',
-                      expectedResult: 'Status is 200',
-                      api: { contractGrounded: false },
-                    },
-                  ],
-                },
-              },
-            ],
+              ],
+            },
           },
         },
       });
@@ -227,6 +227,10 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
       expect(output.summary).toContain('1 already automated');
       expect(output.summary).toContain('1 awaiting automation');
       expect(output.markdown).toContain('[NO OBSERVED API CONTRACT]');
+      // What drives the test and how far it reaches are on the heading, where a reviewer sees them
+      // before reading a single step.
+      expect(output.markdown).toContain('[targeted via ui]');
+      expect(output.markdown).toContain('[targeted via api]');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -241,5 +245,115 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe('--kind=feature-map', () => {
+    function featureMap() {
+      return {
+        schemaVersion: 1,
+        generatedAt: '2026-09-08T00:00:00.000Z',
+        features: {
+          f1: {
+            featureId: 'f1',
+            name: 'Ordering',
+            memberRouteIds: ['id-0', 'id-1'],
+            entityIds: ['e1', 'e2'],
+            impact: 'high',
+            impactSourceRouteId: 'id-0',
+            evidence: [{ signal: 'business-intent-label', excerpt: '/route-00 -> "Ordering"' }],
+            reviewed: false,
+          },
+        },
+        entities: {
+          e1: {
+            entityId: 'e1',
+            name: 'orders',
+            operations: [
+              {
+                kind: 'create',
+                contractId: 'c1',
+                routeIds: ['id-0'],
+                confidence: 'observed',
+                evidence: [{ signal: 'api-resource', excerpt: 'POST /api/orders' }],
+              },
+            ],
+            relations: [
+              {
+                kind: 'references',
+                targetEntityId: 'e2',
+                viaField: 'customerId',
+                confidence: 'inferred',
+                evidence: [{ signal: 'api-payload-field', excerpt: 'request field "customerId"' }],
+              },
+            ],
+            lifecycle: {
+              states: [
+                { name: 'absent', initial: true, terminal: false },
+                { name: 'exists', initial: false, terminal: true },
+              ],
+              transitions: [
+                {
+                  from: 'absent',
+                  to: 'exists',
+                  trigger: 'create',
+                  confidence: 'inferred',
+                  evidence: [{ signal: 'api-resource', excerpt: 'a create operation' }],
+                },
+              ],
+            },
+            evidence: [{ signal: 'route-convention', excerpt: '/orders' }],
+            reviewed: false,
+          },
+          e2: {
+            entityId: 'e2',
+            name: 'customers',
+            operations: [],
+            relations: [],
+            lifecycle: { states: [], transitions: [] },
+            evidence: [{ signal: 'route-convention', excerpt: '/customers' }],
+            reviewed: false,
+          },
+        },
+        sourceHash: 'hash',
+      };
+    }
+
+    it('renders features, their pages, and every link a person has to confirm', () => {
+      const dir = setupProject();
+      try {
+        writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+        writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
+        const { output } = run(dir, '--kind=feature-map');
+        expect(output.entryCount).toBe(3);
+        expect(output.mode).toBe('inline');
+        expect(output.summary).toBe('1 feature(s), 2 thing(s), 1 link(s) between them to confirm');
+        expect(output.markdown).toContain('1. Ordering - **HIGH IMPACT**');
+        // Route ids are resolved to something a person can recognise.
+        expect(output.markdown).toContain('/route-00 - Page 0');
+        expect(output.markdown).toContain('Works with: customers, orders');
+        expect(output.markdown).toContain('Can be: created (seen in real traffic)');
+        expect(output.markdown).toContain('Lifecycle: absent -> exists (create)');
+        expect(output.markdown).toContain(
+          'Needs a customers to already exist - via the field "customerId", guessed from that name alone.',
+        );
+        expect(output.markdown).toContain('Nothing links it to anything else.');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('says plainly where a fallback impact came from instead of presenting it as a judgment', () => {
+      const dir = setupProject();
+      try {
+        const data = featureMap() as any;
+        delete data.features.f1.impactSourceRouteId;
+        writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+        writeJson(dir, 'artifacts/analysis/feature-map.json', data);
+        const { output } = run(dir, '--kind=feature-map');
+        expect(output.markdown).toContain('assumed important until you say otherwise');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });
