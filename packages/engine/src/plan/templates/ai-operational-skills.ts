@@ -116,23 +116,23 @@ function noArgumentSkillInvocationNote(skill: SkillDefinition): string {
 // TeamCity's DSL-level password parameter type requires a token minted by the TeamCity server
 // itself, which cannot be produced from outside it, so that one is manual too, but through the
 // UI's own Parameters screen (typed "Password"), not a DSL edit.
-const AUTH_SETUP_CI_SECTION = `## Step 5: CI - only if CI/CD was actually chosen at generation time
+const AUTH_SETUP_CI_SECTION = `## Step 5: CI - reached only when \`plan.wireCi\` is true
 
-Read \`ciCd\` from \`scripts/auth-status.mjs\`'s output (backed by \`.scaffold/init.json\`). If it is absent or \`none\`, skip this whole step silently - do not ask a CI question with no real target.
+Whether to ask about CI at all, and whether the human agreed, were both settled by \`scripts/auth-questions.mjs\` in Steps 0-3: the question is never asked on a project generated without CI, and a "no" already ended the flow with reason \`local-only\`. Reaching this step means \`plan.wireCi\` is true and \`plan.ciProvider\` names the one provider to use. Do not re-ask either question here.
 
-Otherwise ask: **"Want this login available in CI too, so tests run there the same way? (Recommended)"** ${INTERACTIVE_CHOICE_NOTE} A "No" ends the flow here - say plainly that CI was skipped and can be revisited later by re-running this skill.
+Dispatch to the one provider \`plan.ciProvider\` names, and only that one - never reuse another provider's steps, they are not interchangeable.
 
-On "Yes," dispatch to exactly the one matching provider below - never reuse another provider's steps, they are not interchangeable.
+\`plan.pushSecrets\` carries the human's own answer to the one irreversible, outward-facing action in this flow. When it is false, go straight to the manual path each provider below describes; never push a secret on your own reading of an earlier "yes" to a different question.
 
 ### GitHub Actions
 1. Confirm \`.github/workflows/playwright.yml\`'s job already has an \`env:\` block wired to \`secrets.E2E_USERNAME\`/\`secrets.E2E_PASSWORD\`/\`secrets.AUTH_TOKEN\`/\`secrets.E2E_API_TOKEN\`/\`secrets.TOTP_SECRET\` (present by default in a freshly generated project; add it once if this project predates that).
 2. Check whether \`.env\` already has real values for the auth variables this app actually needs. If not, ask for them now and write them into \`.env\` - never echo a value back into chat, confirm only its presence and length (e.g. "got a value, 12 characters").
-3. Run \`gh auth status\`. If authenticated, ask explicitly: **"Push these as GitHub Actions secrets now via \`gh secret set\`?"** ${INTERACTIVE_CHOICE_NOTE} Yes -> for each filled variable, run \`gh secret set <NAME> --body "$(grep '^<NAME>=' .env | cut -d= -f2-)"\` - the value is read from \`.env\` at shell-execution time, never typed or interpolated into the command string yourself, so it never appears in anything you write or in this session's own transcript. Then run \`gh secret list\` to mechanically confirm each name now exists (never print a value). No, or \`gh\` missing/unauthenticated -> print the exact manual path instead: repo Settings -> Secrets and variables -> Actions -> New repository secret, naming exactly which variables are needed.
+3. Run \`gh auth status\`. If authenticated and \`plan.pushSecrets\` is true -> for each filled variable, run \`gh secret set <NAME> --body "$(grep '^<NAME>=' .env | cut -d= -f2-)"\` - the value is read from \`.env\` at shell-execution time, never typed or interpolated into the command string yourself, so it never appears in anything you write or in this session's own transcript. Then run \`gh secret list\` to mechanically confirm each name now exists (never print a value). \`plan.pushSecrets\` false, or \`gh\` missing/unauthenticated -> print the exact manual path instead: repo Settings -> Secrets and variables -> Actions -> New repository secret, naming exactly which variables are needed.
 
 ### GitLab CI
 1. \`.gitlab-ci.yml\`'s top-level \`variables:\` block already bakes in \`E2E_BASE_URL\` by default - nothing to do there.
 2. Explain plainly: GitLab auto-injects CI/CD Variables into every job's environment with zero YAML changes, unlike GitHub - once a variable exists in project settings, \`script:\` steps just see it.
-3. Run \`glab auth status\`. If \`glab\` is installed and authenticated, ask: **"Push these as GitLab CI/CD variables now via \`glab variable set\`?"** ${INTERACTIVE_CHOICE_NOTE} Yes -> for each filled variable, run \`glab variable set <NAME> "$(grep '^<NAME>=' .env | cut -d= -f2-)" --masked\` - the value is read from \`.env\` at shell-execution time, never typed or interpolated into the command string yourself, so it never appears in anything you write or in this session's own transcript. Then verify via \`glab variable list\` (names only). No, or \`glab\` missing/unauthenticated -> manual path: Settings -> CI/CD -> Variables -> Add variable, exact names, tick both "Masked" and "Protected."
+3. Run \`glab auth status\`. If \`glab\` is installed and authenticated and \`plan.pushSecrets\` is true -> for each filled variable, run \`glab variable set <NAME> "$(grep '^<NAME>=' .env | cut -d= -f2-)" --masked\` - the value is read from \`.env\` at shell-execution time, never typed or interpolated into the command string yourself, so it never appears in anything you write or in this session's own transcript. Then verify via \`glab variable list\` (names only). \`plan.pushSecrets\` false, or \`glab\` missing/unauthenticated -> manual path: Settings -> CI/CD -> Variables -> Add variable, exact names, tick both "Masked" and "Protected."
 
 ### Jenkins
 Never attempt an automated push here - there is no universal, already-authenticated local CLI for Jenkins the way \`gh\`/\`glab\` exist for GitHub/GitLab, and a wrong guess breaks the whole pipeline (see below).
@@ -180,31 +180,33 @@ const AUTH_SETUP_CAPTURE_POLICY = `- **Always print the command and let the huma
 // Identical across every language - the part of the flow that decides whether auth is even
 // needed, whether a session already exists, and how many roles to capture, all computed from
 // `scripts/auth-status.mjs` rather than re-derived ad hoc each time.
-const AUTH_SETUP_STEPS_0_TO_3 = `## Step 0: Does this app even have a login?
+const AUTH_SETUP_STEPS_0_TO_3 = `## Steps 0-3: The questions, driven by \`scripts/auth-questions.mjs\`
 
-Run \`node scripts/auth-status.mjs\` first and read its output for every fact the rest of this flow needs - never re-derive session/env/CI state yourself by guessing or re-reading files ad hoc. Then ask, before explaining anything else: **"Does your app have a login at all - anything behind a sign-in you want tested?"** ${INTERACTIVE_CHOICE_NOTE} On "no", say plainly there is nothing to set up here and stop - do not describe the capture procedure and do not ask for approval of a procedure that will never run. This ordering is deliberate and is the whole reason Step 0 and Step 1 are in this order: whether to approve a login-capture procedure is not a question a human has any basis to answer before it is established that their app has a login at all.
+**Do not decide what to ask, in what order, or with which options. Run the script and ask what it returns.**
 
-## Step 1: Explain what happens next, then confirm
+\`\`\`
+node scripts/auth-questions.mjs
+node scripts/auth-questions.mjs --answers='{"has-login":"yes"}'
+\`\`\`
 
-Only reached when Step 0 established there IS a login. State in plain language what this does and why: "This saves a real login session to a file, so tests don't have to log in every time - locally, and in CI too if you want. A real browser opens once, you log in by hand, and the session is saved." Then ask: **Continue, or stop here?** ${INTERACTIVE_CHOICE_NOTE} Stop immediately on anything but an explicit yes - zero side effects up to this point.
+Call it with no answers to get the first question. Present that question, take the human's reply, add it to the answers object under the question's own \`id\`, and call it again. Repeat until it stops returning \`ASK\`. It reads the project's real state from \`scripts/auth-status.mjs\` itself, so you never re-derive session, role or CI state by hand.
 
-## Step 2: Existing session check
+Why this is a script and not instructions: the ordering is load-bearing in ways that are easy to get subtly wrong, and getting one wrong is invisible. Whether to approve a login-capture procedure is not a question anyone has a basis to answer before it is established that their app has a login at all; the existing-session question is meaningless on a project with no session; the CI question must never be asked on a project generated without CI. Encoded once, those hold every run, on every assistant, in every model. Held as prose, they hold most of the time.
 
-If \`auth-status.mjs\` reports \`hasSession: true\`, list the existing session file(s) by name and ask: **Reuse it as-is / Capture a fresh one / Add another role.** ${INTERACTIVE_CHOICE_NOTE} Never silently overwrite a session that already works.
+**What to do with each result:**
 
-## Step 3: Which roles exist, and which to capture now
+- \`status: "ASK"\` - present \`question.text\` **verbatim** and \`question.options\` in the order given, marking the one with \`recommended: true\` as the recommendation. ${INTERACTIVE_CHOICE_NOTE} Do not add options, reorder them, reword the question, or merge two questions into one exchange.
+- \`status: "STOP"\` - the flow ends here. Say \`outcome.message\` in your own words and stop. Every stop reason is a real, supported end state, not a failed run: a project with no login, a person who declined, a session being kept as-is, a decision to stay local-only. Do not carry on to the capture steps below.
+- \`status: "DONE"\` - the questions are answered and \`plan\` says what was actually decided: whether to capture, which role slugs, whether to create \`.env\` credential slots, whether to wire CI, and whether the human agreed to push secrets. Act on \`plan\`, not on your own recollection of a conversation that may have run over many turns.
+- \`status: "FAILED"\` - an answer was recorded that is not one of that question's option ids. Fix the answer, do not proceed.
 
-"How many roles does the app have" and "how many do you want to capture right now" are two different facts, and guessing either one wrong costs a wasted capture round - ask them as one question with explicit options rather than inferring: **"Does the application under test have more than one user role (Admin, Customer, Vendor, and so on) - and how many do you want to capture right now?"** ${INTERACTIVE_CHOICE_NOTE} Offer exactly these options, in this order:
-- **One kind of user, no separate roles** - a single session, saved under the default \`user\` name.
-- **(Recommended when several exist) Several roles - capture all of them now** - then ask for their names in one reply, and run Step 4 once per name.
-- **Several roles - capture only some now** - then ask which ones to do now. The rest staying uncaptured is a normal, supported end state, not an incomplete run: say so plainly and name re-running this skill as the way to add them later.
-- **No roles and no login at all** - this contradicts Step 0's own answer; do not proceed on a contradiction. Go back to Step 0's "nothing to set up" outcome, say plainly that this run is stopping there, and stop.
+**The one judgment this leaves you.** When a question has \`allowsFreeText: true\` and the human writes their own answer instead of picking, read what they meant and record the matching option \`id\` - that mapping is the part a script genuinely cannot do, and \`freeTextHint\` says what the free text is for. Re-ask only when the answer genuinely fits none of the options. Never invent an option id: the script rejects one it does not know, which is the point.
 
-A human who writes their own answer instead of picking an option is normal - interpret it into one of the above rather than re-asking, and ask again only when it genuinely fits none of them.
+**Contradictions are the script's decision, not yours.** Answering "no roles and no login at all" after having said the app does have a login returns a \`STOP\` with reason \`contradiction\`. Do not resolve it by picking whichever answer came last - guessing there means either capturing a session nobody wants or skipping one they do.
 
-Normalize each role name the human gives into a lowercase, filesystem-and-env-safe slug (\`Admin\` -> \`admin\`, \`Read Only\` -> \`read_only\`), echo the normalized list back once so a mis-typed name is caught before it becomes a filename, and use those exact slugs for the rest of this flow. Every role gets its own session (a separate storage-state file for Playwright/pytest/C#/Java, a separate \`cy.session()\` name for Cypress) - never overwrite one role's saved session with another's.
+Normalize each role name the human gives into a lowercase, filesystem-and-env-safe slug (\`Admin\` -> \`admin\`, \`Read Only\` -> \`read_only\`) - \`plan.roles\` already does exactly this, so use it rather than slugging by hand - and echo the normalized list back once so a mis-typed name is caught before it becomes a filename. Every role gets its own session (a separate storage-state file for Playwright/pytest/C#/Java, a separate \`cy.session()\` name for Cypress) - never overwrite one role's saved session with another's. A role left uncaptured is a normal end state: say so plainly, and name re-running this skill as the way to add it later.
 
-**Then create the credential placeholders, before any capture starts:** run \`node scripts/env-role-stubs.mjs --roles=<comma-separated normalized slugs>\`. This appends an empty \`E2E_<ROLE>_USERNAME=\`/\`E2E_<ROLE>_PASSWORD=\` pair per role to \`.env\`, so the human has a labeled slot per role to fill in instead of variable names being invented later, differently, by whatever writes the first test that needs them. It never overwrites a variable that already has a value, never prints a value, and re-running it changes nothing - so it is safe to run again when a role is added later. The one-kind-of-user case keeps the flat \`E2E_USERNAME\`/\`E2E_PASSWORD\` names that already exist: do not pass a role list for it. Tell the human plainly that those slots are now in \`.env\` waiting for values, and that the browser login in Step 4 is separate from them - the session file authenticates the tests, these variables are what a test uses when it needs to type credentials itself.
+**Then create the credential placeholders, before any capture starts,** when \`plan.envRoleStubs\` is true: run \`node scripts/env-role-stubs.mjs --roles=<plan.roles, comma-separated>\`. This appends an empty \`E2E_<ROLE>_USERNAME=\`/\`E2E_<ROLE>_PASSWORD=\` pair per role to \`.env\`, so the human has a labeled slot per role to fill in instead of variable names being invented later, differently, by whatever writes the first test that needs them. It never overwrites a variable that already has a value, never prints a value, and re-running it changes nothing - so it is safe to run again when a role is added later. The one-kind-of-user case keeps the flat \`E2E_USERNAME\`/\`E2E_PASSWORD\` names that already exist: do not pass a role list for it. Tell the human plainly that those slots are now in \`.env\` waiting for values, and that the browser login in Step 4 is separate from them - the session file authenticates the tests, these variables are what a test uses when it needs to type credentials itself.
 
 `;
 
