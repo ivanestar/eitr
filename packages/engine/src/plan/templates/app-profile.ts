@@ -82,6 +82,81 @@ function checkFact(fact, label, allowedValues, errors) {
   }
 }
 
+// The confirmed one-sentence answer to "what is this application for". Only \`selected\` is
+// authoritative; \`candidates\` is what the analysis proposed before anyone answered.
+function checkCorePurpose(purpose, errors) {
+  if (!purpose || typeof purpose !== 'object' || Array.isArray(purpose)) {
+    errors.push('corePurpose must be an object when present.');
+    return;
+  }
+  if (!Array.isArray(purpose.candidates) || purpose.candidates.length === 0) {
+    errors.push('corePurpose.candidates must be a non-empty array.');
+  } else {
+    purpose.candidates.forEach((candidate, index) => {
+      const label = 'corePurpose.candidates[' + index + ']';
+      if (!candidate || typeof candidate !== 'object') {
+        errors.push(label + ' must be an object.');
+        return;
+      }
+      if (typeof candidate.value !== 'string' || candidate.value.trim() === '') {
+        errors.push(label + '.value must be a non-empty string.');
+      }
+      if (typeof candidate.reasoning !== 'string' || candidate.reasoning.trim() === '') {
+        errors.push(label + '.reasoning must be a non-empty string.');
+      }
+      if (!Array.isArray(candidate.evidence) || candidate.evidence.length === 0) {
+        errors.push(label + '.evidence must be a non-empty array - never propose a reading with nothing behind it.');
+      }
+    });
+    const count = purpose.candidates.length;
+    if (
+      !Number.isInteger(purpose.mostLikelyIndex) ||
+      purpose.mostLikelyIndex < 0 ||
+      purpose.mostLikelyIndex >= count
+    ) {
+      errors.push('corePurpose.mostLikelyIndex must be an integer index into candidates (0..' + (count - 1) + ').');
+    }
+  }
+  if (typeof purpose.reviewed !== 'boolean') {
+    errors.push('corePurpose.reviewed must be a boolean.');
+  }
+  // The failure this catches: a run that asked the question, got an answer, and recorded the
+  // approval without recording the answer itself.
+  if (purpose.reviewed === true && !purpose.selected) {
+    errors.push('corePurpose.reviewed is true but corePurpose.selected is absent - record what was actually confirmed, not just that something was.');
+  }
+  if ('selected' in purpose) {
+    checkFact(purpose.selected, 'corePurpose.selected', null, errors);
+    if (purpose.selected && typeof purpose.selected.value !== 'string') {
+      errors.push('corePurpose.selected.value must be a string.');
+    }
+  }
+}
+
+function checkRoles(roles, errors) {
+  if (!roles || typeof roles !== 'object' || Array.isArray(roles)) {
+    errors.push('roles must be an object keyed by role name when present.');
+    return;
+  }
+  for (const [key, role] of Object.entries(roles)) {
+    const label = 'roles["' + key + '"]';
+    if (!role || typeof role !== 'object') {
+      errors.push(label + ' must be an object.');
+      continue;
+    }
+    if (role.name !== key) {
+      errors.push(label + '.name must equal its own key (found ' + JSON.stringify(role.name) + ').');
+    }
+    checkFact(role.purpose, label + '.purpose', null, errors);
+    if (!Array.isArray(role.exclusiveRoutes)) {
+      errors.push(label + '.exclusiveRoutes must be an array - an empty one is a real finding, not a missing field.');
+    }
+    if (typeof role.reviewed !== 'boolean') {
+      errors.push(label + '.reviewed must be a boolean.');
+    }
+  }
+}
+
 function validate(data, parseError) {
   const errors = [];
   if (parseError !== null) {
@@ -104,6 +179,14 @@ function validate(data, parseError) {
 
   if ('applicationKind' in data) {
     checkFact(data.applicationKind, 'applicationKind', APPLICATION_KINDS, errors);
+  }
+
+  if ('corePurpose' in data) {
+    checkCorePurpose(data.corePurpose, errors);
+  }
+
+  if ('roles' in data) {
+    checkRoles(data.roles, errors);
   }
 
   if ('apiStyle' in data) {
