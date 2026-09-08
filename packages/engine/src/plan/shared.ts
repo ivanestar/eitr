@@ -48,6 +48,8 @@ import { renderMapSiteStatus } from './templates/map-site-status.js';
 import { renderAutomateTestStatus } from './templates/automate-test-status.js';
 import { renderEnvRoleStubs } from './templates/env-role-stubs.js';
 import { renderReviewArtifactRenderer } from './templates/review-artifact-renderer.js';
+import { renderAppProfile } from './templates/app-profile.js';
+import { renderAppProfileTypes } from './templates/app-profile-types.js';
 import { renderJourneysTypes } from './templates/journeys-types.js';
 import { renderJourneysEngine } from './templates/journeys-engine.js';
 import { renderApiContractsTypes } from './templates/api-contracts-types.js';
@@ -200,6 +202,18 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderReviewArtifactRenderer() },
+          },
+          {
+            path: '.scaffold/schemas/app-profile.types.ts',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderAppProfileTypes() },
+          },
+          {
+            path: 'scripts/app-profile.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderAppProfile() },
           },
           {
             path: '.scaffold/schemas/test-cases.types.ts',
