@@ -265,13 +265,26 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('no slash-command argument mechanism');
 
     // skill-reviewer pass (2026-09-02): description discloses the optional step and the automatic
-    // one, crawl bounds are concrete numbers (not just "maximum depth and page count"), the
-    // PII-masking rule is mechanically defined, and the businessFeature label has a checkable bound.
+    // one, the PII-masking rule is mechanically defined, and the businessFeature label has a
+    // checkable bound.
     expect(mapSkill?.source.text).toContain(
       'automatically performs read-only business-intent/criticality inference',
     );
-    expect(mapSkill?.source.text).toContain('maximum crawl depth of 6 hops');
-    expect(mapSkill?.source.text).toContain('maximum of 500 pages visited');
+    // Crawl bounds used to be asserted here as the concrete numbers the prose named. They are no
+    // longer prose at all: scripts/crawl-budget.mjs enforces them, because a run that followed a
+    // pagination chain 5441 times proved a number written in a skill is not a bound. What the skill
+    // must now say is that the script owns the frontier and that its answers are obeyed.
+    expect(mapSkill?.source.text).toContain('scripts/crawl-budget.mjs` owns the frontier');
+    expect(mapSkill?.source.text).toContain('node scripts/crawl-budget.mjs check --url=');
+    expect(mapSkill?.source.text).not.toContain('maximum crawl depth of 6 hops');
+    expect(mapSkill?.source.text).not.toContain('maximum of 500 pages visited');
+    // The early-warning channel: the content signature that detects a trap, and the instruction to
+    // relay a warning the moment it appears rather than saving it for the summary.
+    expect(mapSkill?.source.text).toContain('--content-hash');
+    expect(mapSkill?.source.text).toContain('it is the trap detector');
+    expect(mapSkill?.source.text).toContain('show it to the human immediately, verbatim');
+    // The one guard a same-URL infinite feed can hit, since no other check ever sees such a page.
+    expect(mapSkill?.source.text).toContain('node scripts/crawl-budget.mjs scroll --url=');
     expect(mapSkill?.source.text).toContain(
       'a run of 6 or more consecutive digits, or an alphanumeric token of 8+ characters',
     );
