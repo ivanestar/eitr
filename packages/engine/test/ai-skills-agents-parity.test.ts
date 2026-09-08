@@ -18,7 +18,11 @@ describe('Polymorphic AI Operational Skills & AI Agents Parity (AC-5, AC-6, AC-7
       expect(authText).toContain('playwright open --save-storage');
       // Printing the command for the human is the default, not a fallback - the assistant cannot
       // verify a browser window it launches is visible on the human's screen.
-      expect(authText).toContain('Default: print the command and let the human run it');
+      // The assistant never runs the capture command itself - it always prints it for the human
+      // to run in their own terminal, since it cannot verify a browser window it launches is
+      // actually visible on the human's screen. No agent-driven fallback exists any more.
+      expect(authText).toContain('Always print the command and let the human run it');
+      expect(authText).toContain('never run it yourself');
       expect(authText).toContain('scripts/env-role-stubs.mjs');
 
       const automateSkill = skills.find((s) => s.path.includes('automate-test'))!;

@@ -27,7 +27,7 @@ const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.jso
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 
 const CONFIDENCE_VALUES = new Set(['high', 'medium', 'low']);
-const CRITICALITY_VALUES = new Set(['critical', 'high', 'medium', 'low']);
+const CRITICALITY_VALUES = new Set(['high', 'medium', 'low']);
 const SOURCE_VALUES = new Set([
   'route-path',
   'heading-text',
@@ -303,7 +303,7 @@ function validate() {
       typeof entry.criticalityTier === 'object' &&
       !CRITICALITY_VALUES.has(entry.criticalityTier.value)
     ) {
-      errors.push(label + '.criticalityTier.value must be one of critical|high|medium|low.');
+      errors.push(label + '.criticalityTier.value must be one of high|medium|low.');
     }
     if (!siteMap.error && !knownRouteIds.has(key)) {
       errors.push(

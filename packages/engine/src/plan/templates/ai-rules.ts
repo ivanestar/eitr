@@ -596,6 +596,42 @@ export function renderConventionsMd(
 | Base smoke test | \`tests/\` | \`smoke.${specExt}\` |
 | Full scenario / regression tests | \`tests/\` | \`{feature}.${specExt}\` |
 
+## What This Project Already Knows
+
+Before asking a question or inferring something about this application, check whether it is already
+recorded. These files are written by the analysis workflows and are the project's own memory:
+
+| Artifact | Holds | Read it with |
+|---|---|---|
+| \`artifacts/analysis/app-profile.json\` | What kind of application this is (production / sandbox-demo / internal tool), the crawl boundary a human set, domain knowledge a person volunteered, which test types are in scope | \`node scripts/app-profile.mjs\` |
+| \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, and per-role access | \`node scripts/validate-site-map.mjs\` to check shape |
+| \`artifacts/site-map/api-contracts.json\` | Endpoints actually observed in traffic - method, path template, response shape | \`node scripts/validate-api-contracts.mjs\` |
+| \`artifacts/analysis/business-intent.json\` | Per-route business feature and impact tier (\`high\`/\`medium\`/\`low\`), the confirmed application purpose, and confirmed role purposes | \`node scripts/validate-business-intent.mjs\` |
+| \`artifacts/analysis/test-conditions.json\` | Typed test conditions per route | \`node scripts/validate-test-conditions.mjs\` |
+| \`artifacts/test-cases/test-cases.json\` | Drafted test cases, and which are already automated | \`node scripts/validate-journeys.mjs\` |
+
+Two rules govern all of them:
+
+- **Nothing is authoritative until a human reviewed it.** An entry with \`reviewed: false\` is a draft.
+  Never treat one as an established fact, and never set \`reviewed: true\` yourself without a person
+  actually approving it in conversation.
+- **Absence is normal, not an error.** Each file exists only once the workflow that writes it has
+  run. A missing file or an empty field means "nobody established this yet" - ask, or proceed
+  without it. Never infer that something is false because its record is absent.
+
+Other deterministic helpers worth knowing about, so you never re-derive by hand what a script
+already computes: \`scripts/pipeline-status.mjs\` (which analysis stage this project is at and what
+runs next), \`scripts/coverage-status.mjs\` (whether the suite meets its exit criteria, and exactly
+which routes, test cases or endpoints are still uncovered), \`scripts/auth-status.mjs\` (saved
+sessions, declared vs captured roles, configured CI provider), \`scripts/map-site-status.mjs\`
+(crawl mode resolution, screenshot pruning), \`scripts/render-review-artifact.mjs\` (renders any
+review artifact from its own stored JSON), \`scripts/env-role-stubs.mjs\` (per-role credential slots
+in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).
+
+Ask \`coverage-status\` before claiming a suite is finished, and order any large batch of test
+work by route impact (\`criticalityTier\` in business-intent.json, \`high\` first) - a batch that
+runs out of room mid-way leaves whatever the ordering put first.
+
 ## CPOM Architecture Rules
 
 ### 1. The "No Assertions" Rule

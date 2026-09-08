@@ -252,10 +252,13 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       // Roadmap: current stage bracketed, every other stage plain, printed in fixed order. Only
       // the four real stages appear - the review pause belongs to every stage, so it is stated
       // once in preFlightNotice rather than interleaved as four context-free 'Review' entries.
+      // The brackets are the whole marker: no trailing "you are here", which restated them.
       expect(output.roadmap).toBe(
-        '[S1 Site map <- you are here] -> S2 Test conditions -> S3 Test cases -> S4 Automated tests',
+        '[S1 Site map] -> S2 Test conditions -> S3 Test cases -> S4 Automated tests',
       );
+      expect(output.roadmap).not.toContain('you are here');
       expect(output.preFlightNotice).toContain('Four stages, each one ending with your review:');
+      expect(output.preFlightNotice).not.toContain('you are here');
       expect(output.preFlightNotice).not.toContain('-> Review ->');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -414,7 +417,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       expect(output.stage).toBe('complete');
       expect(output.nextCommand).toBeNull();
       expect(output.roadmap).toBe(
-        'S1 Site map -> S2 Test conditions -> S3 Test cases -> [S4 Automated tests <- done]',
+        'S1 Site map -> S2 Test conditions -> S3 Test cases -> [S4 Automated tests]',
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });

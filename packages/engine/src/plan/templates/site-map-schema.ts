@@ -158,11 +158,17 @@ export function renderSiteMapSchema(): string {
             "enum": ["active", "removed"],
             "description": "\\"removed\\" means /map-site update could no longer resolve this route (404, vanished from nav) - the entry is kept, not silently deleted, so a consumer can see route-removal history. A full /map-site create pass prunes \\"removed\\" entries when it regenerates fresh."
           },
+          "httpStatus": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599,
+            "description": "The navigation response status observed the first time this route was visited this pass. This is the direct, primary signal for whether a route is real: 404/410 means the server itself says the page does not exist, while 401/403 means it exists and is protected. Recording it is what makes a \\"likely-phantom-route\\" flag auditable rather than a guess - without it, that flag can only be justified by the cross-route content-hash heuristic, and only for an href-scan-only route."
+          },
           "screenshot": {
             "type": "string",
             "pattern": "^artifacts/site-map/screenshots/[a-zA-Z0-9_-]+\\\\.(webp|jpg|jpeg)$",
             "maxLength": 260,
-            "description": "Relative filesystem path to the initial state viewport screenshot (e.g. \\"artifacts/site-map/screenshots/<routeId>.jpg\\")."
+            "description": "Relative filesystem path to the initial state viewport screenshot. Named \\"<path slug>--<routeId>.<ext>\\" so a human can tell at a glance which route a screenshot belongs to, with the routeId still carrying the stable identity the pruner matches on (e.g. \\"artifacts/site-map/screenshots/login--3f9a2b7e-4c1d-4e8a-9f2b-1a7c6d5e4f3a.jpg\\")."
           },
           "visualTriage": {
             "type": "object",

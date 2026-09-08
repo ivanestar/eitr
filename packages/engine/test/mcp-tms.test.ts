@@ -300,8 +300,15 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     // Business-intent grounding track: confidence/criticality are evidence-anchored, not free
     // model inference, and the review artifact's label is scoped to the whole route.
-    expect(mapSkill?.source.text).toContain('payment/checkout/billing keyword');
-    expect(mapSkill?.source.text).toContain('MAXIMUM tier found on the route');
+    expect(mapSkill?.source.text).toContain('payment/checkout/billing');
+    expect(mapSkill?.source.text).toContain('MAXIMUM tier found on them');
+    // Impact is decided by what a failure costs, with the keyword lists as fast paths rather than
+    // the rule itself - and `medium` is a definition in its own right, not the leftover bucket.
+    expect(mapSkill?.source.text).toContain('how bad is it if this route is broken');
+    expect(mapSkill?.source.text).toContain('when a keyword and the actual consequence disagree');
+    expect(mapSkill?.source.text).toContain('This is a definition, not the leftover bucket');
+    // Three levels only - the removed fourth tier must not creep back into the drafting rules.
+    expect(mapSkill?.source.text).toContain('Do not reach for a level above');
     expect(mapSkill?.source.text).toContain('Confidence is computed from evidence signal strength');
     expect(mapSkill?.source.text).toContain('Self-verification pass');
     // DX pass (raised from a live /map-site run against a real site, 2026-09-04): confidence is an

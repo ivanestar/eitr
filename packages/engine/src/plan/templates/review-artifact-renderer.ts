@@ -183,7 +183,24 @@ function renderBusinessIntent(labels, data) {
     const tier = String(fieldValue(entry.criticalityTier) || 'unknown');
     tierCounts[tier] = (tierCounts[tier] || 0) + 1;
   }
-  const tierSummary = ['critical', 'high', 'medium', 'low', 'unknown']
+
+  // A reasoning sentence repeated verbatim across routes is a category label, not an explanation
+  // of any one of them - and the tier it justifies is therefore unaudited. Surfaced rather than
+  // rejected: two genuinely static pages can legitimately share one honest sentence, so this is a
+  // prompt for the human to look, not a gate that blocks the pipeline on a guess.
+  const reasoningCounts = new Map();
+  for (const entry of entries) {
+    const reasoning = entry.criticalityTier ? entry.criticalityTier.reasoning : undefined;
+    if (typeof reasoning !== 'string' || reasoning.length === 0) continue;
+    reasoningCounts.set(reasoning, (reasoningCounts.get(reasoning) || 0) + 1);
+  }
+  const repeatedReasonings = Array.from(reasoningCounts.values()).filter(function (count) {
+    return count > 1;
+  });
+  const routesSharingReasoning = repeatedReasonings.reduce(function (sum, count) {
+    return sum + count;
+  }, 0);
+  const tierSummary = ['high', 'medium', 'low', 'unknown']
     .filter(function (tier) {
       return tierCounts[tier];
     })
@@ -199,7 +216,12 @@ function renderBusinessIntent(labels, data) {
       entries.length +
       ' route(s) analysed' +
       (tierSummary ? ' (' + tierSummary + ')' : '') +
-      (phantom.length > 0 ? ', ' + phantom.length + ' flagged as possibly not real' : ''),
+      (phantom.length > 0 ? ', ' + phantom.length + ' flagged as possibly not real' : '') +
+      (routesSharingReasoning > 0
+        ? ' - heads up: ' +
+          routesSharingReasoning +
+          ' route(s) share a reasoning sentence with another route, worth checking those tiers were actually judged per route'
+        : ''),
   };
 }
 

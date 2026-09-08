@@ -47,10 +47,10 @@ function wellFormedReport() {
           evidence: [{ signal: 'heading-text', excerpt: 'Checkout' }],
         },
         criticalityTier: {
-          value: 'critical',
+          value: 'high',
           confidence: 'high',
           source: 'heading-text',
-          reasoning: 'Matches critical checklist: heading text names a checkout/payment flow.',
+          reasoning: 'Takes payment details, so a failure here costs a customer money directly.',
           evidence: [{ signal: 'heading-text', excerpt: 'Checkout' }],
         },
         sourceContentHash: 'abc123',
@@ -227,6 +227,38 @@ describe('scripts/validate-business-intent.mjs (real execution)', () => {
   });
 
   // AC4, case 5/6
+  // The impact axis is three levels. A fourth "critical" tier above "high" used to exist and was
+  // removed: the only mechanical consumer gates on "not medium and not low", so it was
+  // indistinguishable from high in code, and both drew identical condition volume in the drafting
+  // rules. Rejecting it here is what stops it drifting back in.
+  it('rejects the removed fourth "critical" tier', () => {
+    const dir = setupProject();
+    try {
+      const bad = wellFormedReport();
+      bad.routes['route-checkout'].criticalityTier.value = 'critical';
+      writeReport(dir, bad);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.some((e: string) => e.includes('high|medium|low'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts each of the three impact levels', () => {
+    for (const tier of ['high', 'medium', 'low']) {
+      const dir = setupProject();
+      try {
+        const report = wellFormedReport();
+        report.routes['route-checkout'].criticalityTier.value = tier;
+        writeReport(dir, report);
+        expect(JSON.parse(run(dir).stdout).status).toBe('PASSED');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
   it('fails on an invalid criticalityTier enum value', () => {
     const dir = setupProject();
     try {
