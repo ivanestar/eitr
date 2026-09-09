@@ -113,8 +113,12 @@ const QUESTIONS = [
       { id: 'no', label: 'No login anywhere' },
     ],
     allowsFreeText: false,
-    applies: function () {
-      return true;
+    // Asked once, ever. A person who has already said their application has no login should not be
+    // asked again on every run, and one who said it does need not confirm it a second time - the
+    // answer is a durable fact about the application, recorded in app-profile.json and read back
+    // through auth-status.
+    applies: function (answers, status) {
+      return !status || !status.recordedLogin;
     },
   },
   {
@@ -125,8 +129,9 @@ const QUESTIONS = [
       { id: 'stop', label: 'Stop here' },
     ],
     allowsFreeText: false,
-    applies: function (answers) {
-      return answers['has-login'] === 'yes';
+    applies: function (answers, status) {
+      // Either just answered, or recorded on an earlier run - both mean there is a login.
+      return answers['has-login'] === 'yes' || (status && status.recordedLogin === 'present');
     },
   },
   {
@@ -215,8 +220,10 @@ for (const question of QUESTIONS) QUESTION_BY_ID[question.id] = question;
 // Each one is a real, supported end state rather than a failure, and each says what it means in
 // the words the human should hear. A flow that ends early is not an incomplete run.
 
-function outcomeFor(answers) {
-  if (answers['has-login'] === 'no') {
+function outcomeFor(answers, status) {
+  // Either answered just now, or answered on some earlier run and recorded since. The second case
+  // is why the question stops being asked at all: the flow ends here without troubling anyone.
+  if (answers['has-login'] === 'no' || (status && status.recordedLogin === 'none')) {
     return {
       reason: 'no-login',
       message:
@@ -387,7 +394,7 @@ function main() {
     return Object.prototype.hasOwnProperty.call(answers, id);
   });
 
-  const outcome = outcomeFor(answers);
+  const outcome = outcomeFor(answers, status);
   if (outcome) {
     process.stdout.write(
       JSON.stringify({ status: 'STOP', outcome: outcome, answered: answered }, null, 2) + '\\n',

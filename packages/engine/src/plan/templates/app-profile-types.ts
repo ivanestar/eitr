@@ -70,6 +70,16 @@ export interface CrawlBoundaryFact extends Fact<CrawlBoundary> {
 // "candidates" is what the analysis proposed; "selected" is what a person actually settled on, and
 // only "selected" is authoritative. Absence of "selected" means the question was asked and never
 // answered, which is different from never having been asked at all.
+// Whether this application has a sign-in at all. Recorded because it is a durable fact about the
+// application rather than about a run, and because not recording it meant the auth flow asked the
+// same question on every single invocation - a person who has answered "there is no login" once
+// should never be asked again.
+//
+// 'present' is worth recording too, not only 'none': a later stage that meets an unexpected login
+// wall can tell "this application has auth and no session was captured" apart from "something is
+// wrong here".
+export type LoginPresence = 'none' | 'present';
+
 export interface CorePurposeCandidate {
   value: string;
   reasoning: string;
@@ -142,6 +152,7 @@ export interface AppProfile {
   generatedAt: string;
   lastUpdatedAt?: string;
   applicationKind?: Fact<ApplicationKind>;
+  login?: Fact<LoginPresence>;
   corePurpose?: CorePurpose;
   // Keyed by role name. Present only once a crawl actually ran as more than one role.
   roles?: Record<string, RoleProfile>;

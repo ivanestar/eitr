@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,7 @@ type Status = {
   hasSession?: boolean;
   ciProvider?: string | null;
   rolesMissingSession?: string[];
+  recordedLogin?: 'none' | 'present' | null;
 };
 
 type Result = {
@@ -373,6 +374,35 @@ describe('scripts/auth-questions.mjs (real execution)', () => {
     // by contradicting the answer given two questions earlier, and the flow had a branch to stop on
     // that contradiction. The option is gone instead: an answer that only exists to disagree with
     // an earlier one should never be offered. This asserts it stays gone.
+    // Without a record of the answer, this question opened every single run - including for someone
+    // who had already said their application has no login anywhere.
+    it('never asks again whether there is a login once that was recorded', () => {
+      const dir = setupProject();
+      try {
+        const recordedNone = ask(dir, {}, { ...NO_CI, recordedLogin: 'none' });
+        expect(recordedNone.status).toBe('STOP');
+        expect(recordedNone.outcome!.reason).toBe('no-login');
+
+        const recordedPresent = ask(dir, {}, { ...NO_CI, recordedLogin: 'present' });
+        expect(recordedPresent.status).toBe('ASK');
+        // Straight to the explanation, since whether there is a login is settled.
+        expect(recordedPresent.question!.id).toBe('proceed');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('still asks when nobody has established it', () => {
+      const dir = setupProject();
+      try {
+        const result = ask(dir, {}, NO_CI);
+        expect(result.status).toBe('ASK');
+        expect(result.question!.id).toBe('has-login');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it('offers no option that contradicts an answer already given', () => {
       const dir = setupProject();
       try {

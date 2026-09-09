@@ -23,6 +23,22 @@ const CWD = process.cwd();
 const ENV_PATH = path.join(CWD, '.env');
 const AUTH_DIR = path.join(CWD, '.auth');
 const INIT_PATH = path.join(CWD, '.scaffold', 'init.json');
+const PROFILE_PATH = path.join(CWD, 'artifacts', 'analysis', 'app-profile.json');
+
+// Whether this application has a sign-in, if anyone ever said so. Read from the project's own
+// record of durable facts rather than re-asked: without it the auth flow opened with the same
+// question on every single run, including for a person who had already answered that there is no
+// login anywhere. null means nobody has established it, which is different from "no".
+function readRecordedLogin() {
+  if (!fs.existsSync(PROFILE_PATH)) return null;
+  try {
+    const profile = JSON.parse(fs.readFileSync(PROFILE_PATH, 'utf8').replace(/^\\uFEFF/, ''));
+    const value = profile && profile.login ? profile.login.value : null;
+    return value === 'none' || value === 'present' ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 function readFilledEnvKeys() {
   if (!fs.existsSync(ENV_PATH)) return [];
@@ -120,6 +136,7 @@ function main() {
     filledEnvKeys,
     authEnvFilled,
     ciProvider,
+    recordedLogin: readRecordedLogin(),
     nextStep: hasSession
       ? rolesMissingSession.length > 0
         ? 'roles-incomplete'

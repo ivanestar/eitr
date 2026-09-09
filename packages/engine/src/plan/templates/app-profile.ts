@@ -37,6 +37,7 @@ const APPLICATION_KINDS = [
   'unknown',
 ];
 const API_STYLES = ['rest', 'graphql', 'rpc', 'mixed', 'none-observable', 'unknown'];
+const LOGIN_PRESENCES = ['none', 'present'];
 const CRAWL_BOUNDARIES = ['read-only', 'safe-interactions', 'full', 'full-except'];
 const FACT_SOURCES = ['human', 'observed'];
 
@@ -179,6 +180,10 @@ function validate(data, parseError) {
 
   if ('applicationKind' in data) {
     checkFact(data.applicationKind, 'applicationKind', APPLICATION_KINDS, errors);
+  }
+
+  if ('login' in data) {
+    checkFact(data.login, 'login', LOGIN_PRESENCES, errors);
   }
 
   if ('corePurpose' in data) {
