@@ -1,7 +1,7 @@
 // Template for generating .scaffold/schemas/site-map.schema.json, the JSON Schema for
 // artifacts/site-map/site-map.json. create-if-absent. Lives under .scaffold/ (engine-owned machinery),
 // not artifacts/ - artifacts/ is reserved for the actual filled-in artifacts (site-map.json,
-// business-intent.json, test-conditions.json), which are useful context on their own; a schema
+// feature-map.json, test-conditions.json), which are useful context on their own; a schema
 // file or a type-contract .ts file is tooling, not something a human reads for context. A real,
 // separate JSON Schema file (rather than
 // folding the shape into the /map-site skill's own prose) lets any tooling - a lint script, an
@@ -244,7 +244,15 @@ export function renderSiteMapSchema(): string {
                 },
                 "kind": {
                   "type": "string",
-                  "enum": ["native-dialog", "modal", "drawer", "popover", "banner", "toast", "unknown"],
+                  "enum": [
+                    "native-dialog",
+                    "modal",
+                    "drawer",
+                    "popover",
+                    "banner",
+                    "toast",
+                    "unknown"
+                  ],
                   "description": "\\"native-dialog\\" is a real browser alert/confirm/prompt, which blocks the page until answered; everything else is markup covering it."
                 },
                 "trigger": {
@@ -282,7 +290,14 @@ export function renderSiteMapSchema(): string {
                   "properties": {
                     "method": {
                       "type": "string",
-                      "enum": ["native-dismiss", "escape", "close-control", "backdrop", "reload", "gave-up"],
+                      "enum": [
+                        "native-dismiss",
+                        "escape",
+                        "close-control",
+                        "backdrop",
+                        "reload",
+                        "gave-up"
+                      ],
                       "description": "\\"gave-up\\" means nothing permitted by the crawl boundary cleared it - allowed, but only alongside a \\"blocked-by-overlay\\" flag on the route, so a partly-explored page is never mistaken for a fully-explored one."
                     },
                     "verified": {

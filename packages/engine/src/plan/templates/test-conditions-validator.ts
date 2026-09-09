@@ -1,7 +1,7 @@
 ﻿// Template for generating scripts/validate-test-conditions.mjs. create-if-absent.
 // The mechanical gate ADR 0012 Decision item 2 requires at every stage boundary for
 // artifacts/analysis/test-conditions.json (Stage 2). Zero dependencies, same style as
-// business-intent-validator.ts and site-map-validator.ts. Supports --stage=parameters to run only
+// feature-map-validator.ts and site-map-validator.ts. Supports --stage=parameters to run only
 // the pre-generation subset of checks (Gate 1 in /define-test-conditions), or the full check set
 // with no flag (Gate 2).
 

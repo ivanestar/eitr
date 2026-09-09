@@ -1,8 +1,15 @@
 // Template for generating scripts/derive-feature-map.mjs. create-if-absent.
 // Deterministic draft of artifacts/analysis/feature-map.json from artifacts already on disk:
-// api-contracts.json (observed traffic), site-map.json (route shapes), business-intent.json
-// (per-route labels and criticality). Zero model involvement, zero network access, zero new
-// interaction with the application - it only reads what earlier stages already recorded.
+// api-contracts.json (observed traffic), site-map.json (route shapes), and the per-route intent
+// the /map-features skill folds into feature-map.json's own `routes` before calling this. Zero
+// model involvement, zero network access, zero new interaction with the application - it only reads
+// what earlier stages already recorded.
+//
+// The per-route intent used to live in its own artifact (business-intent.json) and carried a
+// feature LABEL per route. It does not any more: a route carries a featureId and the label lives on
+// the feature, so renaming a feature at sign-off renames it in one place. This script is what turns
+// the label the analysis wrote into that id - it groups routes by label, mints the feature, and
+// rewrites each route entry to point at it.
 //
 // Everything it produces is a hypothesis about the domain, and the script says so: a REST resource
 // is not a domain entity, and a path that looks like one proves nothing on its own. That is why
@@ -29,7 +36,6 @@ import crypto from 'node:crypto';
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const API_CONTRACTS_PATH = path.join(CWD, 'artifacts', 'site-map', 'api-contracts.json');
-const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 
 // Path segments that are transport scaffolding rather than anything to do with the domain.
@@ -619,10 +625,11 @@ function featureRecord(name) {
   };
 }
 
-// The label a route already carries in business-intent.json is the seed: it is a per-page guess at
-// what the page is for, and routes sharing one are the closest thing to a feature the earlier
-// stages can offer. Grouping them is where a page-shaped model first becomes a feature-shaped one.
-function deriveFeatures(businessIntentRoutes, siteMapRoutes) {
+// The label the route-intent analysis wrote for each route is the seed: it is a per-page reading of
+// what that page is for, and routes sharing one are the closest thing to a feature this pipeline
+// can offer. Grouping them is where a page-shaped model first becomes a feature-shaped one, and it
+// is also where the label stops being per-route data: the feature owns the name from here on.
+function deriveFeatures(routeIntents, siteMapRoutes) {
   const routeIdToPath = {};
   for (const [routePath, route] of Object.entries(siteMapRoutes)) {
     if (route && typeof route.routeId === 'string') routeIdToPath[route.routeId] = routePath;
@@ -637,8 +644,8 @@ function deriveFeatures(businessIntentRoutes, siteMapRoutes) {
   // produces a coarser map rather than an empty one. Returning zero features would be the worst of
   // both: a stage that appears to have succeeded while having silently dropped every route.
   const labelledRouteIds = new Set();
-  for (const [routeId, entry] of Object.entries(businessIntentRoutes)) {
-    const value = entry && entry.businessFeature ? entry.businessFeature.value : null;
+  for (const [routeId, entry] of Object.entries(routeIntents)) {
+    const value = entry ? entry.featureLabel : null;
     if (typeof value === 'string' && value.trim().length > 0) labelledRouteIds.add(routeId);
   }
   for (const [routePath, route] of Object.entries(siteMapRoutes)) {
@@ -655,12 +662,9 @@ function deriveFeatures(businessIntentRoutes, siteMapRoutes) {
     addEvidenceOnce(feature, evidence('route-path', routePath));
   }
 
-  for (const [routeId, entry] of Object.entries(businessIntentRoutes)) {
+  for (const [routeId, entry] of Object.entries(routeIntents)) {
     if (!entry) continue;
-    const label =
-      entry.businessFeature && typeof entry.businessFeature.value === 'string'
-        ? entry.businessFeature.value.trim()
-        : '';
+    const label = typeof entry.featureLabel === 'string' ? entry.featureLabel.trim() : '';
     if (label.length === 0) continue;
     const key = label.toLowerCase();
     if (!features[key]) features[key] = featureRecord(label);
@@ -668,17 +672,15 @@ function deriveFeatures(businessIntentRoutes, siteMapRoutes) {
     if (feature.memberRouteIds.indexOf(routeId) === -1) feature.memberRouteIds.push(routeId);
     addEvidenceOnce(
       feature,
-      evidence('business-intent-label', (routeIdToPath[routeId] || routeId) + ' -> "' + label + '"'),
+      evidence('route-convention', (routeIdToPath[routeId] || routeId) + ' -> "' + label + '"'),
     );
 
-    // Impact is aggregated from reviewed entries only. An unreviewed criticalityTier is a draft
-    // nobody has confirmed, and letting one set a feature's impact would launder a guess into a
-    // fact one level up - the same reason the test-conditions engine ignores unreviewed tiers.
-    if (entry.reviewed !== true) continue;
-    const tier =
-      entry.criticalityTier && typeof entry.criticalityTier.value === 'string'
-        ? entry.criticalityTier.value
-        : null;
+    // Impact is the worst criticality among the routes inside the feature. Every route here is
+    // drafted and reviewed in the SAME gateway as the feature that contains it, so waiting for a
+    // reviewed flag before aggregating would leave every feature at its 'high' default at exactly
+    // the moment a human is being asked to look at it - which is when the number has to mean
+    // something. The whole record is a draft until sign-off, and the artifact says so.
+    const tier = entry.criticality && typeof entry.criticality.value === 'string' ? entry.criticality.value : null;
     if (!tier || !(tier in IMPACT_ORDER)) continue;
     if (feature.impactSourceRouteId === undefined || IMPACT_ORDER[tier] > IMPACT_ORDER[feature.impact]) {
       feature.impact = tier;
@@ -686,9 +688,68 @@ function deriveFeatures(businessIntentRoutes, siteMapRoutes) {
     }
   }
 
-  // A feature with no reviewed member route keeps the 'high' default it was created with:
-  // under-testing something that turns out to matter is the worse of the two mistakes.
+  // A feature with no member route carrying a criticality keeps the 'high' default it was created
+  // with: under-testing something that turns out to matter is the worse of the two mistakes.
   return features;
+}
+
+// What label each route is grouped by. A route the analysis just folded in carries one directly; a
+// route from an earlier pass does not, because the label is stored once, on the feature. Reading it
+// back off that feature is what makes a second run produce the same grouping as the first instead
+// of collapsing every route into the path-segment fallback - and it is also how a feature renamed
+// at sign-off carries its routes with it.
+function resolveIntentLabels(existing) {
+  const stored = existing && typeof existing.routes === 'object' && existing.routes !== null ? existing.routes : {};
+  const features = existing && typeof existing.features === 'object' && existing.features !== null ? existing.features : {};
+  const resolved = {};
+  for (const [routeId, intent] of Object.entries(stored)) {
+    if (!intent || typeof intent !== 'object') continue;
+    let label = typeof intent.featureLabel === 'string' ? intent.featureLabel.trim() : '';
+    if (label.length === 0 && typeof intent.featureId === 'string') {
+      const owner = features[intent.featureId];
+      if (owner && typeof owner.name === 'string') label = owner.name.trim();
+    }
+    resolved[routeId] = Object.assign({}, intent, { featureLabel: label });
+  }
+  return resolved;
+}
+
+// Every mapped route ends up pointing at exactly one feature, whether the analysis labelled it or
+// the path-segment fallback grouped it. The label itself is dropped from the route entry here -
+// keeping both would give a renamed feature two names, one of which nothing updates.
+function bindRoutesToFeatures(features, routeIntents, siteMapRoutes) {
+  const featureIdByRouteId = {};
+  for (const feature of Object.values(features)) {
+    for (const routeId of feature.memberRouteIds) featureIdByRouteId[routeId] = feature.featureId;
+  }
+
+  const routes = {};
+  for (const route of Object.values(siteMapRoutes)) {
+    if (!route || typeof route.routeId !== 'string') continue;
+    const routeId = route.routeId;
+    const featureId = featureIdByRouteId[routeId];
+    if (!featureId) continue;
+    const intent = routeIntents[routeId];
+    if (!intent) continue;
+    // A route that moved to a different feature is not the record a human approved, so the approval
+    // does not follow it - the same rule preserveReview applies to a feature whose payload changed.
+    const movedFeature = typeof intent.featureId === 'string' && intent.featureId !== featureId;
+    routes[routeId] = {
+      routeId: routeId,
+      featureId: featureId,
+      criticality: intent.criticality,
+      sourceContentHash:
+        typeof intent.sourceContentHash === 'string'
+          ? intent.sourceContentHash
+          : typeof route.contentHash === 'string'
+            ? route.contentHash
+            : '',
+      analyzedAt: typeof intent.analyzedAt === 'string' ? intent.analyzedAt : new Date().toISOString(),
+      reviewed: intent.reviewed === true && !movedFeature,
+    };
+    if (intent.reviewedBy && routes[routeId].reviewed) routes[routeId].reviewedBy = intent.reviewedBy;
+  }
+  return routes;
 }
 
 function attachEntitiesToFeatures(features, entities) {
@@ -752,24 +813,20 @@ function derive() {
       errors: ['artifacts/site-map/site-map.json is missing or has no routes object - run /map-site first.'],
     };
   }
-  // Absent per-route intent degrades this stage, it does not stop it: routes with no label are
-  // grouped by their first path segment instead. A stage that refuses to run because an optional
-  // upstream artifact is missing makes that artifact impossible to remove without editing this file
-  // too, and absence is a normal state everywhere else in this pipeline.
+  // Per-route intent is read from the feature map's own file, where /map-features folds it before
+  // calling this. Absent intent degrades this stage rather than stopping it: routes with no label
+  // are grouped by their first path segment instead. A stage that refuses to run because an
+  // optional input is missing makes that input impossible to remove without editing this file too,
+  // and absence is a normal state everywhere else in this pipeline.
   //
   // Falling back was only safe once the fallback existed. Making this tolerant while grouping still
   // depended entirely on labels produced an empty feature map that reported success - a stage that
   // appears to have worked while having silently dropped every route, which is worse than the hard
   // failure it replaced. Caught by a test asserting the map is non-empty, not by reading the code.
-  const businessIntentFile = loadJson(BUSINESS_INTENT_PATH);
-  const businessIntent =
-    businessIntentFile &&
-    typeof businessIntentFile.routes === 'object' &&
-    businessIntentFile.routes !== null
-      ? businessIntentFile
-      : { routes: {} };
+  const existing = loadJson(FEATURE_MAP_PATH);
+  const routeIntents = resolveIntentLabels(existing);
   const warnings = [];
-  if (businessIntentFile === null) {
+  if (Object.keys(routeIntents).length === 0) {
     warnings.push(
       'No per-route intent was available, so features were grouped from route paths, titles and observed API contracts alone. Feature names will be coarser than they would be with it.',
     );
@@ -783,26 +840,26 @@ function derive() {
       stableStringify({
         routes: siteMap.routes,
         contracts: contracts,
-        intent: Object.entries(businessIntent.routes).map(function (pair) {
+        intent: Object.entries(routeIntents).map(function (pair) {
           const entry = pair[1] || {};
           return [
             pair[0],
             entry.reviewed === true,
-            entry.businessFeature ? entry.businessFeature.value : null,
-            entry.criticalityTier ? entry.criticalityTier.value : null,
+            typeof entry.featureLabel === 'string' ? entry.featureLabel : null,
+            entry.criticality ? entry.criticality.value : null,
           ];
         }),
       }),
     )
     .digest('hex');
 
-  const existing = loadJson(FEATURE_MAP_PATH);
   const force = process.argv.indexOf('--force') !== -1;
   if (!force && existing && existing.sourceHash === sourceHash) {
     return {
       status: 'UNCHANGED',
       features: Object.keys(existing.features || {}).length,
       entities: Object.keys(existing.entities || {}).length,
+      routes: Object.keys(existing.routes || {}).length,
       note: 'Inputs have not changed since the last draft - existing review state kept as is.',
     };
   }
@@ -822,7 +879,7 @@ function derive() {
     entity.lifecycle = deriveLifecycle(entity);
   }
 
-  const features = deriveFeatures(businessIntent.routes, siteMap.routes);
+  const features = deriveFeatures(routeIntents, siteMap.routes);
   attachEntitiesToFeatures(features, entities);
 
   preserveReview(entities, byId(existing && existing.entities, 'entityId'));
@@ -832,12 +889,14 @@ function derive() {
   for (const feature of Object.values(features)) featuresById[feature.featureId] = feature;
   const entitiesById = {};
   for (const entity of Object.values(entities)) entitiesById[entity.entityId] = entity;
+  const routesById = bindRoutesToFeatures(featuresById, routeIntents, siteMap.routes);
 
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     features: featuresById,
     entities: entitiesById,
+    routes: routesById,
     sourceHash: sourceHash,
   };
   fs.mkdirSync(path.dirname(FEATURE_MAP_PATH), { recursive: true });
@@ -870,6 +929,13 @@ function derive() {
     warnings: warnings,
     features: Object.keys(featuresById).length,
     entities: Object.keys(entitiesById).length,
+    routes: Object.keys(routesById).length,
+    // A route the site map has and this file does not - it was mapped but never given an intent, so
+    // no feature claims it and nothing downstream will ever test it. Reported by count rather than
+    // silently: a shrinking feature map with a growing site map is exactly the drift worth seeing.
+    routesWithoutIntent: Object.values(siteMap.routes).filter(function (route) {
+      return route && typeof route.routeId === 'string' && !routesById[route.routeId];
+    }).length,
     unreviewedRelations: unreviewedRelations,
     orphanEntities: orphanEntities,
     // Calls this pass could not read, kept separate from calls it read as nothing. Both are

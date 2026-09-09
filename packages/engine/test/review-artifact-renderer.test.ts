@@ -30,28 +30,49 @@ function siteMapWith(routeCount: number) {
   return { schemaVersion: 2, generatedAt: '2026-09-07T00:00:00.000Z', routes };
 }
 
-function businessIntentWith(routeCount: number) {
+// One feature per route, so the entry count scales the same way the old per-route artifact did and
+// the threshold behaviour stays comparable.
+function featureMapWith(routeCount: number) {
+  const features: Record<string, unknown> = {};
   const routes: Record<string, unknown> = {};
   for (let i = 0; i < routeCount; i++) {
+    const featureId = 'f-' + i;
+    features[featureId] = {
+      featureId,
+      name: 'Feature ' + i,
+      memberRouteIds: ['id-' + i],
+      entityIds: [],
+      impact: i === 0 ? 'high' : 'medium',
+      impactSourceRouteId: 'id-' + i,
+      evidence: [{ signal: 'heading-text', excerpt: 'Heading ' + i }],
+      reviewed: false,
+    };
     routes['id-' + i] = {
       routeId: 'id-' + i,
-      businessFeature: {
-        value: 'Feature ' + i,
-        confidence: 'high',
-        source: 'heading-text',
-        reasoning: 'because ' + i,
-        evidence: [{ signal: 'heading-text', excerpt: 'Heading ' + i }],
-      },
-      criticalityTier: {
-        value: i === 0 ? 'critical' : 'medium',
+      featureId,
+      criticality: {
+        value: i === 0 ? 'high' : 'medium',
         confidence: 'high',
         source: 'heading-text',
         reasoning: 'tier reason ' + i,
         evidence: [{ signal: 'heading-text', excerpt: 'Heading ' + i }],
       },
-      reviewed: true,
+      sourceContentHash: 'hash-' + i,
+      analyzedAt: '2026-09-07T00:00:00.000Z',
+      reviewed: false,
     };
   }
+  return {
+    schemaVersion: 2,
+    generatedAt: '2026-09-07T00:00:00.000Z',
+    features,
+    entities: {},
+    routes,
+    sourceHash: 'fixture',
+  };
+}
+
+function appProfileWithPurpose() {
   return {
     schemaVersion: 1,
     generatedAt: '2026-09-07T00:00:00.000Z',
@@ -68,7 +89,6 @@ function businessIntentWith(routeCount: number) {
       reviewed: true,
       reviewedBy: 'human',
     },
-    routes,
   };
 }
 
@@ -88,17 +108,17 @@ describe('scripts/render-review-artifact.mjs --discard', () => {
     const dir = setupProject();
     try {
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(20));
-      writeJson(dir, 'artifacts/analysis/business-intent.json', businessIntentWith(20));
-      const rendered = run(dir, '--kind=business-intent').output;
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(20));
+      const rendered = run(dir, '--kind=feature-map').output;
       expect(rendered.mode).toBe('file');
-      const reviewPath = join(dir, 'artifacts', 'review', 'business-intent-review.md');
+      const reviewPath = join(dir, 'artifacts', 'review', 'feature-map-review.md');
       expect(existsSync(reviewPath)).toBe(true);
 
-      const discarded = run(dir, '--kind=business-intent', '--discard').output;
+      const discarded = run(dir, '--kind=feature-map', '--discard').output;
       expect(discarded.discarded).toBe(true);
       expect(existsSync(reviewPath)).toBe(false);
       // The record survives; only the view was thrown away.
-      expect(existsSync(join(dir, 'artifacts', 'analysis', 'business-intent.json'))).toBe(true);
+      expect(existsSync(join(dir, 'artifacts', 'analysis', 'feature-map.json'))).toBe(true);
       expect(discarded.note).toContain('Re-render');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -109,8 +129,8 @@ describe('scripts/render-review-artifact.mjs --discard', () => {
     const dir = setupProject();
     try {
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
-      writeJson(dir, 'artifacts/analysis/business-intent.json', businessIntentWith(2));
-      const output = run(dir, '--kind=business-intent', '--discard').output;
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(2));
+      const output = run(dir, '--kind=feature-map', '--discard').output;
       expect(output.discarded).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -123,18 +143,17 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
-      writeJson(dir, 'artifacts/analysis/business-intent.json', businessIntentWith(2));
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(2));
+      writeJson(dir, 'artifacts/analysis/app-profile.json', appProfileWithPurpose());
 
-      const { output } = run(dir, '--kind=business-intent');
+      const { output } = run(dir, '--kind=feature-map');
       expect(output.mode).toBe('inline');
-      expect(output.entryCount).toBe(2);
       expect(output.filePath).toBeNull();
       expect(output.markdown).toContain('Confirmed core purpose: A test fixture application');
+      expect(output.markdown).toContain('1. Feature 0 - **HIGH IMPACT**');
       // Renders the route's resolved path/title, never the raw routeId.
-      expect(output.markdown).toContain('**1. /route-00 - Page 0**');
-      expect(output.markdown).toContain('Feature: Feature 0');
-      expect(output.markdown).toContain('**Route criticality (draft): CRITICAL**');
-      expect(output.markdown).toContain('Reasoning: tier reason 0');
+      expect(output.markdown).toContain('/route-00 - Page 0');
+      expect(output.markdown).toContain('tier reason 0');
       expect(output.markdown).toContain('Evidences: "Heading 0"');
       expect(output.markdown).not.toContain('id-0');
       // confidence is an internal, mechanically-checked signal only - never shown to the human.
@@ -148,21 +167,21 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(46));
-      writeJson(dir, 'artifacts/analysis/business-intent.json', businessIntentWith(46));
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(46));
 
-      const { output } = run(dir, '--kind=business-intent');
+      const { output } = run(dir, '--kind=feature-map');
       expect(output.mode).toBe('file');
-      expect(output.filePath).toBe('artifacts/review/business-intent-review.md');
+      expect(output.filePath).toBe('artifacts/review/feature-map-review.md');
       expect(output.markdown).toBe('');
-      expect(output.summary).toContain('46 route(s) analysed');
+      expect(output.summary).toContain('46 feature(s) over 46 page(s)');
 
       // Every entry is in the file - the point of the threshold is that nothing gets elided.
       const written = readFileSync(
-        join(dir, 'artifacts', 'review', 'business-intent-review.md'),
+        join(dir, 'artifacts', 'review', 'feature-map-review.md'),
         'utf8',
       );
-      expect(written).toContain('**1. /route-00 - Page 0**');
-      expect(written).toContain('**46. /route-45 - Page 45**');
+      expect(written).toContain('/route-00 - Page 0');
+      expect(written).toContain('/route-45 - Page 45');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -172,16 +191,16 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(3));
-      writeJson(dir, 'artifacts/analysis/business-intent.json', businessIntentWith(3));
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(3));
 
-      expect(run(dir, '--kind=business-intent', '--threshold=2').output.mode).toBe('file');
-      expect(run(dir, '--kind=business-intent', '--threshold=99').output.mode).toBe('inline');
+      expect(run(dir, '--kind=feature-map', '--threshold=2').output.mode).toBe('file');
+      expect(run(dir, '--kind=feature-map', '--threshold=99').output.mode).toBe('inline');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('separates likely-phantom routes from the numbered list, and renders confirmed roles', () => {
+  it('marks a likely-phantom route where it sits, and renders confirmed roles', () => {
     const dir = setupProject();
     try {
       const siteMap = siteMapWith(2) as {
@@ -189,30 +208,64 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
       };
       siteMap.routes['/route-01'].visualTriage.flags = ['likely-phantom-route'];
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMap);
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(2));
 
-      const intent = businessIntentWith(2) as Record<string, unknown>;
-      intent.roles = {
+      const profile = appProfileWithPurpose() as Record<string, unknown>;
+      profile.roles = {
         admin: {
           name: 'admin',
           purpose: {
             value: 'Manages user accounts',
             confidence: 'high',
-            source: 'manual',
+            source: 'human',
             reasoning: 'confirmed by the human',
-            evidence: [{ signal: 'manual', excerpt: 'admin manages accounts' }],
+            evidence: [{ signal: 'human', excerpt: 'admin manages accounts' }],
           },
           exclusiveRoutes: ['/route-00'],
           reviewed: true,
           reviewedBy: 'human',
         },
       };
-      writeJson(dir, 'artifacts/analysis/business-intent.json', intent);
+      writeJson(dir, 'artifacts/analysis/app-profile.json', profile);
 
-      const { output } = run(dir, '--kind=business-intent');
+      const { output } = run(dir, '--kind=feature-map');
       expect(output.markdown).toContain('**Roles crawled**');
       expect(output.markdown).toContain('admin: Manages user accounts');
-      expect(output.markdown).toContain('**Possibly not real routes**');
-      expect(output.summary).toContain('1 flagged as possibly not real');
+      expect(output.markdown).toContain('[possibly not a real route]');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('names the pages no feature claims, since nothing downstream will ever test them', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(3));
+      const map = featureMapWith(3) as Record<string, any>;
+      delete map.features['f-2'];
+      delete map.routes['id-2'];
+      writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+
+      const { output } = run(dir, '--kind=feature-map');
+      expect(output.markdown).toContain('**Pages no feature claims**');
+      expect(output.markdown).toContain('/route-02 - Page 2');
+      expect(output.summary).toContain('1 page(s) no feature claims');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('flags a reasoning sentence reused across pages rather than rejecting it', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+      const map = featureMapWith(2) as Record<string, any>;
+      map.routes['id-0'].criticality.reasoning = 'Same sentence for both.';
+      map.routes['id-1'].criticality.reasoning = 'Same sentence for both.';
+      writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+
+      const { output } = run(dir, '--kind=feature-map');
+      expect(output.summary).toContain('2 page(s) share a reasoning sentence');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -288,8 +341,38 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
   describe('--kind=feature-map', () => {
     function featureMap() {
       return {
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt: '2026-09-08T00:00:00.000Z',
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            featureId: 'f1',
+            criticality: {
+              value: 'high',
+              confidence: 'high',
+              source: 'heading-text',
+              reasoning: 'Places real orders.',
+              evidence: [{ signal: 'heading-text', excerpt: 'Place an order' }],
+            },
+            sourceContentHash: 'h0',
+            analyzedAt: '2026-09-08T00:00:00.000Z',
+            reviewed: false,
+          },
+          'id-1': {
+            routeId: 'id-1',
+            featureId: 'f1',
+            criticality: {
+              value: 'medium',
+              confidence: 'medium',
+              source: 'form-labels',
+              reasoning: 'Lists existing orders.',
+              evidence: [{ signal: 'form-labels', excerpt: 'Order number' }],
+            },
+            sourceContentHash: 'h1',
+            analyzedAt: '2026-09-08T00:00:00.000Z',
+            reviewed: false,
+          },
+        },
         features: {
           f1: {
             featureId: 'f1',
@@ -298,7 +381,7 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
             entityIds: ['e1', 'e2'],
             impact: 'high',
             impactSourceRouteId: 'id-0',
-            evidence: [{ signal: 'business-intent-label', excerpt: '/route-00 -> "Ordering"' }],
+            evidence: [{ signal: 'route-convention', excerpt: '/route-00 -> "Ordering"' }],
             reviewed: false,
           },
         },
@@ -362,12 +445,16 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
         writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
         writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
         const { output } = run(dir, '--kind=feature-map');
-        expect(output.entryCount).toBe(3);
+        expect(output.entryCount).toBe(5);
         expect(output.mode).toBe('inline');
-        expect(output.summary).toBe('1 feature(s), 2 thing(s), 1 link(s) between them to confirm');
+        expect(output.summary).toBe(
+          '1 feature(s) over 2 page(s) (1 high, 1 medium), 2 thing(s), 1 link(s) between them to confirm',
+        );
         expect(output.markdown).toContain('1. Ordering - **HIGH IMPACT**');
-        // Route ids are resolved to something a person can recognise.
-        expect(output.markdown).toContain('/route-00 - Page 0');
+        // Route ids are resolved to something a person can recognise, with the tier a reviewer is
+        // actually being asked to check sitting next to the page it was given for.
+        expect(output.markdown).toContain('/route-00 - Page 0 - **HIGH**');
+        expect(output.markdown).toContain('Places real orders.');
         expect(output.markdown).toContain('Works with: customers, orders');
         expect(output.markdown).toContain('Can be: created (seen in real traffic)');
         expect(output.markdown).toContain('Lifecycle: absent -> exists (create)');

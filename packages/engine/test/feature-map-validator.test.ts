@@ -29,7 +29,7 @@ function setupProject(): string {
 
 function wellFormed() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-09-08T10:00:00.000Z',
     features: {
       f0000000000000aa: {
@@ -39,7 +39,24 @@ function wellFormed() {
         entityIds: ['e0000000000000aa', 'e0000000000000bb'],
         impact: 'high',
         impactSourceRouteId: 'route-orders',
-        evidence: [{ signal: 'business-intent-label', excerpt: '/orders -> "Orders"' }],
+        evidence: [{ signal: 'route-convention', excerpt: '/orders -> "Orders"' }],
+        reviewed: false,
+      },
+    },
+    routes: {
+      'route-orders': {
+        routeId: 'route-orders',
+        featureId: 'f0000000000000aa',
+        criticality: {
+          value: 'high',
+          confidence: 'high',
+          source: 'heading-text',
+          reasoning:
+            'This page places and confirms customer orders, so a silent failure here loses real money.',
+          evidence: [{ signal: 'heading-text', excerpt: 'Place your order' }],
+        },
+        sourceContentHash: 'hash-orders',
+        analyzedAt: '2026-09-08T10:00:00.000Z',
         reviewed: false,
       },
     },
@@ -237,6 +254,148 @@ describe('scripts/validate-feature-map.mjs (real execution)', () => {
       data.entities.e0000000000000aa.operations = [];
       write(dir, data);
       expect(JSON.parse(run(dir).stdout).status).toBe('PASSED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// Per-route intent used to be its own artifact with its own validator. These are the checks that
+// came with it, now applied where the routes actually live.
+describe('validate-feature-map.mjs per-route intent', () => {
+  it('rejects a version-1 file rather than pretending to migrate it', () => {
+    const data = wellFormed() as any;
+    data.schemaVersion = 1;
+    failsWith(data, 'schemaVersion must be exactly 2');
+  });
+
+  it('fails when a route belongs to no feature', () => {
+    const data = wellFormed() as any;
+    data.routes['route-orders'].featureId = 'f-does-not-exist';
+    failsWith(data, 'invisible to every stage that walks features');
+  });
+
+  it('fails when a route stores a feature name of its own', () => {
+    const data = wellFormed() as any;
+    data.routes['route-orders'].featureLabel = 'Orders';
+    failsWith(data, 'featureLabel must not be present');
+  });
+
+  it('fails when a feature and its route disagree about which owns which', () => {
+    const data = wellFormed() as any;
+    data.features.f0000000000000bb = {
+      featureId: 'f0000000000000bb',
+      name: 'Checkout',
+      memberRouteIds: ['route-orders'],
+      entityIds: [],
+      impact: 'low',
+      evidence: [{ signal: 'route-path', excerpt: '/checkout' }],
+      reviewed: false,
+    };
+    failsWith(data, 'points at "f0000000000000aa"');
+  });
+
+  it('fails when a criticality claims more confidence than its evidence supports', () => {
+    const data = wellFormed() as any;
+    data.routes['route-orders'].criticality.confidence = 'high';
+    data.routes['route-orders'].criticality.source = 'route-path';
+    data.routes['route-orders'].criticality.evidence = [
+      { signal: 'route-path', excerpt: '/orders' },
+    ];
+    failsWith(data, 'only supports "low"');
+  });
+
+  it('fails when the reasoning just repeats the evidence back', () => {
+    const data = wellFormed() as any;
+    data.routes['route-orders'].criticality.reasoning = 'Place your order';
+    failsWith(data, 'repeats its own evidence excerpt');
+  });
+
+  it('fails when a route claims review with nobody named as the reviewer', () => {
+    const data = wellFormed() as any;
+    data.routes['route-orders'].reviewed = true;
+    failsWith(data, 'reviewedBy must be');
+  });
+
+  it('fails when a route in the file is not in the site map', () => {
+    const data = wellFormed() as any;
+    data.routes['route-ghost'] = {
+      ...data.routes['route-orders'],
+      routeId: 'route-ghost',
+    };
+    failsWith(data, 'not in the site map');
+  });
+
+  it('fails when the routes object is missing entirely', () => {
+    const data = wellFormed() as any;
+    delete data.routes;
+    failsWith(data, 'routes must be an object keyed by routeId');
+  });
+
+  it('rejects the removed fourth "critical" tier', () => {
+    const data = wellFormed() as any;
+    data.routes['route-orders'].criticality.value = 'critical';
+    failsWith(data, 'criticality.value must be "high", "medium", or "low"');
+  });
+
+  it('accepts each of the three levels', () => {
+    for (const tier of ['high', 'medium', 'low']) {
+      const dir = setupProject();
+      try {
+        const data = wellFormed() as any;
+        data.routes['route-orders'].criticality.value = tier;
+        data.features.f0000000000000aa.impact = tier;
+        write(dir, data);
+        expect(JSON.parse(run(dir).stdout).status, tier).toBe('PASSED');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('fails an empty reasoning - a tier with no explanation cannot be checked', () => {
+    const data = wellFormed() as any;
+    data.routes['route-orders'].criticality.reasoning = '';
+    failsWith(data, 'reasoning must be a non-empty string');
+  });
+
+  it('fails an evidence entry with an unknown signal', () => {
+    const data = wellFormed() as any;
+    data.routes['route-orders'].criticality.evidence = [
+      { signal: 'vibes', excerpt: 'it felt important' },
+    ];
+    failsWith(data, 'signal must be one of');
+  });
+
+  it('accepts a path-only judgement when it admits how weak it is', () => {
+    const dir = setupProject();
+    try {
+      const data = wellFormed() as any;
+      data.routes['route-orders'].criticality.confidence = 'low';
+      data.routes['route-orders'].criticality.source = 'route-path';
+      data.routes['route-orders'].criticality.evidence = [
+        { signal: 'route-path', excerpt: '/orders' },
+      ];
+      write(dir, data);
+      expect(JSON.parse(run(dir).stdout).status).toBe('PASSED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails a feature name long enough to be a description', () => {
+    const data = wellFormed() as any;
+    data.features.f0000000000000aa.name = 'A'.repeat(41);
+    failsWith(data, 'it is a label, not a summary');
+  });
+
+  it('fails cleanly rather than crashing when the file is the literal JSON value null', () => {
+    const dir = setupProject();
+    try {
+      write(dir, null);
+      const result = run(dir);
+      expect(result.status).toBe(1);
+      expect(JSON.parse(result.stdout).status).toBe('FAILED');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

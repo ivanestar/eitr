@@ -246,7 +246,7 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
     expect(mapSkill?.source.text).not.toContain('APP_GRAPH.md');
 
-    // Mechanical Shape Gate (site-map.json's own equivalent of business-intent's validator) runs
+    // Mechanical Shape Gate for site-map.json runs
     // right after either create/update mode writes the file, before shared-widget mining reads it.
     expect(mapSkill?.source.text).toContain('validate-site-map.mjs');
     expect(mapSkill?.source.text).toContain('Mechanical Shape Gate');
@@ -264,12 +264,6 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('> **Note:**');
     expect(mapSkill?.source.text).toContain('no slash-command argument mechanism');
 
-    // skill-reviewer pass (2026-09-02): description discloses the optional step and the automatic
-    // one, the PII-masking rule is mechanically defined, and the businessFeature label has a
-    // checkable bound.
-    expect(mapSkill?.source.text).toContain(
-      'automatically performs read-only business-intent/criticality inference',
-    );
     // Crawl bounds used to be asserted here as the concrete numbers the prose named. They are no
     // longer prose at all: scripts/crawl-budget.mjs enforces them, because a run that followed a
     // pagination chain 5441 times proved a number written in a skill is not a bound. What the skill
@@ -285,87 +279,23 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('show it to the human immediately, verbatim');
     // The one guard a same-URL infinite feed can hit, since no other check ever sees such a page.
     expect(mapSkill?.source.text).toContain('node scripts/crawl-budget.mjs scroll --url=');
-    expect(mapSkill?.source.text).toContain(
-      'a run of 6 or more consecutive digits, or an alphanumeric token of 8+ characters',
-    );
-    expect(mapSkill?.source.text).toContain('a label, <=40 characters');
     expect(mapSkill?.source.text).toContain('Bad: `routeId: "users-id"`');
     expect(mapSkill?.source.text).toContain('Good: `routeId:');
 
-    // Step 6 (ADR 0012 Stage 1, business-intent analysis) - AC5: the four banned mutating methods
-    // are named exactly once, inside their own prohibition sentence, and nowhere else in the
-    // skill's content as a real invocation. A raw whole-block substring-absence check would fail
-    // here by construction, since the prohibition sentence must name what it forbids.
-    const prohibitionSentence =
-      'Never call `.click()`, `.fill()`, `.check()`, `.selectOption()`, or any other action method';
-    expect(mapSkill?.source.text).toContain(prohibitionSentence);
-    const businessIntentTextWithoutProhibition = (mapSkill?.source.text ?? '')
-      .split(prohibitionSentence)
-      .join('');
-    expect(businessIntentTextWithoutProhibition).not.toContain('.click(');
-    expect(businessIntentTextWithoutProhibition).not.toContain('.fill(');
-    expect(businessIntentTextWithoutProhibition).not.toContain('.check(');
-    expect(businessIntentTextWithoutProhibition).not.toContain('.selectOption(');
-
-    // AC6: idempotent re-run via the sourceContentHash cheap-skip rule is documented.
-    expect(mapSkill?.source.text).toContain('sourceContentHash');
-    expect(mapSkill?.source.text).toContain('skip re-inference for that route entirely');
-
-    // AC8: Human Sign-Off Gateway precedes trusting business-intent.json.
-    expect(mapSkill?.source.text).toContain('Business-Intent Review Artifact');
-    expect(mapSkill?.source.text).toContain('NOT authoritative until a human has reviewed it');
-
-    // Business-intent grounding track: confidence/criticality are evidence-anchored, not free
-    // model inference, and the review artifact's label is scoped to the whole route.
-    expect(mapSkill?.source.text).toContain('payment/checkout/billing');
-    expect(mapSkill?.source.text).toContain('MAXIMUM tier found on them');
-    // Impact is decided by what a failure costs, with the keyword lists as fast paths rather than
-    // the rule itself - and `medium` is a definition in its own right, not the leftover bucket.
-    expect(mapSkill?.source.text).toContain('how bad is it if this route is broken');
-    expect(mapSkill?.source.text).toContain('when a keyword and the actual consequence disagree');
-    expect(mapSkill?.source.text).toContain('This is a definition, not the leftover bucket');
-    // Three levels only - the removed fourth tier must not creep back into the drafting rules.
-    expect(mapSkill?.source.text).toContain('Do not reach for a level above');
-    expect(mapSkill?.source.text).toContain('Confidence is computed from evidence signal strength');
-    expect(mapSkill?.source.text).toContain('Self-verification pass');
-    // DX pass (raised from a live /map-site run against a real site, 2026-09-04): confidence is an
-    // internal signal only - never shown to the human, since businessFeature.confidence and
-    // criticalityTier.confidence are independently computed and routinely disagree. The Human
-    // Sign-Off Gateway's actual rendering (Feature:/Route criticality (draft): <TIER>/Reasoning:/
-    // Evidences: format, confidence deliberately omitted) is no longer composed in this skill's own
-    // prose - it moved to scripts/render-review-artifact.mjs (see review-artifact-renderer.test.ts
-    // for that format's own coverage), so what this skill's text must show is that it delegates to
-    // that script and does not reformat/duplicate what it prints.
-    expect(mapSkill?.source.text).toContain('render-review-artifact.mjs');
-    expect(mapSkill?.source.text).toContain('--kind=business-intent');
+    // The crawl's own deliverable is the route list, and that is what it asks a human to sign off
+    // on. What each page is FOR moved to /map-features, so this skill must no longer claim it.
+    expect(mapSkill?.source.text).toContain('--kind=site-map');
     expect(mapSkill?.source.text).toContain('do not reformat, reorder, or add to what it prints');
-    expect(mapSkill?.source.text).toContain('never shown to the human');
-    // Reasoning must read as a human explanation, not a mechanism trace naming the rule by name.
-    expect(mapSkill?.source.text).toContain('not a mechanism trace');
-    expect(mapSkill?.source.text).toContain(
-      'never reference the checklist or confidence rule by name',
-    );
+    expect(mapSkill?.source.text).toContain('What each page is FOR is not decided here');
+    expect(mapSkill?.source.text).not.toContain('Business-Intent Review Artifact');
+    expect(mapSkill?.source.text).not.toContain('Core-Purpose Inference');
+
     // No internal-mechanics narration to the end user (routine gate success is implementation
     // detail, not user-facing signal).
     expect(mapSkill?.source.text).toContain('## Reporting to the User');
     expect(mapSkill?.source.text).toContain('never name an internal script file');
 
-    // Core-purpose track: app-level purpose is drafted, confirmed by the human, then used to raise
-    // (never auto-critical) routes that directly deliver it - before the review artifact, which
-    // recaps the confirmed purpose, numbers routes, and offers a bulk-correction shorthand.
-    expect(mapSkill?.source.text).toContain('Core-Purpose Inference');
-    expect(mapSkill?.source.text).toContain('Core-Purpose Confirmation');
-    expect(mapSkill?.source.text).toContain('Criticality Re-Derivation');
-    expect(mapSkill?.source.text).toContain('mostLikelyIndex');
-    expect(mapSkill?.source.text).toContain(
-      'never automatically to `critical`, which stays reserved',
-    );
-    // The confirmed-purpose recap line and route numbering are also rendered by
-    // render-review-artifact.mjs now (see review-artifact-renderer.test.ts), not composed here.
-    expect(mapSkill?.source.text).toContain('high: 1, 4, 5-8, 15; critical: 2-3, 9');
-    expect(mapSkill?.source.text).toContain('is a convenience, not the only way to reply');
-
-    // AC9: reuses the existing Level-2 fan-out - no bespoke dispatch mechanism for Step 6.
+    // Reuses the existing Level-2 fan-out - no bespoke dispatch mechanism.
     expect(mapSkill?.source.text).toContain('orchestrate-swarm.mjs --phase=plan');
 
     // Mode Resolution: deterministically resolved by scripts/map-site-status.mjs (not re-derived
@@ -390,11 +320,10 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     expect(mapSkill?.source.text).toContain('"boundedBy": "maxDepth" | "maxPages"');
     expect(mapSkill?.source.text).toContain('its absence means completeness');
 
-    // AC11: PII/session-data guard on evidence excerpts is documented (length bound + redaction).
-    expect(mapSkill?.source.text).toContain('<=100 char');
-    expect(mapSkill?.source.text).toContain('[REDACTED]');
+    // PII/session-data guard on what the crawl records from live traffic.
+    expect(mapSkill?.source.text).toContain('unredacted PII-shaped payload value');
 
-    // AC7: Step 6's marker text renders identically into every map-site-bearing generated path.
+    // The crawl's own gates render identically into every map-site-bearing generated path.
     const mapSiteBearingPaths = [
       '.agents/skills/map-site/SKILL.md',
       '.claude/skills/map-site/SKILL.md',
@@ -406,11 +335,43 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
     for (const p of mapSiteBearingPaths) {
       const f = files.find((file) => file.path === p);
       expect(f?.source.text, `${p} should exist`).toBeDefined();
-      expect(f?.source.text, `${p} should mention Business-Intent`).toContain('Business-Intent');
-      expect(f?.source.text, `${p} should reference the validator script`).toContain(
+      expect(f?.source.text, `${p} should reference the site-map validator`).toContain(
+        'validate-site-map.mjs',
+      );
+      expect(f?.source.text, `${p} should not claim per-route intent any more`).not.toContain(
         'validate-business-intent.mjs',
       );
     }
+
+    // Per-route intent moved here whole: the same read-only allowlist, the same criticality
+    // checklist, the same evidence-anchored confidence rule, and the same purpose confirmation -
+    // one stage, one artifact, one review.
+    const featuresSkill = files.find((f) => f.path === '.agents/skills/map-features/SKILL.md');
+    expect(featuresSkill?.source.text).toBeDefined();
+    const prohibitionSentence =
+      'Never call `.click()`, `.fill()`, `.check()`, `.selectOption()`, or any other action method';
+    expect(featuresSkill?.source.text).toContain(prohibitionSentence);
+    expect(featuresSkill?.source.text).toContain('sourceContentHash');
+    expect(featuresSkill?.source.text).toContain('skip re-inference entirely');
+    expect(featuresSkill?.source.text).toContain('payment/checkout/billing');
+    expect(featuresSkill?.source.text).toContain('MAXIMUM tier found on them');
+    expect(featuresSkill?.source.text).toContain('how bad is it if this route is broken');
+    expect(featuresSkill?.source.text).toContain(
+      'when a keyword and the actual consequence disagree',
+    );
+    expect(featuresSkill?.source.text).toContain('This is a definition, not the leftover bucket');
+    expect(featuresSkill?.source.text).toContain('There is no level above');
+    expect(featuresSkill?.source.text).toContain(
+      'Confidence is computed from evidence signal strength',
+    );
+    expect(featuresSkill?.source.text).toContain('Criticality Re-Derivation');
+    expect(featuresSkill?.source.text).toContain('mostLikelyIndex');
+    expect(featuresSkill?.source.text).toContain('not a mechanism trace');
+    expect(featuresSkill?.source.text).toContain('--kind=feature-map');
+    expect(featuresSkill?.source.text).toContain('never shown to the human');
+    expect(featuresSkill?.source.text).toContain('a label, <=40 characters');
+    expect(featuresSkill?.source.text).toContain('<=100 char');
+    expect(featuresSkill?.source.text).toContain('[REDACTED]');
 
     // Claude Code's map-site gets the create|update argument frontmatter and
     // disable-model-invocation (real side effects: live network crawl, file writes).

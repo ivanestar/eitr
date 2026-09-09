@@ -3,8 +3,8 @@
 // the artifact's shape and internal consistency... with zero model involvement before an LLM or a
 // human ever reviews its content"), applied to artifacts/site-map/site-map.json itself - the foundation
 // every downstream consumer (shared-widget mining, scripts/orchestrate-swarm.mjs,
-// artifacts/analysis/business-intent.json's Step 6, pom-engineer) keys off. Mirrors
-// business-intent-validator.ts's style and zero-dependency constraint exactly; the two scripts are
+// /map-features' own route-intent analysis, pom-engineer) keys off. Mirrors
+// feature-map-validator.ts's style and zero-dependency constraint exactly; the two scripts are
 // intentionally not shared code, matching every other renderXValidator template in this project.
 
 export function renderSiteMapValidator(): string {
@@ -14,7 +14,7 @@ export function renderSiteMapValidator(): string {
  * Mechanical shape gate for artifacts/site-map/site-map.json.
  * Zero model involvement - pure structural checks, run by /map-site's Step 3c immediately after
  * writing the file and before any downstream consumer (shared-widget mining, the swarm dispatcher,
- * business-intent analysis) reads it.
+ * the feature map's own route-intent analysis) reads it.
  *
  * Usage:
  *   node scripts/validate-site-map.mjs

@@ -1,7 +1,7 @@
-// Template for scripts/app-profile.mjs — the single read/validate entry point for
+﻿// Template for scripts/app-profile.mjs вЂ” the single read/validate entry point for
 // artifacts/analysis/app-profile.json.
 //
-// Deliberately NOT an assembler: it never merges site-map.json, business-intent.json, or anything
+// Deliberately NOT an assembler: it never merges site-map.json, feature-map.json, or anything
 // else into its output. Merging would put a second copy of those facts in circulation and quietly
 // couple every consumer to stages that may not have run. This script answers exactly one question -
 // "what durable facts do we have about this application that live nowhere else" - and returns a
@@ -45,7 +45,7 @@ const FACT_SOURCES = ['human', 'observed'];
 // actually exist right now - a pointer to a file that was never written is worse than no pointer.
 const KNOWN_ARTIFACTS = [
   { key: 'siteMap', file: path.join('artifacts', 'site-map', 'site-map.json') },
-  { key: 'businessIntent', file: path.join('artifacts', 'analysis', 'business-intent.json') },
+  { key: 'featureMap', file: path.join('artifacts', 'analysis', 'feature-map.json') },
   { key: 'apiContracts', file: path.join('artifacts', 'site-map', 'api-contracts.json') },
   { key: 'testConditions', file: path.join('artifacts', 'analysis', 'test-conditions.json') },
   { key: 'testCases', file: path.join('artifacts', 'test-cases', 'test-cases.json') },

@@ -1,4 +1,4 @@
-// Template for scripts/coverage-status.mjs — the deterministic answer to "is this test suite done
+﻿// Template for scripts/coverage-status.mjs вЂ” the deterministic answer to "is this test suite done
 // yet", computed entirely from artifacts that already exist.
 //
 // Every other stage in this pipeline can say what it produced; none of them could say whether what
@@ -29,7 +29,6 @@ import process from 'node:process';
 
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
-const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const TEST_CASES_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 const API_CONTRACTS_PATH = path.join(CWD, 'artifacts', 'site-map', 'api-contracts.json');
@@ -75,7 +74,6 @@ function criterion(id, question, gaps, checked) {
 
 function main() {
   const siteMap = loadJson(SITE_MAP_PATH);
-  const businessIntent = loadJson(BUSINESS_INTENT_PATH);
   const testConditions = loadJson(TEST_CONDITIONS_PATH);
   const journeysData = loadJson(TEST_CASES_PATH);
   const apiContracts = loadJson(API_CONTRACTS_PATH);
@@ -98,12 +96,12 @@ function main() {
   const automatedRouteIds = routeIdsCovered((j) => j.testCase && j.reviewed === true);
   const draftedRouteIds = routeIdsCovered((j) => Boolean(j.testCase));
 
-  const intentRoutes =
-    businessIntent && typeof businessIntent.routes === 'object' ? businessIntent.routes : {};
+  const featureMap = loadJson(FEATURE_MAP_PATH);
+  const intentRoutes = featureMap && typeof featureMap.routes === 'object' ? featureMap.routes : {};
   const tierByRouteId = new Map();
   for (const entry of Object.values(intentRoutes)) {
-    if (entry && entry.routeId && entry.criticalityTier) {
-      tierByRouteId.set(entry.routeId, entry.criticalityTier.value);
+    if (entry && entry.routeId && entry.criticality) {
+      tierByRouteId.set(entry.routeId, entry.criticality.value);
     }
   }
 
@@ -124,7 +122,7 @@ function main() {
       // Checkable as soon as routes have been classified. A missing test-cases.json is not a
       // missing input here - it is a definitive "nothing is automated yet", which is exactly the
       // answer this criterion should give mid-pipeline rather than staying silent until the end.
-      businessIntent !== null,
+      featureMap !== null,
     ),
   );
 
@@ -193,7 +191,6 @@ function main() {
   // coverage is blind to by construction: every one of its routes can be individually green while
   // nothing checks that what one screen creates turns up on the next. Low-impact features are
   // excluded - they are deliberately not given the most expensive test shape.
-  const featureMap = loadJson(FEATURE_MAP_PATH);
   const featureEntries =
     featureMap && typeof featureMap.features === 'object' && featureMap.features !== null
       ? Object.values(featureMap.features)
@@ -231,7 +228,7 @@ function main() {
       'routes-classified',
       'Has every active route been classified with an impact tier?',
       unclassified,
-      siteMap !== null && businessIntent !== null,
+      siteMap !== null && featureMap !== null,
     ),
   );
 

@@ -35,22 +35,20 @@ function writeSiteMap(dir: string, specs: RouteSpec[]) {
 
 type IntentSpec = { routeId: string; feature: string; tier?: string; reviewed?: boolean };
 
-function writeBusinessIntent(dir: string, specs: IntentSpec[]) {
+// The per-route intent /map-features folds into the feature map before calling the deriver. It
+// carries a feature LABEL; turning that label into a featureId is the deriver's own job.
+function writeRouteIntent(dir: string, specs: IntentSpec[]) {
   const routes: Record<string, unknown> = {};
   for (const spec of specs) {
     routes[spec.routeId] = {
       routeId: spec.routeId,
-      businessFeature: {
-        value: spec.feature,
-        confidence: 'high',
-        source: 'heading-text',
-        evidence: [],
-      },
-      criticalityTier: {
+      featureLabel: spec.feature,
+      criticality: {
         value: spec.tier ?? 'medium',
         confidence: 'high',
         source: 'heading-text',
-        evidence: [],
+        reasoning: 'Drafted for this test.',
+        evidence: [{ signal: 'heading-text', excerpt: spec.feature }],
       },
       sourceContentHash: 'hash',
       analyzedAt: '2026-09-08T10:00:00.000Z',
@@ -59,8 +57,19 @@ function writeBusinessIntent(dir: string, specs: IntentSpec[]) {
     };
   }
   writeFileSync(
-    join(dir, 'artifacts', 'analysis', 'business-intent.json'),
-    JSON.stringify({ schemaVersion: 1, generatedAt: '2026-09-08T10:00:00.000Z', routes }, null, 2),
+    join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 2,
+        generatedAt: '2026-09-08T10:00:00.000Z',
+        features: {},
+        entities: {},
+        routes,
+        sourceHash: 'pending',
+      },
+      null,
+      2,
+    ),
     'utf8',
   );
 }
@@ -118,7 +127,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
   // Per-route intent is one input among several, not a precondition. A stage that refuses to run
   // without an optional upstream artifact makes that artifact impossible to remove without editing
   // this stage too, which is the failure mode this project treats as a design defect.
-  it('still produces a feature map when business-intent.json is absent, and says it was coarser', () => {
+  it('still produces a feature map when no per-route intent exists, and says it was coarser', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [
@@ -141,7 +150,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [{ path: '/orders', routeId: 'route-orders' }]);
-      writeBusinessIntent(dir, [{ routeId: 'route-orders', feature: 'Orders', tier: 'high' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-orders', feature: 'Orders', tier: 'high' }]);
       const output = JSON.parse(run(dir).stdout);
       expect(output.warnings).toEqual([]);
     } finally {
@@ -157,7 +166,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
         { path: '/orders/{id}', routeId: 'route-order-detail' },
         { path: '/about', routeId: 'route-about' },
       ]);
-      writeBusinessIntent(dir, [
+      writeRouteIntent(dir, [
         { routeId: 'route-orders', feature: 'Orders', tier: 'high' },
         { routeId: 'route-order-detail', feature: 'Orders', tier: 'medium' },
         { routeId: 'route-about', feature: 'Marketing', tier: 'low' },
@@ -189,7 +198,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [{ path: '/orders', routeId: 'route-orders' }]);
-      writeBusinessIntent(dir, [{ routeId: 'route-orders', feature: 'Orders', tier: 'high' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-orders', feature: 'Orders', tier: 'high' }]);
       writeApiContracts(dir, [
         contract({
           method: 'GET',
@@ -251,7 +260,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [{ path: '/reports', routeId: 'route-reports' }]);
-      writeBusinessIntent(dir, [{ routeId: 'route-reports', feature: 'Reporting' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-reports', feature: 'Reporting' }]);
       writeApiContracts(dir, [
         contract({
           method: 'GET',
@@ -275,7 +284,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
         { path: '/orders', routeId: 'route-orders' },
         { path: '/customers', routeId: 'route-customers' },
       ]);
-      writeBusinessIntent(dir, [
+      writeRouteIntent(dir, [
         { routeId: 'route-orders', feature: 'Orders' },
         { routeId: 'route-customers', feature: 'Customers' },
       ]);
@@ -312,7 +321,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [{ path: '/orders', routeId: 'route-orders' }]);
-      writeBusinessIntent(dir, [{ routeId: 'route-orders', feature: 'Orders' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-orders', feature: 'Orders' }]);
       writeApiContracts(dir, [
         contract({
           method: 'POST',
@@ -335,7 +344,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
         { path: '/orders', routeId: 'route-orders' },
         { path: '/items', routeId: 'route-items' },
       ]);
-      writeBusinessIntent(dir, [
+      writeRouteIntent(dir, [
         { routeId: 'route-orders', feature: 'Orders' },
         { routeId: 'route-items', feature: 'Catalog' },
       ]);
@@ -366,14 +375,14 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     }
   });
 
-  it('groups routes sharing a business-intent label into one feature, and takes the worst impact among them', () => {
+  it('groups routes sharing an intent label into one feature, and takes the worst impact among them', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [
         { path: '/checkout', routeId: 'route-checkout' },
         { path: '/checkout/confirm', routeId: 'route-confirm' },
       ]);
-      writeBusinessIntent(dir, [
+      writeRouteIntent(dir, [
         { routeId: 'route-checkout', feature: 'Checkout', tier: 'medium' },
         { routeId: 'route-confirm', feature: 'Checkout', tier: 'high' },
       ]);
@@ -389,13 +398,31 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     }
   });
 
-  it('ignores an unreviewed criticality tier and falls back to high rather than laundering a draft into a fact', () => {
+  // A route and the feature containing it are drafted together and approved in the same gateway, so
+  // waiting for a reviewed flag before aggregating impact would show every feature at its 'high'
+  // default at exactly the moment a person is being asked to look at the number.
+  it('aggregates impact from a drafted route, since the same review covers both', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [{ path: '/help', routeId: 'route-help' }]);
-      writeBusinessIntent(dir, [
+      writeRouteIntent(dir, [
         { routeId: 'route-help', feature: 'Help Centre', tier: 'low', reviewed: false },
       ]);
+      run(dir);
+      const map = readFeatureMap(dir);
+      const feature = (Object.values(map.features) as Record<string, any>[])[0];
+      expect(feature.impact).toBe('low');
+      expect(feature.impactSourceRouteId).toBe('route-help');
+      expect(map.routes['route-help'].reviewed).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps high for a feature whose routes carry no criticality at all', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [{ path: '/help', routeId: 'route-help' }]);
       run(dir);
       const feature = (Object.values(readFeatureMap(dir).features) as Record<string, any>[])[0];
       expect(feature.impact).toBe('high');
@@ -405,11 +432,83 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     }
   });
 
+  it('points each route at its feature and drops the label the feature now owns', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [
+        { path: '/checkout', routeId: 'route-checkout' },
+        { path: '/checkout/confirm', routeId: 'route-confirm' },
+      ]);
+      writeRouteIntent(dir, [
+        { routeId: 'route-checkout', feature: 'Checkout', tier: 'medium' },
+        { routeId: 'route-confirm', feature: 'Checkout', tier: 'high' },
+      ]);
+      run(dir);
+      const map = readFeatureMap(dir);
+      const featureId = (Object.values(map.features) as Record<string, any>[])[0].featureId;
+      expect(map.routes['route-checkout'].featureId).toBe(featureId);
+      expect(map.routes['route-confirm'].featureId).toBe(featureId);
+      expect(map.routes['route-checkout'].featureLabel).toBeUndefined();
+      expect(map.routes['route-confirm'].criticality.value).toBe('high');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The label lives on the feature after the first pass, so a second one has to read it back from
+  // there. Without that, every route falls into the crude path-segment fallback and the grouping a
+  // person just approved silently changes underneath them.
+  it('keeps the same grouping on a re-run, when the label only exists on the feature', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [
+        { path: '/checkout', routeId: 'route-checkout' },
+        { path: '/pay', routeId: 'route-pay' },
+      ]);
+      writeRouteIntent(dir, [
+        { routeId: 'route-checkout', feature: 'Checkout', tier: 'high' },
+        { routeId: 'route-pay', feature: 'Checkout', tier: 'high' },
+      ]);
+      run(dir);
+      const firstFeatures = Object.keys(readFeatureMap(dir).features);
+      run(dir, ['--force']);
+      const map = readFeatureMap(dir);
+      expect(Object.keys(map.features)).toEqual(firstFeatures);
+      expect(map.routes['route-pay'].featureId).toBe(firstFeatures[0]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('drops a route approval when the route moved to a different feature', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [{ path: '/checkout', routeId: 'route-checkout' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-checkout', feature: 'Checkout', tier: 'high' }]);
+      run(dir);
+      const before = readFeatureMap(dir);
+      before.routes['route-checkout'].reviewed = true;
+      before.routes['route-checkout'].reviewedBy = 'human';
+      before.routes['route-checkout'].featureLabel = 'Payments';
+      writeFileSync(
+        join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+        JSON.stringify(before, null, 2),
+        'utf8',
+      );
+      run(dir, ['--force']);
+      const after = readFeatureMap(dir);
+      expect(after.routes['route-checkout'].reviewed).toBe(false);
+      expect(after.routes['route-checkout'].reviewedBy).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reports an entity no mapped route reached instead of dropping it', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [{ path: '/dashboard', routeId: 'route-dashboard' }]);
-      writeBusinessIntent(dir, [{ routeId: 'route-dashboard', feature: 'Dashboard' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-dashboard', feature: 'Dashboard' }]);
       writeApiContracts(dir, [
         contract({ method: 'POST', pathTemplate: '/api/sessions', observedFromRouteIds: [] }),
       ]);
@@ -423,7 +522,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
   describe('re-running', () => {
     function seed(dir: string) {
       writeSiteMap(dir, [{ path: '/orders', routeId: 'route-orders' }]);
-      writeBusinessIntent(dir, [{ routeId: 'route-orders', feature: 'Orders' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-orders', feature: 'Orders' }]);
       writeApiContracts(dir, [
         contract({
           method: 'GET',
@@ -520,7 +619,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [{ path: '/orders', routeId: 'route-orders' }]);
-      writeBusinessIntent(dir, [{ routeId: 'route-orders', feature: 'Orders' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-orders', feature: 'Orders' }]);
       run(dir);
       expect(existsSync(join(dir, 'artifacts', 'analysis', 'feature-map.json'))).toBe(true);
     } finally {
@@ -559,7 +658,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
 
     function seedRoutes(dir: string) {
       writeSiteMap(dir, [{ path: '/orders', routeId: 'route-orders' }]);
-      writeBusinessIntent(dir, [{ routeId: 'route-orders', feature: 'Ordering' }]);
+      writeRouteIntent(dir, [{ routeId: 'route-orders', feature: 'Ordering' }]);
     }
 
     it('reads a gRPC-Web service and method into one entity with real operations', () => {
@@ -688,7 +787,7 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
           { path: '/orders', routeId: 'route-orders' },
           { path: '/customers', routeId: 'route-customers' },
         ]);
-        writeBusinessIntent(dir, [
+        writeRouteIntent(dir, [
           { routeId: 'route-orders', feature: 'Ordering' },
           { routeId: 'route-customers', feature: 'Customers' },
         ]);

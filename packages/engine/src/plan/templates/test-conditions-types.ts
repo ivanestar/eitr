@@ -1,9 +1,9 @@
-// Template for generating .scaffold/schemas/test-conditions.types.ts, the typed contract for
+﻿// Template for generating .scaffold/schemas/test-conditions.types.ts, the typed contract for
 // artifacts/analysis/test-conditions.json (Stage 2 of the app-analysis pipeline). create-if-absent.
 // Lives under .scaffold/ (engine-owned machinery), not artifacts/ - see site-map-schema.ts's header
 // comment for why.
 //
-// Same "documentation-as-code, not imported at runtime" convention as business-intent-types.ts -
+// Same "documentation-as-code, not imported at runtime" convention as feature-map-types.ts -
 // real mechanical enforcement comes from scripts/validate-test-conditions.mjs instead.
 
 export function renderTestConditionsTypes(): string {
@@ -16,7 +16,7 @@ export type ParameterKind =
   'text' | 'number' | 'email' | 'date' | 'select' | 'checkbox' | 'radio' | 'password' | 'other';
 
 // Which already-rendered, read-only signal grounded an EquivalencePartition's evidence. Same
-// zero-mutation discipline as business-intent.types.ts's BusinessIntentSource.
+// zero-mutation discipline as feature-map.types.ts's FeatureMapSource.
 export type TestConditionSource =
   'form-label' | 'html5-constraint' | 'aria-relationship' | 'select-option-text' | 'manual';
 
@@ -152,13 +152,13 @@ export interface UnsatisfiedPair {
 
 export interface TestConditionsEntry {
   // Joins against artifacts/site-map/site-map.json's routes[*].routeId, same convention as
-  // business-intent.json.
+  // feature-map.json.
   routeId: string;
   parameters: Parameter[];
   constraints: ConstraintRule[];
   conditions: TestCondition[];
   unsatisfiedPairs: UnsatisfiedPair[];
-  // site-map.json contentHash cheap-skip for the extraction step, same idiom as business-intent.json.
+  // site-map.json contentHash cheap-skip for the extraction step, same idiom as feature-map.json.
   sourceContentHash: string;
   // Hash of this entry's parameters+constraints at the last generation pass - the generator
   // recomputes and compares this to decide whether conditions[] needs to be regenerated.

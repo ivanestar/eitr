@@ -22,48 +22,36 @@ function writeSiteMap(dir: string) {
   );
 }
 
-function writeBusinessIntent(dir: string, reviewed: boolean) {
-  writeFileSync(
-    join(dir, 'artifacts', 'analysis', 'business-intent.json'),
-    JSON.stringify({
-      schemaVersion: 1,
-      generatedAt: '2026-09-03T10:00:00.000Z',
-      routes: {
-        'route-checkout': {
-          routeId: 'route-checkout',
-          businessFeature: {
-            value: 'Checkout',
-            confidence: 'high',
-            source: 'heading-text',
-            evidence: [],
-          },
-          criticalityTier: {
-            value: 'high',
-            confidence: 'high',
-            source: 'heading-text',
-            evidence: [],
-          },
-          sourceContentHash: 'abc123',
-          analyzedAt: '2026-09-03T10:00:00.000Z',
-          reviewed,
-          ...(reviewed ? { reviewedBy: 'human' } : {}),
-        },
-      },
-    }),
-    'utf8',
-  );
-}
-
 function writeFeatureMap(
   dir: string,
-  opts: { featureReviewed: boolean; entityReviewed?: boolean } = { featureReviewed: true },
+  opts: { featureReviewed: boolean; entityReviewed?: boolean; routeReviewed?: boolean } = {
+    featureReviewed: true,
+  },
 ) {
   const entityReviewed = opts.entityReviewed ?? opts.featureReviewed;
+  const routeReviewed = opts.routeReviewed ?? opts.featureReviewed;
   writeFileSync(
     join(dir, 'artifacts', 'analysis', 'feature-map.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: '2026-09-03T10:30:00.000Z',
+      routes: {
+        'route-checkout': {
+          routeId: 'route-checkout',
+          featureId: 'feature0001aaaa',
+          criticality: {
+            value: 'high',
+            confidence: 'high',
+            source: 'heading-text',
+            reasoning: 'Takes payment.',
+            evidence: [{ signal: 'heading-text', excerpt: 'Checkout' }],
+          },
+          sourceContentHash: 'abc123',
+          analyzedAt: '2026-09-03T10:30:00.000Z',
+          reviewed: routeReviewed,
+          ...(routeReviewed ? { reviewedBy: 'human' } : {}),
+        },
+      },
       features: {
         feature0001aaaa: {
           featureId: 'feature0001aaaa',
@@ -72,7 +60,7 @@ function writeFeatureMap(
           entityIds: ['entity0001aaaa'],
           impact: 'high',
           impactSourceRouteId: 'route-checkout',
-          evidence: [{ signal: 'business-intent-label', excerpt: '/checkout -> "Checkout"' }],
+          evidence: [{ signal: 'route-convention', excerpt: '/checkout -> "Checkout"' }],
           reviewed: opts.featureReviewed,
           ...(opts.featureReviewed ? { reviewedBy: 'human' } : {}),
         },
@@ -302,59 +290,28 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
-  it('reports business-intent-pending-review when site-map.json exists but business-intent.json does not', () => {
+  it('sends a project with a site map and nothing else to /map-features', () => {
     const dir = setupProject();
     writeSiteMap(dir);
     try {
       const result = run(dir);
       const output = JSON.parse(result.stdout);
-      expect(output.stage).toBe('business-intent-pending-review');
-      expect(output.nextCommand).toBeNull();
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('reports business-intent-pending-review when every business-intent entry has reviewed:false', () => {
-    const dir = setupProject();
-    writeSiteMap(dir);
-    writeBusinessIntent(dir, false);
-    try {
-      const result = run(dir);
-      const output = JSON.parse(result.stdout);
-      expect(output.stage).toBe('business-intent-pending-review');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('does not crash on a malformed business-intent.json - degrades to business-intent-pending-review', () => {
-    const dir = setupProject();
-    writeSiteMap(dir);
-    writeFileSync(
-      join(dir, 'artifacts', 'analysis', 'business-intent.json'),
-      'not valid json',
-      'utf8',
-    );
-    try {
-      const result = run(dir);
-      expect(result.status).toBe(0);
-      const output = JSON.parse(result.stdout);
-      expect(output.stage).toBe('business-intent-pending-review');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('reports business-intent-reviewed (next: /map-features) once reviewed, before feature-map.json exists', () => {
-    const dir = setupProject();
-    writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
-    try {
-      const result = run(dir);
-      const output = JSON.parse(result.stdout);
-      expect(output.stage).toBe('business-intent-reviewed');
+      expect(output.stage).toBe('site-map-reviewed');
       expect(output.nextCommand).toBe('/map-features');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('holds at feature-map-pending-review while a page criticality is unreviewed', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeFeatureMap(dir, { featureReviewed: true, routeReviewed: false });
+    try {
+      const result = run(dir);
+      const output = JSON.parse(result.stdout);
+      expect(output.stage).toBe('feature-map-pending-review');
+      expect(output.nextCommand).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -363,7 +320,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports feature-map-pending-review while a feature is still unreviewed', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir, { featureReviewed: false });
     try {
       const result = run(dir);
@@ -380,7 +336,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('stays at feature-map-pending-review when features are approved but an entity is not', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir, { featureReviewed: true, entityReviewed: false });
     try {
       const result = run(dir);
@@ -394,7 +349,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports feature-map-reviewed (next: /define-test-conditions) once the whole map is approved', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir, { featureReviewed: true });
     try {
       const result = run(dir);
@@ -413,7 +367,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('does not crash on a malformed feature-map.json - degrades to feature-map-pending-review', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFileSync(join(dir, 'artifacts', 'analysis', 'feature-map.json'), 'not valid json', 'utf8');
     try {
       const result = run(dir);
@@ -421,7 +374,7 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
       const output = JSON.parse(result.stdout);
       // An unparseable file carries no review state to protect, so the honest answer is the same
       // one an absent file gets: redraft it.
-      expect(output.stage).toBe('business-intent-reviewed');
+      expect(output.stage).toBe('site-map-reviewed');
       expect(output.nextCommand).toBe('/map-features');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -431,7 +384,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports test-conditions-pending-review when test-conditions.json exists but no condition is reviewed', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir);
     writeTestConditions(dir, false);
     try {
@@ -447,7 +399,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports test-conditions-reviewed (next: /design-test-cases) once test conditions are reviewed, before test-cases.json exists', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir);
     writeTestConditions(dir, true);
     try {
@@ -463,7 +414,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports test-conditions-reviewed (next: /design-test-cases) when test-cases.json exists but no journey has a drafted testCase yet', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir);
     writeTestConditions(dir, true);
     writeJourneys(dir, { withTestCase: false, reviewed: false });
@@ -480,7 +430,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('does not crash on a malformed test-cases.json - degrades to test-conditions-reviewed', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir);
     writeTestConditions(dir, true);
     writeFileSync(
@@ -501,7 +450,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports test-cases-drafted (next: /automate-test) once a journey has a drafted, unreviewed testCase', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir);
     writeTestConditions(dir, true);
     writeJourneys(dir, { withTestCase: true, reviewed: false });
@@ -521,7 +469,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports test-closure (nextCommand null) once every drafted testCase is reviewed:true', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir);
     writeTestConditions(dir, true);
     writeJourneys(dir, { withTestCase: true, reviewed: true });
@@ -542,7 +489,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports test-conditions-reviewed, not complete, when one route is fully automated but a second reviewed route has no journey entry at all yet', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir);
     writeTestConditionsTwoRoutes(dir);
     writeJourneysCheckoutOnly(dir, { cartHasJourneyWithoutTestCase: false });
@@ -559,7 +505,6 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
   it('reports test-conditions-reviewed, not complete, when one route is fully automated but a second route has a journey entry with no testCase yet', () => {
     const dir = setupProject();
     writeSiteMap(dir);
-    writeBusinessIntent(dir, true);
     writeFeatureMap(dir);
     writeTestConditionsTwoRoutes(dir);
     writeJourneysCheckoutOnly(dir, { cartHasJourneyWithoutTestCase: true });

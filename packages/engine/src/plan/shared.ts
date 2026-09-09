@@ -1,4 +1,4 @@
-import type { FileDescriptor } from '../types/generation-plan.js';
+﻿import type { FileDescriptor } from '../types/generation-plan.js';
 import type { PlanOptions } from './types.js';
 import { renderGitignore } from './templates/gitignore.js';
 import { renderEditorConfig } from './templates/editorconfig.js';
@@ -35,8 +35,6 @@ import { renderDockerfile, renderDockerignore } from './templates/docker.js';
 import { renderSiteMapSchema } from './templates/site-map-schema.js';
 import { renderGitHooks } from './templates/git-hooks.js';
 import { renderSwarmDispatcher } from './templates/swarm-dispatcher.js';
-import { renderBusinessIntentTypes } from './templates/business-intent-types.js';
-import { renderBusinessIntentValidator } from './templates/business-intent-validator.js';
 import { renderSiteMapValidator } from './templates/site-map-validator.js';
 import { renderSitemapCoverageChecker } from './templates/sitemap-coverage-checker.js';
 import { renderFeatureMapTypes } from './templates/feature-map-types.js';
@@ -54,6 +52,7 @@ import { renderVisualCopilot } from './templates/visual-copilot.js';
 import { renderOverlayLedger } from './templates/overlay-ledger.js';
 import { renderSkillBriefing } from './templates/skill-briefing.js';
 import { renderMapSiteQuestions } from './templates/map-site-questions.js';
+import { renderMapFeaturesQuestions } from './templates/map-features-questions.js';
 import { renderDebugLog } from './templates/debug-log.js';
 import { renderMapSiteStatus } from './templates/map-site-status.js';
 import { renderAutomateTestStatus } from './templates/automate-test-status.js';
@@ -74,7 +73,7 @@ import { renderJourneysValidator } from './templates/journeys-validator.js';
  *
  * This function is called once per generation and its output is the same regardless of the
  * language + tool combination chosen. When a new language or tool is added, only the
- * LanguageAdapter and ToolAdapter need to change — this function stays untouched.
+ * LanguageAdapter and ToolAdapter need to change вЂ” this function stays untouched.
  */
 export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
   const ciCd = opts.ciCd ?? 'none';
@@ -90,7 +89,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
     ...planMcpConfigs(opts.taskTracker, opts.tmsProviders, true, opts.aiAssistants),
     ...planAiAgents(opts.aiAssistants, opts.automationTool, opts.language),
     ...planAiOperationalSkills(opts.aiAssistants, opts.automationTool, opts.language),
-    // ── Project meta ────────────────────────────────────────────────────────
+    // в”Ђв”Ђ Project meta в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     {
       path: '.gitignore',
       writePolicy: 'create-if-absent',
@@ -124,18 +123,6 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderSwarmDispatcher() },
-          },
-          {
-            path: '.scaffold/schemas/business-intent.types.ts',
-            writePolicy: 'create-if-absent',
-            provenance: { origin: 'project' },
-            source: { kind: 'inline', text: renderBusinessIntentTypes() },
-          },
-          {
-            path: 'scripts/validate-business-intent.mjs',
-            writePolicy: 'create-if-absent',
-            provenance: { origin: 'project' },
-            source: { kind: 'inline', text: renderBusinessIntentValidator() },
           },
           {
             path: 'scripts/validate-site-map.mjs',
@@ -227,6 +214,13 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderMapSiteQuestions() },
           },
+          {
+            path: 'scripts/map-features-questions.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderMapFeaturesQuestions() },
+          },
+
           {
             path: 'scripts/crawl-budget.mjs',
             writePolicy: 'create-if-absent',
@@ -486,7 +480,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
         ] as FileDescriptor[])
       : []),
 
-    // ── VS Code ─────────────────────────────────────────────────────────────
+    // в”Ђв”Ђ VS Code в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     {
       path: '.vscode/extensions.json',
       writePolicy: 'create-if-absent',
@@ -501,7 +495,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
     },
   ];
 
-  // ── CI/CD (conditional, language-aware) ───────────────────────────────────
+  // в”Ђв”Ђ CI/CD (conditional, language-aware) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   if (ciCd === 'github') {
     files.push({
       path: '.github/workflows/playwright.yml',

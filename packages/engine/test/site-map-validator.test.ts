@@ -435,7 +435,7 @@ describe('scripts/validate-site-map.mjs (real execution)', () => {
     }
   });
 
-  // The join key business-intent.json relies on - a duplicate routeId across two different path
+  // The join key route intent.json relies on - a duplicate routeId across two different path
   // templates would make that join ambiguous, so this must be a mechanical failure, not a
   // theoretical concern left to prose.
   it('fails on two route entries sharing the same routeId', () => {

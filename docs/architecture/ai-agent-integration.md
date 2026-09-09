@@ -29,7 +29,7 @@ Generated Test Repository
 │   │                             nothing to verified working tests, with a human sign-off gate per
 │   │                             stage (or auto-pilot for local review; code synthesis always gated)
 │   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
-│   │                             optional read-only business-intent analysis (ADR 0012 Stage 1)
+│   │                             overlay recording (ADR 0012 Stage 1 crawl half)
 │   ├── /define-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
 │   │                             combinatorial/boundary-value condition generation (ADR 0012 Stage 2)
 │   └── /design-test-cases    -- Deterministic test-level classification + drafted test case per
@@ -100,17 +100,21 @@ verifying actual business logic:
 - **Mutation analysis:** a test must deterministically fail if the backend returns HTTP 4xx/5xx or
   the UI component fails to render - not just pass by never actually looking.
 
-## Business-intent analysis (`/map-site` Step 6, ADR 0012 Stage 1)
+## Route intent analysis (`/map-features`, ADR 0012 Stage 1)
 
-A strictly read-only `/map-site` step, run automatically as part of every `create`/`update` pass
-(unless the user explicitly asks to skip it), infers per-route business intent (`businessFeature`)
-and criticality (`criticalityTier`) into a typed artifact, `artifacts/analysis/business-intent.json`
-(`.scaffold/schemas/business-intent.types.ts` documents its shape - `schemaVersion: 1`,
-`Field<T>`-wrapped values, keyed by `routeId`). It never performs a mutating Playwright call of any
-kind, not even a `trial: true` dry-run - inference draws only from already-rendered page title, heading text, form field labels,
-button/link text, and ARIA roles reached by a single navigation per route. A zero-dependency
-validator (`scripts/validate-business-intent.mjs`) mechanically checks the artifact's shape before
-a Human Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
+A strictly read-only pass over every active route infers what each page is part of (a feature label)
+and how much it costs when it breaks (a criticality tier), writing both into
+`artifacts/analysis/feature-map.json` beside the features they roll up into
+(`.scaffold/schemas/feature-map.types.ts` documents its shape - `schemaVersion: 2`,
+`Field<T>`-wrapped values, keyed by `routeId`). This used to be a `/map-site` step writing a separate
+`business-intent.json`; it moved because a per-page label of what a page is for is the transpose of
+grouping pages into features, so the two were one judgement kept in two files with two review
+gateways and one axis at two granularities that could disagree. It never performs a mutating
+Playwright call of any kind, not even a `trial: true` dry-run - inference draws only from
+already-rendered page title, heading text, form field labels, button/link text, and ARIA roles
+reached by a single navigation per route. A zero-dependency validator
+(`scripts/validate-feature-map.mjs`) mechanically checks the artifact's shape before a Human
+Sign-Off Gateway presents results for review; no other skill or agent treats an entry with
 `reviewed: false` as ground truth. Every review gateway in the pipeline renders through one shared
 script (`scripts/render-review-artifact.mjs`) rather than each skill re-specifying a block format in
 prose: it builds the artifact from the stored JSON, so the text a human approves cannot drift from
@@ -123,9 +127,7 @@ observed evidence of a permission boundary anywhere in the pipeline, and `/defin
 draws its `permission_denied` conditions from them rather than from a role's name. `confidence` is computed from evidence-signal strength (a
 heading/ARIA/manual signal implies `high`, form-labels/button-link-text implies `medium`,
 route-path alone implies `low`) and mechanically checked against that rule, never chosen freely -
-it stays an internal signal, never shown in the review artifact itself, since a route's
-`businessFeature.confidence` and `criticalityTier.confidence` are independently computed and
-routinely disagree. `criticalityTier` follows a written, evidence-anchored checklist rather than
+it stays an internal signal, never shown in the review artifact itself. Criticality follows a written, evidence-anchored checklist rather than
 free inference, is labeled "draft" in the review artifact (it drives real downstream automation -
 `/define-test-conditions`'s checklist volume - once approved, so it earns its own reminder beyond
 the block-level notice), and every `Field<T>` carries a `reasoning` string that reads as a plain
@@ -164,8 +166,8 @@ for the design decision this implements and what remains out of scope for this f
 Stage 2 and Stage 3 below take their names (test analysis defines test conditions, test design
 designs test cases from them) from the ISTQB Foundation Level syllabus's fundamental test process.
 
-A second, explicit-request-only, strictly read-only skill consumes `business-intent.json`'s
-`reviewed: true` entries plus `site-map.json` and derives typed test conditions per route into
+A second, explicit-request-only, strictly read-only skill consumes the feature map's
+`reviewed: true` routes plus `site-map.json` and derives typed test conditions per route into
 `artifacts/analysis/test-conditions.json` (`.scaffold/schemas/test-conditions.types.ts` documents its
 shape). An LLM step infers form parameters and their equivalence partitions primarily from markup
 (tag, `type`, label text, HTML5 constraint attributes, `<select>` option text, static ARIA
@@ -201,7 +203,7 @@ Bridges `test-conditions.json`'s reviewed conditions to a drafted, TMS-shaped te
 `artifacts/test-cases/test-cases.json` (`.scaffold/schemas/test-cases.types.ts` documents its shape).
 `scripts/compose-journeys.mjs` deterministically classifies every condition onto a test level
 (`e2e`/`api`/`ui-only`) and groups them into one journey per route - zero model involvement, zero
-dependency on `criticalityTier` or any other LLM-derived signal, which is too unstable to gate a
+dependency on a route's criticality or any other LLM-derived signal, which is too unstable to gate a
 structural decision on. An LLM step then drafts each journey's `testCase` (title, preconditions,
 ordered steps): every step is one atomic action with its own concrete expected result, never a
 step bundling several actions behind one blanket result - drawn directly from each condition's own
@@ -237,7 +239,7 @@ what used to be two separate exchanges (approve-this-stage, then what-next) into
 question. What runs next is never hardcoded in the orchestrator's own prose - both it and the
 underlying skills' own end-of-run hints consult one deterministic script, `scripts/pipeline-status.mjs`,
 which recomputes the pipeline's current stage from real artifact state on disk (site map existence,
-reviewed business-intent entries, reviewed test conditions, drafted/automated journeys) every time it
+a reviewed feature map, reviewed test conditions, drafted/automated journeys) every time it
 runs, never from a cached belief. This keeps the single-source-of-truth property intact as later
 stages get added - extending the script's stage list is the only change a new stage needs, not a
 rewrite of the orchestrator's own sequencing. `/automate-test` is an in-chain stage like the three

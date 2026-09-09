@@ -130,7 +130,6 @@ function loadStatus(errors) {
       profile.crawlBoundary && Array.isArray(profile.crawlBoundary.offLimits)
         ? profile.crawlBoundary.offLimits
         : null,
-    hasApplicationKind: Boolean(profile.applicationKind),
     hasApiStyle: Boolean(profile.apiStyle),
     contractsExist: contracts !== null,
     // A contract whose operation style is 'opaque' was seen and could not be read, so a file of
@@ -138,11 +137,6 @@ function loadStatus(errors) {
     readableContractCount: entries.filter(function (entry) {
       return !entry || !entry.operation || entry.operation.style !== 'opaque';
     }).length,
-    corePurposeCandidates:
-      profile.corePurpose && Array.isArray(profile.corePurpose.candidates)
-        ? profile.corePurpose.candidates
-        : [],
-    corePurposeSelected: Boolean(profile.corePurpose && profile.corePurpose.selected),
   };
 }
 
@@ -265,51 +259,6 @@ const QUESTIONS = [
     applies: function (answers, status) {
       if (status.hasApiStyle === true) return false;
       return status.contractsExist === true && status.readableContractCount === 0;
-    },
-  },
-  {
-    id: 'application-kind',
-    phase: 'postcrawl',
-    // Separate from purpose on purpose: what an application IS FOR and what KIND of thing it is are
-    // different facts, and only the second one tells a practice sandbox from the real system it
-    // imitates - which decides whether an auth route is a real credential surface or an exhibit.
-    text: 'Is this the real production application, or a sandbox or demo, an internal tool, or a staging copy?',
-    options: [
-      { id: 'production', label: 'The real production application' },
-      { id: 'sandbox-demo', label: 'A sandbox, demo or practice application' },
-      { id: 'internal-tool', label: 'An internal tool' },
-      { id: 'staging', label: 'A staging copy of production' },
-    ],
-    allowsFreeText: false,
-    applies: function (answers, status) {
-      return status.siteMapExists === true && status.hasApplicationKind !== true;
-    },
-  },
-  {
-    id: 'core-purpose',
-    phase: 'postcrawl',
-    text: 'What is this application for? Pick the reading that fits, or describe it yourself.',
-    // Built from whatever the analysis actually proposed. One candidate is the normal case - the
-    // analysis is told to write a single well-evidenced reading rather than pad the list - and a
-    // structured choice tool rejects a call carrying one option, so the "describe it myself"
-    // alternative is appended here rather than left to the model to remember at the point of asking.
-    dynamicOptions: function (status) {
-      const options = status.corePurposeCandidates.map(function (candidate, index) {
-        return {
-          id: 'candidate:' + index,
-          label: candidate && typeof candidate.value === 'string' ? candidate.value : '(unreadable candidate)',
-        };
-      });
-      const likely = options[0];
-      if (likely) likely.recommended = true;
-      options.push({ id: 'own-words', label: 'None of these - I will describe it myself' });
-      return options;
-    },
-    allowsFreeText: true,
-    freeTextHint:
-      'A one-sentence description in the human own words. Record it as corePurpose.selected with source "human"; picking a candidate records that candidate value with source "observed".',
-    applies: function (answers, status) {
-      return status.corePurposeCandidates.length > 0 && status.corePurposeSelected !== true;
     },
   },
 ];
