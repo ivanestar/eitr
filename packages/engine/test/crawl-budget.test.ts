@@ -80,7 +80,7 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
         duplicateTemplateWarnAt: 3,
         maxPerParent: 50,
         maxPerQueryBase: 8,
-        maxMinutes: 30,
+        maxStallMinutes: 10,
         exclude: [],
         maxScrolls: 2,
         allowInvisible: false,
@@ -540,25 +540,82 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
     }
   });
 
-  it('stops on elapsed time, not only on pages, so a slow app cannot run forever', () => {
-    const dir = setupProject();
-    try {
-      // Zero would be rejected as a non-positive value, so the smallest real ceiling is used and
-      // the recorded start time is moved back to simulate a long-running crawl.
-      start(dir, ['--max-minutes=1']);
-      const statePath = join(dir, 'artifacts', 'site-map', '.crawl-budget.json');
-      const state = JSON.parse(readFileSync(statePath, 'utf8'));
-      state.startedAt = new Date(Date.now() - 5 * 60000).toISOString();
-      writeFileSync(statePath, JSON.stringify(state), 'utf8');
+  // The clock measures the gap since the last new route, never the time since the start: cutting a
+  // large application off half way produces an incomplete map someone then has to notice and
+  // re-run, which costs more than the crawl it saved.
+  describe('stall detection', () => {
+    const statePathFor = (dir: string) => join(dir, 'artifacts', 'site-map', '.crawl-budget.json');
 
-      const stopped = check(dir, `${BASE}/anything`);
-      expect(stopped.decision).toBe('skip');
-      expect(stopped.reason).toBe('max-minutes');
-      expect(stopped.warning).toContain('run for over 1 minutes');
-      expect(run(dir, ['report']).coverage.boundedBy).toBe('maxMinutes');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    it('stops a crawl that has found nothing new for the configured gap', () => {
+      const dir = setupProject();
+      try {
+        // Zero would be rejected as non-positive, so the smallest real gap is used and the
+        // recorded progress time is moved back to simulate a wedged crawl.
+        start(dir, ['--max-stall-minutes=1']);
+        const state = JSON.parse(readFileSync(statePathFor(dir), 'utf8'));
+        state.startedAt = new Date(Date.now() - 5 * 60000).toISOString();
+        writeFileSync(statePathFor(dir), JSON.stringify(state), 'utf8');
+
+        const stopped = check(dir, `${BASE}/anything`);
+        expect(stopped.decision).toBe('skip');
+        expect(stopped.reason).toBe('stalled');
+        expect(stopped.warning).toContain('no new route has been found in over 1 minutes');
+        expect(run(dir, ['report']).coverage.boundedBy).toBe('stalled');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('does not stop a long-running crawl that is still finding routes', () => {
+      const dir = setupProject();
+      try {
+        start(dir, ['--max-stall-minutes=1']);
+        // Running for an hour, but a route was kept a moment ago: this crawl is working.
+        const state = JSON.parse(readFileSync(statePathFor(dir), 'utf8'));
+        state.startedAt = new Date(Date.now() - 60 * 60000).toISOString();
+        state.lastProgressAt = new Date().toISOString();
+        writeFileSync(statePathFor(dir), JSON.stringify(state), 'utf8');
+
+        const decision = check(dir, `${BASE}/anything`);
+        expect(decision.decision).toBe('visit');
+        expect(run(dir, ['report']).coverage).toBeNull();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('counts a new route as progress and re-walking a known one as none', () => {
+      const dir = setupProject();
+      try {
+        start(dir);
+        check(dir, `${BASE}/alpha`);
+        run(dir, ['visited', `--url=${BASE}/alpha`, '--status=200']);
+        const first = run(dir, ['report']).lastProgressAt;
+        expect(first).not.toBeNull();
+
+        // Same canonical template again - a page was fetched, but the map gained nothing.
+        check(dir, `${BASE}/alpha`);
+        run(dir, ['visited', `--url=${BASE}/alpha`, '--status=200']);
+        expect(run(dir, ['report']).lastProgressAt).toBe(first);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('runs the clock from the start until the first route, so a crawl wedged on page one is caught', () => {
+      const dir = setupProject();
+      try {
+        start(dir, ['--max-stall-minutes=1']);
+        const state = JSON.parse(readFileSync(statePathFor(dir), 'utf8'));
+        state.startedAt = new Date(Date.now() - 5 * 60000).toISOString();
+        expect(state.lastProgressAt).toBeNull();
+        writeFileSync(statePathFor(dir), JSON.stringify(state), 'utf8');
+
+        expect(check(dir, `${BASE}/anything`).reason).toBe('stalled');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   // An extension is a guess about what a URL will return. One HEAD request replaces the guess with

@@ -57,10 +57,10 @@ export function renderSiteMapSchema(): string {
             "maxPerTemplate",
             "maxPerParent",
             "maxPerQueryBase",
-            "maxMinutes",
+            "stalled",
             "duplicateContent"
           ],
-          "description": "Which traversal limit actually stopped this crawl pass."
+          "description": "Which traversal limit actually stopped this crawl pass. \\"stalled\\" means no new route was found for the configured gap - the crawl had stopped getting anywhere, which is a different fact from having run for a long time; a crawl still finding pages is never stopped for its duration."
         },
         "pagesVisited": {
           "type": "integer",
