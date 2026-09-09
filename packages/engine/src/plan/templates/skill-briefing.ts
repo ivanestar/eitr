@@ -173,12 +173,13 @@ const BRIEFINGS = {
 
   'map-features': {
     command: '/map-features',
-    what: 'Produces artifacts/analysis/feature-map.json: your pages grouped into features, the things your application works with (orders, users, invoices), what can happen to each of them, and how they connect.',
-    how: 'Drafts it mechanically first, from traffic already observed during the crawl and from the shape of your routes, corroborates that against the forms and links actually on the pages, then asks you the two or three things no artifact can answer.',
+    what: 'Produces artifacts/analysis/feature-map.json: what each page is for and how much it costs when it breaks, those pages grouped into features, the things your application works with (orders, users, invoices), what can happen to each of them, and how they connect.',
+    how: 'Reads every mapped page once to work out what it is part of and how critical it is, groups them into features mechanically, cross-checks that against the traffic the crawl already observed and the forms on the pages themselves, then asks you what the application is and the two or three things no artifact can answer.',
     why: 'Tests are written against features and entities rather than pages, and a link between two entities becomes a precondition every test built on it inherits - so you confirm those links before anything is built on them.',
     notes: [
-      'Read-only: it reads markup and existing artifacts and never clicks, fills or submits anything.',
+      'It visits every page again, so on a large map this is minutes rather than seconds - but read-only: it reads markup and existing artifacts and never clicks, fills or submits anything.',
       'Everything it drafts is a hypothesis marked as one until you approve it. A resource-shaped path is not proof of a domain entity.',
+      'How critical each page is decides how much testing it gets later, so that column is the one worth reading closely.',
     ],
     produces: ['artifacts/analysis/feature-map.json'],
     question: {
