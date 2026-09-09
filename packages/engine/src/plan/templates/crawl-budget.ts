@@ -29,6 +29,7 @@ export function renderCrawlBudget(): string {
  * Usage:
  *   node scripts/crawl-budget.mjs start --base-url=<url> [--role=<slug>]
  *                                 [--max-pages=N] [--max-depth=N] [--max-per-template=N]
+ *                                 [--max-stall-minutes=N]
  *   node scripts/crawl-budget.mjs check --url=<url> --depth=<n> --visible=<true|false>
  *   node scripts/crawl-budget.mjs visited --url=<url> [--status=<n>] [--content-type=<mime>]
  *                                 [--content-hash=<hash>]
@@ -99,12 +100,18 @@ const TEMPLATE_WARN_AT = 4;
 // The anti-infinite-scroll ceiling, enforced rather than described. A page that appends content on
 // scroll never changes its URL, so nothing else in this script ever sees it.
 const DEFAULT_MAX_SCROLLS = 2;
-// A page ceiling is not a time ceiling. 500 pages of a fast application is minutes; 500 pages of a
-// slow one, or one behind a saturated test environment, is most of an afternoon - a live crawl here
-// averaged four seconds a page. katana bounds a crawl by duration as well as by depth for exactly
-// this reason, and a human waiting on a stage needs the wait to be bounded by something they can
-// predict. Generous by default: this is a runaway stop, not a schedule.
-const DEFAULT_MAX_MINUTES = 30;
+// What a time bound is actually for is a crawl that has stopped getting anywhere - hung on a slow
+// response, circling the same content, wedged. Total elapsed time is a bad proxy for that: it is a
+// fact about the machine and the network rather than about the application, so a large site on a
+// slow connection trips it at route two hundred while a small one on a fast connection never trips
+// it at all. Cutting a big crawl off half way is not a saving - it produces an incomplete map that
+// a person then has to notice, judge and re-run.
+//
+// So the clock measures the gap since the last NEW route was kept, not the time since the start. A
+// crawl that keeps finding pages runs as long as it needs to; one that has genuinely wedged is
+// stopped sooner than a total ceiling would have caught it. The global runaway stop is maxPages,
+// which bounds the work regardless of how fast it happens.
+const DEFAULT_MAX_STALL_MINUTES = 10;
 const ANNOUNCE_EVERY_PAGES = 25;
 const ANNOUNCE_EVERY_MS = 120000;
 // Every refused link is kept, not just counted, so a human can scan the list and catch a route
@@ -198,6 +205,8 @@ function emptyState() {
     origin: null,
     role: null,
     startedAt: null,
+    // When a route the map did not already have was last kept. Null until the first one.
+    lastProgressAt: null,
     limits: {
       maxPages: DEFAULT_MAX_PAGES,
       maxDepth: DEFAULT_MAX_DEPTH,
@@ -206,7 +215,7 @@ function emptyState() {
       duplicateTemplateWarnAt: DEFAULT_DUPLICATE_TEMPLATE_WARN_AT,
       maxPerParent: DEFAULT_MAX_PER_PARENT,
       maxPerQueryBase: DEFAULT_MAX_PER_QUERY_BASE,
-      maxMinutes: DEFAULT_MAX_MINUTES,
+      maxStallMinutes: DEFAULT_MAX_STALL_MINUTES,
       // Glob patterns the human asked to stay out of, translated from their own words by the skill
       // and confirmed back to them before the crawl starts. Enforced here rather than remembered
       // per link - both Crawlee and katana make exclusion a first-class crawler option, and a rule
@@ -454,6 +463,24 @@ function elapsedMs(state) {
   return Date.now() - Date.parse(state.startedAt);
 }
 
+// How long since this crawl last did the thing it exists to do. Before the first route is kept the
+// clock runs from the start, so a crawl that wedges on its very first page is still caught.
+function stalledMs(state) {
+  const since = state.lastProgressAt || state.startedAt;
+  if (!since) return 0;
+  return Date.now() - Date.parse(since);
+}
+
+// Progress is a route the map did not have, not a page that was fetched. Walking twenty concrete
+// URLs that all collapse into one template is exactly the shape a trap has, and counting it as
+// progress would keep the stall clock alive for precisely the case this guard exists to stop.
+function keepTemplate(state, canonical) {
+  if (!canonical.ok) return;
+  if (state.keptTemplates[canonical.canonicalPath]) return;
+  state.keptTemplates[canonical.canonicalPath] = true;
+  state.lastProgressAt = new Date().toISOString();
+}
+
 function humanDuration(ms) {
   const totalSeconds = Math.max(0, Math.round(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -563,7 +590,7 @@ function cmdStart(args) {
     ),
     maxPerParent: positiveInt(args['max-per-parent'], DEFAULT_MAX_PER_PARENT),
     maxPerQueryBase: positiveInt(args['max-per-query-base'], DEFAULT_MAX_PER_QUERY_BASE),
-    maxMinutes: positiveInt(args['max-minutes'], DEFAULT_MAX_MINUTES),
+    maxStallMinutes: positiveInt(args['max-stall-minutes'], DEFAULT_MAX_STALL_MINUTES),
     exclude: typeof args.exclude === 'string' && args.exclude !== '' ? args.exclude.split(',') : [],
     maxScrolls: positiveInt(args['max-scrolls'], DEFAULT_MAX_SCROLLS),
     // Opt-in, for the rare application whose real navigation genuinely is not visible markup (a
@@ -632,19 +659,23 @@ function cmdCheck(args) {
     return deny('off-limits', { canonicalPath: canonical.canonicalPath, pattern: excluded });
   }
 
-  // Elapsed time is checked here rather than only counted, so a slow application cannot turn a
-  // bounded stage into an unbounded wait.
-  if (elapsedMs(state) > state.limits.maxMinutes * 60000) {
-    state.boundedBy = state.boundedBy || 'maxMinutes';
-    return deny('max-minutes', {
+  // Checked here rather than only counted, so a wedged crawl cannot turn a bounded stage into an
+  // unbounded wait. Note what is being measured: time since the last new route, not time since the
+  // start - a crawl still finding pages is working, however long it has been going.
+  if (stalledMs(state) > state.limits.maxStallMinutes * 60000) {
+    state.boundedBy = state.boundedBy || 'stalled';
+    return deny('stalled', {
       canonicalPath: canonical.canonicalPath,
       warning: addWarning(
         state,
-        'max-minutes',
-        'Stopping: this crawl has run for over ' +
-          state.limits.maxMinutes +
-          ' minutes. The route list is whatever was reached by now, and is incomplete - re-run with ' +
-          '--max-minutes raised if the application really is this large or this slow.',
+        'stalled',
+        'Stopping: no new route has been found in over ' +
+          state.limits.maxStallMinutes +
+          ' minutes, so this crawl has stopped getting anywhere - it has been running ' +
+          humanDuration(elapsedMs(state)) +
+          ' in total. The route list is whatever was reached by now. Re-run with ' +
+          '--max-stall-minutes raised if the application really is slow enough that a gap this ' +
+          'long between pages is normal for it.',
       ),
     });
   }
@@ -795,7 +826,7 @@ function cmdVisited(args) {
   // answer with different content types.
   if (status === 401 || status === 403) {
     state.pagesVisited += 1;
-    if (canonical.ok) state.keptTemplates[canonical.canonicalPath] = true;
+    keepTemplate(state, canonical);
     const announceNow = maybeAnnounce(state);
     saveState(state);
     return {
@@ -853,7 +884,7 @@ function cmdVisited(args) {
   }
 
   state.pagesVisited += 1;
-  if (canonical.ok) state.keptTemplates[canonical.canonicalPath] = true;
+  keepTemplate(state, canonical);
 
   // The repetition check. contentHash is this route's normalized structural signature (title plus
   // sorted regions plus sorted components) - the same value the site map records - so two pages
@@ -1078,6 +1109,7 @@ function cmdProgress() {
     action: 'progress',
     line: progressLine(state),
     elapsedMs: elapsedMs(state),
+    stalledMs: stalledMs(state),
     skipped: state.skipped,
     warnings: state.warnings,
     budget: budgetView(state),
@@ -1094,6 +1126,7 @@ function cmdReport() {
     role: state.role,
     startedAt: state.startedAt,
     elapsedMs: elapsedMs(state),
+    lastProgressAt: state.lastProgressAt,
     line: progressLine(state),
     skipped: state.skipped,
     droppedAfterVisit: state.droppedAfterVisit,

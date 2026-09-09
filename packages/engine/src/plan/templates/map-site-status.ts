@@ -12,6 +12,14 @@
 // deleted. Live-observed result: 1239 files (~146 MB) on disk backing a 44-route site map. Pruning
 // belongs here rather than in the skill's prose for the same reason mode resolution does: "which
 // files are no longer referenced" is a pure fact about on-disk state, not a judgment call.
+//
+// Pruning after the fact is not the same as starting clean, which is why reset-screenshots exists
+// alongside it. A `create` pass is already defined as starting from nothing, so the directory it
+// leaves behind should hold that pass's images and nothing else - wiping at the start rather than
+// reconciling at the end also means a pass that dies half-way leaves a partial set of its OWN
+// images rather than a mix of two crawls that no later prune can tell apart. `update` needs none of
+// this: it keeps each route's id, so re-capturing a route overwrites that route's own file in place
+// and the directory can never accumulate a second copy of anything.
 export function renderMapSiteStatus(): string {
   return `#!/usr/bin/env node
 
@@ -24,6 +32,7 @@ export function renderMapSiteStatus(): string {
  *   node scripts/map-site-status.mjs <create|update>
  *   node scripts/map-site-status.mjs prune-screenshots
  *   node scripts/map-site-status.mjs prune-screenshots --orphaned
+ *   node scripts/map-site-status.mjs reset-screenshots
  */
 
 import fs from 'node:fs';
@@ -33,7 +42,14 @@ import process from 'node:process';
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const SCREENSHOT_DIR = path.join(CWD, 'artifacts', 'site-map', 'screenshots');
+const MARKS_DIR = path.join(CWD, 'artifacts', 'site-map', '.visual-marks');
+const CRAWL_STATE_PATH = path.join(CWD, 'artifacts', 'site-map', '.crawl-budget.json');
 const SCREENSHOT_EXTENSIONS = ['.jpg', '.jpeg', '.webp', '.png'];
+
+// How recently the crawl's own state file must have been written for another pass to count as live.
+// A crawl touches it on every check and every visit, so a gap wider than this means nothing is
+// walking the site right now.
+const ACTIVE_CRAWL_WINDOW_MS = 120000;
 
 function loadSiteMap() {
   if (!fs.existsSync(SITE_MAP_PATH)) return null;
@@ -203,6 +219,71 @@ function pruneScreenshots(orphanedRequested) {
   };
 }
 
+// Transient marked-up copies the visual pass hands to its worker. They are deleted as each route
+// finishes, so anything still here belongs to a run that stopped early.
+function purgeMarksDir() {
+  if (!fs.existsSync(MARKS_DIR)) return 0;
+  let removed = 0;
+  try {
+    for (const entry of fs.readdirSync(MARKS_DIR, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      if (!SCREENSHOT_EXTENSIONS.includes(path.extname(entry.name).toLowerCase())) continue;
+      try {
+        fs.unlinkSync(path.join(MARKS_DIR, entry.name));
+        removed += 1;
+      } catch {
+        // A file we cannot delete is reported by count, not by failing the reset - the pass that
+        // follows overwrites by route id anyway.
+      }
+    }
+  } catch {
+    return removed;
+  }
+  return removed;
+}
+
+// Whether a crawl looks like it is running right now. The only evidence available is how recently
+// the frontier gatekeeper wrote its state, which is exactly what a live crawl does constantly.
+function crawlLooksActive() {
+  try {
+    const stat = fs.statSync(CRAWL_STATE_PATH);
+    return Date.now() - stat.mtimeMs < ACTIVE_CRAWL_WINDOW_MS;
+  } catch {
+    return false;
+  }
+}
+
+// Start-of-pass wipe for \`create\`, whose contract is already "this starts clean". Unlike
+// prune-screenshots this deletes without comparing against a site map, so it is deliberately not
+// reachable from any other mode, and it refuses outright while another crawl is visibly running -
+// the one situation where deleting the directory would destroy work in progress rather than the
+// leftovers of a finished pass.
+function resetScreenshots(force) {
+  if (!force && crawlLooksActive()) {
+    return {
+      action: 'reset-screenshots',
+      pruned: 0,
+      freedBytes: 0,
+      marksRemoved: 0,
+      skippedReason:
+        'artifacts/site-map/.crawl-budget.json was written in the last ' +
+        Math.round(ACTIVE_CRAWL_WINDOW_MS / 1000) +
+        's, so a crawl appears to be running. Refusing to wipe the screenshot directory - wait for ' +
+        'it to finish, or pass --force if you are certain nothing else is crawling.',
+    };
+  }
+  const all = listAllScreenshots();
+  const outcome = deleteAll(all);
+  return {
+    action: 'reset-screenshots',
+    pruned: outcome.pruned,
+    freedBytes: outcome.freedBytes,
+    marksRemoved: purgeMarksDir(),
+    failures: outcome.failures,
+    skippedReason: null,
+  };
+}
+
 function resolveMode() {
   const requestedModeArg = (process.argv[2] || '').toLowerCase();
   const requestedMode = requestedModeArg === 'update' ? 'update' : 'create';
@@ -255,9 +336,11 @@ function resolveMode() {
 
 function main() {
   const action = (process.argv[2] || '').toLowerCase();
-  const orphanedRequested = process.argv.slice(3).includes('--orphaned');
-  const result =
-    action === 'prune-screenshots' ? pruneScreenshots(orphanedRequested) : resolveMode();
+  const flags = process.argv.slice(3);
+  let result;
+  if (action === 'prune-screenshots') result = pruneScreenshots(flags.includes('--orphaned'));
+  else if (action === 'reset-screenshots') result = resetScreenshots(flags.includes('--force'));
+  else result = resolveMode();
   process.stdout.write(JSON.stringify(result, null, 2) + '\\n');
 }
 

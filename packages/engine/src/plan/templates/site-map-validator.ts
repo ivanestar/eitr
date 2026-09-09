@@ -33,7 +33,7 @@ const BOUNDED_BY_VALUES = new Set([
   'maxPerTemplate',
   'maxPerParent',
   'maxPerQueryBase',
-  'maxMinutes',
+  'stalled',
   'duplicateContent',
 ]);
 const STATUS_VALUES = new Set(['active', 'removed']);
@@ -45,7 +45,15 @@ const TRIAGE_STATE_VALUES = new Set([
   'empty_state',
 ]);
 const TRIAGE_CONFIDENCE_VALUES = new Set(['high', 'medium', 'low']);
-const TRIAGE_ALLOWED_KEYS = new Set(['state', 'blockingOverlay', 'confidence', 'flags']);
+const TRIAGE_SOURCE_VALUES = new Set(['heuristic', 'vision']);
+const TRIAGE_ALLOWED_KEYS = new Set([
+  'state',
+  'blockingOverlay',
+  'confidence',
+  'flags',
+  'source',
+]);
+const DISCOVERY_METHOD_VALUES = new Set(['navigation', 'href-scan-only']);
 const ROUTE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 const SCREENSHOT_PATH_RE = /^artifacts\\/site-map\\/screenshots\\/[a-zA-Z0-9_-]+\\.(webp|jpg|jpeg)$/;
 const FLAG_TOKEN_RE = /^[a-z0-9_-]+$/;
@@ -169,6 +177,26 @@ function validate() {
     if (!STATUS_VALUES.has(entry.status)) {
       errors.push(label + '.status must be one of active|removed.');
     }
+    if ('redirectedFrom' in entry) {
+      if (!isStringArray(entry.redirectedFrom) || entry.redirectedFrom.length === 0) {
+        errors.push(
+          label +
+            '.redirectedFrom, when present, must be a non-empty array of strings - omit it entirely when nothing redirected here.',
+        );
+      } else if (new Set(entry.redirectedFrom).size !== entry.redirectedFrom.length) {
+        errors.push(label + '.redirectedFrom must not repeat the same path.');
+      } else if (entry.redirectedFrom.includes(key)) {
+        // A route listing itself as its own redirect source says nothing and hides the real one.
+        errors.push(
+          label + '.redirectedFrom must not contain this route own key ("' + key + '").',
+        );
+      }
+    }
+    if ('discoveryMethod' in entry && !DISCOVERY_METHOD_VALUES.has(entry.discoveryMethod)) {
+      errors.push(
+        label + '.discoveryMethod, when present, must be one of navigation|href-scan-only.',
+      );
+    }
     if ('httpStatus' in entry) {
       if (
         !Number.isInteger(entry.httpStatus) ||
@@ -204,8 +232,11 @@ function validate() {
             label +
               '.visualTriage has unrecognized properties: ' +
               extraKeys.join(', ') +
-              '. Only state, blockingOverlay, confidence, flags are allowed.',
+              '. Only state, blockingOverlay, confidence, flags, source are allowed.',
           );
+        }
+        if ('source' in triage && !TRIAGE_SOURCE_VALUES.has(triage.source)) {
+          errors.push(label + '.visualTriage.source, when present, must be one of heuristic|vision.');
         }
         if (!triage.state || typeof triage.state !== 'string' || !TRIAGE_STATE_VALUES.has(triage.state)) {
           errors.push(

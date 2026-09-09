@@ -57,10 +57,10 @@ export function renderSiteMapSchema(): string {
             "maxPerTemplate",
             "maxPerParent",
             "maxPerQueryBase",
-            "maxMinutes",
+            "stalled",
             "duplicateContent"
           ],
-          "description": "Which traversal limit actually stopped this crawl pass."
+          "description": "Which traversal limit actually stopped this crawl pass. \\"stalled\\" means no new route was found for the configured gap - the crawl had stopped getting anywhere, which is a different fact from having run for a long time; a crawl still finding pages is never stopped for its duration."
         },
         "pagesVisited": {
           "type": "integer",
@@ -166,6 +166,19 @@ export function renderSiteMapSchema(): string {
             "enum": ["active", "removed"],
             "description": "\\"removed\\" means /map-site update could no longer resolve this route (404, vanished from nav) - the entry is kept, not silently deleted, so a consumer can see route-removal history. A full /map-site create pass prunes \\"removed\\" entries when it regenerates fresh."
           },
+          "redirectedFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true,
+            "description": "Canonical path templates that were requested and redirected here, e.g. [\\"/old-checkout\\"] on the entry for \\"/checkout\\". Absent when nothing redirected to this route, which is the common case. A route that exists only as a redirect target is reachable by a real user and invisible to a crawl that keys every page by the URL it asked for, so the destination owns the entry and the requested path is recorded here rather than becoming a route of its own."
+          },
+          "discoveryMethod": {
+            "type": "string",
+            "enum": ["navigation", "href-scan-only"],
+            "description": "How this route was actually reached. \\"navigation\\" means at least one visible, interactable link to it was clicked through on a rendered page; \\"href-scan-only\\" means the sole evidence was a raw href attribute with no visible counterpart anywhere. The distinction is load-bearing: the cross-route content-hash heuristic may only flag an href-scan-only route as a likely phantom, because being reachable through real navigation is independent evidence the route exists."
+          },
           "httpStatus": {
             "type": "integer",
             "minimum": 100,
@@ -197,6 +210,11 @@ export function renderSiteMapSchema(): string {
                 "type": "string",
                 "enum": ["high", "medium", "low"],
                 "description": "Confidence of the visual state classification."
+              },
+              "source": {
+                "type": "string",
+                "enum": ["heuristic", "vision"],
+                "description": "What produced this classification: \\"heuristic\\" is the cheap markup check (suspicious tokens in the URL or title, interactive-element density, an overlay covering the viewport), \\"vision\\" is a worker that read the rendered screenshot. They answer the same question with very different reliability, and a reader deciding how much to trust an empty_state needs to know which one said it."
               },
               "flags": {
                 "type": "array",
