@@ -6,6 +6,7 @@ obj/
 TestResults/
 test-results/
 artifacts/site-map/screenshots/
+artifacts/site-map/.visual-marks/
 artifacts/.journal/
 artifacts/.debug/
 .idea/
@@ -30,6 +31,7 @@ build/
 .gradle/
 test-results/
 artifacts/site-map/screenshots/
+artifacts/site-map/.visual-marks/
 artifacts/.journal/
 artifacts/.debug/
 .idea/
@@ -56,6 +58,7 @@ cypress/videos/
 cypress/downloads/
 test-results/
 artifacts/site-map/screenshots/
+artifacts/site-map/.visual-marks/
 artifacts/.journal/
 artifacts/.debug/
 .idea/
@@ -83,6 +86,7 @@ __pycache__/
 .pytest_cache/
 test-results/
 artifacts/site-map/screenshots/
+artifacts/site-map/.visual-marks/
 artifacts/.journal/
 artifacts/.debug/
 .idea/
@@ -107,6 +111,7 @@ test-results/
 playwright-report/
 blob-report/
 artifacts/site-map/screenshots/
+artifacts/site-map/.visual-marks/
 artifacts/.journal/
 artifacts/.debug/
 .idea/

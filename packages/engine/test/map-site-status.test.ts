@@ -264,6 +264,89 @@ describe('scripts/map-site-status.mjs (real execution)', () => {
     }
   });
 
+  describe('reset-screenshots', () => {
+    it('clears the whole directory so a create pass starts on its own images alone', () => {
+      const dir = setupProject();
+      try {
+        writeSiteMap(dir, {
+          schemaVersion: 2,
+          generatedAt: '2026-09-03T10:00:00.000Z',
+          routes: { '/': { routeId: 'still-referenced' } },
+        });
+        const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+        mkdirSync(shots, { recursive: true });
+        writeFileSync(join(shots, 'root--still-referenced.jpg'), 'x', 'utf8');
+        writeFileSync(join(shots, 'old--gone.jpg'), 'yy', 'utf8');
+        writeFileSync(join(shots, 'notes.txt'), 'not an image', 'utf8');
+
+        const output = run(dir, 'reset-screenshots');
+        // Unlike prune, this deletes regardless of whether a route still references the file - the
+        // pass about to run is going to reassign every routeId anyway.
+        expect(output.pruned).toBe(2);
+        expect(output.skippedReason).toBeNull();
+        expect(existsSync(join(shots, 'root--still-referenced.jpg'))).toBe(false);
+        expect(existsSync(join(shots, 'old--gone.jpg'))).toBe(false);
+        expect(existsSync(join(shots, 'notes.txt'))).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('also clears transient marked copies a crashed visual pass left behind', () => {
+      const dir = setupProject();
+      try {
+        const marks = join(dir, 'artifacts', 'site-map', '.visual-marks');
+        mkdirSync(marks, { recursive: true });
+        writeFileSync(join(marks, 'abc.jpg'), 'x', 'utf8');
+        writeFileSync(join(marks, 'def.jpg'), 'x', 'utf8');
+
+        const output = run(dir, 'reset-screenshots');
+        expect(output.marksRemoved).toBe(2);
+        expect(existsSync(join(marks, 'abc.jpg'))).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('refuses while another crawl is visibly running, rather than deleting its work', () => {
+      const dir = setupProject();
+      try {
+        const shots = join(dir, 'artifacts', 'site-map', 'screenshots');
+        mkdirSync(shots, { recursive: true });
+        writeFileSync(join(shots, 'root--abc.jpg'), 'x', 'utf8');
+        // A live crawl rewrites this file on every check and every visit.
+        writeFileSync(
+          join(dir, 'artifacts', 'site-map', '.crawl-budget.json'),
+          JSON.stringify({ schemaVersion: 1 }),
+          'utf8',
+        );
+
+        const output = run(dir, 'reset-screenshots');
+        expect(output.pruned).toBe(0);
+        expect(output.skippedReason).toContain('a crawl appears to be running');
+        expect(existsSync(join(shots, 'root--abc.jpg'))).toBe(true);
+
+        const forced = run(dir, 'reset-screenshots', '--force');
+        expect(forced.pruned).toBe(1);
+        expect(existsSync(join(shots, 'root--abc.jpg'))).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('is a no-op on a project that has never crawled', () => {
+      const dir = setupProject();
+      try {
+        const output = run(dir, 'reset-screenshots');
+        expect(output.pruned).toBe(0);
+        expect(output.marksRemoved).toBe(0);
+        expect(output.skippedReason).toBeNull();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
   it("treats a malformed (missing schemaVersion) site-map.json as absent, same as the skill's own Step 3a rule", () => {
     const dir = setupProject();
     try {

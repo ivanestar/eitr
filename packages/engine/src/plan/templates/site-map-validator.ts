@@ -45,7 +45,15 @@ const TRIAGE_STATE_VALUES = new Set([
   'empty_state',
 ]);
 const TRIAGE_CONFIDENCE_VALUES = new Set(['high', 'medium', 'low']);
-const TRIAGE_ALLOWED_KEYS = new Set(['state', 'blockingOverlay', 'confidence', 'flags']);
+const TRIAGE_SOURCE_VALUES = new Set(['heuristic', 'vision']);
+const TRIAGE_ALLOWED_KEYS = new Set([
+  'state',
+  'blockingOverlay',
+  'confidence',
+  'flags',
+  'source',
+]);
+const DISCOVERY_METHOD_VALUES = new Set(['navigation', 'href-scan-only']);
 const ROUTE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 const SCREENSHOT_PATH_RE = /^artifacts\\/site-map\\/screenshots\\/[a-zA-Z0-9_-]+\\.(webp|jpg|jpeg)$/;
 const FLAG_TOKEN_RE = /^[a-z0-9_-]+$/;
@@ -169,6 +177,11 @@ function validate() {
     if (!STATUS_VALUES.has(entry.status)) {
       errors.push(label + '.status must be one of active|removed.');
     }
+    if ('discoveryMethod' in entry && !DISCOVERY_METHOD_VALUES.has(entry.discoveryMethod)) {
+      errors.push(
+        label + '.discoveryMethod, when present, must be one of navigation|href-scan-only.',
+      );
+    }
     if ('httpStatus' in entry) {
       if (
         !Number.isInteger(entry.httpStatus) ||
@@ -204,8 +217,11 @@ function validate() {
             label +
               '.visualTriage has unrecognized properties: ' +
               extraKeys.join(', ') +
-              '. Only state, blockingOverlay, confidence, flags are allowed.',
+              '. Only state, blockingOverlay, confidence, flags, source are allowed.',
           );
+        }
+        if ('source' in triage && !TRIAGE_SOURCE_VALUES.has(triage.source)) {
+          errors.push(label + '.visualTriage.source, when present, must be one of heuristic|vision.');
         }
         if (!triage.state || typeof triage.state !== 'string' || !TRIAGE_STATE_VALUES.has(triage.state)) {
           errors.push(

@@ -966,9 +966,11 @@ pass with a fixed stopping rule, not an open-ended refactor audit:
 
 ## Selective Vision & Visual Baseline Integration
 - When generating or validating Page Objects for a route mapped in \`artifacts/site-map/site-map.json\`, inspect its \`screenshot\` and \`visualTriage\` properties.
-- **Unlabeled Icons & Visual Affordances**: for icon-only buttons, graphic toggles, or unlabeled clickable elements lacking accessible name/role/label, inspect the route's initial viewport screenshot (\`artifacts/site-map/screenshots/<routeId>.(webp|jpg|jpeg)\`) to deduce the component's semantic intent and choose an accurate primitive/name (e.g. \`ThemeToggle\`, \`CloseButton\`, \`UserProfileAvatar\`).
+- **Unlabeled Icons & Visual Affordances**: for icon-only buttons, graphic toggles, or unlabeled clickable elements lacking accessible name/role/label, inspect the route's initial viewport screenshot (the entry's own \`screenshot\` path, named \`<path slug>--<routeId>.(webp|jpg|jpeg)\`) to deduce the component's semantic intent and choose an accurate primitive/name (e.g. \`ThemeToggle\`, \`CloseButton\`, \`UserProfileAvatar\`).
 - **Security & Context Guard**: NEVER inline base64 image strings into prompts, docstrings, or code comments. Always reference the screenshot path on disk.
 - **Visual Triage Handling**: If \`visualTriage.blockingOverlay\` is \`true\` or \`visualTriage.state\` indicates an overlay/barrier (\`auth_wall\`, \`access_denied\`), model the dismissal or prerequisite navigation in the Page Object before interacting with main content elements.
+- **How much the triage is worth depends on who wrote it.** \`visualTriage.source\` is \`vision\` when a worker read the rendered page and \`heuristic\` when a markup check guessed from token matches and element counts; absent means neither ran. Trust a \`heuristic\` \`empty_state\` far less - it fires on any page with under three interactive elements, which a legitimately sparse page also is.
+- **A \`still-rendering-at-capture\` flag means the screenshot is not the finished page.** The crawl re-shot it and it still had not settled, so treat the image as unreliable for locator work on that route and read the live DOM instead of inferring from the picture.
 
 ## Advanced DOM Handling
 - Lists & Virtual Scrolls: Use \`.filter({ hasText })\`, \`.first()\`, \`.nth()\` instead of hardcoded array indices.

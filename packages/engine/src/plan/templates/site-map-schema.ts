@@ -166,6 +166,11 @@ export function renderSiteMapSchema(): string {
             "enum": ["active", "removed"],
             "description": "\\"removed\\" means /map-site update could no longer resolve this route (404, vanished from nav) - the entry is kept, not silently deleted, so a consumer can see route-removal history. A full /map-site create pass prunes \\"removed\\" entries when it regenerates fresh."
           },
+          "discoveryMethod": {
+            "type": "string",
+            "enum": ["navigation", "href-scan-only"],
+            "description": "How this route was actually reached. \\"navigation\\" means at least one visible, interactable link to it was clicked through on a rendered page; \\"href-scan-only\\" means the sole evidence was a raw href attribute with no visible counterpart anywhere. The distinction is load-bearing: the cross-route content-hash heuristic may only flag an href-scan-only route as a likely phantom, because being reachable through real navigation is independent evidence the route exists."
+          },
           "httpStatus": {
             "type": "integer",
             "minimum": 100,
@@ -197,6 +202,11 @@ export function renderSiteMapSchema(): string {
                 "type": "string",
                 "enum": ["high", "medium", "low"],
                 "description": "Confidence of the visual state classification."
+              },
+              "source": {
+                "type": "string",
+                "enum": ["heuristic", "vision"],
+                "description": "What produced this classification: \\"heuristic\\" is the cheap markup check (suspicious tokens in the URL or title, interactive-element density, an overlay covering the viewport), \\"vision\\" is a worker that read the rendered screenshot. They answer the same question with very different reliability, and a reader deciding how much to trust an empty_state needs to know which one said it."
               },
               "flags": {
                 "type": "array",

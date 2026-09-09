@@ -630,8 +630,12 @@ sessions, declared vs captured roles, configured CI provider), \`scripts/auth-qu
 (which question the auth flow asks next given the answers so far, and what those answers add up
 to - the questions are computed, not composed at the point of asking),
 \`scripts/map-site-status.mjs\`
-(crawl mode resolution, screenshot pruning), \`scripts/crawl-budget.mjs\` (whether a given URL may be
-crawled, what its canonical path template is, and the crawl's own progress line),
+(crawl mode resolution, screenshot pruning and start-of-pass reset), \`scripts/crawl-budget.mjs\`
+(whether a given URL may be crawled, what its canonical path template is, and the crawl's own
+progress line), \`scripts/visual-copilot.mjs\` (marks a page's navigation candidates with numbered
+overlays, then grades what a vision worker says about them - a mark the page never had is dropped,
+a proposed URL still goes through the frontier gatekeeper, and "wait, it is still loading" runs
+out after two retakes),
 \`scripts/render-review-artifact.mjs\` (renders any
 review artifact from its own stored JSON), \`scripts/env-role-stubs.mjs\` (per-role credential slots
 in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).

@@ -50,6 +50,7 @@ import { renderAuthStatus } from './templates/auth-status.js';
 import { renderAuthQuestions } from './templates/auth-questions.js';
 import { renderArtifactJournal } from './templates/artifact-journal.js';
 import { renderCrawlBudget } from './templates/crawl-budget.js';
+import { renderVisualCopilot } from './templates/visual-copilot.js';
 import { renderMapSiteQuestions } from './templates/map-site-questions.js';
 import { renderDebugLog } from './templates/debug-log.js';
 import { renderMapSiteStatus } from './templates/map-site-status.js';
@@ -229,6 +230,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderCrawlBudget() },
+          },
+          {
+            path: 'scripts/visual-copilot.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderVisualCopilot() },
           },
           {
             path: 'scripts/artifact-journal.mjs',

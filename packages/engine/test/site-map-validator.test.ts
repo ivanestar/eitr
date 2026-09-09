@@ -637,6 +637,60 @@ describe('scripts/validate-site-map.mjs (real execution)', () => {
     }
   });
 
+  it('accepts visualTriage.source, which says whether a worker or a heuristic classified the page', () => {
+    const dir = setupProject();
+    try {
+      const data = structuredClone(wellFormedSiteMap()) as Record<string, any>;
+      data.routes['/checkout'].visualTriage = { state: 'ready', source: 'vision' };
+      data.routes['/account'].visualTriage = { state: 'empty_state', source: 'heuristic' };
+      writeSiteMap(dir, data);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when visualTriage.source is not one of the two things that can produce a triage', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedSiteMap()) as Record<string, any>;
+      bad.routes['/checkout'].visualTriage = { state: 'ready', source: 'intuition' };
+      writeSiteMap(dir, bad);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) =>
+          e.includes('.visualTriage.source, when present, must be one of heuristic|vision'),
+        ),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // discoveryMethod decides whether the content-hash heuristic may call a route a phantom, so a
+  // typo in it silently changes which routes can be flagged - the validator has always read the
+  // field but never checked it.
+  it('fails when discoveryMethod is not one of the two ways a route can be found', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedSiteMap()) as Record<string, any>;
+      bad.routes['/checkout'].discoveryMethod = 'navigaton';
+      writeSiteMap(dir, bad);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) =>
+          e.includes('.discoveryMethod, when present, must be one of navigation|href-scan-only'),
+        ),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('passes validation when a route defines both screenshot and visualTriage simultaneously', () => {
     const dir = setupProject();
     try {
@@ -813,8 +867,14 @@ describe('crawler screenshot feature integration & prompt invariants', () => {
     const content = (pomAgent!.source as { kind: 'inline'; text: string }).text;
 
     expect(content).toContain('Selective Vision & Visual Baseline Integration');
-    expect(content).toContain('artifacts/site-map/screenshots/<routeId>');
+    // The file name carries the path slug as well as the routeId, so a human can tell which page a
+    // screenshot shows without cross-referencing UUIDs - the agent must be told the real shape.
+    expect(content).toContain('<path slug>--<routeId>');
     expect(content).toContain('NEVER inline base64 image strings');
     expect(content).toContain('visualTriage.blockingOverlay');
+    // A triage the cheap markup heuristic produced is worth far less than one a worker actually
+    // looked at, and the agent has to know which it is holding.
+    expect(content).toContain('visualTriage.source');
+    expect(content).toContain('still-rendering-at-capture');
   });
 });
