@@ -638,6 +638,9 @@ a proposed URL still goes through the frontier gatekeeper, and "wait, it is stil
 out after two retakes), \`scripts/overlay-ledger.mjs\` (every modal, drawer, banner and native dialog
 the crawl meets: which dismissal the crawl boundary permits, how many attempts are left, and what is
 still open - an overlay left open makes every later click land on a backdrop with no error at all),
+\`scripts/skill-briefing.mjs\` (what a given skill is about to do,
+how, why, and what is worth knowing before agreeing to it - printed verbatim by every skill before
+it runs anything, and by the pipeline at each stage gate),
 \`scripts/render-review-artifact.mjs\` (renders any
 review artifact from its own stored JSON), \`scripts/env-role-stubs.mjs\` (per-role credential slots
 in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).
