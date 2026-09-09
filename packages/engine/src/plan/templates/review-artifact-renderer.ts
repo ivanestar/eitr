@@ -25,6 +25,7 @@ export function renderReviewArtifactRenderer(): string {
  *   node scripts/render-review-artifact.mjs --kind=feature-map
  *   node scripts/render-review-artifact.mjs --kind=test-conditions [--threshold=10]
  *   node scripts/render-review-artifact.mjs --kind=test-cases
+ *   node scripts/render-review-artifact.mjs --kind=<kind> --discard   (after sign-off)
  *
  * Prints JSON: { kind, entryCount, threshold, mode, filePath, summary, markdown }.
  *   mode 'inline' - 'markdown' holds the whole artifact; print it as-is.
@@ -713,6 +714,33 @@ function main() {
   const kind = argValue('kind');
   if (!kind || !KINDS[kind]) {
     fail('missing or unknown --kind. Use one of: ' + Object.keys(KINDS).join(', '));
+  }
+
+  // A rendered review is a snapshot of a draft, and approving it changes the draft: sign-off sets
+  // reviewed on the very entries the file describes, and corrections change their values. Nothing
+  // re-renders it, so from that moment the file on disk disagrees with the artifact it came from -
+  // live-observed showing "criticality (draft)" for 45 entries a human had already confirmed, with
+  // the JSON written two minutes after the markdown.
+  //
+  // It is deleted rather than refreshed because it is a view, not a record: the JSON is the artifact
+  // and this command regenerates the view at any time. Leaving both means leaving one that lies.
+  if (process.argv.slice(2).indexOf('--discard') !== -1) {
+    const target = path.join(REVIEW_DIR, kind + '-review.md');
+    const existed = fs.existsSync(target);
+    if (existed) fs.unlinkSync(target);
+    process.stdout.write(
+      JSON.stringify(
+        {
+          kind,
+          discarded: existed,
+          filePath: path.relative(CWD, target).split(path.sep).join('/'),
+          note: 'The artifact itself is unchanged. Re-render this view at any time with the same command without --discard.',
+        },
+        null,
+        2,
+      ) + '\\n',
+    );
+    return;
   }
 
   const thresholdArg = argValue('threshold');

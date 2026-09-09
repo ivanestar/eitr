@@ -17,6 +17,8 @@ type Status = {
   readableContractCount?: number;
   corePurposeCandidates?: Array<{ value: string }>;
   corePurposeSelected?: boolean;
+  storedCrawlBoundary?: string | null;
+  storedOffLimits?: string[] | null;
 };
 
 type Option = { id: string; label: string; recommended?: boolean };
@@ -46,6 +48,8 @@ const FRESH: Required<Status> = {
   readableContractCount: 0,
   corePurposeCandidates: [],
   corePurposeSelected: false,
+  storedCrawlBoundary: null,
+  storedOffLimits: null,
 };
 
 function setupProject(): string {
@@ -111,12 +115,42 @@ describe('scripts/map-site-questions.mjs - preflight', () => {
     }
   });
 
-  it('never re-asks a boundary a human already set', () => {
+  // Skipping a question because it was already answered has to hand that answer forward. Leaving
+  // the plan empty gave a second crawl neither a question nor a boundary, which is worse than
+  // asking again - live-observed.
+  it('does not re-ask a boundary already set, and still delivers it', () => {
     const dir = setupProject();
     try {
-      const { asked, final } = walk(dir, 'preflight', {}, { hasCrawlBoundary: true });
+      const { asked, final } = walk(
+        dir,
+        'preflight',
+        {},
+        { hasCrawlBoundary: true, storedCrawlBoundary: 'safe-interactions' },
+      );
       expect(asked).toEqual([]);
       expect(final.status).toBe('DONE');
+      expect(final.plan!.crawlBoundary).toBe('safe-interactions');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('carries forward off-limits areas named on an earlier run', () => {
+    const dir = setupProject();
+    try {
+      const { asked, final } = walk(
+        dir,
+        'preflight',
+        {},
+        {
+          hasCrawlBoundary: true,
+          storedCrawlBoundary: 'full-except',
+          storedOffLimits: ['the contact form', 'billing'],
+        },
+      );
+      expect(asked).toEqual([]);
+      expect(final.plan!.crawlBoundary).toBe('full-except');
+      expect(final.plan!.offLimits).toBe('the contact form, billing');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -285,6 +319,29 @@ describe('scripts/map-site-questions.mjs - postcrawl', () => {
       );
       expect(unreadable.asked).toContain('api-style');
       expect(unreadable.final.plan!.apiStyle).toBe('none-observable');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Forcing a choice here would record a guess as an established fact, and later stages draft
+  // API-level tests from it. An admitted gap is the better outcome.
+  it('accepts "I don\'t know" about the API, and records nothing rather than a guess', () => {
+    const dir = setupProject();
+    try {
+      const asking = ask(dir, 'postcrawl', {}, { ...CRAWLED, readableContractCount: 0 });
+      expect(asking.question!.id).toBe('api-style');
+      expect(asking.question!.options[0].id).toBe('unknown');
+      expect(asking.question!.options[0].recommended).toBe(true);
+
+      const { final } = walk(
+        dir,
+        'postcrawl',
+        { 'api-style': 'unknown', 'application-kind': 'production' },
+        { ...CRAWLED, readableContractCount: 0 },
+      );
+      expect(final.status).toBe('DONE');
+      expect(final.plan!.apiStyle).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -487,8 +544,18 @@ describe('scripts/map-site-questions.mjs - contract', () => {
       for (const phase of ['preflight', 'postcrawl']) {
         for (const status of states) {
           const seen = new Map<string, Option[]>();
+          // The same answer set is reached by many orderings, and each visit costs a process. Left
+          // unmemoized the walk is exponential and times out under parallel load; deduplicating by
+          // the answer set explores every distinct state exactly once.
+          const visited = new Set<string>();
           const explore = (answers: Record<string, string>, depth: number) => {
             if (depth > 8) return;
+            const key = Object.keys(answers)
+              .sort()
+              .map((k) => k + '=' + answers[k])
+              .join('&');
+            if (visited.has(key)) return;
+            visited.add(key);
             const result = ask(dir, phase, answers, status);
             if (result.status !== 'ASK' || !result.question) return;
             seen.set(result.question.id, result.question.options);
@@ -509,7 +576,7 @@ describe('scripts/map-site-questions.mjs - contract', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 120000);
 
   it('rejects an answer that is not one of its own options', () => {
     const dir = setupProject();

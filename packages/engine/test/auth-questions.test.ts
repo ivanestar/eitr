@@ -369,14 +369,23 @@ describe('scripts/auth-questions.mjs (real execution)', () => {
       );
     });
 
-    // Answering "no roles and no login at all" contradicts having said there is a login. Picking
-    // whichever answer came last means either capturing a session nobody wants or skipping one
-    // they do, so the flow stops and names the disagreement instead.
-    it('stops on a contradiction rather than resolving it', () => {
-      stops(
-        { 'has-login': 'yes', proceed: 'continue', roles: 'none-and-no-login' },
-        'contradiction',
-      );
+    // The roles question used to offer "no roles and no login at all", which could only be reached
+    // by contradicting the answer given two questions earlier, and the flow had a branch to stop on
+    // that contradiction. The option is gone instead: an answer that only exists to disagree with
+    // an earlier one should never be offered. This asserts it stays gone.
+    it('offers no option that contradicts an answer already given', () => {
+      const dir = setupProject();
+      try {
+        const result = ask(dir, { 'has-login': 'yes', proceed: 'continue' }, NO_CI);
+        expect(result.question!.id).toBe('roles');
+        const ids = result.question!.options.map((option) => option.id);
+        expect(ids).toEqual(['single', 'all', 'some']);
+        for (const option of result.question!.options) {
+          expect(option.label.toLowerCase()).not.toContain('no login');
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 
