@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,12 +11,9 @@ type Status = {
   orphanedScreenshotCount?: number;
   capturedRoles?: string[];
   hasCrawlBoundary?: boolean;
-  hasApplicationKind?: boolean;
   hasApiStyle?: boolean;
   contractsExist?: boolean;
   readableContractCount?: number;
-  corePurposeCandidates?: Array<{ value: string }>;
-  corePurposeSelected?: boolean;
   storedCrawlBoundary?: string | null;
   storedOffLimits?: string[] | null;
 };
@@ -42,12 +39,9 @@ const FRESH: Required<Status> = {
   orphanedScreenshotCount: 0,
   capturedRoles: [],
   hasCrawlBoundary: false,
-  hasApplicationKind: false,
   hasApiStyle: false,
   contractsExist: false,
   readableContractCount: 0,
-  corePurposeCandidates: [],
-  corePurposeSelected: false,
   storedCrawlBoundary: null,
   storedOffLimits: null,
 };
@@ -303,18 +297,13 @@ describe('scripts/map-site-questions.mjs - postcrawl', () => {
   it('asks the API style only when nothing readable was observed', () => {
     const dir = setupProject();
     try {
-      const readable = walk(
-        dir,
-        'postcrawl',
-        { 'application-kind': 'production' },
-        { ...CRAWLED, readableContractCount: 12 },
-      );
+      const readable = walk(dir, 'postcrawl', {}, { ...CRAWLED, readableContractCount: 12 });
       expect(readable.asked).not.toContain('api-style');
 
       const unreadable = walk(
         dir,
         'postcrawl',
-        { 'api-style': 'none-observable', 'application-kind': 'production' },
+        { 'api-style': 'none-observable' },
         { ...CRAWLED, readableContractCount: 0 },
       );
       expect(unreadable.asked).toContain('api-style');
@@ -337,7 +326,7 @@ describe('scripts/map-site-questions.mjs - postcrawl', () => {
       const { final } = walk(
         dir,
         'postcrawl',
-        { 'api-style': 'unknown', 'application-kind': 'production' },
+        { 'api-style': 'unknown' },
         { ...CRAWLED, readableContractCount: 0 },
       );
       expect(final.status).toBe('DONE');
@@ -353,7 +342,7 @@ describe('scripts/map-site-questions.mjs - postcrawl', () => {
       const { asked } = walk(
         dir,
         'postcrawl',
-        { 'application-kind': 'production' },
+        {},
         { ...CRAWLED, readableContractCount: 0, hasApiStyle: true },
       );
       expect(asked).not.toContain('api-style');
@@ -380,7 +369,7 @@ describe('scripts/map-site-questions.mjs - postcrawl', () => {
       const accepted = walk(
         dir,
         'postcrawl',
-        { 'thin-result': 'accept', 'application-kind': 'internal-tool' },
+        { 'thin-result': 'accept' },
         { ...CRAWLED, routeCount: 2 },
       );
       expect(accepted.final.status).toBe('DONE');
@@ -392,105 +381,8 @@ describe('scripts/map-site-questions.mjs - postcrawl', () => {
   it('does not raise a thin result on an ordinary map', () => {
     const dir = setupProject();
     try {
-      const { asked } = walk(dir, 'postcrawl', { 'application-kind': 'production' }, CRAWLED);
-      expect(asked).not.toContain('thin-result');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('asks what kind of application this is, once', () => {
-    const dir = setupProject();
-    try {
-      const asking = ask(dir, 'postcrawl', {}, CRAWLED);
-      expect(asking.question!.id).toBe('application-kind');
-      expect(asking.question!.options.map((o) => o.id)).toEqual([
-        'production',
-        'sandbox-demo',
-        'internal-tool',
-        'staging',
-      ]);
-
-      const already = walk(dir, 'postcrawl', {}, { ...CRAWLED, hasApplicationKind: true });
-      expect(already.asked).not.toContain('application-kind');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
-
-// The bug this closes mechanically: a choice tool rejects a call carrying one option, and the
-// analysis is deliberately told to propose a single well-evidenced reading rather than pad the list.
-describe('scripts/map-site-questions.mjs - core purpose', () => {
-  const CRAWLED: Status = {
-    siteMapExists: true,
-    routeCount: 45,
-    contractsExist: true,
-    readableContractCount: 5,
-    hasApplicationKind: true,
-  };
-
-  it('offers a real second option when the analysis produced exactly one candidate', () => {
-    const dir = setupProject();
-    try {
-      const result = ask(
-        dir,
-        'postcrawl',
-        {},
-        {
-          ...CRAWLED,
-          corePurposeCandidates: [{ value: 'A practice sandbox of isolated UI patterns.' }],
-        },
-      );
-      expect(result.question!.id).toBe('core-purpose');
-      expect(result.question!.options).toHaveLength(2);
-      expect(result.question!.options[0].id).toBe('candidate:0');
-      expect(result.question!.options[0].recommended).toBe(true);
-      expect(result.question!.options[1].id).toBe('own-words');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('never emits a single-option question, whatever the candidate count', () => {
-    const dir = setupProject();
-    try {
-      for (const count of [1, 2, 3, 4]) {
-        const candidates = Array.from({ length: count }, (_, i) => ({ value: `reading ${i}` }));
-        const result = ask(dir, 'postcrawl', {}, { ...CRAWLED, corePurposeCandidates: candidates });
-        expect(result.question!.options.length, `${count} candidate(s)`).toBe(count + 1);
-        expect(result.question!.options.length).toBeGreaterThan(1);
-        expect(result.question!.options.filter((o) => o.recommended)).toHaveLength(1);
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('stops asking once a purpose has been recorded', () => {
-    const dir = setupProject();
-    try {
-      const { asked } = walk(
-        dir,
-        'postcrawl',
-        {},
-        {
-          ...CRAWLED,
-          corePurposeCandidates: [{ value: 'x' }],
-          corePurposeSelected: true,
-        },
-      );
-      expect(asked).not.toContain('core-purpose');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('does not ask before the analysis has proposed anything', () => {
-    const dir = setupProject();
-    try {
       const { asked } = walk(dir, 'postcrawl', {}, CRAWLED);
-      expect(asked).not.toContain('core-purpose');
+      expect(asked).not.toContain('thin-result');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -515,8 +407,6 @@ describe('scripts/map-site-questions.mjs - contract', () => {
         'off-limits',
         'thin-result',
         'api-style',
-        'application-kind',
-        'core-purpose',
       ]);
       for (const question of output.questions) {
         expect(['preflight', 'postcrawl']).toContain(question.phase);
@@ -538,7 +428,7 @@ describe('scripts/map-site-questions.mjs - contract', () => {
       { capturedRoles: ['admin', 'customer'] },
       { capturedRoles: ['a', 'b', 'c', 'd'] },
       { siteMapExists: true, routeCount: 45, contractsExist: true, readableContractCount: 0 },
-      { siteMapExists: true, routeCount: 45, corePurposeCandidates: [{ value: 'only one' }] },
+      { siteMapExists: true, routeCount: 45 },
     ];
     try {
       for (const phase of ['preflight', 'postcrawl']) {

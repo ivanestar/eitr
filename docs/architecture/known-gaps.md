@@ -41,13 +41,12 @@ is for gaps significant enough to shape future architecture, not routine finding
   `fetch()` from a `file://`-loaded page reading a sibling local file), breaking the single most
   natural way to open the file (double-click); it had already fallen behind the schema it existed
   to visualize (no awareness of `coverage`, `routeId`, or the sibling
-  `artifacts/analysis/business-intent.json`); and its actual audience - an SDET already working inside
+  `artifacts/analysis/feature-map.json`); and its actual audience - an SDET already working inside
   an AI coding assistant - already has a strictly better interface to the same data (asking the
   assistant to read/query `site-map.json` directly, which is faster and more flexible than a
   static text-substring filter). `artifacts/site-map/site-map.json` and
   `.scaffold/schemas/site-map.schema.json` are unaffected and remain the source of truth for every
-  consumer (`pom-engineer`, `/scan-and-generate-pom`, `/automate-test`, the business-intent
-  Step 6). Re-open only on a new, explicit maintainer decision to build a human-facing view again -
+  consumer (`pom-engineer`, `/scan-and-generate-pom`, `/automate-test`, `/map-features`). Re-open only on a new, explicit maintainer decision to build a human-facing view again -
   not on a future audit finding the gap again.
 - **Requirements → test-case generation:** an agent that derives test cases from live application
   analysis or existing requirements documentation, rather than from an already-written TMS ticket,

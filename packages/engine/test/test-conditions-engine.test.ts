@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderTestConditionsEngine } from '../src/plan/templates/test-conditions-engine.js';
@@ -112,35 +112,51 @@ function run(dir: string) {
   return spawnSync('node', ['generate-test-conditions.mjs'], { cwd: dir, encoding: 'utf8' });
 }
 
-function writeBusinessIntent(dir: string, routeId: string, tier: string, reviewed = true) {
-  writeFileSync(
-    join(dir, 'artifacts', 'analysis', 'business-intent.json'),
-    JSON.stringify({
-      schemaVersion: 1,
-      generatedAt: '2026-09-03T11:00:00.000Z',
-      routes: {
-        [routeId]: {
-          routeId,
-          businessFeature: {
-            value: 'Contact',
-            confidence: 'high',
-            source: 'heading-text',
-            evidence: [],
+// Per-route criticality lives in the feature map now, beside the feature that contains the route.
+function routeIntentEntry(routeId: string, tier: string, reviewed: boolean) {
+  return {
+    routeId,
+    featureId: 'f1',
+    criticality: {
+      value: tier,
+      confidence: 'high',
+      source: 'heading-text',
+      reasoning: 'Fixture route for the checklist reduction.',
+      evidence: [{ signal: 'heading-text', excerpt: 'Contact us' }],
+    },
+    sourceContentHash: 'abc123',
+    analyzedAt: '2026-09-03T11:00:00.000Z',
+    reviewed,
+    ...(reviewed ? { reviewedBy: 'human' } : {}),
+  };
+}
+
+function writeRouteCriticality(dir: string, routeId: string, tier: string, reviewed = true) {
+  const target = join(dir, 'artifacts', 'analysis', 'feature-map.json');
+  const existing = existsSync(target)
+    ? (JSON.parse(readFileSync(target, 'utf8')) as Record<string, any>)
+    : {
+        schemaVersion: 2,
+        generatedAt: '2026-09-03T11:00:00.000Z',
+        features: {
+          f1: {
+            featureId: 'f1',
+            name: 'Contact',
+            memberRouteIds: [routeId],
+            entityIds: [],
+            impact: tier,
+            evidence: [{ signal: 'route-convention', excerpt: '/contact' }],
+            reviewed: true,
+            reviewedBy: 'human',
           },
-          criticalityTier: {
-            value: tier,
-            confidence: 'high',
-            source: 'heading-text',
-            evidence: [],
-          },
-          sourceContentHash: 'abc123',
-          analyzedAt: '2026-09-03T11:00:00.000Z',
-          reviewed,
         },
-      },
-    }),
-    'utf8',
-  );
+        entities: {},
+        routes: {},
+        sourceHash: 'hash',
+      };
+  existing.routes = existing.routes || {};
+  existing.routes[routeId] = routeIntentEntry(routeId, tier, reviewed);
+  writeFileSync(target, JSON.stringify(existing), 'utf8');
 }
 
 function singleTextParamRoute(routeId: string) {
@@ -759,11 +775,11 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     }
   });
 
-  // Checklist-based probing scales with the route's own business-intent.json criticality rather
+  // Checklist-based probing scales with the route's own the feature map criticality rather
   // than firing uniformly everywhere.
   it('runs the checklist on a critical route', () => {
     const dir = setupProject(singleTextParamRoute('route-checkout'));
-    writeBusinessIntent(dir, 'route-checkout', 'critical');
+    writeRouteCriticality(dir, 'route-checkout', 'critical');
     try {
       const result = run(dir);
       expect(result.status).toBe(0);
@@ -779,7 +795,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
 
   it('skips the checklist on a low-criticality route', () => {
     const dir = setupProject(singleTextParamRoute('route-about'));
-    writeBusinessIntent(dir, 'route-about', 'low');
+    writeRouteCriticality(dir, 'route-about', 'low');
     try {
       const result = run(dir);
       expect(result.status).toBe(0);
@@ -798,9 +814,9 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     }
   });
 
-  it('defaults to running the checklist when business-intent.json is absent (unknown criticality)', () => {
+  it('defaults to running the checklist when feature-map.json is absent (unknown criticality)', () => {
     const dir = setupProject(singleTextParamRoute('route-orphan'));
-    // Deliberately not calling writeBusinessIntent - no artifacts/analysis/business-intent.json at all.
+    // Deliberately not calling writeBusinessIntent - no artifacts/analysis/feature-map.json at all.
     try {
       const result = run(dir);
       expect(result.status).toBe(0);
@@ -816,7 +832,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
 
   it('skips the checklist on a medium-criticality route', () => {
     const dir = setupProject(singleTextParamRoute('route-faq'));
-    writeBusinessIntent(dir, 'route-faq', 'medium');
+    writeRouteCriticality(dir, 'route-faq', 'medium');
     try {
       const result = run(dir);
       expect(result.status).toBe(0);
@@ -830,12 +846,12 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     }
   });
 
-  // An unreviewed business-intent entry is never ground truth for another skill (the same rule
-  // /map-site Step 6's own Human Sign-Off Gateway states) - a low-tier value that hasn't been
-  // signed off must not silently reduce this generator's coverage.
-  it('ignores criticalityTier from an unreviewed business-intent entry, running the full checklist', () => {
+  // An unreviewed route in the feature map is never ground truth for another skill (the same rule
+  // /map-features' own Human Sign-Off Gateway states) - a low-tier value that hasn't been signed
+  // off must not silently reduce this generator's coverage.
+  it('ignores the criticality of an unreviewed route, running the full checklist', () => {
     const dir = setupProject(singleTextParamRoute('route-unreviewed'));
-    writeBusinessIntent(dir, 'route-unreviewed', 'low', false);
+    writeRouteCriticality(dir, 'route-unreviewed', 'low', false);
     try {
       const result = run(dir);
       expect(result.status).toBe(0);
@@ -860,11 +876,18 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
         entityReviewed?: boolean;
       },
     ) {
+      // Per-route criticality may already have been written into this same file - it lives here
+      // now - so this preserves whatever routes are already recorded instead of overwriting them.
+      const target = join(dir, 'artifacts', 'analysis', 'feature-map.json');
+      const existingRoutes = existsSync(target)
+        ? ((JSON.parse(readFileSync(target, 'utf8')) as Record<string, any>).routes ?? {})
+        : {};
       writeFileSync(
-        join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+        target,
         JSON.stringify({
-          schemaVersion: 1,
+          schemaVersion: 2,
           generatedAt: '2026-09-08T10:00:00.000Z',
+          routes: existingRoutes,
           features: {
             f1: {
               featureId: 'f1',
@@ -872,7 +895,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
               memberRouteIds: opts.routeIds,
               entityIds: ['e1'],
               impact: 'high',
-              evidence: [{ signal: 'business-intent-label', excerpt: 'x' }],
+              evidence: [{ signal: 'route-convention', excerpt: 'x' }],
               reviewed: opts.reviewed ?? true,
               ...(opts.reviewed === false ? {} : { reviewedBy: 'human' }),
             },
@@ -924,7 +947,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     it('generates one positive condition per defined transition', () => {
       const dir = setupProject(singleTextParamRoute('route-contact'));
       try {
-        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeRouteCriticality(dir, 'route-contact', 'high');
         writeFeatureMap(dir, { routeIds: ['route-contact', 'route-other'], ...fullLifecycle });
         expect(run(dir).status).toBe(0);
         const positives = conditionsOf(dir, 'state-transition').filter(
@@ -944,7 +967,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     it('generates one negative condition per state and trigger the lifecycle leaves undefined', () => {
       const dir = setupProject(singleTextParamRoute('route-contact'));
       try {
-        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeRouteCriticality(dir, 'route-contact', 'high');
         writeFeatureMap(dir, { routeIds: ['route-contact', 'route-other'], ...fullLifecycle });
         run(dir);
         const negatives = conditionsOf(dir, 'state-transition').filter(
@@ -968,7 +991,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     it('drops the invalid-transition half on a low-impact route, the same reduction the checklist makes', () => {
       const dir = setupProject(singleTextParamRoute('route-contact'));
       try {
-        writeBusinessIntent(dir, 'route-contact', 'low');
+        writeRouteCriticality(dir, 'route-contact', 'low');
         writeFeatureMap(dir, { routeIds: ['route-contact', 'route-other'], ...fullLifecycle });
         run(dir);
         const transitions = conditionsOf(dir, 'state-transition');
@@ -984,7 +1007,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     it('generates one use-case condition naming the whole main flow', () => {
       const dir = setupProject(singleTextParamRoute('route-contact'));
       try {
-        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeRouteCriticality(dir, 'route-contact', 'high');
         writeFeatureMap(dir, { routeIds: ['route-contact', 'route-other'], ...fullLifecycle });
         run(dir);
         const useCases = conditionsOf(dir, 'use-case');
@@ -1000,7 +1023,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     it('writes a lifecycle only once, on the feature first member route rather than on every page it touches', () => {
       const dir = setupProject(singleTextParamRoute('route-contact'));
       try {
-        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeRouteCriticality(dir, 'route-contact', 'high');
         // route-contact sorts after route-a, so the bundle lands there and not here.
         writeFeatureMap(dir, { routeIds: ['route-a', 'route-contact'], ...fullLifecycle });
         run(dir);
@@ -1014,7 +1037,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     it('generates nothing flow-shaped when there is no feature map at all', () => {
       const dir = setupProject(singleTextParamRoute('route-contact'));
       try {
-        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeRouteCriticality(dir, 'route-contact', 'high');
         expect(run(dir).status).toBe(0);
         expect(conditionsOf(dir, 'state-transition')).toHaveLength(0);
         expect(conditionsOf(dir, 'use-case')).toHaveLength(0);
@@ -1026,7 +1049,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     it('ignores an unreviewed entity - a derived lifecycle nobody confirmed is not a test basis', () => {
       const dir = setupProject(singleTextParamRoute('route-contact'));
       try {
-        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeRouteCriticality(dir, 'route-contact', 'high');
         writeFeatureMap(dir, {
           routeIds: ['route-contact', 'route-other'],
           ...fullLifecycle,
@@ -1042,7 +1065,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     it('writes no use case for an entity whose life goes nowhere', () => {
       const dir = setupProject(singleTextParamRoute('route-contact'));
       try {
-        writeBusinessIntent(dir, 'route-contact', 'high');
+        writeRouteCriticality(dir, 'route-contact', 'high');
         writeFeatureMap(dir, {
           routeIds: ['route-contact', 'route-other'],
           states: ['exists'],

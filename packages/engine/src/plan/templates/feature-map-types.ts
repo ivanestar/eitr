@@ -3,9 +3,14 @@
 // Lives under .scaffold/ (engine-owned machinery), not artifacts/ - see site-map-schema.ts's header
 // comment for why.
 //
-// Same "documentation-as-code, not imported at runtime" convention as business-intent-types.ts and
-// test-conditions-types.ts - real mechanical enforcement comes from scripts/validate-feature-map.mjs
-// instead.
+// Same "documentation-as-code, not imported at runtime" convention as test-conditions-types.ts -
+// real mechanical enforcement comes from scripts/validate-feature-map.mjs instead.
+//
+// This file absorbed what used to be business-intent.types.ts. That artifact held a per-route
+// feature LABEL plus a criticality tier, which is the transpose of the grouping this file already
+// carries: routes sharing a label ARE a feature. Two files describing the same routes from two
+// angles meant two review gateways, two validators, and one axis (impact) expressed at two
+// granularities that could disagree.
 
 export function renderFeatureMapTypes(): string {
   return `// Typed contract for artifacts/analysis/feature-map.json, produced by scripts/derive-feature-map.mjs
@@ -31,7 +36,11 @@ export type FeatureMapSource =
   | 'route-convention' // a path shape like /orders, /orders/new, /orders/{id}
   | 'ui-form' // a form on a route, and where its submit went
   | 'ui-navigation' // a navigation link between two routes
-  | 'business-intent-label' // an already-reviewed businessFeature value from business-intent.json
+  | 'route-path' // the route's own path template
+  | 'heading-text' // an h1/h2 or an ARIA heading on the route
+  | 'form-labels' // the label text of the fields on it
+  | 'button-link-text' // the visible text of its buttons and links
+  | 'aria-roles' // its accessibility roles and names
   | 'human'; // stated by a person at sign-off
 
 export interface FeatureEvidence {
@@ -121,16 +130,59 @@ export interface Entity {
   lifecycle: EntityLifecycle;
   evidence: FeatureEvidence[];
   // False until a human reviews this entity and its relations. Nothing downstream may treat an
-  // unreviewed entity as ground truth - the same rule business-intent.json's own entries follow.
+  // unreviewed entity as ground truth - the same rule every drafted record in this pipeline follows.
   reviewed: boolean;
   reviewedBy?: 'human' | 'auto-pilot';
 }
 
-// The impact of a feature failing, on the same three-level scale business-intent.json already uses
-// for routes. Not judged again here: it is the maximum tier across the feature's own reviewed
-// member routes, because a feature is exactly as critical as the worst thing inside it - the same
-// rule that already governs a single route carrying mixed functionality, applied one level up.
+// How bad it is when this breaks. Three levels, the scale risk-based testing conventionally uses
+// for the impact axis - deliberately not a full risk level, which would also need a likelihood axis
+// nothing here can observe: at greenfield time there is no execution history to derive one from.
+//
+// A fourth "critical" tier above "high" existed once and was removed because nothing behaved
+// differently for it: the only mechanical consumer gates on "not medium and not low", so the two
+// were indistinguishable in code while costing real inference effort and review attention.
 export type ImpactTier = 'high' | 'medium' | 'low';
+
+// How much a per-route judgement is worth, computed from the strength of the evidence behind it
+// rather than chosen freely: 'high' when a heading, ARIA role/name or a person grounded it,
+// 'medium' when form labels or button/link text did, 'low' when only the path shape did.
+// scripts/validate-feature-map.mjs checks that mapping mechanically.
+export type Confidence2 = 'high' | 'medium' | 'low';
+
+// The same wrapper every inferred value in this project uses - the value, how much it is worth, what
+// it was read off, why, and the literal signal behind it.
+export interface Field<T> {
+  value: T;
+  confidence: Confidence2;
+  source: FeatureMapSource;
+  // Why this value, in plain language a person can check against the evidence - never a restatement
+  // of the excerpt, and never a citation of the rubric that produced it.
+  reasoning: string;
+  evidence: FeatureEvidence[];
+}
+
+// One route's own place in the domain: which feature it belongs to, and how much it costs when it
+// breaks. This used to be a separate artifact (business-intent.json) keyed by routeId, holding a
+// per-route feature LABEL alongside this tier. The label was the transpose of the grouping that
+// already exists here - routes carrying the same label are a feature - so the label lives on the
+// Feature and the route points at it by id, which means a feature renamed at sign-off is renamed in
+// exactly one place.
+export interface RouteIntent {
+  // Joins against artifacts/site-map/site-map.json's routes[*].routeId - the id, not the path
+  // template, because the id is stable across a URL restructure.
+  routeId: string;
+  // The feature this route belongs to. Always present: a route with no feature would be invisible
+  // to every consumer that walks features.
+  featureId: string;
+  criticality: Field<ImpactTier>;
+  // Copy of site-map.json's routes[routeId].contentHash when this was inferred. A re-run compares
+  // the current hash against it and skips re-inferring a route whose structure has not moved.
+  sourceContentHash: string;
+  analyzedAt: string;
+  reviewed: boolean;
+  reviewedBy?: 'human' | 'auto-pilot';
+}
 
 export interface Feature {
   // sha256(name).slice(0, 16).
@@ -140,11 +192,14 @@ export interface Feature {
   // feature with several routes is the normal case and the whole reason this artifact exists.
   memberRouteIds: string[];
   entityIds: string[];
+  // The worst thing inside it: the maximum criticality across its own member routes, because a
+  // feature is exactly as critical as the worst thing it contains - the same rule that governs a
+  // single route carrying mixed functionality, applied one level up.
   impact: ImpactTier;
-  // Which member route's own criticalityTier set the impact above, so a human can check the claim
-  // against that route rather than re-deriving the maximum by hand. Absent when no member route had
-  // a reviewed criticalityTier to draw from, in which case impact falls back to 'high' - an
-  // unreviewed feature is treated as important until someone says otherwise, never the reverse.
+  // Which member route set that maximum, so a human can check the claim against that route rather
+  // than re-deriving it. Absent when no member route carried a criticality to draw from, in which
+  // case impact stays 'high' - under-testing something that turns out to matter is the worse of the
+  // two mistakes.
   impactSourceRouteId?: string;
   evidence: FeatureEvidence[];
   reviewed: boolean;
@@ -152,16 +207,19 @@ export interface Feature {
 }
 
 export interface FeatureMapReport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
-  // Keyed by featureId and entityId respectively - the same keyed-object convention every other
-  // artifact in this pipeline uses, so a re-run's diff shows only what actually changed.
+  // Keyed by featureId, entityId and routeId respectively - the same keyed-object convention every
+  // other artifact in this pipeline uses, so a re-run's diff shows only what actually changed.
   features: Record<string, Feature>;
   entities: Record<string, Entity>;
+  // Every mapped route's feature membership and criticality. This is the whole of what
+  // business-intent.json used to be: one file per stage, so what a person reviews after
+  // /map-features is one artifact rather than two describing the same routes from two angles.
+  routes: Record<string, RouteIntent>;
   // Hash of the inputs this draft was derived from (site-map.json, api-contracts.json, and the
-  // reviewed parts of business-intent.json). scripts/derive-feature-map.mjs compares it to decide
-  // whether to redraft at all, preserving human review state when nothing upstream changed - the
-  // same cheap-skip idiom as business-intent.json's sourceContentHash.
+  // per-route intent above). scripts/derive-feature-map.mjs compares it to decide whether to
+  // redraft at all, preserving human review state when nothing upstream changed.
   sourceHash: string;
 }
 `;

@@ -34,15 +34,41 @@ const SOURCES = new Set([
   'route-convention',
   'ui-form',
   'ui-navigation',
-  'business-intent-label',
+  'route-path',
+  'heading-text',
+  'form-labels',
+  'button-link-text',
+  'aria-roles',
   'human',
 ]);
+
+// How much a per-route judgement is worth is computed from what grounded it, never chosen: a
+// heading, an ARIA role/name or a person is strong; form labels and button text are middling; the
+// path shape alone is weak. Checked here so a 'high' confidence resting on nothing but a URL cannot
+// reach a human as if it were an observation.
+const CONFIDENCE_BY_SIGNAL = {
+  'heading-text': 'high',
+  'aria-roles': 'high',
+  human: 'high',
+  'ui-form': 'medium',
+  'ui-navigation': 'medium',
+  'form-labels': 'medium',
+  'button-link-text': 'medium',
+  'api-resource': 'medium',
+  'api-payload-field': 'medium',
+  'api-response-nesting': 'medium',
+  'route-convention': 'low',
+  'route-path': 'low',
+};
+const CONFIDENCE_RANK = { low: 1, medium: 2, high: 3 };
+const FIELD_CONFIDENCES = new Set(['high', 'medium', 'low']);
 const OPERATION_KINDS = new Set(['create', 'read', 'list', 'update', 'delete']);
 const RELATION_KINDS = new Set(['references', 'contains']);
 const CONFIDENCES = new Set(['observed', 'inferred']);
 const IMPACTS = new Set(['high', 'medium', 'low']);
 const REVIEWERS = new Set(['human', 'auto-pilot']);
 const MAX_EXCERPT = 100;
+const MAX_FEATURE_NAME = 40;
 
 // Same digit-shaped threshold as every other evidence guard in this pipeline.
 const DIGIT_RUN = /\\d{6,}/;
@@ -258,6 +284,11 @@ function checkFeature(key, feature, errors, entityIds, knownRouteIds) {
   }
   if (typeof feature.name !== 'string' || feature.name.length === 0) {
     errors.push(label + '.name must be a non-empty string.');
+  } else if (feature.name.length > MAX_FEATURE_NAME) {
+    // A feature name is a label a person scans down a list, not a description of the feature.
+    errors.push(
+      label + '.name must be at most ' + MAX_FEATURE_NAME + ' characters - it is a label, not a summary.',
+    );
   }
   if (!Array.isArray(feature.memberRouteIds) || feature.memberRouteIds.length === 0) {
     errors.push(label + '.memberRouteIds must be a non-empty array - a feature reachable from nowhere is not one.');
@@ -297,6 +328,98 @@ function checkFeature(key, feature, errors, entityIds, knownRouteIds) {
   checkReviewFlags(feature, label, errors);
 }
 
+// One route's own record: which feature owns it, and how bad it is when it breaks. This is what
+// business-intent.json used to hold on its own, checked here now that it lives beside the features
+// it describes.
+function checkRouteIntent(key, intent, errors, featureIds, knownRouteIds) {
+  const label = 'routes["' + key + '"]';
+  if (!intent || typeof intent !== 'object' || Array.isArray(intent)) {
+    errors.push(label + ' must be an object.');
+    return;
+  }
+  if (intent.routeId !== key) {
+    errors.push(label + '.routeId must equal its own key (found ' + JSON.stringify(intent.routeId) + ').');
+  }
+  if (knownRouteIds && !knownRouteIds.has(key)) {
+    errors.push(label + ' names a route that is not in the site map.');
+  }
+  if (typeof intent.featureId !== 'string' || !featureIds.has(intent.featureId)) {
+    errors.push(
+      label +
+        '.featureId must name a feature present in this file (found ' +
+        JSON.stringify(intent.featureId) +
+        ') - a route belonging to no feature is invisible to every stage that walks features.',
+    );
+  }
+  if (intent.featureLabel !== undefined) {
+    errors.push(
+      label +
+        '.featureLabel must not be present - the feature owns its own name, so a label stored here would be a second name nothing keeps in step with it.',
+    );
+  }
+  if (typeof intent.sourceContentHash !== 'string') {
+    errors.push(label + '.sourceContentHash must be a string - it is what lets a re-run skip an unchanged route.');
+  }
+  if (typeof intent.analyzedAt !== 'string' || intent.analyzedAt.length === 0) {
+    errors.push(label + '.analyzedAt must be a non-empty string.');
+  }
+
+  const criticality = intent.criticality;
+  const criticalityLabel = label + '.criticality';
+  if (!criticality || typeof criticality !== 'object' || Array.isArray(criticality)) {
+    errors.push(criticalityLabel + ' must be an object carrying value, confidence, source, reasoning and evidence.');
+    checkReviewFlags(intent, label, errors);
+    return;
+  }
+  if (!IMPACTS.has(criticality.value)) {
+    errors.push(criticalityLabel + '.value must be "high", "medium", or "low".');
+  }
+  if (!FIELD_CONFIDENCES.has(criticality.confidence)) {
+    errors.push(criticalityLabel + '.confidence must be "high", "medium", or "low".');
+  }
+  if (!SOURCES.has(criticality.source)) {
+    errors.push(criticalityLabel + '.source must be one of: ' + Array.from(SOURCES).join(', ') + '.');
+  }
+  if (typeof criticality.reasoning !== 'string' || criticality.reasoning.length === 0) {
+    errors.push(criticalityLabel + '.reasoning must be a non-empty string saying why, in plain language.');
+  }
+  checkEvidence(criticality.evidence, criticalityLabel, errors);
+
+  if (Array.isArray(criticality.evidence) && criticality.evidence.length > 0) {
+    // The strongest signal actually present is the ceiling. A claim resting only on a path shape is
+    // a weak claim however confidently it was written down.
+    let ceiling = 0;
+    for (const entry of criticality.evidence) {
+      const rank = CONFIDENCE_RANK[CONFIDENCE_BY_SIGNAL[entry && entry.signal]] || 0;
+      if (rank > ceiling) ceiling = rank;
+    }
+    const claimed = CONFIDENCE_RANK[criticality.confidence] || 0;
+    if (ceiling > 0 && claimed > ceiling) {
+      errors.push(
+        criticalityLabel +
+          '.confidence is "' +
+          criticality.confidence +
+          '" but the strongest evidence signal behind it only supports "' +
+          Object.keys(CONFIDENCE_RANK).find(function (name) {
+            return CONFIDENCE_RANK[name] === ceiling;
+          }) +
+          '".',
+      );
+    }
+    for (const entry of criticality.evidence) {
+      if (!entry || typeof entry.excerpt !== 'string') continue;
+      if (entry.excerpt.trim() === criticality.reasoning.trim()) {
+        errors.push(
+          criticalityLabel +
+            '.reasoning repeats its own evidence excerpt verbatim - it has to explain the tier, not restate what was read.',
+        );
+      }
+    }
+  }
+
+  checkReviewFlags(intent, label, errors);
+}
+
 function validate() {
   const errors = [];
   const data = loadJson(FEATURE_MAP_PATH);
@@ -309,8 +432,12 @@ function validate() {
   if (typeof data !== 'object' || Array.isArray(data)) {
     return { status: 'FAILED', errors: ['feature-map.json must contain a JSON object.'] };
   }
-  if (data.schemaVersion !== 1) {
-    errors.push('schemaVersion must be exactly 1 (found ' + JSON.stringify(data.schemaVersion) + ').');
+  if (data.schemaVersion !== 2) {
+    errors.push(
+      'schemaVersion must be exactly 2 (found ' +
+        JSON.stringify(data.schemaVersion) +
+        '). Version 1 kept per-route intent in a separate business-intent.json; a version-1 file has to be redrafted, not migrated.',
+    );
   }
   if (typeof data.generatedAt !== 'string' || data.generatedAt.length === 0) {
     errors.push('generatedAt must be a non-empty string.');
@@ -342,6 +469,39 @@ function validate() {
   }
   for (const [key, feature] of Object.entries(data.features)) {
     checkFeature(key, feature, errors, entityIds, knownRouteIds);
+  }
+
+  if (!data.routes || typeof data.routes !== 'object' || Array.isArray(data.routes)) {
+    errors.push('routes must be an object keyed by routeId - it holds each route\\'s feature and criticality.');
+    return { status: 'FAILED', errors };
+  }
+  const featureIds = new Set(Object.keys(data.features));
+  for (const [key, intent] of Object.entries(data.routes)) {
+    checkRouteIntent(key, intent, errors, featureIds, knownRouteIds);
+  }
+
+  // A feature claiming a route that has no record of its own, or a route claiming a feature that
+  // does not claim it back, is a map that disagrees with itself - and the disagreement decides
+  // which routes downstream stages test.
+  for (const [key, feature] of Object.entries(data.features)) {
+    if (!feature || !Array.isArray(feature.memberRouteIds)) continue;
+    for (const routeId of feature.memberRouteIds) {
+      const intent = data.routes[routeId];
+      if (!intent) continue;
+      if (intent.featureId !== key) {
+        errors.push(
+          'features["' +
+            key +
+            '"] claims route "' +
+            routeId +
+            '", but routes["' +
+            routeId +
+            '"].featureId points at ' +
+            JSON.stringify(intent.featureId) +
+            '.',
+        );
+      }
+    }
   }
 
   return { status: errors.length === 0 ? 'PASSED' : 'FAILED', errors };

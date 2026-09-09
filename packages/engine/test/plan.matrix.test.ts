@@ -133,19 +133,23 @@ describe('plan() framework & CI/CD matrix integration', () => {
     );
   });
 
-  // AC1 (ADR 0012 Stage 1) - the two static business-intent files follow the exact same
-  // AI-assistant gating as orchestrate-swarm.mjs above; Step 6's own runtime behavior is a
-  // separate, opt-in question these two files are unaffected by (see plan D5).
-  it('emits .scaffold/schemas/business-intent.types.ts, scripts/validate-business-intent.mjs, scripts/validate-site-map.mjs, and scripts/check-sitemap-coverage.mjs only when at least one AI assistant is configured', () => {
+  // The analysis-stage files follow the exact same AI-assistant gating as orchestrate-swarm.mjs
+  // above: nothing that only an assistant ever runs is emitted into a project with no assistant.
+  it('emits the analysis scripts and schemas only when at least one AI assistant is configured', () => {
+    const analysisFiles = [
+      '.scaffold/schemas/feature-map.types.ts',
+      'scripts/validate-feature-map.mjs',
+      'scripts/derive-feature-map.mjs',
+      'scripts/map-features-questions.mjs',
+      'scripts/validate-site-map.mjs',
+      'scripts/check-sitemap-coverage.mjs',
+    ];
     const withDefaultAssistants = plan(muiProfile(), {
       language: 'typescript',
       automationTool: 'playwright',
     });
     const defaultPaths = withDefaultAssistants.files.map((f) => f.path);
-    expect(defaultPaths).toContain('.scaffold/schemas/business-intent.types.ts');
-    expect(defaultPaths).toContain('scripts/validate-business-intent.mjs');
-    expect(defaultPaths).toContain('scripts/validate-site-map.mjs');
-    expect(defaultPaths).toContain('scripts/check-sitemap-coverage.mjs');
+    for (const file of analysisFiles) expect(defaultPaths).toContain(file);
 
     const withNoAssistants = plan(muiProfile(), {
       language: 'typescript',
@@ -153,10 +157,19 @@ describe('plan() framework & CI/CD matrix integration', () => {
       aiAssistants: [],
     });
     const noAssistantPaths = withNoAssistants.files.map((f) => f.path);
-    expect(noAssistantPaths).not.toContain('.scaffold/schemas/business-intent.types.ts');
-    expect(noAssistantPaths).not.toContain('scripts/validate-business-intent.mjs');
-    expect(noAssistantPaths).not.toContain('scripts/validate-site-map.mjs');
-    expect(noAssistantPaths).not.toContain('scripts/check-sitemap-coverage.mjs');
+    for (const file of analysisFiles) expect(noAssistantPaths).not.toContain(file);
+  });
+
+  // The artifact business-intent.json used to have its own schema and validator. Per-route intent
+  // lives in the feature map now, so a project that still emitted them would ship a validator for a
+  // file nothing writes.
+  it('no longer emits the business-intent schema or validator', () => {
+    const paths = plan(muiProfile(), {
+      language: 'typescript',
+      automationTool: 'playwright',
+    }).files.map((f) => f.path);
+    expect(paths).not.toContain('.scaffold/schemas/business-intent.types.ts');
+    expect(paths).not.toContain('scripts/validate-business-intent.mjs');
   });
 
   // AC6 (ADR 0012 Stage 2) - the three test-conditions files follow the exact same AI-assistant

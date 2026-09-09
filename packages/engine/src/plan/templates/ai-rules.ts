@@ -1,4 +1,4 @@
-// Centralized AI rules templates for all major coding assistants. create-if-absent.
+﻿// Centralized AI rules templates for all major coding assistants. create-if-absent.
 
 import { yamlSafeScalar } from './yaml-frontmatter.js';
 
@@ -145,7 +145,7 @@ ${componentSyntax}
 - **Strict Linearity (Zero Branching):** ABSOLUTELY NO conditional logic (\`if/else\`, \`switch\`), NO loops (\`for/while/forEach\`), and NO \`try/catch\` wrapping assertions inside test specs.
 - **Step Demarcation:** Every step MUST be explicitly demarcated with \`await test.step('Step N: <action>', async () => { ... })\` (or \`cy.step()\`).
 - **Dependency Injection via Fixtures:** Never instantiate Page Objects via constructor (\`new LoginPage(page)\`) inside test files. Always inject them through fixture extensions (\`test.extend<{ loginPage: LoginPage, apiClient: ApiClient }>()\`).
-- **Anti-Over-Mocking Guard:** NEVER register a network route mock/interception (\`page.route()\`/\`context.route()\`/\`browserContext.route()\`/\`routeFromHAR()\`, or \`cy.intercept()\`) to force a failing test to pass — fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
+- **Anti-Over-Mocking Guard:** NEVER register a network route mock/interception (\`page.route()\`/\`context.route()\`/\`browserContext.route()\`/\`routeFromHAR()\`, or \`cy.intercept()\`) to force a failing test to pass вЂ” fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
 - **Metadata Tagging:** For every TMS scenario test, attach the ticket metadata tag: \`test('TC-{id}: {title}', { tag: ['@TC-{id}'] }, async ({ ... }) => ...)\`.
 - **Test Runner Execution Command:** Run tests using \`${tool === 'cypress' ? 'npx cypress run' : language === 'python' ? 'pytest' : language === 'csharp' ? 'dotnet test' : language === 'java' ? 'mvn test' : 'npx playwright test'}\`.
 
@@ -515,7 +515,7 @@ export function renderConventionsMd(
     exCss = `this.child(Component, { kind: 'css', css: 'form.login-form input[type="email"]' })`;
   }
 
-  // ── Section 6-8 language-native API snippets ─────────────────────────────
+  // в”Ђв”Ђ Section 6-8 language-native API snippets в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   // Section 7: Collection / list API per language
   let listSyntax: string;
   if (language === 'python') {
@@ -606,9 +606,8 @@ recorded. These files are written by the analysis workflows and are the project'
 | Artifact | Holds | Read it with |
 |---|---|---|
 | \`artifacts/analysis/app-profile.json\` | Everything established about the application as a whole: what kind of application it is (production / sandbox-demo / internal tool), its confirmed core purpose, what each role is for, how it talks to its backend (\`apiStyle\`), the crawl boundary a human set, domain knowledge a person volunteered, which test types are in scope | \`node scripts/app-profile.mjs\` |
-| \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, and per-role access | \`node scripts/validate-site-map.mjs\` to check shape |
+| \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, per-role access, and the overlays met on it - each with what raised it, what it contains, its own screenshot, and how it was closed | \`node scripts/validate-site-map.mjs\` to check shape |
 | \`artifacts/site-map/api-contracts.json\` | Operations actually observed in traffic - method, path template, the operation name for a GraphQL or RPC call, and the response shape | \`node scripts/validate-api-contracts.mjs\` |
-| \`artifacts/analysis/business-intent.json\` | Per-route business feature and impact tier (\`high\`/\`medium\`/\`low\`) | \`node scripts/validate-business-intent.mjs\` |
 | \`artifacts/analysis/feature-map.json\` | Features and the routes they span, the entities this application works with, what can happen to each one, its lifecycle, and the links between them | \`node scripts/derive-feature-map.mjs\` to draft, \`node scripts/validate-feature-map.mjs\` to check shape |
 | \`artifacts/analysis/test-conditions.json\` | Typed test conditions per route | \`node scripts/validate-test-conditions.mjs\` |
 | \`artifacts/test-cases/test-cases.json\` | Drafted test cases, and which are already automated | \`node scripts/validate-journeys.mjs\` |
@@ -635,7 +634,12 @@ to - the questions are computed, not composed at the point of asking),
 progress line), \`scripts/visual-copilot.mjs\` (marks a page's navigation candidates with numbered
 overlays, then grades what a vision worker says about them - a mark the page never had is dropped,
 a proposed URL still goes through the frontier gatekeeper, and "wait, it is still loading" runs
-out after two retakes),
+out after two retakes), \`scripts/overlay-ledger.mjs\` (every modal, drawer, banner and native dialog
+the crawl meets: which dismissal the crawl boundary permits, how many attempts are left, and what is
+still open - an overlay left open makes every later click land on a backdrop with no error at all),
+\`scripts/skill-briefing.mjs\` (what a given skill is about to do,
+how, why, and what is worth knowing before agreeing to it - printed verbatim by every skill before
+it runs anything, and by the pipeline at each stage gate),
 \`scripts/render-review-artifact.mjs\` (renders any
 review artifact from its own stored JSON), \`scripts/env-role-stubs.mjs\` (per-role credential slots
 in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).
@@ -658,7 +662,7 @@ and \`node scripts/debug-log.mjs status\` says whether it is currently on. It is
 is for diagnosing a finished run without paying for another one - not something to leave on.
 
 Ask \`coverage-status\` before claiming a suite is finished, and order any large batch of test
-work by route impact (\`criticalityTier\` in business-intent.json, \`high\` first) - a batch that
+work by route impact (each route's own \`criticality\` in feature-map.json, \`high\` first) - a batch that
 runs out of room mid-way leaves whatever the ordering put first.
 
 A relation in \`feature-map.json\` is a precondition, not a note: \`references\` means the target has
@@ -720,7 +724,7 @@ ${componentSyntax}
 - Point-in-time snapshot reader methods with \`Now()\` suffix (e.g. \`isVisibleNow()\`, \`valueNow()\`) MUST NOT be used inside assertions.
 ${s8AsyncSync}
 - Use \`apiClient\` zero-dependency TDM generators: \`createUniqueId()\`, \`createTestEmail()\`, \`createTestPhone()\`, \`createTestPassword()\`, \`createTestUuid()\`, \`createTestName()\`, \`createTestAmount()\`, \`createTestDate()\`.
-- NEVER register a network route mock/interception (${s8RouteMocks}) to force a failing test to pass — fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
+- NEVER register a network route mock/interception (${s8RouteMocks}) to force a failing test to pass вЂ” fix the real defect the test is exposing instead. The CPOM linter rejects any unannotated route mock found in a test spec; if isolating unrelated 3rd-party traffic (analytics, Sentry) is genuinely required, annotate the exact line with \`${commentPrefix} @allow-mock: <reason>\` stating why.
 
 ### 9. Frontend Framework Hydration Helpers
 - When testing applications built with React, Next.js, or hydration-dependent SPA frameworks, wait for hydration before interacting with elements to eliminate synthetic click misses and state resets.

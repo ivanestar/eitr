@@ -29,7 +29,6 @@ import process from 'node:process';
 
 const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
-const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
@@ -43,13 +42,6 @@ function loadJson(filePath) {
   }
 }
 
-function anyRouteHasReviewedTrue(routes) {
-  if (!routes || typeof routes !== 'object') return false;
-  return Object.values(routes).some(function (entry) {
-    return entry && entry.reviewed === true;
-  });
-}
-
 function countReviewedTrue(routes) {
   if (!routes || typeof routes !== 'object') return 0;
   return Object.values(routes).filter(function (entry) {
@@ -57,18 +49,22 @@ function countReviewedTrue(routes) {
   }).length;
 }
 
-// A feature map is only past its own gate once every feature AND every entity in it is reviewed -
-// unlike business-intent, where a single reviewed route is enough to move on. Entity relations are
-// the one thing in this pipeline that a later stage builds preconditions out of, so a half-reviewed
-// map would hand a downstream stage a link nobody confirmed.
+// A feature map is only past its own gate once every feature, every entity AND every route in it is
+// reviewed. Entity relations are the one thing in this pipeline that a later stage builds
+// preconditions out of, so a half-reviewed map would hand a downstream stage a link nobody
+// confirmed - and a route whose criticality nobody confirmed decides how much testing it gets.
 function featureMapFullyReviewed(featureMap) {
   if (!featureMap) return false;
   const features = Object.values(featureMap.features || {});
   const entities = Object.values(featureMap.entities || {});
+  const routes = Object.values(featureMap.routes || {});
   if (features.length === 0) return false;
-  return features.concat(entities).every(function (record) {
-    return record && record.reviewed === true;
-  });
+  return features
+    .concat(entities)
+    .concat(routes)
+    .every(function (record) {
+      return record && record.reviewed === true;
+    });
 }
 
 function anyRouteHasReviewedCondition(routes) {
@@ -156,8 +152,7 @@ const ROADMAP_STEPS = [
 // review - so a stage index alone cannot say which of the two the human is looking at.
 const STAGE_POSITION = {
   'not-started': { index: 0, phase: 'run' },
-  'business-intent-pending-review': { index: 0, phase: 'review' },
-  'business-intent-reviewed': { index: 1, phase: 'run' },
+  'site-map-reviewed': { index: 1, phase: 'run' },
   'feature-map-pending-review': { index: 1, phase: 'review' },
   'feature-map-reviewed': { index: 2, phase: 'run' },
   'test-conditions-pending-review': { index: 2, phase: 'review' },
@@ -187,7 +182,7 @@ function formatRoadmap(stage) {
 
 // Route-level counters a human-facing report can print without re-deriving them from raw artifacts
 // itself - zero model involvement, same as every other computation in this script.
-function computeRouteCoverage(siteMap, businessIntent, featureMap, testConditions, journeys) {
+function computeRouteCoverage(siteMap, featureMap, testConditions, journeys) {
   const routes = siteMap && typeof siteMap.routes === 'object' ? Object.values(siteMap.routes) : [];
   const activeRoutes = routes.filter(function (r) {
     return r && r.status === 'active';
@@ -203,7 +198,8 @@ function computeRouteCoverage(siteMap, businessIntent, featureMap, testCondition
     totalRoutes: routes.length,
     activeRoutes: activeRoutes.length,
     likelyPhantomRoutes: likelyPhantomRoutes.length,
-    businessIntentReviewed: countReviewedTrue(businessIntent && businessIntent.routes),
+    routesWithIntent: featureMap ? Object.keys(featureMap.routes || {}).length : 0,
+    routeIntentReviewed: countReviewedTrue(featureMap && featureMap.routes),
     features: featureMap ? Object.keys(featureMap.features || {}).length : 0,
     featuresReviewed: countReviewedTrue(featureMap && featureMap.features),
     entities: featureMap ? Object.keys(featureMap.entities || {}).length : 0,
@@ -236,13 +232,10 @@ function formatDuration(ms) {
 // never the model's own guess at how long a session felt. This measures wall-clock time between
 // artifacts being written, which includes any human review wait folded into the gap after it - it
 // is not a claim about pure agent working time.
-function computeStageTimings(siteMap, businessIntent, featureMap, testConditions, journeysData) {
+function computeStageTimings(siteMap, featureMap, testConditions, journeysData) {
   const points = [];
   if (siteMap && siteMap.generatedAt) {
     points.push({ label: 'Stage 1: Site map crawled', timestamp: siteMap.generatedAt });
-  }
-  if (businessIntent && businessIntent.generatedAt) {
-    points.push({ label: 'Stage 1: Business-intent analysis', timestamp: businessIntent.generatedAt });
   }
   if (featureMap && featureMap.generatedAt) {
     points.push({ label: 'Stage 2: Feature map derived', timestamp: featureMap.generatedAt });
@@ -298,7 +291,7 @@ function computePreFlightNotice(stage, coverage) {
   return lines.join('\\n');
 }
 
-function computeStatus(siteMap, businessIntent, featureMap, testConditions, journeysData) {
+function computeStatus(siteMap, featureMap, testConditions, journeysData) {
   if (!siteMap) {
     return {
       stage: 'not-started',
@@ -307,29 +300,12 @@ function computeStatus(siteMap, businessIntent, featureMap, testConditions, jour
     };
   }
 
-  if (!businessIntent) {
-    return {
-      stage: 'business-intent-pending-review',
-      nextCommand: null,
-      nextCommandDescription:
-        'Site map exists, but business-intent analysis has not run yet. Continue /map-site Step 6 to generate it.',
-    };
-  }
-  if (!anyRouteHasReviewedTrue(businessIntent.routes)) {
-    return {
-      stage: 'business-intent-pending-review',
-      nextCommand: null,
-      nextCommandDescription:
-        'Business-intent entries exist, but none are reviewed yet. Review the Business-Intent Review Artifact table from /map-site Step 6, then approve entries in conversation.',
-    };
-  }
-
   if (!featureMap) {
     return {
-      stage: 'business-intent-reviewed',
+      stage: 'site-map-reviewed',
       nextCommand: '/map-features',
       nextCommandDescription:
-        'Business-intent is reviewed. Run /map-features to group the routes into features and work out the application\\'s entities and their lifecycles.',
+        'The site map exists. Run /map-features to work out what each page is for, group them into features, and derive the application\\'s entities and their lifecycles.',
     };
   }
   if (!featureMapFullyReviewed(featureMap)) {
@@ -337,7 +313,7 @@ function computeStatus(siteMap, businessIntent, featureMap, testConditions, jour
       stage: 'feature-map-pending-review',
       nextCommand: null,
       nextCommandDescription:
-        'A feature map exists, but not every feature and entity in it is reviewed yet. Review the Feature-Map Review Artifact from /map-features, then approve entries in conversation.',
+        'A feature map exists, but not every feature, entity and page in it is reviewed yet. Review the Feature-Map Review Artifact from /map-features, then approve entries in conversation.',
     };
   }
 
@@ -388,21 +364,19 @@ function computeStatus(siteMap, businessIntent, featureMap, testConditions, jour
 
 function main() {
   const siteMap = loadJson(SITE_MAP_PATH);
-  const businessIntent = loadJson(BUSINESS_INTENT_PATH);
   const featureMap = loadJson(FEATURE_MAP_PATH);
   const testConditions = loadJson(TEST_CONDITIONS_PATH);
   const journeysData = loadJson(JOURNEYS_PATH);
 
-  const status = computeStatus(siteMap, businessIntent, featureMap, testConditions, journeysData);
+  const status = computeStatus(siteMap, featureMap, testConditions, journeysData);
   const roadmap = formatRoadmap(status.stage);
   const routeCoverage = computeRouteCoverage(
     siteMap,
-    businessIntent,
     featureMap,
     testConditions,
     collectJourneys(journeysData),
   );
-  const stageTimings = computeStageTimings(siteMap, businessIntent, featureMap, testConditions, journeysData);
+  const stageTimings = computeStageTimings(siteMap, featureMap, testConditions, journeysData);
   const preFlightNotice = computePreFlightNotice(status.stage, routeCoverage);
 
   process.stdout.write(

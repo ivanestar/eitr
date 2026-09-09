@@ -71,7 +71,7 @@ function writeFeatureMap(
       memberRouteIds: feature.routeIds,
       entityIds: [],
       impact: feature.impact ?? 'high',
-      evidence: [{ signal: 'business-intent-label', excerpt: feature.id }],
+      evidence: [{ signal: 'route-convention', excerpt: feature.id }],
       reviewed: feature.reviewed ?? true,
       ...(feature.reviewed === false ? {} : { reviewedBy: 'human' }),
     };

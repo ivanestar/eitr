@@ -317,7 +317,7 @@ function resolveMode() {
       ' routes (last touched ' +
       (lastTouched || 'unknown') +
       '). create starts fresh: routeId identity resets for every route, so any downstream ' +
-      'artifact keyed by routeId (e.g. artifacts/analysis/business-intent.json) will need ' +
+      'artifact keyed by routeId (e.g. artifacts/analysis/feature-map.json) will need ' +
       're-review. Use /map-site update instead to refresh in place and preserve routeId/history.';
   }
 

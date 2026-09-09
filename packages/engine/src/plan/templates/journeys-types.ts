@@ -4,7 +4,7 @@
 // Lives under .scaffold/ (engine-owned machinery), not artifacts/ - see site-map-schema.ts's header
 // comment for why.
 //
-// Same "documentation-as-code, not imported at runtime" convention as business-intent-types.ts and
+// Same "documentation-as-code, not imported at runtime" convention as feature-map-types.ts and
 // test-conditions-types.ts - real mechanical enforcement comes from scripts/validate-journeys.mjs
 // instead.
 

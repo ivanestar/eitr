@@ -84,6 +84,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 1. URL Canonicalization & Pagination Normalization: strip query parameters and hashes.
 2. Write topology map to artifacts/site-map/site-map.json.
 3. Extract recurring DOM patterns (frequency >= 2) into components/widgets/.
+4. Record every modal, banner and native dialog through overlay-ledger.mjs, close it, and re-check the page before finishing the route.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,
@@ -155,7 +156,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
     const skillCase = GOLDEN_SKILLS_DATASET.find((s) => s.skillName === '/define-test-conditions')!;
     const simulatedOutput = `
 # Skill: Test Analysis (/define-test-conditions)
-1. Preconditions: refuse with "No reviewed business-intent entries found" if none exist.
+1. Preconditions: refuse with "No reviewed pages found in the feature map" if none exist.
 2. Extract parameters read-only, redact PII as [REDACTED], synthesize sampleValues never copied from the live page.
 3. Run node scripts/validate-test-conditions.mjs, deterministically generate boundary-value + checklist-based conditions.
 4. Present a Test-Conditions Review Artifact per route - Human Sign-Off Gateway before artifacts/analysis/test-conditions.json is authoritative.

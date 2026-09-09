@@ -1,4 +1,4 @@
-// Template for scripts/render-review-artifact.mjs — renders a stage's review artifact from its own
+﻿// Template for scripts/render-review-artifact.mjs вЂ” renders a stage's review artifact from its own
 // JSON, and decides deterministically whether it is small enough to print into the chat or big
 // enough to belong in a file the human can actually read.
 //
@@ -10,7 +10,7 @@
 // drift impossible.
 //
 // The threshold is a UX judgment, stated once here rather than left to per-run improvisation: a
-// business-intent block is 5-6 terminal lines, so ~10 entries is where a review stops fitting on one
+// feature block is 5-6 terminal lines, so ~10 entries is where a review stops fitting on one
 // screen and starts scrolling past the top of the window.
 export function renderReviewArtifactRenderer(): string {
   return `#!/usr/bin/env node
@@ -21,7 +21,6 @@ export function renderReviewArtifactRenderer(): string {
  *
  * Usage:
  *   node scripts/render-review-artifact.mjs --kind=site-map
- *   node scripts/render-review-artifact.mjs --kind=business-intent
  *   node scripts/render-review-artifact.mjs --kind=feature-map
  *   node scripts/render-review-artifact.mjs --kind=test-conditions [--threshold=10]
  *   node scripts/render-review-artifact.mjs --kind=test-cases
@@ -42,7 +41,7 @@ const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 // written by something other than a crawl, which the renderer treats as "nothing to show" rather
 // than an error.
 const CRAWL_BUDGET_PATH = path.join(CWD, 'artifacts', 'site-map', '.crawl-budget.json');
-const BUSINESS_INTENT_PATH = path.join(CWD, 'artifacts', 'analysis', 'business-intent.json');
+const APP_PROFILE_PATH = path.join(CWD, 'artifacts', 'analysis', 'app-profile.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const TEST_CASES_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
@@ -111,126 +110,6 @@ function dedupedEvidence(fields) {
     }
   }
   return excerpts;
-}
-
-function renderBusinessIntent(labels, data) {
-  const routes = data && data.routes && typeof data.routes === 'object' ? data.routes : {};
-  const entries = Object.values(routes).filter(Boolean);
-  entries.sort(function (a, b) {
-    return labelFor(labels, a.routeId).localeCompare(labelFor(labels, b.routeId));
-  });
-
-  const lines = [];
-  const selectedPurpose =
-    data && data.corePurpose ? fieldValue(data.corePurpose.selected) : undefined;
-  if (selectedPurpose) {
-    lines.push('Confirmed core purpose: ' + selectedPurpose);
-    lines.push('');
-  }
-
-  const roles = data && data.roles && typeof data.roles === 'object' ? Object.values(data.roles) : [];
-  if (roles.length > 0) {
-    lines.push('**Roles crawled**');
-    for (const role of roles) {
-      const purpose = fieldValue(role.purpose);
-      lines.push('- ' + role.name + ': ' + (purpose === undefined ? '(no purpose recorded)' : purpose));
-      const exclusive = Array.isArray(role.exclusiveRoutes) ? role.exclusiveRoutes : [];
-      lines.push(
-        '  Reaches on its own: ' +
-          (exclusive.length > 0 ? exclusive.join(', ') : 'nothing the other crawled roles could not'),
-      );
-    }
-    lines.push('');
-  }
-
-  const phantom = entries.filter(function (entry) {
-    const found = labels.get(entry.routeId);
-    return found && found.flags.indexOf('likely-phantom-route') !== -1;
-  });
-  if (phantom.length > 0) {
-    lines.push('**Possibly not real routes**');
-    for (const entry of phantom) {
-      lines.push(
-        '- ' +
-          labelFor(labels, entry.routeId) +
-          ' - found only via a hidden DOM link, not reachable by clicking through the app.',
-      );
-    }
-    lines.push('');
-  }
-
-  const real = entries.filter(function (entry) {
-    return phantom.indexOf(entry) === -1;
-  });
-  real.forEach(function (entry, index) {
-    lines.push('**' + (index + 1) + '. ' + labelFor(labels, entry.routeId) + '**');
-    const feature = fieldValue(entry.businessFeature);
-    if (feature !== undefined) lines.push('Feature: ' + feature);
-    const tier = fieldValue(entry.criticalityTier);
-    if (tier !== undefined) {
-      lines.push('**Route criticality (draft): ' + String(tier).toUpperCase() + '**');
-    }
-    const reasoning = entry.criticalityTier ? entry.criticalityTier.reasoning : undefined;
-    if (reasoning) lines.push('Reasoning: ' + reasoning);
-    const excerpts = dedupedEvidence([entry.businessFeature, entry.criticalityTier]);
-    if (excerpts.length > 0) {
-      lines.push(
-        'Evidences: ' +
-          excerpts
-            .map(function (e) {
-              return '"' + e + '"';
-            })
-            .join(', '),
-      );
-    }
-    lines.push('');
-  });
-
-  const tierCounts = {};
-  for (const entry of entries) {
-    const tier = String(fieldValue(entry.criticalityTier) || 'unknown');
-    tierCounts[tier] = (tierCounts[tier] || 0) + 1;
-  }
-
-  // A reasoning sentence repeated verbatim across routes is a category label, not an explanation
-  // of any one of them - and the tier it justifies is therefore unaudited. Surfaced rather than
-  // rejected: two genuinely static pages can legitimately share one honest sentence, so this is a
-  // prompt for the human to look, not a gate that blocks the pipeline on a guess.
-  const reasoningCounts = new Map();
-  for (const entry of entries) {
-    const reasoning = entry.criticalityTier ? entry.criticalityTier.reasoning : undefined;
-    if (typeof reasoning !== 'string' || reasoning.length === 0) continue;
-    reasoningCounts.set(reasoning, (reasoningCounts.get(reasoning) || 0) + 1);
-  }
-  const repeatedReasonings = Array.from(reasoningCounts.values()).filter(function (count) {
-    return count > 1;
-  });
-  const routesSharingReasoning = repeatedReasonings.reduce(function (sum, count) {
-    return sum + count;
-  }, 0);
-  const tierSummary = ['high', 'medium', 'low', 'unknown']
-    .filter(function (tier) {
-      return tierCounts[tier];
-    })
-    .map(function (tier) {
-      return tierCounts[tier] + ' ' + tier;
-    })
-    .join(', ');
-
-  return {
-    entryCount: entries.length,
-    markdown: lines.join('\\n').trimEnd(),
-    summary:
-      entries.length +
-      ' route(s) analysed' +
-      (tierSummary ? ' (' + tierSummary + ')' : '') +
-      (phantom.length > 0 ? ', ' + phantom.length + ' flagged as possibly not real' : '') +
-      (routesSharingReasoning > 0
-        ? ' - heads up: ' +
-          routesSharingReasoning +
-          ' route(s) share a reasoning sentence with another route, worth checking those tiers were actually judged per route'
-        : ''),
-  };
 }
 
 // A constraint stores partition ids, which are internal identifiers - a human reads the partition's
@@ -422,23 +301,76 @@ function renderFeatureMap(labels, data) {
     return String(a.name).localeCompare(String(b.name));
   });
 
+  const routeIntents = data && data.routes && typeof data.routes === 'object' ? data.routes : {};
+
   const lines = [];
+
+  // The application-level facts a reviewer needs in front of them while judging impact live in
+  // app-profile.json - the confirmed purpose, and what each crawled role turned out to reach. They
+  // are read from there rather than copied into this artifact: one fact, one home.
+  const profile = loadJson(APP_PROFILE_PATH);
+  const selectedPurpose = profile && profile.corePurpose ? fieldValue(profile.corePurpose.selected) : undefined;
+  if (selectedPurpose) {
+    lines.push('Confirmed core purpose: ' + selectedPurpose);
+    lines.push('');
+  }
+  const roles = profile && profile.roles && typeof profile.roles === 'object' ? Object.values(profile.roles) : [];
+  if (roles.length > 0) {
+    lines.push('**Roles crawled**');
+    for (const role of roles) {
+      const purpose = fieldValue(role.purpose);
+      lines.push('- ' + role.name + ': ' + (purpose === undefined ? '(no purpose recorded)' : purpose));
+      const exclusive = Array.isArray(role.exclusiveRoutes) ? role.exclusiveRoutes : [];
+      lines.push(
+        '  Reaches on its own: ' +
+          (exclusive.length > 0 ? exclusive.join(', ') : 'nothing the other crawled roles could not'),
+      );
+    }
+    lines.push('');
+  }
+
   lines.push('**Features**');
   features.forEach(function (feature, i) {
     lines.push(
       i + 1 + '. ' + feature.name + ' - **' + String(feature.impact).toUpperCase() + ' IMPACT**',
     );
     const routes = Array.isArray(feature.memberRouteIds) ? feature.memberRouteIds : [];
-    lines.push(
-      '   Pages: ' +
-        (routes.length > 0
-          ? routes
-              .map(function (routeId) {
-                return labelFor(labels, routeId);
-              })
-              .join('; ')
-          : '(none)'),
-    );
+    if (routes.length === 0) {
+      lines.push('   Pages: (none)');
+    } else {
+      // Each page with its own criticality and the sentence justifying it, rather than a bare list
+      // of paths: the tier is the thing a reviewer is actually being asked to check, and checking it
+      // means reading it against the page it was given for.
+      lines.push('   Pages:');
+      const sorted = routes.slice().sort(function (a, b) {
+        return labelFor(labels, a).localeCompare(labelFor(labels, b));
+      });
+      for (const routeId of sorted) {
+        const intent = routeIntents[routeId];
+        const tier = intent && intent.criticality ? String(intent.criticality.value).toUpperCase() : null;
+        const phantom = labels.get(routeId);
+        const flagged = phantom && phantom.flags.indexOf('likely-phantom-route') !== -1;
+        lines.push(
+          '   - ' +
+            labelFor(labels, routeId) +
+            (tier ? ' - **' + tier + '**' : ' - no criticality recorded') +
+            (flagged ? ' [possibly not a real route]' : ''),
+        );
+        const reasoning = intent && intent.criticality ? intent.criticality.reasoning : undefined;
+        if (reasoning) lines.push('     ' + reasoning);
+        const excerpts = dedupedEvidence([intent && intent.criticality]);
+        if (excerpts.length > 0) {
+          lines.push(
+            '     Evidences: ' +
+              excerpts
+                .map(function (e) {
+                  return '"' + e + '"';
+                })
+                .join(', '),
+          );
+        }
+      }
+    }
     const names = (Array.isArray(feature.entityIds) ? feature.entityIds : [])
       .map(function (entityId) {
         return entityNameById.get(entityId) || entityId;
@@ -449,10 +381,32 @@ function renderFeatureMap(labels, data) {
       lines.push('   Impact comes from: ' + labelFor(labels, feature.impactSourceRouteId));
     } else {
       lines.push(
-        '   Impact comes from: no reviewed page to draw it from, so it is assumed important until you say otherwise.',
+        '   Impact comes from: no page carried a criticality to draw it from, so it is assumed important until you say otherwise.',
       );
     }
   });
+
+  // A page the site map has and no feature claims will never be tested by anything downstream, and
+  // nothing else in this artifact would say so.
+  const claimed = new Set();
+  for (const feature of features) {
+    for (const routeId of Array.isArray(feature.memberRouteIds) ? feature.memberRouteIds : []) {
+      claimed.add(routeId);
+    }
+  }
+  const unclaimed = Array.from(labels.keys()).filter(function (routeId) {
+    return !claimed.has(routeId);
+  });
+  if (unclaimed.length > 0) {
+    lines.push('');
+    lines.push('**Pages no feature claims**');
+    lines.push('Nothing downstream will test these until they belong somewhere:');
+    for (const routeId of unclaimed.sort(function (a, b) {
+      return labelFor(labels, a).localeCompare(labelFor(labels, b));
+    })) {
+      lines.push('- ' + labelFor(labels, routeId));
+    }
+  }
 
   if (entities.length > 0) {
     lines.push('');
@@ -522,16 +476,59 @@ function renderFeatureMap(labels, data) {
     return total + (Array.isArray(entity.relations) ? entity.relations.length : 0);
   }, 0);
 
+  const intents = Object.values(routeIntents).filter(Boolean);
+  const tierCounts = {};
+  for (const intent of intents) {
+    const tier = intent.criticality ? String(intent.criticality.value) : 'unknown';
+    tierCounts[tier] = (tierCounts[tier] || 0) + 1;
+  }
+  const tierSummary = ['high', 'medium', 'low', 'unknown']
+    .filter(function (tier) {
+      return tierCounts[tier];
+    })
+    .map(function (tier) {
+      return tierCounts[tier] + ' ' + tier;
+    })
+    .join(', ');
+
+  // A reasoning sentence repeated verbatim across routes is a category label, not an explanation of
+  // any one of them - and the tier it justifies is therefore unaudited. Surfaced rather than
+  // rejected: two genuinely static pages can legitimately share one honest sentence, so this is a
+  // prompt for a person to look, not a gate that blocks on a guess.
+  const reasoningCounts = new Map();
+  for (const intent of intents) {
+    const reasoning = intent.criticality ? intent.criticality.reasoning : undefined;
+    if (typeof reasoning !== 'string' || reasoning.length === 0) continue;
+    reasoningCounts.set(reasoning, (reasoningCounts.get(reasoning) || 0) + 1);
+  }
+  const routesSharingReasoning = Array.from(reasoningCounts.values())
+    .filter(function (count) {
+      return count > 1;
+    })
+    .reduce(function (sum, count) {
+      return sum + count;
+    }, 0);
+
   return {
-    entryCount: features.length + entities.length,
+    entryCount: features.length + entities.length + intents.length,
     markdown: lines.join('\\n'),
     summary:
       features.length +
-      ' feature(s), ' +
+      ' feature(s) over ' +
+      intents.length +
+      ' page(s)' +
+      (tierSummary ? ' (' + tierSummary + ')' : '') +
+      ', ' +
       entities.length +
       ' thing(s), ' +
       unreviewedRelations +
-      ' link(s) between them to confirm',
+      ' link(s) between them to confirm' +
+      (unclaimed.length > 0 ? ', ' + unclaimed.length + ' page(s) no feature claims' : '') +
+      (routesSharingReasoning > 0
+        ? ' - heads up: ' +
+          routesSharingReasoning +
+          ' page(s) share a reasoning sentence with another, worth checking those were actually judged per page'
+        : ''),
   };
 }
 
@@ -704,7 +701,6 @@ function groupRejections(rejected, crawledPaths) {
 
 const KINDS = {
   'site-map': { source: SITE_MAP_PATH, render: renderSiteMap },
-  'business-intent': { source: BUSINESS_INTENT_PATH, render: renderBusinessIntent },
   'feature-map': { source: FEATURE_MAP_PATH, render: renderFeatureMap },
   'test-conditions': { source: TEST_CONDITIONS_PATH, render: renderTestConditions },
   'test-cases': { source: TEST_CASES_PATH, render: renderTestCases },

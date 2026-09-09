@@ -44,12 +44,23 @@ function siteMap() {
   };
 }
 
-function businessIntent(tiers: Record<string, string>) {
+// Per-route criticality lives in the feature map, beside the feature that owns the route.
+function featureMapWithTiers(
+  tiers: Record<string, string>,
+  features: Record<string, unknown> = {},
+) {
   const routes: Record<string, unknown> = {};
   for (const [routeId, tier] of Object.entries(tiers)) {
-    routes[routeId] = { routeId, criticalityTier: { value: tier } };
+    routes[routeId] = { routeId, featureId: 'f1', criticality: { value: tier } };
   }
-  return { schemaVersion: 1, generatedAt: '2026-09-08T10:00:00.000Z', routes };
+  return {
+    schemaVersion: 2,
+    generatedAt: '2026-09-08T10:00:00.000Z',
+    features,
+    entities: {},
+    routes,
+    sourceHash: 'hash',
+  };
 }
 
 describe('scripts/coverage-status.mjs (real execution)', () => {
@@ -79,8 +90,8 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
       write(dir, 'artifacts/site-map/site-map.json', siteMap());
       write(
         dir,
-        'artifacts/analysis/business-intent.json',
-        businessIntent({ 'r-checkout': 'high', 'r-help': 'low' }),
+        'artifacts/analysis/feature-map.json',
+        featureMapWithTiers({ 'r-checkout': 'high', 'r-help': 'low' }),
       );
 
       const check = criterion(run(dir).output, 'important-routes-automated');
@@ -99,8 +110,8 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
       write(dir, 'artifacts/site-map/site-map.json', siteMap());
       write(
         dir,
-        'artifacts/analysis/business-intent.json',
-        businessIntent({ 'r-checkout': 'high', 'r-help': 'medium' }),
+        'artifacts/analysis/feature-map.json',
+        featureMapWithTiers({ 'r-checkout': 'high', 'r-help': 'medium' }),
       );
 
       const check = criterion(run(dir).output, 'important-routes-automated');
@@ -117,8 +128,8 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
       write(dir, 'artifacts/site-map/site-map.json', siteMap());
       write(
         dir,
-        'artifacts/analysis/business-intent.json',
-        businessIntent({ 'r-checkout': 'high', 'r-help': 'low' }),
+        'artifacts/analysis/feature-map.json',
+        featureMapWithTiers({ 'r-checkout': 'high', 'r-help': 'low' }),
       );
       write(dir, 'artifacts/test-cases/test-cases.json', {
         schemaVersion: 2,
@@ -245,8 +256,8 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
       write(dir, 'artifacts/site-map/site-map.json', siteMap());
       write(
         dir,
-        'artifacts/analysis/business-intent.json',
-        businessIntent({ 'r-checkout': 'high' }),
+        'artifacts/analysis/feature-map.json',
+        featureMapWithTiers({ 'r-checkout': 'high' }),
       );
 
       const check = criterion(run(dir).output, 'routes-classified');
@@ -262,8 +273,8 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
       write(dir, 'artifacts/site-map/site-map.json', siteMap());
       write(
         dir,
-        'artifacts/analysis/business-intent.json',
-        businessIntent({ 'r-checkout': 'high', 'r-help': 'low' }),
+        'artifacts/analysis/feature-map.json',
+        featureMapWithTiers({ 'r-checkout': 'high', 'r-help': 'low' }),
       );
       write(dir, 'artifacts/test-cases/test-cases.json', {
         schemaVersion: 2,
@@ -304,7 +315,7 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
             memberRouteIds: ['r-checkout', 'r-help'],
             entityIds: [],
             impact,
-            evidence: [{ signal: 'business-intent-label', excerpt: 'x' }],
+            evidence: [{ signal: 'route-convention', excerpt: 'x' }],
             reviewed: true,
             reviewedBy: 'human',
           },
@@ -389,8 +400,8 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
         write(dir, 'artifacts/site-map/site-map.json', siteMap());
         write(
           dir,
-          'artifacts/analysis/business-intent.json',
-          businessIntent({ 'r-checkout': 'high', 'r-help': 'medium' }),
+          'artifacts/analysis/feature-map.json',
+          featureMapWithTiers({ 'r-checkout': 'high', 'r-help': 'medium' }),
         );
         write(dir, 'artifacts/test-cases/test-cases.json', {
           schemaVersion: 2,

@@ -115,13 +115,15 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'artifacts/site-map/site-map.json',
         'frequency >= 2',
         'components/widgets/',
+        'overlay-ledger.mjs',
       ],
       contractGuarantees: [
         'Shared Primitives First',
         'Concurrency worker pool',
         'Anti-Infinite-Scroll Guard',
+        'Every overlay opened is closed, and the closing re-checked',
       ],
-      forbiddenPatterns: ['infinite crawl loop', 'hardcoded routes'],
+      forbiddenPatterns: ['infinite crawl loop', 'hardcoded routes', 'leave the modal open'],
     },
   },
   // 6. /bulk-rescan
@@ -186,7 +188,7 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'Bracket every literal on-screen name',
       ],
       contractGuarantees: [
-        'zero dependency on criticalityTier for test-level assignment',
+        'zero dependency on route criticality for test-level assignment',
         'no blocking approval pause before finishing',
         'each step carries its own concrete expected result, never a blanket result at the end',
         'any literal button/page/checkbox/dropdown/toast name a step references is wrapped in square brackets',
@@ -200,13 +202,13 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
     description:
       'Test Analysis: defines typed test conditions (equivalence partitions, 2-way combinatorial coverage, 3-value boundary conditions) per route, gated by mechanical validation and human sign-off',
     inputScenario:
-      'Define test conditions for reviewed routes in artifacts/analysis/business-intent.json',
+      'Define test conditions for reviewed routes in artifacts/analysis/feature-map.json',
     expectedWorkflow: {
       mustContainKeySteps: [
         'artifacts/analysis/test-conditions.json',
         'validate-test-conditions.mjs',
         'Human Sign-Off Gateway',
-        'No reviewed business-intent entries found',
+        'No reviewed pages found in the feature map',
         'checklist-based',
       ],
       contractGuarantees: [
