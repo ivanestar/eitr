@@ -563,12 +563,22 @@ function cmdPendingClicks() {
     count: state.pendingClicks.length,
     overflow: state.pendingClicksOverflow,
     items: state.pendingClicks,
+    // Live-observed on the-internet.herokuapp.com: a jQuery UI menu item hid a real route behind
+    // it, the visual pass named it correctly, and pressing it revealed nothing at all - the menu
+    // opens on hover. Clicking first is both the wrong gesture for a whole common class of
+    // navigation and the only one of the two that can change state, so the order is fixed here
+    // rather than left to be remembered.
+    resolutionOrder: ['hover', 'click'],
+    resolutionNote:
+      'Hover the element first and look for links that became visible; only press it if hovering ' +
+      'revealed nothing. Hovering mutates nothing, so it needs no permission - the human answer ' +
+      'you collected is for the press.',
     note:
       state.pendingClicks.length === 0
         ? 'Nothing needs a click - every candidate this pass found already carried a URL.'
         : 'Each of these looks like navigation but carries no URL to fetch, so the only way to ' +
-          'learn where it goes is to press it. Ask once, for the whole list, before pressing ' +
-          'anything.',
+          'learn where it goes is to reach it directly. Ask once, for the whole list, before ' +
+          'pressing anything.',
   };
 }
 

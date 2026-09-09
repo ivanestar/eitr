@@ -335,6 +335,10 @@ describe('scripts/visual-copilot.mjs (real execution)', () => {
           '/two',
         ]);
         expect(pending.note).toContain('Ask once');
+        // Hover before click: a menu that opens on hover does nothing at all when pressed, and
+        // hovering is the only one of the two gestures that cannot change state.
+        expect(pending.resolutionOrder).toEqual(['hover', 'click']);
+        expect(pending.resolutionNote).toContain('Hover the element first');
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -421,6 +425,12 @@ describe('the visual pass is actually wired into what gets generated', () => {
     expect(text).toContain('Never press anything before that answer');
     // The ban everywhere else is what makes this one authorized exception safe to state at all.
     expect(text).toContain('not relaxed generally');
+  });
+
+  it('/map-site resolves a click candidate by hovering it first', () => {
+    const text = mapSiteSkill();
+    expect(text).toContain('hover first, press only if hovering revealed nothing');
+    expect(text).toContain('resolutionOrder');
   });
 
   it('/map-site puts a visually proposed URL through the frontier gatekeeper like any other link', () => {
