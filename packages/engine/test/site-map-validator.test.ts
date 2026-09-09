@@ -181,6 +181,139 @@ describe('validate-site-map.mjs phantom-route evidence invariant', () => {
   });
 });
 
+// An overlay the crawl opened and walked away from makes every later click on that page land on a
+// backdrop - no error, no effect, nothing explored. The file is where that becomes catchable.
+function siteMapWithOverlay(overlay: Record<string, unknown>, flags?: string[]) {
+  const map = minimalSiteMap() as unknown as {
+    routes: Record<string, Record<string, unknown>>;
+  };
+  map.routes['/'].overlays = [
+    {
+      overlayId: 'ov-abc123-1',
+      kind: 'modal',
+      trigger: 'auto',
+      title: 'We use cookies',
+      dismissal: { method: 'escape', verified: true },
+      ...overlay,
+    },
+  ];
+  if (flags) map.routes['/'].visualTriage = { state: 'ready', flags };
+  return map;
+}
+
+describe('validate-site-map.mjs overlay dismissal invariant', () => {
+  it('accepts an overlay that was closed and re-checked', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, siteMapWithOverlay({}));
+      expect(run(dir).status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an overlay whose dismissal was never verified', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, siteMapWithOverlay({ dismissal: { method: 'escape', verified: false } }));
+      const result = run(dir);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('re-check the page after dismissing');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an overlay with no dismissal recorded at all', () => {
+    const dir = setupProject();
+    try {
+      const map = siteMapWithOverlay({});
+      delete (map.routes['/'].overlays as Record<string, unknown>[])[0].dismissal;
+      writeSiteMap(dir, map);
+      const result = run(dir);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('may have left open');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('requires a blocked-by-overlay flag when the crawl gave up on closing it', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, siteMapWithOverlay({ dismissal: { method: 'gave-up', verified: false } }));
+      const result = run(dir);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('blocked-by-overlay');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts a give-up that is flagged honestly on the route', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(
+        dir,
+        siteMapWithOverlay({ dismissal: { method: 'gave-up', verified: false } }, [
+          'blocked-by-overlay',
+        ]),
+      );
+      expect(run(dir).status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an overlay screenshot the pruner could not match back to its route', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(
+        dir,
+        siteMapWithOverlay({
+          screenshot: 'artifacts/site-map/screenshots/root--route-home--overlay-1.jpg',
+        }),
+      );
+      const result = run(dir);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('must end with');
+      expect(result.stdout).toContain('map-site-status.mjs can match it');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts the overlay screenshot name the ledger actually produces', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(
+        dir,
+        siteMapWithOverlay({
+          screenshot: 'artifacts/site-map/screenshots/root-overlay-1--route-home.jpg',
+        }),
+      );
+      expect(run(dir).status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an unknown dismissal method rather than storing an invented one', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(
+        dir,
+        siteMapWithOverlay({ dismissal: { method: 'wished-it-away', verified: true } }),
+      );
+      const result = run(dir);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('dismissal.method must be one of');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('scripts/validate-site-map.mjs (real execution)', () => {
   it('passes validation for a well-formed multi-route fixture with every optional field present', () => {
     const dir = setupProject();

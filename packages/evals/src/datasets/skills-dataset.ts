@@ -115,13 +115,15 @@ export const GOLDEN_SKILLS_DATASET: GoldenSkillCase[] = [
         'artifacts/site-map/site-map.json',
         'frequency >= 2',
         'components/widgets/',
+        'overlay-ledger.mjs',
       ],
       contractGuarantees: [
         'Shared Primitives First',
         'Concurrency worker pool',
         'Anti-Infinite-Scroll Guard',
+        'Every overlay opened is closed, and the closing re-checked',
       ],
-      forbiddenPatterns: ['infinite crawl loop', 'hardcoded routes'],
+      forbiddenPatterns: ['infinite crawl loop', 'hardcoded routes', 'leave the modal open'],
     },
   },
   // 6. /bulk-rescan

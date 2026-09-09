@@ -54,6 +54,33 @@ const TRIAGE_ALLOWED_KEYS = new Set([
   'source',
 ]);
 const DISCOVERY_METHOD_VALUES = new Set(['navigation', 'href-scan-only']);
+const OVERLAY_KIND_VALUES = new Set([
+  'native-dialog',
+  'modal',
+  'drawer',
+  'popover',
+  'banner',
+  'toast',
+  'unknown',
+]);
+const OVERLAY_DISMISS_METHODS = new Set([
+  'native-dismiss',
+  'escape',
+  'close-control',
+  'backdrop',
+  'reload',
+  'gave-up',
+]);
+const OVERLAY_ALLOWED_KEYS = new Set([
+  'overlayId',
+  'kind',
+  'trigger',
+  'title',
+  'textExcerpt',
+  'components',
+  'screenshot',
+  'dismissal',
+]);
 const ROUTE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 const SCREENSHOT_PATH_RE = /^artifacts\\/site-map\\/screenshots\\/[a-zA-Z0-9_-]+\\.(webp|jpg|jpeg)$/;
 const FLAG_TOKEN_RE = /^[a-z0-9_-]+$/;
@@ -267,6 +294,127 @@ function validate() {
         }
       }
     }
+    if ('overlays' in entry) {
+      checkOverlays(entry, label, errors);
+    }
+  }
+
+  // An overlay the crawl opened and never closed is the failure this whole record exists to make
+  // impossible: every later interaction on that page lands on a backdrop, produces no error, and
+  // quietly explores nothing. So an entry that does not say what closed it, and that the closing was
+  // actually re-checked, fails the file rather than being written into it. The one permitted
+  // exception is an honest "gave-up", which has to travel with the route flag that tells every later
+  // reader this page was only partly explored.
+  function checkOverlays(entry, label, errors) {
+    const overlays = entry.overlays;
+    if (!Array.isArray(overlays)) {
+      errors.push(label + '.overlays, when present, must be an array.');
+      return;
+    }
+    if (overlays.length > 8) {
+      errors.push(label + '.overlays must contain at most 8 entries.');
+      return;
+    }
+    const flags =
+      entry.visualTriage && Array.isArray(entry.visualTriage.flags) ? entry.visualTriage.flags : [];
+    const seenIds = new Set();
+
+    overlays.forEach((overlay, index) => {
+      const overlayLabel = label + '.overlays[' + index + ']';
+      if (!overlay || typeof overlay !== 'object' || Array.isArray(overlay)) {
+        errors.push(overlayLabel + ' must be an object.');
+        return;
+      }
+      const extraKeys = Object.keys(overlay).filter((key) => !OVERLAY_ALLOWED_KEYS.has(key));
+      if (extraKeys.length > 0) {
+        errors.push(overlayLabel + ' has unrecognized properties: ' + extraKeys.join(', ') + '.');
+      }
+      if (typeof overlay.overlayId !== 'string' || overlay.overlayId.length === 0) {
+        errors.push(overlayLabel + '.overlayId must be a non-empty string.');
+      } else if (seenIds.has(overlay.overlayId)) {
+        errors.push(overlayLabel + '.overlayId is duplicated on this route: ' + overlay.overlayId + '.');
+      } else {
+        seenIds.add(overlay.overlayId);
+      }
+      if (!OVERLAY_KIND_VALUES.has(overlay.kind)) {
+        errors.push(
+          overlayLabel + '.kind must be one of ' + [...OVERLAY_KIND_VALUES].join('|') + '.',
+        );
+      }
+      if (typeof overlay.trigger !== 'string' || overlay.trigger.length === 0) {
+        errors.push(
+          overlayLabel +
+            '.trigger must be a non-empty string - "auto" when it appeared on its own, otherwise what raised it.',
+        );
+      }
+      if ('components' in overlay && !isStringArray(overlay.components)) {
+        errors.push(overlayLabel + '.components, when present, must be an array of strings.');
+      }
+      if ('screenshot' in overlay) {
+        if (
+          typeof overlay.screenshot !== 'string' ||
+          overlay.screenshot.length > 260 ||
+          !SCREENSHOT_PATH_RE.test(overlay.screenshot) ||
+          overlay.screenshot.includes('..') ||
+          overlay.screenshot.includes(String.fromCharCode(92))
+        ) {
+          errors.push(
+            overlayLabel +
+              '.screenshot, when present, must be a relative artifacts/site-map/screenshots/ path without traversal.',
+          );
+        } else if (
+          typeof entry.routeId === 'string' &&
+          !overlay.screenshot.endsWith('--' + entry.routeId + path.extname(overlay.screenshot))
+        ) {
+          // scripts/map-site-status.mjs identifies a screenshot by whatever follows the final "--".
+          // A name that ends any other way is unmatchable, so the next prune deletes it as an
+          // orphan - which is how a whole pass of overlay images disappears silently.
+          errors.push(
+            overlayLabel +
+              '.screenshot must end with "--<routeId>.<ext>" so scripts/map-site-status.mjs can match it - found ' +
+              overlay.screenshot +
+              '.',
+          );
+        }
+      }
+      const dismissal = overlay.dismissal;
+      if (!dismissal || typeof dismissal !== 'object' || Array.isArray(dismissal)) {
+        errors.push(
+          overlayLabel +
+            '.dismissal must be an object recording how this overlay was closed - an overlay with no recorded dismissal is one the crawl may have left open.',
+        );
+        return;
+      }
+      if (!OVERLAY_DISMISS_METHODS.has(dismissal.method)) {
+        errors.push(
+          overlayLabel + '.dismissal.method must be one of ' + [...OVERLAY_DISMISS_METHODS].join('|') + '.',
+        );
+      }
+      if (typeof dismissal.verified !== 'boolean') {
+        errors.push(overlayLabel + '.dismissal.verified must be a boolean.');
+        return;
+      }
+      if (dismissal.method === 'gave-up') {
+        if (dismissal.verified) {
+          errors.push(overlayLabel + '.dismissal.verified must be false when method is "gave-up".');
+        }
+        if (!flags.includes('blocked-by-overlay')) {
+          errors.push(
+            overlayLabel +
+              '.dismissal.method is "gave-up", so this route must carry "blocked-by-overlay" in visualTriage.flags - a page still covered by an overlay was only partly explored, and nothing else in the file says so.',
+          );
+        }
+        return;
+      }
+      if (!dismissal.verified) {
+        errors.push(
+          overlayLabel +
+            '.dismissal.verified is false with method "' +
+            dismissal.method +
+            '" - re-check the page after dismissing and record what is actually true, or record method "gave-up" with the blocked-by-overlay flag.',
+        );
+      }
+    });
   }
 
   // "This route probably isn't real" is the one triage claim that deletes a route from a human's

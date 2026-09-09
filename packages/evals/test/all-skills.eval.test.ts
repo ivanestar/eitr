@@ -84,6 +84,7 @@ describe('All 9 Operational Skills Evaluation Benchmark', () => {
 1. URL Canonicalization & Pagination Normalization: strip query parameters and hashes.
 2. Write topology map to artifacts/site-map/site-map.json.
 3. Extract recurring DOM patterns (frequency >= 2) into components/widgets/.
+4. Record every modal, banner and native dialog through overlay-ledger.mjs, close it, and re-check the page before finishing the route.
 `;
     const grade = gradeSkillCompliance(
       simulatedOutput,

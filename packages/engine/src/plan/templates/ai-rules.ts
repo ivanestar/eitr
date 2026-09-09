@@ -606,7 +606,7 @@ recorded. These files are written by the analysis workflows and are the project'
 | Artifact | Holds | Read it with |
 |---|---|---|
 | \`artifacts/analysis/app-profile.json\` | Everything established about the application as a whole: what kind of application it is (production / sandbox-demo / internal tool), its confirmed core purpose, what each role is for, how it talks to its backend (\`apiStyle\`), the crawl boundary a human set, domain knowledge a person volunteered, which test types are in scope | \`node scripts/app-profile.mjs\` |
-| \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, and per-role access | \`node scripts/validate-site-map.mjs\` to check shape |
+| \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, per-role access, and the overlays met on it - each with what raised it, what it contains, its own screenshot, and how it was closed | \`node scripts/validate-site-map.mjs\` to check shape |
 | \`artifacts/site-map/api-contracts.json\` | Operations actually observed in traffic - method, path template, the operation name for a GraphQL or RPC call, and the response shape | \`node scripts/validate-api-contracts.mjs\` |
 | \`artifacts/analysis/business-intent.json\` | Per-route business feature and impact tier (\`high\`/\`medium\`/\`low\`) | \`node scripts/validate-business-intent.mjs\` |
 | \`artifacts/analysis/feature-map.json\` | Features and the routes they span, the entities this application works with, what can happen to each one, its lifecycle, and the links between them | \`node scripts/derive-feature-map.mjs\` to draft, \`node scripts/validate-feature-map.mjs\` to check shape |
@@ -635,7 +635,9 @@ to - the questions are computed, not composed at the point of asking),
 progress line), \`scripts/visual-copilot.mjs\` (marks a page's navigation candidates with numbered
 overlays, then grades what a vision worker says about them - a mark the page never had is dropped,
 a proposed URL still goes through the frontier gatekeeper, and "wait, it is still loading" runs
-out after two retakes),
+out after two retakes), \`scripts/overlay-ledger.mjs\` (every modal, drawer, banner and native dialog
+the crawl meets: which dismissal the crawl boundary permits, how many attempts are left, and what is
+still open - an overlay left open makes every later click land on a backdrop with no error at all),
 \`scripts/render-review-artifact.mjs\` (renders any
 review artifact from its own stored JSON), \`scripts/env-role-stubs.mjs\` (per-role credential slots
 in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).

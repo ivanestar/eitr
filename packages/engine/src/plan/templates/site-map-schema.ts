@@ -227,6 +227,72 @@ export function renderSiteMapSchema(): string {
                 "description": "Diagnostic tags identifying visual anomalies (e.g. [\\"session_expired\\", \\"cookie_banner\\"])."
               }
             }
+          },
+          "overlays": {
+            "type": "array",
+            "maxItems": 8,
+            "description": "Modals, drawers, banners, popovers and native dialogs met on this route, recorded by scripts/overlay-ledger.mjs. A modal is a real part of the interface a test will have to open, read and close, so it belongs in the map beside the page that raises it - and recording it is also what proves the crawl put the page back the way it found it, since every entry has to say what closed it.",
+            "items": {
+              "type": "object",
+              "required": ["overlayId", "kind", "trigger", "dismissal"],
+              "additionalProperties": false,
+              "properties": {
+                "overlayId": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "Stable within one crawl. Overlays sharing an identity across routes share the leading signature segment, which is how the same cookie banner on 40 routes is recognisable as one thing."
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["native-dialog", "modal", "drawer", "popover", "banner", "toast", "unknown"],
+                  "description": "\\"native-dialog\\" is a real browser alert/confirm/prompt, which blocks the page until answered; everything else is markup covering it."
+                },
+                "trigger": {
+                  "type": "string",
+                  "maxLength": 80,
+                  "description": "\\"auto\\" when it appeared on its own, otherwise the visible label of whatever the crawl did to raise it - the difference between a banner every visitor sees and a dialog only a specific action opens."
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "textExcerpt": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "Short excerpt of the overlay's own text, PII-masked the same way every other evidence excerpt in this pipeline is."
+                },
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "What the overlay contains (form, input, table, iframe, ...) - the raw material for a Page Object component, since a dialog carrying a form is a component with its own locators, not decoration."
+                },
+                "screenshot": {
+                  "type": "string",
+                  "pattern": "^artifacts/site-map/screenshots/[a-zA-Z0-9_-]+\\\\.(webp|jpg|jpeg)$",
+                  "maxLength": 260,
+                  "description": "Named \\"<path slug>-overlay-<n>--<routeId>.<ext>\\": the routeId stays the last segment because scripts/map-site-status.mjs identifies a screenshot by what follows the final \\"--\\", and a name shaped any other way is deleted by the first prune that runs. Absent when this same overlay was already captured on an earlier route."
+                },
+                "dismissal": {
+                  "type": "object",
+                  "required": ["method", "verified"],
+                  "additionalProperties": false,
+                  "description": "How the crawl put the page back. \\"verified\\" is the whole point of this record: an overlay left open makes every later click on that page land somewhere unintended, silently.",
+                  "properties": {
+                    "method": {
+                      "type": "string",
+                      "enum": ["native-dismiss", "escape", "close-control", "backdrop", "reload", "gave-up"],
+                      "description": "\\"gave-up\\" means nothing permitted by the crawl boundary cleared it - allowed, but only alongside a \\"blocked-by-overlay\\" flag on the route, so a partly-explored page is never mistaken for a fully-explored one."
+                    },
+                    "verified": {
+                      "type": "boolean",
+                      "description": "True only when the page was re-checked after the dismissal and the overlay was actually gone. Never set from the fact that a close action was performed."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
