@@ -163,7 +163,30 @@ async function check() {
     if (!knownPaths.has(canonical)) gaps.push({ sitemapUrl: rawUrl, canonicalPath: canonical });
   }
 
-  return { status: 'CHECKED', sitemapUrl, totalSitemapUrls: urls.length, gaps };
+  // The other direction, and the one that finds a defect in the application rather than in the
+  // crawl: pages the crawl reached that the sitemap does not declare. A sitemap is supposed to list
+  // what a site wants found, so a live page missing from it is usually a sitemap nobody updated -
+  // live-observed on a real application where eleven working pages, including whole product
+  // sections, were absent from its own sitemap.
+  //
+  // Only routes that actually answered 200 count. A protected or erroring route legitimately does
+  // not belong in a sitemap, and reporting those would bury the real finding in noise.
+  const undeclared = [];
+  for (const [routePath, entry] of Object.entries(siteMap.routes)) {
+    if (seen.has(routePath)) continue;
+    if (!entry || (entry.status && entry.status !== 'active')) continue;
+    if (entry.httpStatus !== undefined && entry.httpStatus !== 200) continue;
+    undeclared.push(routePath);
+  }
+  undeclared.sort();
+
+  return {
+    status: 'CHECKED',
+    sitemapUrl,
+    totalSitemapUrls: urls.length,
+    gaps,
+    undeclared,
+  };
 }
 
 const result = await check();

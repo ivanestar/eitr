@@ -454,6 +454,8 @@ export function renderClaudeMd(
 
 @CONVENTIONS.md
 
+**Before inferring anything about the application itself, read \`artifacts/\` first.** It is this project's own memory - what the analysis workflows established and what a human confirmed, written down so it is not rediscovered every time. \`CONVENTIONS.md\` above lists what each file holds and the script that reads it. An entry marked \`reviewed: false\` is a draft, not a fact; a missing file means nobody established that yet, never that the answer is no. This applies to any task, not only the stages that write those files: if you are about to ask about the application or guess at it, look there first.
+
 ---
 
 ${renderSharedRuleBlocks(tool, language)}
@@ -786,6 +788,10 @@ export function renderAgentsMd(
   return `# Project Rules & Agent Instructions
 
 This project is configured with native rules for Cursor, Devin Desktop, Copilot, Aider, and Claude Code. For the full CPOM component/locator contract (directory layout, assertion rules, locator priority, TDM helpers), see \`CONVENTIONS.md\`.
+
+**Before inferring anything about the application itself - what it is for, what its pages are, who its users are, what its API looks like - read \`artifacts/\` first.** That directory is this project's own memory: everything the analysis workflows established, and everything a human confirmed, is written down there rather than being rediscovered each time. \`CONVENTIONS.md\` lists what each file holds and the script that reads it. Two rules govern all of it: an entry marked \`reviewed: false\` is a draft and not a fact, and a missing file means nobody has established that yet - never that the answer is no.
+
+This applies to any task, not only to the analysis stages that write those files. If you are about to ask the human something about their application, or guess at it, check there first - the answer may already be recorded.
 
 ---
 

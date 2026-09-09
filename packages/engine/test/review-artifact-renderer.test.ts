@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderReviewArtifactRenderer } from '../src/plan/templates/review-artifact-renderer.js';
@@ -79,6 +79,44 @@ function run(dir: string, ...args: string[]) {
   });
   return { result, output: result.stdout ? JSON.parse(result.stdout) : null };
 }
+
+// Approving a review changes the entries it describes, and nothing re-renders it - so the file
+// left behind states the pre-approval draft. Live-observed claiming "criticality (draft)" for 45
+// entries a human had confirmed, with the JSON written two minutes after the markdown.
+describe('scripts/render-review-artifact.mjs --discard', () => {
+  it('removes the rendered view and leaves the artifact untouched', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(20));
+      writeJson(dir, 'artifacts/analysis/business-intent.json', businessIntentWith(20));
+      const rendered = run(dir, '--kind=business-intent').output;
+      expect(rendered.mode).toBe('file');
+      const reviewPath = join(dir, 'artifacts', 'review', 'business-intent-review.md');
+      expect(existsSync(reviewPath)).toBe(true);
+
+      const discarded = run(dir, '--kind=business-intent', '--discard').output;
+      expect(discarded.discarded).toBe(true);
+      expect(existsSync(reviewPath)).toBe(false);
+      // The record survives; only the view was thrown away.
+      expect(existsSync(join(dir, 'artifacts', 'analysis', 'business-intent.json'))).toBe(true);
+      expect(discarded.note).toContain('Re-render');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is harmless when there is nothing rendered to discard', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+      writeJson(dir, 'artifacts/analysis/business-intent.json', businessIntentWith(2));
+      const output = run(dir, '--kind=business-intent', '--discard').output;
+      expect(output.discarded).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('scripts/render-review-artifact.mjs (real execution)', () => {
   it('prints inline when the artifact is small enough to read in a terminal', () => {

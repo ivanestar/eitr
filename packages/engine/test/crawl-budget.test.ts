@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
 import { renderCrawlBudget } from '../src/plan/templates/crawl-budget.js';
 import { renderDebugLog } from '../src/plan/templates/debug-log.js';
 
@@ -23,6 +24,24 @@ function run(dir: string, args: string[], env: NodeJS.ProcessEnv = {}): any {
     env: { ...process.env, ...env },
   });
   return { ...JSON.parse(result.stdout), exitCode: result.status };
+}
+
+// spawnSync blocks this process's event loop, so a test that also serves HTTP from here would
+// deadlock: the child's fetch can never be answered while the parent is blocked waiting for it.
+// The seeding tests use this async runner instead.
+function runAsync(dir: string, args: string[]): Promise<any> {
+  return new Promise((resolve) => {
+    const child = spawn('node', [join('scripts', 'crawl-budget.mjs'), ...args], { cwd: dir });
+    let out = '';
+    child.stdout.on('data', (chunk) => (out += chunk));
+    child.on('close', (code) => {
+      try {
+        resolve({ ...JSON.parse(out), exitCode: code });
+      } catch {
+        resolve({ error: out, exitCode: code });
+      }
+    });
+  });
 }
 
 function start(dir: string, extra: string[] = []) {
@@ -541,6 +560,113 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // An extension is a guess about what a URL will return. One HEAD request replaces the guess with
+  // an observation, and the observation wins in both directions.
+  it('lets an observed content type overrule the extension guess', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      // Guessed a file, actually a page - rescued rather than lost.
+      const guessed = check(dir, `${BASE}/reports.xml`);
+      expect(guessed.reason).toBe('non-html-asset');
+      expect(guessed.probeWorthwhile).toBe(true);
+      const observed = run(dir, [
+        'check',
+        `--url=${BASE}/reports.xml`,
+        '--depth=1',
+        '--visible=true',
+        '--content-type=text/html; charset=utf-8',
+      ]);
+      expect(observed.decision).toBe('visit');
+      expect(observed.canonicalPath).toBe('/reports.xml');
+
+      // No extension at all, but the server says it is a file - dropped on evidence.
+      const notAPage = run(dir, [
+        'check',
+        `--url=${BASE}/export`,
+        '--depth=1',
+        '--visible=true',
+        '--content-type=application/pdf',
+      ]);
+      expect(notAPage.decision).toBe('skip');
+      expect(notAPage.reason).toBe('non-html-response');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Seeding is additive by construction: it reaches pages nothing links to, and every URL it
+  // returns still goes through check like any other candidate.
+  it('seeds from the application own declaration, rebased onto the crawled origin', async () => {
+    const dir = setupProject();
+    const server = createServer((req, res) => {
+      if (req.url === '/robots.txt') {
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        // Points at a production host, the way a dev server's robots.txt routinely does.
+        res.end('User-agent: *\nSitemap: https://production.example/sitemap.xml\n');
+        return;
+      }
+      if (req.url === '/sitemap.xml') {
+        res.writeHead(200, { 'content-type': 'application/xml' });
+        res.end(
+          '<urlset><url><loc>https://production.example/orphan</loc></url>' +
+            '<url><loc>https://production.example/tools/pairwise</loc></url></urlset>',
+        );
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    const origin = `http://127.0.0.1:${port}`;
+    try {
+      await runAsync(dir, ['start', `--base-url=${origin}`]);
+      const seeded = await runAsync(dir, ['seed']);
+      // A dev server whose robots.txt names the production domain made every seeded URL
+      // cross-origin, and the whole step silently useless, until they were rebased.
+      expect(seeded.urls).toEqual([`${origin}/orphan`, `${origin}/tools/pairwise`]);
+      expect(seeded.sources.join(' ')).toContain('robots.txt');
+
+      for (const url of seeded.urls) {
+        const decision = await runAsync(dir, [
+          'check',
+          `--url=${url}`,
+          '--depth=0',
+          '--visible=true',
+        ]);
+        expect(decision.decision, `${url} was refused`).toBe('visit');
+      }
+    } finally {
+      // Node keeps fetch's socket alive, so close() alone waits for it and hangs the run.
+      server.closeAllConnections();
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it('treats an application with no sitemap as normal, not as a failure', async () => {
+    const dir = setupProject();
+    const server = createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      await runAsync(dir, ['start', `--base-url=http://127.0.0.1:${port}`]);
+      const seeded = await runAsync(dir, ['seed']);
+      expect(seeded.count).toBe(0);
+      expect(seeded.exitCode).toBe(0);
+      expect(seeded.note).toContain('not a problem');
+    } finally {
+      // Node keeps fetch's socket alive, so close() alone waits for it and hangs the run.
+      server.closeAllConnections();
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30000);
 
   it('rejects source files a site offers for download', () => {
     const dir = setupProject();

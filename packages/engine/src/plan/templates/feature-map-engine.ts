@@ -629,6 +629,32 @@ function deriveFeatures(businessIntentRoutes, siteMapRoutes) {
   }
 
   const features = {};
+
+  // Routes that no intent label covers are grouped by their first path segment, which is the
+  // structure the application itself already declares: /orders and /orders/{id} are one feature by
+  // construction, and a top-level page is its own. This is deliberately cruder than a confirmed
+  // label and never overrides one - it exists so that an absent or partial upstream artifact
+  // produces a coarser map rather than an empty one. Returning zero features would be the worst of
+  // both: a stage that appears to have succeeded while having silently dropped every route.
+  const labelledRouteIds = new Set();
+  for (const [routeId, entry] of Object.entries(businessIntentRoutes)) {
+    const value = entry && entry.businessFeature ? entry.businessFeature.value : null;
+    if (typeof value === 'string' && value.trim().length > 0) labelledRouteIds.add(routeId);
+  }
+  for (const [routePath, route] of Object.entries(siteMapRoutes)) {
+    if (!route || typeof route.routeId !== 'string') continue;
+    if (labelledRouteIds.has(route.routeId)) continue;
+    const segment = routePath.split('/').filter(Boolean)[0];
+    const label = segment ? segment.split(/[-_]/).join(' ') : 'home';
+    const key = 'path:' + label.toLowerCase();
+    if (!features[key]) features[key] = featureRecord(label);
+    const feature = features[key];
+    if (feature.memberRouteIds.indexOf(route.routeId) === -1) {
+      feature.memberRouteIds.push(route.routeId);
+    }
+    addEvidenceOnce(feature, evidence('route-path', routePath));
+  }
+
   for (const [routeId, entry] of Object.entries(businessIntentRoutes)) {
     if (!entry) continue;
     const label =
@@ -726,14 +752,27 @@ function derive() {
       errors: ['artifacts/site-map/site-map.json is missing or has no routes object - run /map-site first.'],
     };
   }
-  const businessIntent = loadJson(BUSINESS_INTENT_PATH);
-  if (!businessIntent || typeof businessIntent.routes !== 'object' || businessIntent.routes === null) {
-    return {
-      status: 'FAILED',
-      errors: [
-        'artifacts/analysis/business-intent.json is missing or has no routes object - it is where feature labels come from.',
-      ],
-    };
+  // Absent per-route intent degrades this stage, it does not stop it: routes with no label are
+  // grouped by their first path segment instead. A stage that refuses to run because an optional
+  // upstream artifact is missing makes that artifact impossible to remove without editing this file
+  // too, and absence is a normal state everywhere else in this pipeline.
+  //
+  // Falling back was only safe once the fallback existed. Making this tolerant while grouping still
+  // depended entirely on labels produced an empty feature map that reported success - a stage that
+  // appears to have worked while having silently dropped every route, which is worse than the hard
+  // failure it replaced. Caught by a test asserting the map is non-empty, not by reading the code.
+  const businessIntentFile = loadJson(BUSINESS_INTENT_PATH);
+  const businessIntent =
+    businessIntentFile &&
+    typeof businessIntentFile.routes === 'object' &&
+    businessIntentFile.routes !== null
+      ? businessIntentFile
+      : { routes: {} };
+  const warnings = [];
+  if (businessIntentFile === null) {
+    warnings.push(
+      'No per-route intent was available, so features were grouped from route paths, titles and observed API contracts alone. Feature names will be coarser than they would be with it.',
+    );
   }
   const apiContracts = loadJson(API_CONTRACTS_PATH);
   const contracts = apiContracts && Array.isArray(apiContracts.contracts) ? apiContracts.contracts : [];
@@ -826,6 +865,9 @@ function derive() {
 
   return {
     status: 'DRAFTED',
+    // Never empty silently: a run that produced a coarser result because an input was absent has to
+    // say so, or the human reads a weaker feature map as if it were the best one obtainable.
+    warnings: warnings,
     features: Object.keys(featuresById).length,
     entities: Object.keys(entitiesById).length,
     unreviewedRelations: unreviewedRelations,

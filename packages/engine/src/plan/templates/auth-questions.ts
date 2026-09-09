@@ -113,8 +113,12 @@ const QUESTIONS = [
       { id: 'no', label: 'No login anywhere' },
     ],
     allowsFreeText: false,
-    applies: function () {
-      return true;
+    // Asked once, ever. A person who has already said their application has no login should not be
+    // asked again on every run, and one who said it does need not confirm it a second time - the
+    // answer is a durable fact about the application, recorded in app-profile.json and read back
+    // through auth-status.
+    applies: function (answers, status) {
+      return !status || !status.recordedLogin;
     },
   },
   {
@@ -125,16 +129,17 @@ const QUESTIONS = [
       { id: 'stop', label: 'Stop here' },
     ],
     allowsFreeText: false,
-    applies: function (answers) {
-      return answers['has-login'] === 'yes';
+    applies: function (answers, status) {
+      // Either just answered, or recorded on an earlier run - both mean there is a login.
+      return answers['has-login'] === 'yes' || (status && status.recordedLogin === 'present');
     },
   },
   {
     id: 'existing-session',
-    text: 'A saved session already exists. Reuse it, replace it, or add another role alongside it?',
+    text: 'A saved login session already exists for this project. Use it as it is, capture a fresh one over it, or keep it and add another role alongside?',
     options: [
       { id: 'reuse', label: 'Reuse it as-is' },
-      { id: 'capture-fresh', label: 'Capture a fresh one' },
+      { id: 'capture-fresh', label: 'Capture a fresh one, replacing it' },
       { id: 'add-role', label: 'Add another role' },
     ],
     allowsFreeText: false,
@@ -146,12 +151,14 @@ const QUESTIONS = [
   },
   {
     id: 'roles',
-    text: 'Does the application have more than one user role (Admin, Customer, Vendor, and so on) - and how many do you want to capture right now?',
+    // One question, not two. It used to ask whether roles exist AND how many to capture in the same
+    // sentence, and offered "no login at all" to someone who had already answered that there is
+    // one - an option that contradicted an answer given two questions earlier.
+    text: 'Do different kinds of user see different things in this app - an admin, a customer, a vendor? If so, which of them should be captured now?',
     options: [
-      { id: 'single', label: 'One kind of user, no separate roles' },
-      { id: 'all', label: 'Several roles - capture all of them now', recommended: true },
-      { id: 'some', label: 'Several roles - capture only some now' },
-      { id: 'none-and-no-login', label: 'No roles and no login at all' },
+      { id: 'single', label: 'Everyone sees the same thing - just one login' },
+      { id: 'all', label: 'There are several - capture all of them now', recommended: true },
+      { id: 'some', label: 'There are several - capture only some of them now' },
     ],
     allowsFreeText: true,
     freeTextHint:
@@ -189,7 +196,7 @@ const QUESTIONS = [
   },
   {
     id: 'push-secrets',
-    text: 'Push the auth values as CI secrets now, from this machine?',
+    text: 'Add these to your CI provider as secrets now, from this machine? Only the variable names are ever shown back to you - never the values.',
     options: [
       { id: 'yes', label: 'Yes, push them now' },
       { id: 'no', label: 'No, I will add them myself' },
@@ -213,8 +220,10 @@ for (const question of QUESTIONS) QUESTION_BY_ID[question.id] = question;
 // Each one is a real, supported end state rather than a failure, and each says what it means in
 // the words the human should hear. A flow that ends early is not an incomplete run.
 
-function outcomeFor(answers) {
-  if (answers['has-login'] === 'no') {
+function outcomeFor(answers, status) {
+  // Either answered just now, or answered on some earlier run and recorded since. The second case
+  // is why the question stops being asked at all: the flow ends here without troubling anyone.
+  if (answers['has-login'] === 'no' || (status && status.recordedLogin === 'none')) {
     return {
       reason: 'no-login',
       message:
@@ -224,16 +233,10 @@ function outcomeFor(answers) {
   if (answers.proceed === 'stop') {
     return { reason: 'declined', message: 'Stopped before anything ran. Nothing was changed.' };
   }
-  // A person cannot both have a login and have no login. Rather than picking whichever answer came
-  // last, the flow stops and says which two answers disagree - guessing an intent here would mean
-  // either capturing a session nobody wants or skipping one they do.
-  if (answers.roles === 'none-and-no-login') {
-    return {
-      reason: 'contradiction',
-      message:
-        'The answer "no roles and no login at all" contradicts the earlier answer that this app does have a login. Stopping rather than choosing one of the two - re-run and answer the first question again.',
-    };
-  }
+  // The roles question used to carry a "no roles and no login at all" option, which could only ever
+  // contradict the answer given two questions earlier, and this branch existed to catch that
+  // contradiction. The option is gone: an answer that can only be reached by contradicting an
+  // earlier one should not be offered in the first place.
   if (answers['existing-session'] === 'reuse') {
     return {
       reason: 'reusing-session',
@@ -391,7 +394,7 @@ function main() {
     return Object.prototype.hasOwnProperty.call(answers, id);
   });
 
-  const outcome = outcomeFor(answers);
+  const outcome = outcomeFor(answers, status);
   if (outcome) {
     process.stdout.write(
       JSON.stringify({ status: 'STOP', outcome: outcome, answered: answered }, null, 2) + '\\n',

@@ -121,6 +121,15 @@ function loadStatus(errors) {
     orphanedScreenshotCount: orphanedScreenshotCount,
     capturedRoles: capturedRoles,
     hasCrawlBoundary: Boolean(profile.crawlBoundary),
+    // The stored answers themselves, not only whether they exist. A question that is skipped
+    // because it was already answered has to hand that answer forward, or the run proceeds with
+    // neither - live-observed leaving a second crawl with no boundary at all, which is worse than
+    // asking again.
+    storedCrawlBoundary: profile.crawlBoundary ? profile.crawlBoundary.value : null,
+    storedOffLimits:
+      profile.crawlBoundary && Array.isArray(profile.crawlBoundary.offLimits)
+        ? profile.crawlBoundary.offLimits
+        : null,
     hasApplicationKind: Boolean(profile.applicationKind),
     hasApiStyle: Boolean(profile.apiStyle),
     contractsExist: contracts !== null,
@@ -237,13 +246,20 @@ const QUESTIONS = [
     phase: 'postcrawl',
     // Asked ONLY when the crawl observed nothing readable. Asking otherwise invites an answer that
     // contradicts what was actually seen, and observation beats recollection every time.
-    text: 'I could not read this application API traffic. Does it use REST, GraphQL, RPC, a mix, or does the server interaction not go through a readable API at all - server actions, form posts, a LiveView or Blazor style socket?',
+    text: "Nothing readable came back from this application's network traffic while crawling. Do you know how its pages talk to the server? If you are not sure, say so - a guess here would be recorded as fact.",
+    // "I do not know" is a real answer, not a missing one. Without it the only way forward is a
+    // guess, and a guess recorded as an established fact is exactly what this project treats as
+    // worse than an admitted gap - later stages draft API-level tests from this.
     options: [
-      { id: 'rest', label: 'REST' },
-      { id: 'graphql', label: 'GraphQL' },
-      { id: 'rpc', label: 'RPC (gRPC-Web, tRPC, JSON-RPC)' },
-      { id: 'mixed', label: 'A mix of more than one' },
-      { id: 'none-observable', label: 'No readable API - server actions or form posts' },
+      { id: 'unknown', label: "I don't know", recommended: true },
+      { id: 'rest', label: 'REST - each address is a thing, like /api/orders/42' },
+      { id: 'graphql', label: 'GraphQL - one address that everything is asked through' },
+      { id: 'rpc', label: 'RPC - named operations (gRPC-Web, tRPC, JSON-RPC)' },
+      { id: 'mixed', label: 'More than one of these' },
+      {
+        id: 'none-observable',
+        label: 'No API as such - form submits or server-side actions',
+      },
     ],
     allowsFreeText: false,
     applies: function (answers, status) {
@@ -323,7 +339,9 @@ function outcomeFor(answers) {
 }
 
 function planFor(answers, status) {
-  const boundary = answers['crawl-boundary'] || null;
+  // This run's answer first, then whatever was recorded on an earlier one. A question skipped
+  // because it is already answered must still deliver that answer.
+  const boundary = answers['crawl-boundary'] || status.storedCrawlBoundary || null;
   const rolesAnswer = answers.roles;
   let roles = [];
   if (rolesAnswer === 'all') roles = status.capturedRoles.slice();
@@ -336,11 +354,17 @@ function planFor(answers, status) {
     roles: roles,
     crawlBoundary: boundary,
     offLimits:
-      boundary === 'full-except' && typeof answers['off-limits'] === 'string'
-        ? answers['off-limits']
-        : null,
+      boundary !== 'full-except'
+        ? null
+        : typeof answers['off-limits'] === 'string'
+          ? answers['off-limits']
+          : status.storedOffLimits && status.storedOffLimits.length > 0
+            ? status.storedOffLimits.join(', ')
+            : null,
     pruneOrphanedScreenshots: answers['orphaned-screenshots'] === 'delete',
-    apiStyle: answers['api-style'] || null,
+    // "I don't know" records nothing rather than recording uncertainty as a value: an absent field
+    // already means "nobody established this", which is exactly what happened.
+    apiStyle: answers['api-style'] && answers['api-style'] !== 'unknown' ? answers['api-style'] : null,
     applicationKind: answers['application-kind'] || null,
     corePurpose: answers['core-purpose'] || null,
   };
