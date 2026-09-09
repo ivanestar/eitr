@@ -115,14 +115,35 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     }
   });
 
-  it('fails when business-intent.json is absent - it is where feature labels come from', () => {
+  // Per-route intent is one input among several, not a precondition. A stage that refuses to run
+  // without an optional upstream artifact makes that artifact impossible to remove without editing
+  // this stage too, which is the failure mode this project treats as a design defect.
+  it('still produces a feature map when business-intent.json is absent, and says it was coarser', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [
+        { path: '/orders', routeId: 'route-orders' },
+        { path: '/orders/{id}', routeId: 'route-order-detail' },
+      ]);
+      const result = run(dir);
+      expect(result.status).toBe(0);
+      const output = JSON.parse(result.stdout);
+      expect(output.status).toBe('DRAFTED');
+      expect(output.features).toBeGreaterThan(0);
+      // Degrading silently would let a human read a weaker map as the best one obtainable.
+      expect(output.warnings.join(' ')).toContain('No per-route intent');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports no such warning when the intent was there', () => {
     const dir = setupProject();
     try {
       writeSiteMap(dir, [{ path: '/orders', routeId: 'route-orders' }]);
-      const result = run(dir);
-      expect(result.status).toBe(1);
-      const output = JSON.parse(result.stdout);
-      expect(output.errors[0]).toContain('business-intent.json');
+      writeBusinessIntent(dir, [{ routeId: 'route-orders', feature: 'Orders', tier: 'high' }]);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.warnings).toEqual([]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
