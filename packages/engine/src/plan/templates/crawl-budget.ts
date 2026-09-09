@@ -33,6 +33,7 @@ export function renderCrawlBudget(): string {
  *   node scripts/crawl-budget.mjs visited --url=<url> [--status=<n>] [--content-type=<mime>]
  *                                 [--content-hash=<hash>]
  *   node scripts/crawl-budget.mjs scroll --url=<url>
+ *   node scripts/crawl-budget.mjs seed
  *   node scripts/crawl-budget.mjs rejected [--reason=<reason>]
  *   node scripts/crawl-budget.mjs progress
  *   node scripts/crawl-budget.mjs report
@@ -274,7 +275,10 @@ function templateSegment(segment) {
   return segment;
 }
 
-function canonicalize(rawUrl, state) {
+// observedContentType defaults rather than being required: two of the three call sites have not
+// looked at a response and never will, and a bare "!== null" check treats their missing argument as
+// a real observation of undefined.
+function canonicalize(rawUrl, state, observedContentType = null) {
   let parsed;
   try {
     parsed = new URL(rawUrl, state.baseUrl || undefined);
@@ -321,12 +325,23 @@ function canonicalize(rawUrl, state) {
   parsed.search = '';
   for (const [key, value] of kept) parsed.searchParams.append(key, value);
 
-  const lastSegment = parsed.pathname.split('/').pop() || '';
-  const dot = lastSegment.lastIndexOf('.');
-  if (dot > 0) {
-    const ext = lastSegment.slice(dot + 1).toLowerCase();
-    if (NON_HTML_EXTENSIONS.has(ext)) {
-      return { ok: false, reason: 'non-html-asset' };
+  // An extension is a guess about what a URL will return, and a guess is the wrong basis for
+  // discarding a route. When the caller has actually observed the content type - one HEAD request -
+  // that observation replaces the guess in both directions: an .xml path answering text/html is a
+  // page and is kept, an extensionless path answering application/pdf is not and is dropped.
+  if (observedContentType !== null) {
+    if (!HTML_CONTENT_TYPES.some((type) => observedContentType.includes(type))) {
+      return { ok: false, reason: 'non-html-response' };
+    }
+  } else {
+    const lastSegment = parsed.pathname.split('/').pop() || '';
+    const dot = lastSegment.lastIndexOf('.');
+    if (dot > 0) {
+      const ext = lastSegment.slice(dot + 1).toLowerCase();
+      if (NON_HTML_EXTENSIONS.has(ext)) {
+        // Says plainly that this was a guess and can be overturned by looking.
+        return { ok: false, reason: 'non-html-asset', probeWorthwhile: true };
+      }
     }
   }
 
@@ -605,8 +620,12 @@ function cmdCheck(args) {
   // drop the ones that were reached anyway from some other page - the same link is routinely hidden
   // in a collapsed menu on one page and visible in the nav on another. It also means a cross-origin
   // link is reported as cross-origin rather than as invisible, which is the more useful answer.
-  const canonical = canonicalize(rawUrl, state);
-  if (!canonical.ok) return deny(canonical.reason);
+  const observedContentType =
+    typeof args['content-type'] === 'string' ? args['content-type'].toLowerCase() : null;
+  const canonical = canonicalize(rawUrl, state, observedContentType);
+  if (!canonical.ok) {
+    return deny(canonical.reason, canonical.probeWorthwhile ? { probeWorthwhile: true } : undefined);
+  }
 
   const excluded = matchesExclusion(state, canonical.canonicalPath);
   if (excluded !== null) {
@@ -973,6 +992,86 @@ function cmdRejected(args) {
   };
 }
 
+// Routes the application declares about itself, from robots.txt's Sitemap: lines and the
+// conventional /sitemap.xml. Purely additive: a crawl that follows links can only reach what
+// something links to, and a page nobody links to is invisible to it by construction. Nothing here
+// removes a route or overrides a decision - every URL returned still goes through 'check' like any
+// other candidate, so the ordinary bounds, the visibility rule and the exclusions all still apply.
+//
+// katana calls the same idea known-files. Failure is silent by design: most applications publish no
+// sitemap at all, and that is a normal outcome rather than a problem to report.
+async function cmdSeed() {
+  const state = requireState();
+  const found = new Set();
+  const sources = [];
+
+  const fetchText = async (url) => {
+    try {
+      const res = await fetch(url, { redirect: 'follow' });
+      return res.ok ? await res.text() : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const sitemapUrls = [];
+  const robots = await fetchText(state.origin + '/robots.txt');
+  if (robots !== null) {
+    sources.push('robots.txt');
+    for (const line of robots.split('\\n')) {
+      const match = line.match(/^\\s*sitemap\\s*:\\s*(\\S+)/i);
+      if (match) sitemapUrls.push(match[1]);
+    }
+  }
+  // The conventional location on the origin being crawled is always tried, not only as a fallback
+  // when robots.txt named nothing. A dev or staging server commonly serves a robots.txt copied from
+  // production, so the sitemap it points at is on a host that is unreachable from here - and the
+  // one sitting right there at /sitemap.xml would never be read.
+  sitemapUrls.push(state.origin + '/sitemap.xml');
+
+  // A sitemap index points at further sitemaps. One level of following is enough for the shapes
+  // real sites use, and refusing to recurse further keeps this from becoming its own crawl.
+  const seen = new Set();
+  const queue = sitemapUrls.slice(0, 20);
+  while (queue.length > 0) {
+    const url = queue.shift();
+    if (seen.has(url) || seen.size >= 20) continue;
+    seen.add(url);
+    const xml = await fetchText(url);
+    if (xml === null) continue;
+    sources.push(url);
+    const isIndex = /<sitemapindex/i.test(xml);
+    for (const match of xml.matchAll(/<loc>\\s*([^<\\s]+)\\s*<\\/loc>/gi)) {
+      if (isIndex) {
+        queue.push(match[1]);
+        continue;
+      }
+      // Rebased onto the origin actually being crawled. A sitemap names production hosts, and a
+      // local or staging deployment of the same application serves the same paths - live-observed
+      // with a dev server whose robots.txt pointed at the production domain, which made every
+      // seeded URL cross-origin and the whole seeding step silently useless. The path is the
+      // application's declaration about itself; the host is deployment configuration.
+      try {
+        found.add(state.origin + new URL(match[1]).pathname);
+      } catch {
+        // A malformed <loc> contributes nothing rather than failing the step.
+      }
+    }
+  }
+
+  return {
+    action: 'seed',
+    sources: sources,
+    urls: [...found].sort(),
+    count: found.size,
+    note:
+      found.size === 0
+        ? 'This application publishes no sitemap, which is the common case and not a problem. Crawl from links alone.'
+        : found.size +
+          ' URL(s) the application declares about itself. Put each through check like any other candidate - this only adds pages a link-following crawl could never reach, it never overrides a decision.',
+  };
+}
+
 function cmdProgress() {
   const state = requireState();
   return {
@@ -1013,7 +1112,7 @@ function cmdReport() {
   };
 }
 
-function main() {
+async function main() {
   const action = (process.argv[2] || '').toLowerCase();
   const args = parseArgs(process.argv.slice(3));
 
@@ -1033,6 +1132,9 @@ function main() {
       break;
     case 'rejected':
       result = cmdRejected(args);
+      break;
+    case 'seed':
+      result = await cmdSeed();
       break;
     case 'progress':
       result = cmdProgress();
