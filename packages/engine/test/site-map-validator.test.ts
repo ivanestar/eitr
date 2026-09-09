@@ -670,6 +670,62 @@ describe('scripts/validate-site-map.mjs (real execution)', () => {
     }
   });
 
+  it('accepts redirectedFrom naming the paths that land on a route', () => {
+    const dir = setupProject();
+    try {
+      const data = structuredClone(wellFormedSiteMap()) as Record<string, any>;
+      data.routes['/checkout'].redirectedFrom = ['/old-checkout', '/cart/finish'];
+      writeSiteMap(dir, data);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('PASSED');
+      expect(output.errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails on an empty redirectedFrom, which should simply be absent', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedSiteMap()) as Record<string, any>;
+      bad.routes['/checkout'].redirectedFrom = [];
+      writeSiteMap(dir, bad);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.some((e: string) => e.includes('omit it entirely'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when a route claims it redirects to itself, which records nothing', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedSiteMap()) as Record<string, any>;
+      bad.routes['/checkout'].redirectedFrom = ['/checkout'];
+      writeSiteMap(dir, bad);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.some((e: string) => e.includes('own key'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when redirectedFrom repeats a path', () => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedSiteMap()) as Record<string, any>;
+      bad.routes['/checkout'].redirectedFrom = ['/old', '/old'];
+      writeSiteMap(dir, bad);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(output.errors.some((e: string) => e.includes('must not repeat'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // discoveryMethod decides whether the content-hash heuristic may call a route a phantom, so a
   // typo in it silently changes which routes can be flagged - the validator has always read the
   // field but never checked it.
@@ -847,11 +903,13 @@ describe('crawler screenshot feature integration & prompt invariants', () => {
     expect(content).toContain('artifacts/site-map/screenshots/<slug>--<routeId>.jpg');
     expect(content).toContain('Never use the slug alone');
 
-    // Visual triage states
+    // Visual triage. The markup heuristics may raise a flag and observe a blocking overlay; the
+    // three failure states are reached only from the HTTP status the server actually returned,
+    // after a live run showed these proxies wrong six times out of eight.
     expect(content).toContain('Selective Visual Triage Gate');
-    expect(content).toContain(
-      'ready` | `auth_wall` | `access_denied` | `error_page` | `empty_state',
-    );
+    expect(content).toContain('may never set `state` to anything but `ready`');
+    expect(content).toContain('no-interactive-elements');
+    expect(content).toContain('may reach those three states on its own');
     expect(content).toContain('blockingOverlay');
 
     // Self-healing update mode

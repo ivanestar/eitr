@@ -433,6 +433,31 @@ describe('the visual pass is actually wired into what gets generated', () => {
     expect(text).toContain('resolutionOrder');
   });
 
+  // Measured on a live site: six of eight non-ready verdicts from these heuristics were wrong,
+  // including a working sign-in form recorded as a broken page because its URL said "login".
+  it('/map-site lets the markup heuristics raise a flag but never set a failure state', () => {
+    const text = mapSiteSkill();
+    expect(text).toContain('may never set `state` to anything but `ready`');
+    expect(text).toContain('never by its own name');
+    // The states it may no longer reach on its own are exactly the ones HTTP status decides.
+    expect(text).toContain('may reach those three states on its own');
+  });
+
+  it('/map-site keys a redirected route by its destination and records where it came from', () => {
+    const text = mapSiteSkill();
+    expect(text).toContain('redirectedFrom');
+    expect(text).toContain('that is the route key');
+    expect(text).toContain('redirect left the application');
+  });
+
+  // A redirect onto a route the crawl already has is the common case, and reading it as "left the
+  // application" throws away the only record that the old path exists.
+  it('/map-site merges a redirect onto an already-known destination instead of dropping it', () => {
+    const text = mapSiteSkill();
+    expect(text).toContain('already-claimed');
+    expect(text).toContain('Read the `reason`');
+  });
+
   it('/map-site puts a visually proposed URL through the frontier gatekeeper like any other link', () => {
     const text = mapSiteSkill();
     expect(text).toContain('a visual proposal gets no special standing');

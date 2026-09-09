@@ -166,6 +166,14 @@ export function renderSiteMapSchema(): string {
             "enum": ["active", "removed"],
             "description": "\\"removed\\" means /map-site update could no longer resolve this route (404, vanished from nav) - the entry is kept, not silently deleted, so a consumer can see route-removal history. A full /map-site create pass prunes \\"removed\\" entries when it regenerates fresh."
           },
+          "redirectedFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true,
+            "description": "Canonical path templates that were requested and redirected here, e.g. [\\"/old-checkout\\"] on the entry for \\"/checkout\\". Absent when nothing redirected to this route, which is the common case. A route that exists only as a redirect target is reachable by a real user and invisible to a crawl that keys every page by the URL it asked for, so the destination owns the entry and the requested path is recorded here rather than becoming a route of its own."
+          },
           "discoveryMethod": {
             "type": "string",
             "enum": ["navigation", "href-scan-only"],

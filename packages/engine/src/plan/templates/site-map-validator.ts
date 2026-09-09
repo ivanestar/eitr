@@ -177,6 +177,21 @@ function validate() {
     if (!STATUS_VALUES.has(entry.status)) {
       errors.push(label + '.status must be one of active|removed.');
     }
+    if ('redirectedFrom' in entry) {
+      if (!isStringArray(entry.redirectedFrom) || entry.redirectedFrom.length === 0) {
+        errors.push(
+          label +
+            '.redirectedFrom, when present, must be a non-empty array of strings - omit it entirely when nothing redirected here.',
+        );
+      } else if (new Set(entry.redirectedFrom).size !== entry.redirectedFrom.length) {
+        errors.push(label + '.redirectedFrom must not repeat the same path.');
+      } else if (entry.redirectedFrom.includes(key)) {
+        // A route listing itself as its own redirect source says nothing and hides the real one.
+        errors.push(
+          label + '.redirectedFrom must not contain this route own key ("' + key + '").',
+        );
+      }
+    }
     if ('discoveryMethod' in entry && !DISCOVERY_METHOD_VALUES.has(entry.discoveryMethod)) {
       errors.push(
         label + '.discoveryMethod, when present, must be one of navigation|href-scan-only.',
