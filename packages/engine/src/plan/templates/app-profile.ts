@@ -1,4 +1,4 @@
-﻿// Template for scripts/app-profile.mjs вЂ” the single read/validate entry point for
+﻿// Template for scripts/app-profile.mjs - the single read/validate entry point for
 // artifacts/analysis/app-profile.json.
 //
 // Deliberately NOT an assembler: it never merges site-map.json, feature-map.json, or anything

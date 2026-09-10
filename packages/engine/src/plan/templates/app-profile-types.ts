@@ -1,4 +1,4 @@
-﻿// Template for .scaffold/schemas/app-profile.types.ts вЂ” the type contract for
+﻿// Template for .scaffold/schemas/app-profile.types.ts - the type contract for
 // artifacts/analysis/app-profile.json.
 //
 // Scope is deliberately narrow: this file holds ONLY facts that have no other home and cannot be

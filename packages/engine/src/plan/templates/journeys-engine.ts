@@ -10,6 +10,9 @@
 //   level     - 'integration' or 'system', following from the other two.
 //
 // Interface rules, in priority order:
+//   0. A condition carrying an executionLevel keeps it: 'dom' -> 'ui', since a value the control
+//      cannot offer is set by script in the browser; 'api' -> 'api', allowed only where the crawl
+//      observed this route calling one.
 //   1. A boundary-value/checklist-based condition whose target parameter has html5-constraint
 //      evidence -> 'ui': the browser blocks that value before it ever reaches the network, so an
 //      API check of it is meaningless.
@@ -180,6 +183,15 @@ function classify(condition, parameters, anchorConditionId, cheapestInterfaceIsA
   // actually happens rather than through the screen that happens to trigger it.
   if (condition.technique === 'state-transition') {
     return { testInterface: 'api', reason: 'state-transition-default' };
+  }
+  // A value the page's own control cannot produce is set by script in the browser; one recorded as
+  // api-level is sent to the endpoint the crawl saw this route call. Neither is a choice left to the
+  // defaults below.
+  if (condition.executionLevel === 'dom') {
+    return { testInterface: 'ui', reason: 'dom-level-value' };
+  }
+  if (condition.executionLevel === 'api') {
+    return { testInterface: 'api', reason: 'api-level-value' };
   }
   if (condition.conditionId === anchorConditionId) {
     return cheapestInterfaceIsApi

@@ -181,15 +181,26 @@ mechanically expands those partitions into 2-way combinatorial coverage and 3-va
 boundary-value conditions: it seeds one candidate vector per still-uncovered parameter pair and
 greedily fills every other column around it, backtracking within that fill - a pair only lands in
 `unsatisfiedPairs` (with the exact constraint that blocks it) when completing a vector around it
-is genuinely impossible, never merely because an earlier, unrelated greedy attempt stalled. The
-same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
+is genuinely impossible, never merely because an earlier, unrelated greedy attempt stalled.
+Invalid values follow the single-fault rule PICT uses for its negative values: two never share a
+vector, each is paired with every valid value of the other parameters, and valid pairs count as
+covered only in all-valid vectors, since a rejected input never exercised the values beside it.
+The same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
 deterministic redaction backstop - independent of what the LLM step already did - masking
-digit-run and majority-digit PII shapes in every evidence excerpt and sample value before the
-artifact is ever written. Every generated condition also carries a `description` (one plain sentence, e.g. `Verify the page
-accepts language="en" (positive)`) and a `scenario` (`positive`/`negative`), both synthesized
-deterministically from the vector's own resolved partition sample values or literal boundary/
-checklist probe - what a human actually reviews at sign-off, never a bare parameter/technique/count
-summary. Every generated condition starts `isSpeculative: true`/`reviewed: false`
+digit-run and majority-digit PII shapes in every evidence excerpt, sample value and option label
+before the artifact is ever written. The gate also holds the extraction to what the page states:
+an invalid partition and a boundary each quote the rule they rest on (a placeholder is refused as
+one), a select or radio records its offered options so none of them can be marked invalid, and an
+invalid value such a control cannot produce carries an `executionLevel` (`dom` or `api`) that
+`compose-journeys.mjs` routes by. Every partition records an `expectedOutcome` for its first
+sample value and every boundary an `acceptedOutcome` and a `rejectedOutcome` for its probes - a
+boundary probe never borrows the partition's, which was written for a different value - and every
+generated condition carries a `description` (the vector's values followed by that outcome, e.g.
+`With count="5": exactly 5 GUIDs are listed in the result (positive)`), the `expectedOutcome` on
+its own, and a `scenario` (`positive`/`negative`) - all synthesized deterministically, and all
+rejected by the gate when they fall back on a stock phrase such as "correctly handles". That is
+what a human reviews at sign-off, never a bare parameter/technique/count summary, and what
+`/design-test-cases` carries into each step's expected result. Every generated condition starts `isSpeculative: true`/`reviewed: false`
 with an empty verification contract; a human fills in expected UI/state/network behavior at the
 same kind of Human Sign-Off Gateway Stage 1 already established, recording `reviewedBy` the same
 way (`'human'` or `'auto-pilot'`) once approved. See

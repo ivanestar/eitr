@@ -20,6 +20,17 @@
 // a real dead end (a 3-way-or-deeper conflict from multiple independent ConstraintRules
 // interacting) - buildNeededPairs already excludes any pair directly forbidden by a single rule
 // before it ever becomes a seed candidate.
+//
+// Invalid values follow the single-fault rule the same way PICT treats its negative values: two
+// invalid values never share a vector, because the first rejection hides whatever the application
+// does with the second. Valid pairs are covered only by all-valid vectors, and each invalid value is
+// paired with every valid value of every other parameter in vectors that carry it alone. A valid
+// pair sitting inside a negative vector does not count as covered - a rejected submission never
+// exercised it.
+//
+// Descriptions carry no verbs of their own judgment. Each is the vector's values followed by the
+// expected outcome the extraction step recorded on the partition or boundary it draws on, so a
+// condition always names something a person can check.
 
 export function renderTestConditionsEngine(): string {
   return `#!/usr/bin/env node
@@ -91,6 +102,7 @@ function redactEntry(entry) {
         partition.sampleValues = partition.sampleValues.map(redact);
       }
     }
+    if (Array.isArray(param.options)) param.options = param.options.map(redact);
   }
 }
 
@@ -195,15 +207,35 @@ function violatesConstraint(paramName, partitionId, fixed, constraints) {
   return false;
 }
 
+function isInvalidPartition(param, partitionId) {
+  const partition =
+    param &&
+    param.partitions.find(function (p) {
+      return p.id === partitionId;
+    });
+  return Boolean(partition && partition.kind === 'invalid');
+}
+
+// The one parameter in a vector holding an invalid partition, or null for an all-valid vector.
+// Never more than one exists: seeds carry at most one and fillRemaining only adds valid values.
+function invalidNameOf(parameters, vector) {
+  for (const name of Object.keys(vector)) {
+    if (isInvalidPartition(paramByName(parameters, name), vector[name])) return name;
+  }
+  return null;
+}
+
 // Pairs directly forbidden by a single ConstraintRule never enter needed at all - only a pair
 // that ends up unsatisfiable through a THIRD parameter's cascading conflict (multiple independent
-// rules interacting) can still fail once it's picked as a seed - see buildSeededVector.
+// rules interacting) can still fail once it's picked as a seed - see buildSeededVector. A pair of
+// two invalid values never enters either: no vector may carry both.
 function buildNeededPairs(parameters, constraints) {
   const needed = new Set();
   for (let i = 0; i < parameters.length; i++) {
     for (let j = i + 1; j < parameters.length; j++) {
       for (const pa of parameters[i].partitions) {
         for (const pb of parameters[j].partitions) {
+          if (pa.kind === 'invalid' && pb.kind === 'invalid') continue;
           const fixed = {};
           fixed[parameters[j].name] = pb.id;
           if (violatesConstraint(parameters[i].name, pa.id, fixed, constraints)) continue;
@@ -218,7 +250,15 @@ function buildNeededPairs(parameters, constraints) {
 // How many currently-uncovered needed pairs this candidate would newly cover against the values
 // THIS vector has already fixed (seed values plus any columns filled so far). Every call site has
 // at least the seed's 2 values already fixed, so there is no "nothing fixed yet" case to special-case.
+// In a vector carrying an invalid value, only the pair with that value counts - see
+// removeCoveredPairs for why.
 function scoreCandidate(parameters, param, partition, vector, needed) {
+  const invalidName = invalidNameOf(parameters, vector);
+  if (invalidName !== null) {
+    return needed.has(pairKey(parameters, param.name, partition.id, invalidName, vector[invalidName]))
+      ? 1
+      : 0;
+  }
   let count = 0;
   for (const name of Object.keys(vector)) {
     if (needed.has(pairKey(parameters, param.name, partition.id, name, vector[name]))) count++;
@@ -282,14 +322,27 @@ function describeDeadEnds(parameters, constraints, fixed, col) {
 // highest-scoring conflict-free candidate first (stable sort - ties keep the partitions array's
 // own declared order, so results are deterministic run to run) and backtracking within this fill
 // when a later column dead-ends. Returns null on success, or the dead-end facts for the column
-// where every candidate failed even after exhausting every earlier column's alternatives.
+// where every candidate failed even after exhausting every earlier column's alternatives. Only
+// valid values fill a column: whether a vector carries an invalid value is decided by its seed.
 function fillRemaining(parameters, constraints, needed, vector, col) {
   if (col >= parameters.length) return null;
   const param = parameters[col];
   if (Object.prototype.hasOwnProperty.call(vector, param.name)) {
     return fillRemaining(parameters, constraints, needed, vector, col + 1);
   }
-  const candidates = param.partitions.filter(function (p) {
+  const validPartitions = param.partitions.filter(function (p) {
+    return p.kind !== 'invalid';
+  });
+  if (validPartitions.length === 0) {
+    return {
+      deadEnds: [
+        {
+          reason: param.name + ' has no valid partition to hold while another value is probed',
+        },
+      ],
+    };
+  }
+  const candidates = validPartitions.filter(function (p) {
     return !violatesConstraint(param.name, p.id, vector, constraints);
   });
   if (candidates.length === 0) {
@@ -312,8 +365,19 @@ function fillRemaining(parameters, constraints, needed, vector, col) {
   return lastDeadEnd;
 }
 
+// A negative vector covers only the pairs its invalid value forms: the application rejects the
+// input, so the valid values beside it were never exercised together and still need an all-valid
+// vector of their own.
 function removeCoveredPairs(parameters, vector, needed) {
   const names = Object.keys(vector);
+  const invalidName = invalidNameOf(parameters, vector);
+  if (invalidName !== null) {
+    for (const name of names) {
+      if (name === invalidName) continue;
+      needed.delete(pairKey(parameters, invalidName, vector[invalidName], name, vector[name]));
+    }
+    return;
+  }
   for (let i = 0; i < names.length; i++) {
     for (let j = i + 1; j < names.length; j++) {
       needed.delete(pairKey(parameters, names[i], vector[names[i]], names[j], vector[names[j]]));
@@ -373,31 +437,37 @@ function boundaryProbeIsValid(boundary, index) {
   return boundary === 'min' ? index !== 0 : index !== 2;
 }
 
-// Phrasing varies by technique - grounded in a real distinction (what kind of probe this is), not
-// cosmetic rotation: a boundary-value condition reads as an accept/reject verdict on an edge value,
-// a checklist-based condition (always negative by construction) reads as a safety claim about a
-// malformed input, and combinatorial/equivalence-partition conditions read as a general
-// accept/handle claim about a value combination. All three stay fully deterministic.
-function describeText(technique, joinedClauses, scenario) {
-  if (technique === 'boundary-value') {
-    const verdict = scenario === 'positive' ? 'accepted' : 'rejected';
-    return 'Verify the boundary value ' + joinedClauses + ' is ' + verdict + ' (' + scenario + ')';
-  }
-  if (technique === 'checklist-based') {
-    return (
-      'Verify the page safely rejects the malformed input ' + joinedClauses + ' (' + scenario + ')'
-    );
-  }
-  const verb = scenario === 'positive' ? 'accepts' : 'correctly handles';
-  return 'Verify the page ' + verb + ' ' + joinedClauses + ' (' + scenario + ')';
+// Where a 3-value BVA probe sits relative to its limit, indexed the same way BoundarySet.values is.
+const BOUNDARY_POSITION = {
+  min: ['one below the minimum', 'at the minimum', 'one above the minimum'],
+  max: ['one below the maximum', 'at the maximum', 'one above the maximum'],
+};
+
+function levelNote(level) {
+  if (level === 'dom') return 'set by script - the control does not offer it';
+  if (level === 'api') return 'sent straight to the API';
+  return null;
 }
 
-// Synthesizes a human-readable sentence for one condition's vector, deterministically from data
-// already present - never free model inference. targetName/targetIsValid apply only to
-// boundary-value/checklist-based conditions, where that one parameter's vector entry is a literal
-// probe value rather than a partitionId; every other technique resolves every vector entry as a
-// partitionId lookup against that parameter's own partitions.
-function describeCondition(parameters, vector, targetName, targetIsValid, technique) {
+function firstValidPartition(param) {
+  return (
+    param.partitions.find(function (p) {
+      return p.kind === 'valid';
+    }) || param.partitions[0]
+  );
+}
+
+function withoutTrailingStop(text) {
+  return String(text).replace(/[\\s.]+$/, '');
+}
+
+// Synthesizes a condition's sentence, outcome and scenario deterministically from data already
+// present - never free model inference. probe applies only to boundary-value/checklist-based
+// conditions, where one parameter's vector entry is a literal value rather than a partitionId and
+// the probe itself supplies its note and outcome; every other entry resolves as a partitionId
+// lookup. A negative vector carries exactly one invalid value, so its outcome is that value's own;
+// an all-valid vector's outcome is every distinct outcome its values promise.
+function describeCondition(parameters, vector, probe) {
   const orderedNames = parameters
     .map(function (p) {
       return p.name;
@@ -405,45 +475,85 @@ function describeCondition(parameters, vector, targetName, targetIsValid, techni
     .filter(function (name) {
       return Object.prototype.hasOwnProperty.call(vector, name);
     });
-  let allValid = true;
+  let fault = null;
+  const validOutcomes = [];
   const clauses = orderedNames.map(function (name) {
     const rawValue = vector[name];
-    let text;
-    let isValid;
-    if (name === targetName) {
-      text = rawValue;
-      isValid = targetIsValid;
-    } else {
-      const param = paramByName(parameters, name);
-      const partition =
-        param &&
-        param.partitions.find(function (p) {
-          return p.id === rawValue;
-        });
-      text =
-        partition && partition.sampleValues && partition.sampleValues[0] !== undefined
-          ? partition.sampleValues[0]
-          : rawValue;
-      isValid = !partition || partition.kind === 'valid';
+    if (probe && name === probe.name) {
+      return name + '=' + JSON.stringify(rawValue) + ' (' + probe.note + ')';
     }
-    if (!isValid) allValid = false;
+    const param = paramByName(parameters, name);
+    const partition =
+      param &&
+      param.partitions.find(function (p) {
+        return p.id === rawValue;
+      });
+    const text =
+      partition && partition.sampleValues && partition.sampleValues[0] !== undefined
+        ? partition.sampleValues[0]
+        : rawValue;
+    if (partition && partition.kind === 'invalid') {
+      const level =
+        partition.executionLevel === 'dom' || partition.executionLevel === 'api'
+          ? partition.executionLevel
+          : null;
+      fault = { outcome: partition.expectedOutcome, level: level };
+      const note = levelNote(level);
+      return name + '=' + JSON.stringify(text) + ' (invalid' + (note ? ', ' + note : '') + ')';
+    }
+    if (partition && typeof partition.expectedOutcome === 'string') {
+      const outcome = withoutTrailingStop(partition.expectedOutcome);
+      if (validOutcomes.indexOf(outcome) === -1) validOutcomes.push(outcome);
+    }
     return name + '=' + JSON.stringify(text);
   });
-  const scenario = allValid ? 'positive' : 'negative';
-  return {
-    description: describeText(technique, clauses.join(', '), scenario),
+
+  let scenario;
+  let expectedOutcome;
+  let executionLevel = null;
+  if (probe) {
+    scenario = probe.isValid ? 'positive' : 'negative';
+    expectedOutcome = withoutTrailingStop(probe.outcome);
+  } else if (fault) {
+    scenario = 'negative';
+    expectedOutcome = withoutTrailingStop(fault.outcome);
+    executionLevel = fault.level;
+  } else {
+    scenario = 'positive';
+    expectedOutcome = validOutcomes.join('; ');
+  }
+  const described = {
+    description: 'With ' + clauses.join(', ') + ': ' + expectedOutcome + ' (' + scenario + ')',
+    expectedOutcome: expectedOutcome,
     scenario: scenario,
   };
+  if (executionLevel) described.executionLevel = executionLevel;
+  return described;
 }
 
+// Copies what describeCondition resolved onto a condition, in the field order every technique
+// writes, so re-running over unchanged input serializes byte-identically.
+function conditionFrom(conditionIdValue, vector, technique, described) {
+  const cond = {
+    conditionId: conditionIdValue,
+    parameters: vector,
+    technique: technique,
+    description: described.description,
+    expectedOutcome: described.expectedOutcome,
+  };
+  if (described.executionLevel) cond.executionLevel = described.executionLevel;
+  cond.scenario = described.scenario;
+  return cond;
+}
+
+// A probe takes its outcome from the boundary itself, never from the parameter's valid partition:
+// a partition's outcome is written for its own sample value ("exactly 5 GUIDs are listed"), and
+// reusing it for the value at the limit promised 5 GUIDs for a count of 1 in a live run.
 function buildBoundaryConditions(routeId, parameters) {
   const conditions = [];
   for (const param of parameters) {
     if (!param.boundaries || param.boundaries.length === 0) continue;
-    const validPartition =
-      param.partitions.find(function (p) {
-        return p.kind === 'valid';
-      }) || param.partitions[0];
+    const validPartition = firstValidPartition(param);
     if (!validPartition) continue;
     for (const boundarySet of param.boundaries) {
       boundarySet.values.forEach(function (value, index) {
@@ -453,24 +563,17 @@ function buildBoundaryConditions(routeId, parameters) {
             vector[other.name] = value;
             continue;
           }
-          const otherValid =
-            other.partitions.find(function (p) {
-              return p.kind === 'valid';
-            }) || other.partitions[0];
-          vector[other.name] = otherValid.id;
+          vector[other.name] = firstValidPartition(other).id;
         }
         const isValid = boundaryProbeIsValid(boundarySet.boundary, index);
-        const described = describeCondition(parameters, vector, param.name, isValid, 'boundary-value');
-        const cond = {
-          conditionId: conditionId(routeId, vector),
-          parameters: vector,
-          technique: 'boundary-value',
-          description: described.description,
-          scenario: described.scenario,
-          verification: {},
-          isSpeculative: true,
-          reviewed: false,
-        };
+        const described = describeCondition(parameters, vector, {
+          name: param.name,
+          isValid: isValid,
+          note: BOUNDARY_POSITION[boundarySet.boundary][index],
+          outcome: isValid ? boundarySet.acceptedOutcome : boundarySet.rejectedOutcome,
+        });
+        const cond = conditionFrom(conditionId(routeId, vector), vector, 'boundary-value', described);
+        Object.assign(cond, { verification: {}, isSpeculative: true, reviewed: false });
         if (described.scenario === 'negative') {
           cond.negativeCategory = 'boundary';
         }
@@ -492,23 +595,14 @@ function buildEquivalencePartitionConditions(routeId, parameters) {
     for (const partition of param.partitions) {
       const vector = {};
       vector[param.name] = partition.id;
-      const described = describeCondition(
-        parameters,
+      const described = describeCondition(parameters, vector);
+      const cond = conditionFrom(
+        conditionId(routeId, vector),
         vector,
-        undefined,
-        undefined,
         'equivalence-partition',
+        described,
       );
-      const cond = {
-        conditionId: conditionId(routeId, vector),
-        parameters: vector,
-        technique: 'equivalence-partition',
-        description: described.description,
-        scenario: described.scenario,
-        verification: {},
-        isSpeculative: true,
-        reviewed: false,
-      };
+      Object.assign(cond, { verification: {}, isSpeculative: true, reviewed: false });
       if (described.scenario === 'negative') {
         cond.negativeCategory = 'invalid_input';
       }
@@ -528,6 +622,17 @@ const CHECKLIST_VALUES = {
   email: ['plainaddress', '@missinglocal.com', 'user@', 'user@.com'],
   number: ['-1', '0', '1e309'],
   date: ['0000-00-00', '9999-12-31', 'not-a-date'],
+};
+
+// What the page must show for a checklist probe. Nothing here knows whether the application accepts
+// a given value, so each outcome is the robustness a person can check either way - the input never
+// escapes into markup or breaks the page - rather than a guess about which values it rejects.
+const CHECKLIST_OUTCOMES = {
+  text: 'the value is rejected with a message or shown back as plain text - no script runs and no error page appears',
+  email: 'the address is rejected with a validation message and nothing is submitted with it',
+  number:
+    'the value is rejected with a message or used as entered - no NaN, Infinity or error page appears',
+  date: 'the date is rejected with a message or shown as entered - no "Invalid Date", NaN or error page appears',
 };
 
 // Reads artifacts/analysis/feature-map.json fresh on every run (a separate artifact from a
@@ -634,6 +739,7 @@ function buildStateTransitionConditions(routeId, bundle, criticalityTier) {
         parameters: { entity: entity.name, from: transition.from, to: transition.to },
         technique: 'state-transition',
         description: description,
+        expectedOutcome: 'the ' + entity.name + ' is now "' + transition.to + '"',
         scenario: 'positive',
         verification: {},
         isSpeculative: true,
@@ -673,6 +779,7 @@ function buildStateTransitionConditions(routeId, bundle, criticalityTier) {
           parameters: { entity: entity.name, from: state.name, trigger: trigger },
           technique: 'state-transition',
           description: description,
+          expectedOutcome: trigger + ' is refused and the ' + entity.name + ' stays "' + state.name + '"',
           scenario: 'negative',
           negativeCategory: 'state_violation',
           verification: {},
@@ -706,11 +813,14 @@ function buildUseCaseConditions(routeId, bundle) {
       ' can be ' +
       flow +
       ', and the result of each step is visible in the next.';
+    const finalState = entity.transitions[entity.transitions.length - 1].to;
     conditions.push({
       conditionId: conditionId(routeId, {}, 'use-case|' + entity.name + '|' + description),
       parameters: { entity: entity.name, feature: bundle.featureName },
       technique: 'use-case',
       description: description,
+      expectedOutcome:
+        'the ' + entity.name + ' ends "' + finalState + '", with the result of each step visible in the next',
       scenario: 'positive',
       verification: {},
       isSpeculative: true,
@@ -733,25 +843,24 @@ function buildChecklistConditions(routeId, parameters, criticalityTier) {
           vector[other.name] = value;
           continue;
         }
-        const otherValid =
-          other.partitions.find(function (p) {
-            return p.kind === 'valid';
-          }) || other.partitions[0];
+        const otherValid = firstValidPartition(other);
         if (!otherValid) continue;
         vector[other.name] = otherValid.id;
       }
-      const described = describeCondition(parameters, vector, target.name, false, 'checklist-based');
-      conditions.push({
-        conditionId: conditionId(routeId, vector),
-        parameters: vector,
-        technique: 'checklist-based',
-        description: described.description,
-        scenario: described.scenario,
+      const described = describeCondition(parameters, vector, {
+        name: target.name,
+        isValid: false,
+        note: 'malformed-input checklist',
+        outcome: CHECKLIST_OUTCOMES[target.kind],
+      });
+      const cond = conditionFrom(conditionId(routeId, vector), vector, 'checklist-based', described);
+      Object.assign(cond, {
         negativeCategory: 'invalid_input',
         verification: {},
         isSpeculative: true,
         reviewed: false,
       });
+      conditions.push(cond);
     }
   }
   return conditions;
@@ -765,23 +874,9 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle) {
   }
   const { vectors, unsatisfied } = buildVectors(entry.parameters, entry.constraints || []);
   const combinatorialConditions = vectors.map(function (vector) {
-    const described = describeCondition(
-      entry.parameters,
-      vector,
-      undefined,
-      undefined,
-      'combinatorial',
-    );
-    const cond = {
-      conditionId: conditionId(routeId, vector),
-      parameters: vector,
-      technique: 'combinatorial',
-      description: described.description,
-      scenario: described.scenario,
-      verification: {},
-      isSpeculative: true,
-      reviewed: false,
-    };
+    const described = describeCondition(entry.parameters, vector);
+    const cond = conditionFrom(conditionId(routeId, vector), vector, 'combinatorial', described);
+    Object.assign(cond, { verification: {}, isSpeculative: true, reviewed: false });
     if (described.scenario === 'negative') {
       cond.negativeCategory = 'invalid_input';
     }
@@ -834,7 +929,10 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle) {
 
 // Structural guard before any route is touched: a malformed entry (missing/non-array parameters,
 // a parameter missing partitions) reports the same clean {status:'FAILED', errors:[...]} shape as
-// the missing-file/no-routes cases below, instead of an unhandled TypeError mid-generation.
+// the missing-file/no-routes cases below, instead of an unhandled TypeError mid-generation. A
+// partition or boundary with no recorded outcome stops generation too: every description is built
+// from those outcomes, and filling the gap with a stock phrase is exactly what this file refuses to
+// do. node scripts/validate-test-conditions.mjs --stage=parameters reports the full list.
 function checkShape(data) {
   const errors = [];
   for (const [routeId, entry] of Object.entries(data.routes)) {
@@ -843,9 +941,27 @@ function checkShape(data) {
       continue;
     }
     entry.parameters.forEach(function (param, i) {
+      const label = 'routes["' + routeId + '"].parameters[' + i + ']';
       if (!param || typeof param !== 'object' || !Array.isArray(param.partitions)) {
-        errors.push('routes["' + routeId + '"].parameters[' + i + '].partitions must be an array.');
+        errors.push(label + '.partitions must be an array.');
+        return;
       }
+      param.partitions.forEach(function (partition, j) {
+        if (
+          !partition ||
+          typeof partition.expectedOutcome !== 'string' ||
+          partition.expectedOutcome.trim().length === 0
+        ) {
+          errors.push(label + '.partitions[' + j + '].expectedOutcome must be a non-empty string.');
+        }
+      });
+      (Array.isArray(param.boundaries) ? param.boundaries : []).forEach(function (boundary, j) {
+        ['acceptedOutcome', 'rejectedOutcome'].forEach(function (field) {
+          if (!boundary || typeof boundary[field] !== 'string' || boundary[field].trim().length === 0) {
+            errors.push(label + '.boundaries[' + j + '].' + field + ' must be a non-empty string.');
+          }
+        });
+      });
     });
   }
   return errors;

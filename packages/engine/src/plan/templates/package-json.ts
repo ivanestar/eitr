@@ -1,4 +1,4 @@
-// package.json for the generated project. create-if-absent вЂ” never regenerated, so a user's added
+// package.json for the generated project. create-if-absent - never regenerated, so a user's added
 // deps/scripts survive. Pins @playwright/test to the engine's version; typescript + @types/node are
 // dev-only (Playwright bundles its own transform to RUN tests; tsc is for the `typecheck` gate).
 //

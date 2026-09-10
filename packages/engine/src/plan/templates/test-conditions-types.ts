@@ -25,27 +25,63 @@ export interface Evidence {
   excerpt: string;
 }
 
+// How a value reaches the application. 'ui' (the default when absent) is anything a person can
+// enter through the page's own controls. 'dom' is a value those controls cannot produce - an option
+// a <select> does not offer - so a test has to set it by script, past the control. 'api' is sent
+// straight to the endpoint, and is only allowed on a route with an observed call in
+// artifacts/site-map/api-contracts.json.
+export type ExecutionLevel = 'ui' | 'dom' | 'api';
+
 export interface EquivalencePartition {
   id: string;
   kind: 'valid' | 'invalid';
   // Synthesized illustrative examples only - never copied from a live page.
   sampleValues: string[];
+  // What a person sees when this parameter takes the partition's first sample value - the value
+  // every condition built from it uses - and every other input is valid: a message and where it
+  // appears, a count, a value shown, a control disabled. It is the oracle those conditions inherit,
+  // so a sentence nobody could check against the page ("handled correctly", "works as expected") is
+  // rejected by the validator.
+  expectedOutcome: string;
+  // Required on an 'invalid' partition: where the page says this value is not allowed - an HTML5
+  // constraint, a label stating the rule, the offered option list, or a person's words. A value is
+  // invalid because something says so, never because it looks unusual. A placeholder such as
+  // "e.g. 20" is an example of a valid value, not a rule.
+  rule?: Evidence;
+  // Absent means 'ui'. Only an 'invalid' partition may be 'dom' or 'api', and an invalid partition
+  // of a select, radio or checkbox must be one of the two, since the control cannot produce it.
+  executionLevel?: ExecutionLevel;
 }
 
 export interface BoundarySet {
   boundary: 'min' | 'max';
   // ISTQB 3-value BVA: [boundary-1, boundary, boundary+1].
   values: [string, string, string];
+  // Where the limit is stated - an HTML5 min/max/minlength/maxlength attribute, a label giving the
+  // range, or a person's words. A boundary nobody states is a guess, and a guessed limit produces
+  // conditions that reject values the application legitimately accepts.
+  rule: Evidence;
+  // What a person sees at the limit and one step inside it - both probes carry this, so it has to
+  // hold for either value ("exactly as many GUIDs as requested are listed", not "5 GUIDs").
+  acceptedOutcome: string;
+  // What a person sees when the value one step past this boundary is entered.
+  rejectedOutcome: string;
 }
 
 export interface Parameter {
   name: string;
   kind: ParameterKind;
-  // Must contain at least one 'valid'-kind entry if boundaries is non-empty - enforced by
-  // scripts/validate-test-conditions.mjs before generation ever runs.
+  // Every parameter needs at least one 'valid'-kind partition: an invalid value is only ever
+  // combined with valid values of the others, and a parameter with no acceptable value is either
+  // mislabelled or not an input. Enforced by scripts/validate-test-conditions.mjs.
   partitions: EquivalencePartition[];
   boundaries: BoundarySet[];
   evidence: Evidence[];
+  // Required for 'select' and 'radio': the option labels the page offers, as displayed. A valid
+  // partition's samples must come from this list and an invalid partition's samples must not - an
+  // option the page itself offers cannot be an invalid input. A list drawn from the user's own data
+  // (saved addresses, their contacts) is recorded as ['[REDACTED]'].
+  options?: string[];
 }
 
 // v1 supports pairwise-exclusion constraints only - "if paramA holds partition X, paramB may
@@ -105,9 +141,10 @@ export type TestConditionTechnique =
   | 'architectural-invariant';
 
 // Whether every parameter value in a TestCondition's vector is drawn from a 'valid' partition (or
-// the inclusive/still-inside side of a boundary) - 'negative' when at least one is an
-// 'invalid'-kind partition, the value one step past a boundary, or a checklist probe (checklist
-// values are malformed/injection-class by construction, always 'negative').
+// the inclusive/still-inside side of a boundary) - 'negative' when one is an 'invalid'-kind
+// partition, the value one step past a boundary, or a checklist probe (checklist values are
+// malformed/injection-class by construction, always 'negative'). Never more than one: the first
+// rejected value would hide what the application does with the second.
 export type TestConditionScenario = 'positive' | 'negative';
 
 export interface TestCondition {
@@ -120,10 +157,17 @@ export interface TestCondition {
   parameters: Record<string, string>;
   technique: TestConditionTechnique;
   // One human-readable sentence synthesized deterministically from the vector's own resolved
-  // values (partition sampleValues, or the literal boundary/checklist probe) or authored by the
-  // agent for architectural invariants. This is what a human actually reviews at
-  // sign-off; parameters/technique above remain the machine-consumable form.
+  // values (partition sampleValues, or the literal boundary/checklist probe) and the outcome below,
+  // or authored by the agent for architectural invariants. This is what a human actually reviews
+  // at sign-off; parameters/technique above remain the machine-consumable form.
   description: string;
+  // What a person should observe - the expected result a test case asserts. Generated conditions
+  // take it from the partitions and boundaries they draw on (a negative one carries exactly one
+  // invalid value, so its outcome is that value's own); an architectural invariant states its own.
+  expectedOutcome: string;
+  // Present only when the condition cannot be driven through the page's own controls - copied from
+  // the invalid partition it carries.
+  executionLevel?: 'dom' | 'api';
   scenario: TestConditionScenario;
   // Closed taxonomy category for negative scenarios. Applicable strictly when scenario === 'negative';
   // required when technique === 'architectural-invariant'.
@@ -167,7 +211,7 @@ export interface TestConditionsEntry {
 }
 
 export interface TestConditionsReport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
   routes: Record<string, TestConditionsEntry>;
 }
