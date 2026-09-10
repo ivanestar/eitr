@@ -639,6 +639,269 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     });
   });
 
+  // Every field the crawl recorded outside the site frame is a parameter or an explicit exclusion,
+  // and what the inventory read off the page - options, HTML5 attributes, the field type - is what
+  // the parameters are checked against.
+  describe('field accounting against the route inventory', () => {
+    type Report = {
+      routes: Record<string, { parameters: Array<Record<string, any>>; excluded?: unknown[] }>;
+    };
+
+    function checkoutInventory(overrides: Record<string, unknown> = {}) {
+      return {
+        schemaVersion: 1,
+        routeId: 'route-checkout',
+        contentHash: 'abc123',
+        controls: [
+          {
+            id: 'c0',
+            region: 'header',
+            role: 'combobox',
+            name: 'Language',
+            tag: 'select',
+            options: ['English', 'Deutsch'],
+            optionCount: 2,
+          },
+          {
+            id: 'c1',
+            region: 'main',
+            role: 'textbox',
+            name: 'Email',
+            tag: 'input',
+            type: 'email',
+            constraints: { required: true },
+          },
+          {
+            id: 'c2',
+            region: 'main',
+            role: 'spinbutton',
+            name: 'Quantity',
+            tag: 'input',
+            type: 'number',
+            constraints: { max: '10' },
+          },
+          {
+            id: 'c3',
+            region: 'main',
+            role: 'checkbox',
+            name: 'Gift wrap',
+            tag: 'input',
+            type: 'checkbox',
+          },
+          {
+            id: 'c4',
+            region: 'main',
+            role: 'textbox',
+            name: '',
+            hint: 'Order summary',
+            tag: 'textarea',
+          },
+          { id: 'c5', region: 'main', role: 'button', name: 'Place order', tag: 'button' },
+          {
+            id: 'c6',
+            region: 'main',
+            role: 'combobox',
+            name: 'Shipping',
+            tag: 'select',
+            options: ['Standard', 'Express'],
+            optionCount: 2,
+          },
+        ],
+        ...overrides,
+      };
+    }
+
+    function accounted(): Report {
+      const report = structuredClone(wellFormedParametersOnly()) as unknown as Report;
+      const route = report.routes['route-checkout'];
+      route.parameters[0].control = 'c1';
+      route.parameters[1].control = 'c2';
+      route.parameters.push({
+        name: 'shipping',
+        kind: 'select',
+        control: 'c6',
+        partitions: [
+          {
+            id: 'standard',
+            kind: 'valid',
+            sampleValues: ['Standard'],
+            expectedOutcome: 'the summary shows a standard shipping line',
+          },
+        ],
+        boundaries: [],
+        evidence: [{ signal: 'select-option-text', excerpt: 'Standard' }],
+      });
+      route.excluded = [
+        { control: 'c3', reason: 'disabled' },
+        { control: 'c4', reason: 'result-output' },
+      ];
+      return report;
+    }
+
+    function validateWith(report: unknown, inventory: unknown = checkoutInventory()) {
+      const dir = setupProject();
+      try {
+        writeReport(dir, report);
+        if (inventory) {
+          mkdirSync(join(dir, 'artifacts', 'site-map', 'inventory'), { recursive: true });
+          writeFileSync(
+            join(dir, 'artifacts', 'site-map', 'inventory', 'route-checkout.json'),
+            JSON.stringify(inventory),
+            'utf8',
+          );
+        }
+        return JSON.parse(run(dir, ['--stage=parameters']).stdout) as {
+          errors: string[];
+          warnings: string[];
+        };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    it('passes when every field of the page is a parameter or excluded, with options read from the inventory', () => {
+      const output = validateWith(accounted());
+      expect(output.errors).toEqual([]);
+      expect(output.warnings.some((w) => w.includes('no inventory'))).toBe(false);
+    });
+
+    it('fails a field nobody accounted for', () => {
+      const report = accounted();
+      report.routes['route-checkout'].excluded = [{ control: 'c4', reason: 'result-output' }];
+      expect(
+        validateWith(report).errors.some((e) =>
+          e.includes('leaves c3 checkbox "Gift wrap" unaccounted'),
+        ),
+      ).toBe(true);
+    });
+
+    // Live-observed: the header's language switcher was a parameter on 13 of 28 routes.
+    it('fails a parameter citing a field of the site frame', () => {
+      const report = accounted();
+      report.routes['route-checkout'].parameters.push({
+        ...report.routes['route-checkout'].parameters[2],
+        name: 'language',
+        control: 'c0',
+        partitions: [
+          {
+            id: 'en',
+            kind: 'valid',
+            sampleValues: ['English'],
+            expectedOutcome: 'the page reads in English',
+          },
+        ],
+      });
+      expect(validateWith(report).errors.some((e) => e.includes('belongs to the site frame'))).toBe(
+        true,
+      );
+    });
+
+    // Without this, a parameter simply omitting control passed as "revealed by a probe" - live-observed
+    // on the home page, whose only parameter was the header's language switcher.
+    it('fails a parameter with no control unless it names the own field that revealed it', () => {
+      const orphan = accounted();
+      orphan.routes['route-checkout'].parameters.push({
+        ...orphan.routes['route-checkout'].parameters[2],
+        name: 'language',
+        control: undefined,
+        options: ['English'],
+        partitions: [
+          {
+            id: 'en',
+            kind: 'valid',
+            sampleValues: ['English'],
+            expectedOutcome: 'the page reads in English',
+          },
+        ],
+      });
+      expect(
+        validateWith(orphan).errors.some((e) => e.includes('has no control and no revealedBy')),
+      ).toBe(true);
+
+      const revealed = structuredClone(orphan);
+      revealed.routes['route-checkout'].parameters[3].revealedBy = 'c3';
+      expect(validateWith(revealed).errors).toEqual([]);
+
+      const byFrame = structuredClone(orphan);
+      byFrame.routes['route-checkout'].parameters[3].revealedBy = 'c0';
+      expect(
+        validateWith(byFrame).errors.some((e) => e.includes('has no control and no revealedBy')),
+      ).toBe(true);
+    });
+
+    it('fails an html5 rule the field does not carry', () => {
+      const wrongValue = validateWith(
+        accounted(),
+        checkoutInventory({
+          controls: checkoutInventory().controls.map((c) =>
+            c.id === 'c2' ? { ...c, constraints: { max: '1000' } } : c,
+          ),
+        }),
+      );
+      expect(wrongValue.errors.some((e) => e.includes('carries max=1000'))).toBe(true);
+
+      const report = accounted();
+      report.routes['route-checkout'].parameters[1].boundaries[0].rule = {
+        signal: 'html5-constraint',
+        excerpt: 'min=0',
+      };
+      expect(validateWith(report).errors.some((e) => e.includes('recorded no min'))).toBe(true);
+    });
+
+    it('fails a non-numeric sample on a number field, which the browser would empty', () => {
+      const report = accounted();
+      report.routes['route-checkout'].parameters[1].partitions[1].sampleValues = ['abc'];
+      expect(
+        validateWith(report).errors.some((e) =>
+          e.includes('cannot be the value of a number field'),
+        ),
+      ).toBe(true);
+    });
+
+    it('checks select samples against the options on the page, and the kind against the field', () => {
+      const offered = accounted();
+      offered.routes['route-checkout'].parameters[2].partitions.push({
+        id: 'express-as-invalid',
+        kind: 'invalid',
+        sampleValues: ['Express'],
+        expectedOutcome: 'no shipping line is shown',
+        rule: { signal: 'select-option-text', excerpt: 'Standard, Express' },
+        executionLevel: 'dom',
+      });
+      expect(
+        validateWith(offered).errors.some((e) =>
+          e.includes('sample "Express" is one of the options'),
+        ),
+      ).toBe(true);
+
+      const mislabelled = accounted();
+      mislabelled.routes['route-checkout'].parameters[2].kind = 'text';
+      expect(
+        validateWith(mislabelled).errors.some((e) => e.includes('is a select field on the page')),
+      ).toBe(true);
+    });
+
+    it('refuses control ids from an inventory recorded after the extraction', () => {
+      const output = validateWith(accounted(), checkoutInventory({ contentHash: 're-crawled' }));
+      expect(output.errors.some((e) => e.includes('does not match the inventory'))).toBe(true);
+    });
+
+    it('accepts no parameters at all on a page whose only fields belong to the frame', () => {
+      const report = structuredClone(wellFormedParametersOnly()) as unknown as Report;
+      report.routes['route-checkout'].parameters = [];
+      const inventory = checkoutInventory({
+        controls: checkoutInventory().controls.filter((c) => c.id === 'c0' || c.id === 'c5'),
+      });
+      expect(validateWith(report, inventory).errors).toEqual([]);
+    });
+
+    it('warns, without failing, when the route has no inventory to check against', () => {
+      const output = validateWith(wellFormedParametersOnly(), null);
+      expect(output.errors).toEqual([]);
+      expect(output.warnings.some((w) => w.includes('no inventory'))).toBe(true);
+    });
+  });
+
   it('fails cleanly (not a crash) when the report file content is the literal JSON value null', () => {
     const dir = setupProject();
     try {

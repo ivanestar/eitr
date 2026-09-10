@@ -26,6 +26,26 @@ const CWD = process.cwd();
 const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const API_CONTRACTS_PATH = path.join(CWD, 'artifacts', 'site-map', 'api-contracts.json');
+const INVENTORY_DIR = 'artifacts/site-map/inventory';
+
+// Regions shared by every page. Their fields - a language switcher, a theme toggle - belong to the
+// site frame, not to the route underneath, so they are never a route's parameter.
+const FRAME_REGIONS = new Set(['header', 'nav', 'footer', 'aside']);
+const FIELD_ROLES = new Set([
+  'textbox',
+  'searchbox',
+  'combobox',
+  'listbox',
+  'checkbox',
+  'radio',
+  'switch',
+  'slider',
+  'spinbutton',
+]);
+const EXCLUSION_REASONS = new Set(['result-output', 'duplicate', 'disabled', 'needs-button', 'off-limits']);
+// HTML's "valid floating-point number". Anything else in an input[type=number] is replaced with an
+// empty string by the browser's own value sanitization, so it can never be the value under test.
+const VALID_FLOAT = /^-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][-+]?\\d+)?$/;
 
 const args = process.argv.slice(2);
 const stageArg = args.find(function (a) {
@@ -166,6 +186,97 @@ function checkRule(rule, label, kind, errors) {
   }
 }
 
+function isField(control) {
+  if (!control) return false;
+  if (FIELD_ROLES.has(control.role)) return true;
+  if (control.tag === 'select' || control.tag === 'textarea') return true;
+  return control.tag === 'input' && control.role !== 'button';
+}
+
+function describeControl(control) {
+  if (control.name) return control.id + ' ' + control.role + ' "' + control.name + '"';
+  return (
+    control.id +
+    ' ' +
+    control.role +
+    ' (no accessible name' +
+    (control.hint ? ', next to "' + control.hint + '"' : '') +
+    ')'
+  );
+}
+
+// A radio group is one parameter but one control per option; citing any member accounts for all.
+function radioGroupOf(control, inventory) {
+  if (!control || control.role !== 'radio' || !control.group) return control ? [control] : [];
+  return inventory.controls.filter(function (other) {
+    return other.role === 'radio' && other.group === control.group;
+  });
+}
+
+function expectedKind(control) {
+  if (control.tag === 'select') return 'select';
+  if (control.type === 'checkbox' || control.role === 'checkbox') return 'checkbox';
+  if (control.type === 'radio' || control.role === 'radio') return 'radio';
+  if (control.type === 'number') return 'number';
+  return null;
+}
+
+// An html5-constraint rule has to be an attribute the crawl actually saw on this field. Live-observed:
+// a converter got a minimum of 0 its input never declared, and every condition built on it rejected
+// negative temperatures.
+function checkRuleAgainstControl(rule, label, control, errors, warnings) {
+  if (!rule || typeof rule.excerpt !== 'string') return;
+  if (rule.signal === 'html5-constraint') {
+    const constraints = control.constraints || {};
+    const found = rule.excerpt.match(/\\b(min|max|step|minlength|maxlength|pattern|required)\\b(?:\\s*=\\s*"?([^"\\s,;]+)"?)?/gi) || [];
+    if (found.length === 0) {
+      errors.push(label + '.excerpt names no HTML5 attribute - quote it as the page carries it, e.g. max=10.');
+      return;
+    }
+    for (const token of found) {
+      const parts = token.split('=');
+      const attr = parts[0].trim().toLowerCase();
+      const quoted = parts.length > 1 ? parts.slice(1).join('=').replace(/"/g, '').trim() : null;
+      if (!(attr in constraints)) {
+        errors.push(
+          label + ' quotes ' + attr + ', but the crawl recorded no ' + attr + ' on ' + describeControl(control) + '.',
+        );
+      } else if (quoted !== null && constraints[attr] !== true && String(constraints[attr]) !== quoted) {
+        errors.push(
+          label +
+            ' quotes ' +
+            attr +
+            '=' +
+            quoted +
+            ', but ' +
+            describeControl(control) +
+            ' carries ' +
+            attr +
+            '=' +
+            constraints[attr] +
+            '.',
+        );
+      }
+    }
+  } else if (rule.signal === 'form-label') {
+    // Text near a field is not all captured, so this is a prompt to look, not a verdict.
+    const nearby = [control.name, control.hint, control.placeholder]
+      .filter(Boolean)
+      .map(normalizeOption)
+      .join(' | ');
+    if (nearby && nearby.indexOf(normalizeOption(rule.excerpt)) === -1) {
+      warnings.push(
+        label +
+          ' quotes "' +
+          rule.excerpt +
+          '", which is not the label or nearby text the crawl recorded for ' +
+          describeControl(control) +
+          ' - check it is really stated on the page.',
+      );
+    }
+  }
+}
+
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
     return { value: null, error: label + ' not found at ' + path.relative(CWD, filePath) };
@@ -217,8 +328,35 @@ function isParameter(value, label, context, errors) {
     errors.push(label + '.kind must be a known ParameterKind.');
   }
 
+  // The inventory field this parameter cites, when the route has an inventory and the id resolves.
+  const control = context.control || null;
+  const warnings = context.warnings || [];
+  if (control) {
+    const kind = expectedKind(control);
+    if (kind && value.kind !== kind) {
+      errors.push(
+        label + '.kind is ' + value.kind + ', but ' + describeControl(control) + ' is a ' + kind + ' field on the page.',
+      );
+    }
+  }
+
+  // What the page offers, read off the live page when there is an inventory - it wins over anything
+  // written here. A list the crawl cut short still proves what IS offered, never what is not.
   let options = null;
-  if (OPTION_LIST_KINDS.has(value.kind)) {
+  let optionsComplete = true;
+  const liveOptions = !control
+    ? null
+    : control.role === 'radio' && control.group
+      ? radioGroupOf(control, context.inventory).map(function (radio) {
+          return radio.name;
+        })
+      : Array.isArray(control.options) && control.options.length > 0
+        ? control.options
+        : null;
+  if (OPTION_LIST_KINDS.has(value.kind) && liveOptions) {
+    options = new Set(liveOptions.map(normalizeOption));
+    optionsComplete = !(Number.isInteger(control.optionCount) && control.optionCount > liveOptions.length);
+  } else if (OPTION_LIST_KINDS.has(value.kind)) {
     if (
       !Array.isArray(value.options) ||
       value.options.length === 0 ||
@@ -262,6 +400,17 @@ function isParameter(value, label, context, errors) {
         });
       if (!samplesOk) {
         errors.push(pLabel + '.sampleValues must be an array of strings.');
+      } else if (control && control.type === 'number') {
+        p.sampleValues.forEach(function (sample) {
+          if (sample !== '' && !VALID_FLOAT.test(sample.trim())) {
+            errors.push(
+              pLabel +
+                ' sample "' +
+                sample +
+                '" cannot be the value of a number field - the browser replaces anything that is not a number with an empty value. Use "" for an empty entry, or a number.',
+            );
+          }
+        });
       }
       checkOutcome(p.expectedOutcome, pLabel + '.expectedOutcome', errors);
 
@@ -277,6 +426,7 @@ function isParameter(value, label, context, errors) {
       }
       if (p.kind === 'invalid') {
         checkRule(p.rule, pLabel + '.rule', value.kind, errors);
+        if (control) checkRuleAgainstControl(p.rule, pLabel + '.rule', control, errors, warnings);
         if (CLOSED_CHOICE_KINDS.has(value.kind) && !offLevel) {
           errors.push(
             pLabel +
@@ -296,7 +446,7 @@ function isParameter(value, label, context, errors) {
       if (options && samplesOk) {
         p.sampleValues.forEach(function (sample) {
           const offered = options.has(normalizeOption(sample));
-          if (p.kind === 'valid' && !offered) {
+          if (p.kind === 'valid' && !offered && optionsComplete) {
             errors.push(
               pLabel +
                 ' sample "' +
@@ -350,6 +500,7 @@ function isParameter(value, label, context, errors) {
         errors.push(bLabel + '.values must be a 3-element array of strings.');
       }
       checkRule(b.rule, bLabel + '.rule', value.kind, errors);
+      if (control) checkRuleAgainstControl(b.rule, bLabel + '.rule', control, errors, warnings);
       checkOutcome(b.acceptedOutcome, bLabel + '.acceptedOutcome', errors);
       checkOutcome(b.rejectedOutcome, bLabel + '.rejectedOutcome', errors);
     });
@@ -506,6 +657,96 @@ function isUnsatisfiedPair(value, label, errors) {
   });
 }
 
+// Every field the crawl recorded outside the site frame is a parameter or an explicit exclusion.
+// Live-observed without this: a GUID generator's five format checkboxes and a pairwise tool's value
+// fields never became parameters, while the header's language switcher became one on 13 routes.
+function accountForFields(entry, label, inventory, controlById, errors) {
+  if (typeof inventory.contentHash === 'string' && inventory.contentHash !== entry.sourceContentHash) {
+    errors.push(
+      label +
+        '.sourceContentHash does not match the inventory recorded for this route - the page was re-crawled after these parameters were extracted, so the control ids they cite may point at other fields. Re-extract this route.',
+    );
+    return;
+  }
+  const accounted = new Map();
+  function cite(id, where) {
+    const control = controlById.get(id);
+    if (!control) {
+      errors.push(where + ' cites control "' + id + '", which the inventory does not list.');
+      return;
+    }
+    if (FRAME_REGIONS.has(control.region)) {
+      errors.push(
+        where +
+          ' cites ' +
+          describeControl(control) +
+          ' in the ' +
+          control.region +
+          ', which belongs to the site frame shared by every page rather than to this route - leave it out.',
+      );
+      return;
+    }
+    if (!isField(control)) {
+      errors.push(where + ' cites ' + describeControl(control) + ', which is not a field a value can be entered into.');
+      return;
+    }
+    const members = radioGroupOf(control, inventory);
+    for (const member of members) {
+      if (accounted.has(member.id)) {
+        errors.push(
+          where + ' cites ' + describeControl(member) + ', already accounted for by ' + accounted.get(member.id) + '.',
+        );
+        return;
+      }
+    }
+    for (const member of members) accounted.set(member.id, where);
+  }
+
+  entry.parameters.forEach(function (p, i) {
+    const where = label + '.parameters[' + i + ']';
+    if (p && typeof p.control === 'string') {
+      cite(p.control, where);
+      return;
+    }
+    // A field the inventory does not list exists only because a probe on this page revealed it, so
+    // it has to name that field - which also rules out the site frame, whose fields reveal nothing
+    // on the page underneath.
+    const revealer = p && typeof p.revealedBy === 'string' ? controlById.get(p.revealedBy) : null;
+    if (!revealer || FRAME_REGIONS.has(revealer.region) || !isField(revealer)) {
+      errors.push(
+        where +
+          ' has no control and no revealedBy naming one of this page\\'s own fields that revealed it - cite its id from the inventory, or leave it out if it belongs to the site frame.',
+      );
+    }
+  });
+  (Array.isArray(entry.excluded) ? entry.excluded : []).forEach(function (x, i) {
+    const where = label + '.excluded[' + i + ']';
+    if (!x || typeof x.control !== 'string') {
+      errors.push(where + '.control must be a control id from the inventory.');
+      return;
+    }
+    if (!EXCLUSION_REASONS.has(x.reason)) {
+      errors.push(where + '.reason must be one of ' + Array.from(EXCLUSION_REASONS).join('|') + '.');
+    }
+    if ('note' in x && typeof x.note !== 'string') {
+      errors.push(where + '.note, when present, must be a string.');
+    }
+    cite(x.control, where);
+  });
+
+  for (const control of inventory.controls) {
+    if (!isField(control) || FRAME_REGIONS.has(control.region) || accounted.has(control.id)) continue;
+    errors.push(
+      label +
+        ' leaves ' +
+        describeControl(control) +
+        ' unaccounted - make it a parameter (control: "' +
+        control.id +
+        '") or list it under excluded with a reason.',
+    );
+  }
+}
+
 function validate() {
   const errors = [];
   const report = loadJson(REPORT_PATH, 'artifacts/analysis/test-conditions.json');
@@ -540,11 +781,18 @@ function validate() {
 
   const siteMap = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
   const knownRouteIds = new Set();
+  const inventoryPathById = new Map();
   if (!siteMap.error && siteMap.value && typeof siteMap.value.routes === 'object') {
     for (const route of Object.values(siteMap.value.routes)) {
-      if (route && typeof route.routeId === 'string') knownRouteIds.add(route.routeId);
+      if (!route || typeof route.routeId !== 'string') continue;
+      knownRouteIds.add(route.routeId);
+      inventoryPathById.set(
+        route.routeId,
+        typeof route.inventory === 'string' ? route.inventory : INVENTORY_DIR + '/' + route.routeId + '.json',
+      );
     }
   }
+  const warnings = [];
 
   // An api-level value is only testable where the crawl actually saw the route call an API. A
   // missing contracts file means nothing was observed anywhere, which is exactly that answer.
@@ -572,17 +820,52 @@ function validate() {
     if (typeof entry.analyzedAt !== 'string' || entry.analyzedAt.length === 0) {
       errors.push(label + '.analyzedAt must be a non-empty string.');
     }
-    if (!Array.isArray(entry.parameters) || entry.parameters.length === 0) {
+    const inventoryPath = inventoryPathById.get(key);
+    const inventoryLoaded = inventoryPath ? loadJson(path.join(CWD, inventoryPath), inventoryPath) : null;
+    const inventory =
+      inventoryLoaded && !inventoryLoaded.error && inventoryLoaded.value && Array.isArray(inventoryLoaded.value.controls)
+        ? inventoryLoaded.value
+        : null;
+    const controlById = new Map();
+    if (inventory) {
+      for (const control of inventory.controls) {
+        if (control && typeof control.id === 'string') controlById.set(control.id, control);
+      }
+    }
+
+    // Without an inventory nothing can say a field was missed, so an empty list is refused outright;
+    // with one, the accounting below is what decides - a page with no fields of its own has none.
+    if (!Array.isArray(entry.parameters) || (!inventory && entry.parameters.length === 0)) {
       errors.push(label + '.parameters must be a non-empty array.');
     } else {
       entry.parameters.forEach(function (p, i) {
         isParameter(
           p,
           label + '.parameters[' + i + ']',
-          { routeId: key, routesWithObservedCalls: routesWithObservedCalls },
+          {
+            routeId: key,
+            routesWithObservedCalls: routesWithObservedCalls,
+            inventory: inventory,
+            control: p && typeof p.control === 'string' ? controlById.get(p.control) || null : null,
+            warnings: warnings,
+          },
           errors,
         );
       });
+    }
+
+    if ('excluded' in entry && !Array.isArray(entry.excluded)) {
+      errors.push(label + '.excluded, when present, must be an array.');
+    }
+    if (inventory && Array.isArray(entry.parameters)) {
+      accountForFields(entry, label, inventory, controlById, errors);
+    } else if (!inventory && inventoryPath) {
+      warnings.push(
+        label +
+          ': no inventory at ' +
+          inventoryPath +
+          ', so nothing can check that every field on this page was accounted for - re-run /map-site to record one.',
+      );
     }
     if (!Array.isArray(entry.constraints)) {
       errors.push(label + '.constraints must be an array.');
@@ -647,7 +930,7 @@ function validate() {
     }
   }
 
-  return { status: errors.length === 0 ? 'PASSED' : 'FAILED', errors };
+  return { status: errors.length === 0 ? 'PASSED' : 'FAILED', errors, warnings };
 }
 
 const result = validate();

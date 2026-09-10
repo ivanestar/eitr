@@ -481,9 +481,13 @@ function cmdRecord(args) {
       name: redact(landmark && landmark.name, 60),
     };
   });
-  const controls = observation.controls.slice(0, MAX_CONTROLS).map(function (raw) {
+  // The id is what a later stage cites a control by ("parameter count is c4"). It is the control's
+  // position in this recording, so it holds exactly as long as the recording does - which is why a
+  // stage citing it also records the contentHash it read.
+  const controls = observation.controls.slice(0, MAX_CONTROLS).map(function (raw, index) {
     const landmarkIndex = Number.isInteger(raw.landmark) && landmarks[raw.landmark] ? raw.landmark : -1;
     const control = {
+      id: 'c' + index,
       landmark: landmarkIndex,
       region: landmarkIndex === -1 ? 'body' : landmarks[landmarkIndex].region,
       role: redact(raw.role, 30) || 'unknown',

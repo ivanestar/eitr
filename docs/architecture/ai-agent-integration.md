@@ -195,6 +195,10 @@ is genuinely impossible, never merely because an earlier, unrelated greedy attem
 Invalid values follow the single-fault rule PICT uses for its negative values: two never share a
 vector, each is paired with every valid value of the other parameters, and valid pairs count as
 covered only in all-valid vectors, since a rejected input never exercised the values beside it.
+Extraction starts from the route's page inventory rather than a fresh reading of the page: every
+field the crawl recorded outside the site frame must end up a parameter (citing the field's
+inventory id) or an exclusion with a reason from a closed list, and the gate checks the rest of the
+extraction against the same record - offered options, HTML5 attributes, field types.
 The same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
 deterministic redaction backstop - independent of what the LLM step already did - masking
 digit-run and majority-digit PII shapes in every evidence excerpt, sample value and option label

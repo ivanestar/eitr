@@ -104,6 +104,12 @@ describe('scripts/page-inventory.mjs record', () => {
       const stored = readJson(join(dir, output.inventory));
       expect(stored.routeId).toBe('route-guid');
       expect(stored.controls).toHaveLength(14);
+      // The id a later stage cites a field by.
+      expect(stored.controls.slice(0, 3).map((c: { id: string }) => c.id)).toEqual([
+        'c0',
+        'c1',
+        'c2',
+      ]);
       expect(stored.landmarks.map((l: { fingerprint: string }) => l.fingerprint)).toHaveLength(3);
       expect(stored.contentHash).toBe(output.contentHash);
     } finally {

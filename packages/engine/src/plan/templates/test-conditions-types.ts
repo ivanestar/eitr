@@ -77,11 +77,35 @@ export interface Parameter {
   partitions: EquivalencePartition[];
   boundaries: BoundarySet[];
   evidence: Evidence[];
-  // Required for 'select' and 'radio': the option labels the page offers, as displayed. A valid
-  // partition's samples must come from this list and an invalid partition's samples must not - an
-  // option the page itself offers cannot be an invalid input. A list drawn from the user's own data
-  // (saved addresses, their contacts) is recorded as ['[REDACTED]'].
+  // The id of the field this parameter is, in the route's inventory
+  // (artifacts/site-map/inventory/<routeId>.json). Absent only for a field the inventory does not
+  // list - one a probe revealed after the crawl recorded the page.
+  control?: string;
+  // For a parameter without control, on a route with an inventory: the id of the page's own field
+  // whose toggle, selection or fill revealed this one. Without it, "not in the inventory" would let
+  // anything through - the header's language switcher included.
+  revealedBy?: string;
+  // The option labels a 'select' or 'radio' offers, as displayed. With an inventory the validator
+  // reads them from there; without one they are required here. A valid partition's samples must
+  // come from this list and an invalid partition's samples must not - an option the page itself
+  // offers cannot be an invalid input. A list drawn from the user's own data (saved addresses, their
+  // contacts) is recorded as ['[REDACTED]'].
   options?: string[];
+}
+
+// Why a field on the page is not a parameter. Closed list: anything else on the page is a parameter.
+//   result-output - shows the page's result rather than taking input (a read-only result box)
+//   duplicate     - the same field rendered twice (a mobile and a desktop copy, a repeated row);
+//                   note names the control id that stands for it
+//   disabled      - disabled, and nothing short of pressing a button enables it
+//   needs-button  - only takes a value after a button this stage may not press opens it
+//   off-limits    - inside an area the human put off-limits for this project
+export type ExclusionReason = 'result-output' | 'duplicate' | 'disabled' | 'needs-button' | 'off-limits';
+
+export interface ExcludedControl {
+  control: string;
+  reason: ExclusionReason;
+  note?: string;
 }
 
 // v1 supports pairwise-exclusion constraints only - "if paramA holds partition X, paramB may
@@ -199,6 +223,11 @@ export interface TestConditionsEntry {
   // feature-map.json.
   routeId: string;
   parameters: Parameter[];
+  // Every field in the route's inventory outside the site frame (header, navigation, footer,
+  // sidebar) is either a parameter, by its control id, or listed here - enforced by
+  // scripts/validate-test-conditions.mjs, since a field nobody accounted for is a field nothing
+  // downstream tests.
+  excluded?: ExcludedControl[];
   constraints: ConstraintRule[];
   conditions: TestCondition[];
   unsatisfiedPairs: UnsatisfiedPair[];

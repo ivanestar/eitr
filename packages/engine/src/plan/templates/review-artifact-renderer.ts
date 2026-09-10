@@ -44,6 +44,7 @@ const CRAWL_BUDGET_PATH = path.join(CWD, 'artifacts', 'site-map', '.crawl-budget
 const APP_PROFILE_PATH = path.join(CWD, 'artifacts', 'analysis', 'app-profile.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const INVENTORY_DIR = path.join(CWD, 'artifacts', 'site-map', 'inventory');
 const TEST_CASES_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 const REVIEW_DIR = path.join(CWD, 'artifacts', 'review');
 const DEFAULT_THRESHOLD = 10;
@@ -129,6 +130,14 @@ function sampleFor(entry, paramName, partitionId) {
   return partitionId;
 }
 
+// How a person recognises a control the analysis cites by id: its role and label, or where it sits
+// when it has no label.
+function controlLabel(control) {
+  if (!control) return '';
+  if (control.name) return control.role + ' "' + control.name + '"';
+  return control.role + (control.hint ? ' next to "' + control.hint + '"' : ' with no label');
+}
+
 function renderTestConditions(labels, data) {
   const routes = data && data.routes && typeof data.routes === 'object' ? data.routes : {};
   const entries = Object.values(routes).filter(Boolean);
@@ -137,6 +146,21 @@ function renderTestConditions(labels, data) {
   });
 
   const lines = [];
+  // The site frame's own fields are left out of every page on purpose, so say where they went
+  // rather than let a reader conclude the language switcher is simply untested by accident.
+  const shared = loadJson(path.join(INVENTORY_DIR, 'shared.json'));
+  const frameFields = [];
+  for (const widget of shared && Array.isArray(shared.widgets) ? shared.widgets : []) {
+    for (const control of Array.isArray(widget.controls) ? widget.controls : []) {
+      if (['input', 'select', 'textarea'].indexOf(control.tag) !== -1) {
+        frameFields.push(widget.name + ': ' + controlLabel(control));
+      }
+    }
+  }
+  if (frameFields.length > 0) {
+    lines.push('Site frame fields are not part of any page below: ' + frameFields.join('; '));
+    lines.push('');
+  }
   let conditionCount = 0;
   const techniqueCounts = {};
   let unsatisfiedTotal = 0;
@@ -174,6 +198,28 @@ function renderTestConditions(labels, data) {
     const unsatisfied = Array.isArray(entry.unsatisfiedPairs) ? entry.unsatisfiedPairs.length : 0;
     unsatisfiedTotal += unsatisfied;
     if (unsatisfied > 0) lines.push('Unsatisfied pairs: ' + unsatisfied);
+    // A field left out is a decision a person should see and be able to overturn.
+    const excluded = Array.isArray(entry.excluded) ? entry.excluded : [];
+    if (excluded.length > 0) {
+      const inventory = loadJson(path.join(INVENTORY_DIR, entry.routeId + '.json'));
+      const byId = {};
+      for (const control of inventory && Array.isArray(inventory.controls) ? inventory.controls : []) {
+        byId[control.id] = control;
+      }
+      lines.push(
+        'Fields left out: ' +
+          excluded
+            .map(function (item) {
+              return (
+                (controlLabel(byId[item.control]) || item.control) +
+                ' - ' +
+                item.reason +
+                (item.note ? ' (' + item.note + ')' : '')
+              );
+            })
+            .join('; '),
+      );
+    }
     lines.push('');
   }
 

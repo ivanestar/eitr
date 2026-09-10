@@ -100,6 +100,63 @@ function run(dir: string, ...args: string[]) {
   return { result, output: result.stdout ? JSON.parse(result.stdout) : null };
 }
 
+// A field left out of a page's conditions is a decision nothing downstream will test it, so the
+// review names each one; and the site frame's fields, left out of every page, get one line saying so.
+describe('scripts/render-review-artifact.mjs --kind=test-conditions field accounting', () => {
+  it('names each field left out with its reason, and the frame fields no page carries', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      mkdirSync(join(dir, 'artifacts', 'site-map', 'inventory'), { recursive: true });
+      writeJson(dir, 'artifacts/site-map/inventory/id-0.json', {
+        routeId: 'id-0',
+        controls: [
+          { id: 'c3', role: 'checkbox', name: 'Gift wrap', tag: 'input' },
+          { id: 'c4', role: 'textbox', name: '', hint: 'Result', tag: 'textarea' },
+        ],
+      });
+      writeJson(dir, 'artifacts/site-map/inventory/shared.json', {
+        widgets: [
+          {
+            name: 'Header',
+            controls: [
+              { role: 'link', name: 'Home', tag: 'a' },
+              { role: 'combobox', name: 'Select language', tag: 'select' },
+            ],
+          },
+        ],
+      });
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 2,
+        generatedAt: '2026-09-10T00:00:00.000Z',
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters: [],
+            excluded: [
+              { control: 'c3', reason: 'disabled', note: 'enabled only after checkout' },
+              { control: 'c4', reason: 'result-output' },
+            ],
+            constraints: [],
+            conditions: [],
+            unsatisfiedPairs: [],
+          },
+        },
+      });
+      const { output } = run(dir, '--kind=test-conditions');
+      expect(output.markdown).toContain(
+        'Site frame fields are not part of any page below: Header: combobox "Select language"',
+      );
+      expect(output.markdown).not.toContain('Header: link');
+      expect(output.markdown).toContain(
+        'Fields left out: checkbox "Gift wrap" - disabled (enabled only after checkout); textbox next to "Result" - result-output',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 // Approving a review changes the entries it describes, and nothing re-renders it - so the file
 // left behind states the pre-approval draft. Live-observed claiming "criticality (draft)" for 45
 // entries a human had confirmed, with the JSON written two minutes after the markdown.
