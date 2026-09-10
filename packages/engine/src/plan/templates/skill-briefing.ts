@@ -153,7 +153,7 @@ const BRIEFINGS = {
 
   'map-site': {
     command: '/map-site',
-    what: 'Crawls your application and produces one file - artifacts/site-map/site-map.json: every page it reached, what is on it, a screenshot of it, and the dialogs it raises - for you to review.',
+    what: 'Crawls your application and produces artifacts/site-map/site-map.json: every page it reached, every control on it (kept per page under artifacts/site-map/inventory/), a screenshot of it, and the dialogs it raises - for you to review.',
     how: 'Signs in with your saved session, walks the app link by link inside limits you set before it starts, reads each page and looks at its own screenshot, and writes down what it finds as it goes.',
     why: 'Everything later is built on knowing which pages exist. No later stage can invent a page this one did not find.',
     notes: [
@@ -161,7 +161,7 @@ const BRIEFINGS = {
       'It touches your live application. Before it starts you choose whether it may interact at all or only read - and if it may, it still never presses anything that commits (buy, delete, submit).',
       'It reports progress as it goes and picks up where it stopped if it is interrupted, so stopping costs you the current page and nothing more.',
     ],
-    produces: ['artifacts/site-map/site-map.json'],
+    produces: ['artifacts/site-map/site-map.json', 'artifacts/site-map/inventory/'],
     question: {
       text: 'Start the crawl?',
       options: [

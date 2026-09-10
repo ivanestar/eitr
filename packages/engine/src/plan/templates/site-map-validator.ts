@@ -192,6 +192,13 @@ function validate() {
     if ('components' in entry && !isStringArray(entry.components)) {
       errors.push(label + '.components, when present, must be an array of strings.');
     }
+    // Keyed by routeId so scripts/page-inventory.mjs prune can tell a live file from a leftover.
+    if ('inventory' in entry && entry.inventory !== 'artifacts/site-map/inventory/' + entry.routeId + '.json') {
+      errors.push(
+        label +
+          '.inventory, when present, must be exactly artifacts/site-map/inventory/<routeId>.json - the path scripts/page-inventory.mjs record returned.',
+      );
+    }
     if (typeof entry.discoveredAt !== 'string' || entry.discoveredAt.length === 0) {
       errors.push(label + '.discoveredAt must be a non-empty string.');
     }

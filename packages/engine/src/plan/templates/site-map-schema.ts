@@ -114,14 +114,18 @@ export function renderSiteMapSchema(): string {
             "items": {
               "type": "string"
             },
-            "description": "Major structural DOM regions found on this route (header, nav, main, ...)."
+            "description": "Top-level landmark regions on this route (header, nav, main, footer, aside, search), as scripts/page-inventory.mjs record reports them."
           },
           "components": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Page Object / widget class names discovered on this route."
+            "description": "The page's own controls - fields and buttons outside the header, navigation, footer and sidebar - each as its role and accessible name (e.g. 'spinbutton \\"How many GUIDs\\"'), or marked as having no accessible name. Copied from scripts/page-inventory.mjs record, never composed by hand. Links and the frame's controls are in the route's inventory file."
+          },
+          "inventory": {
+            "type": "string",
+            "description": "Path to this route's full inventory, artifacts/site-map/inventory/<routeId>.json, written by scripts/page-inventory.mjs record: every landmark with the fingerprint shared-widget detection compares, and every control with its role, accessible name, type, HTML5 constraints, options and whether it sends a result elsewhere (copy, export, download)."
           },
           "access": {
             "type": "object",
@@ -159,7 +163,7 @@ export function renderSiteMapSchema(): string {
           },
           "contentHash": {
             "type": "string",
-            "description": "Hash of a normalized structural signal for this route - title plus sorted regions plus sorted components, NOT raw HTML (too noisy: whitespace, analytics scripts, and embedded timestamps would cause false-positive \\"changed\\" signals). /map-site update recomputes this per route and skips full re-extraction when it matches the stored value; every pass must compute it the same way for the comparison to mean anything."
+            "description": "Structural signature of this route, computed by scripts/page-inventory.mjs record from the title (digits normalized), the landmark regions, and every control's region, role and type - never names and never raw HTML, so page two of a listing hashes like page one and the crawl budget can stop a pagination chain. /map-site update compares it per route and skips the screenshot and triage when it matches the stored value."
           },
           "status": {
             "type": "string",
@@ -317,7 +321,7 @@ export function renderSiteMapSchema(): string {
       "items": {
         "type": "string"
       },
-      "description": "Widget class names found recurring across 2+ routes, synthesized under components/widgets/."
+      "description": "Names of the header, navigation, footer and sidebar regions found identical on 2+ active routes, written by scripts/page-inventory.mjs shared. Which routes carry each one and every control inside it are in artifacts/site-map/inventory/shared.json; Page Objects build each as one widget under components/widgets/."
     }
   }
 }

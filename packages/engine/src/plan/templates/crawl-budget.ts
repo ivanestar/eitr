@@ -886,9 +886,10 @@ function cmdVisited(args) {
   state.pagesVisited += 1;
   keepTemplate(state, canonical);
 
-  // The repetition check. contentHash is this route's normalized structural signature (title plus
-  // sorted regions plus sorted components) - the same value the site map records - so two pages
-  // sharing one are rendering the same thing regardless of what their URLs look like.
+  // The repetition check. contentHash is this route's structural signature from
+  // scripts/page-inventory.mjs record (title, regions, and every control's region, role and type -
+  // never names) - the same value the site map records - so two pages sharing one are rendering the
+  // same thing regardless of what their URLs look like.
   const contentHash = typeof args['content-hash'] === 'string' ? args['content-hash'] : null;
   const template = canonical.ok ? canonical.canonicalPath : null;
   let warning = null;

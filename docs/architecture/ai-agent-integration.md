@@ -28,8 +28,8 @@ Generated Test Repository
 │   │                             /design-test-cases + /automate-test end-to-end, one command from
 │   │                             nothing to verified working tests, with a human sign-off gate per
 │   │                             stage (or auto-pilot for local review; code synthesis always gated)
-│   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
-│   │                             overlay recording (ADR 0012 Stage 1 crawl half)
+│   ├── /map-site             -- Route graph crawler, site topology, per-page control inventory,
+│   │                             shared widgets & overlay recording (ADR 0012 Stage 1 crawl half)
 │   ├── /define-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
 │   │                             combinatorial/boundary-value condition generation (ADR 0012 Stage 2)
 │   └── /design-test-cases    -- Deterministic test-level classification + drafted test case per
@@ -156,7 +156,17 @@ boundary. Immediately after that gate, an optional, never-blocking Coverage Cros
 (`scripts/check-sitemap-coverage.mjs`) looks for the target site's own `sitemap.xml` (via
 `robots.txt`'s `Sitemap:` directive or the conventional default path) and flags any route it lists
 that the crawl didn't reach - most sites publish no sitemap.xml at all, so a `SKIPPED` result is the
-normal outcome, not an error. See
+normal outcome, not an error.
+
+What is on each page is collected by a script rather than read off by the crawling model:
+`scripts/page-inventory.mjs` hands the crawl browser-side source for `page.evaluate` (`probe`), then
+stores every landmark and every control - role, accessible name, type, HTML5 constraints, options,
+and whether it sends a result elsewhere - in `artifacts/site-map/inventory/<routeId>.json` and
+answers with the route entry's `regions`, `components` and `contentHash` (`record`). The hash covers
+structure only (title with digits normalized, regions, each control's region, role and type), so a
+pagination chain still repeats it and the crawl budget still stops the chain; names go into
+per-region fingerprints instead, which `shared` compares across routes to name the header,
+navigation, footer and sidebar regions that recur as shared widgets. See
 [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
 for the design decision this implements and what remains out of scope for this first stage
 (transport choice, cross-route journey synthesis).

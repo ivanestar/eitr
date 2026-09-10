@@ -900,6 +900,12 @@ making that route's drafted test conditions impossible to actually automate.
   array must have a corresponding named child on the Page Object, composed per the Component Reuse
   Order above. A parameter with no matching child is a real gap: go back and add it, not a
   discrepancy to silently ignore.
+- Cross-reference the route's inventory too, \`artifacts/site-map/inventory/<routeId>.json\`, written
+  by the crawl from the live DOM: every control in it outside the header, navigation, footer and
+  sidebar needs a child here. Controls inside a region that \`artifacts/site-map/inventory/shared.json\`
+  names as a widget belong to that widget - compose it, never redefine them on the page. A control
+  recorded with no accessible name cannot be reached by \`getByRole\` name or \`getByLabel\`; locate it
+  by its test id, or by the nearby text the inventory records, and say so in the report.
 - Even when no test-conditions.json entry exists yet for a route, scan for every real interactive
   element the live DOM actually contains (every form field, select, checkbox, radio, button,
   meaningful link) - never stop at a handful of generic landmark regions and call the page object
@@ -953,7 +959,9 @@ pass with a fixed stopping rule, not an open-ended refactor audit:
 ## Worker-Mode & Batch Generation from Site Map
 - When invoked in parallel worker mode or for mapped routes in \`artifacts/site-map/site-map.json\`:
   * Focus on the assigned route unit in isolation (Work-Unit Isolation).
-  * Reuse existing shared widgets in \`${sc.widgetPath('<name>')}\`.
+  * Reuse existing shared widgets in \`${sc.widgetPath('<name>')}\`. A Level 1 worker assigned a widget
+    name builds it from that name's entry in \`artifacts/site-map/inventory/shared.json\` - the routes
+    carrying it and every control inside it.
   * Synthesize dedicated Page Object in \`${sc.pagePath('<name>')}\`.
   * For EVERY Page Object, verify all locators directly against the live DOM before reporting it complete (1:1 strict parity, 0 unverified pages).
   * Run local verification and return structured JSON/Markdown results to the orchestrator.

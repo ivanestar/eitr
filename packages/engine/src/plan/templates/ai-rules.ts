@@ -607,6 +607,7 @@ recorded. These files are written by the analysis workflows and are the project'
 |---|---|---|
 | \`artifacts/analysis/app-profile.json\` | Everything established about the application as a whole: what kind of application it is (production / sandbox-demo / internal tool), its confirmed core purpose, what each role is for, how it talks to its backend (\`apiStyle\`), the crawl boundary a human set, domain knowledge a person volunteered, which test types are in scope | \`node scripts/app-profile.mjs\` |
 | \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, per-role access, and the overlays met on it - each with what raised it, what it contains, its own screenshot, and how it was closed | \`node scripts/validate-site-map.mjs\` to check shape |
+| \`artifacts/site-map/inventory/<routeId>.json\` | Every control on one page, collected from the live DOM - role, accessible name, type, HTML5 constraints, options, and whether it sends a result elsewhere (copy, export, download) - plus its landmark regions. \`shared.json\` beside them names the header, navigation, footer and sidebar regions that recur across routes | \`node scripts/page-inventory.mjs\` (\`record\` writes one, \`shared\` compares them) |
 | \`artifacts/site-map/api-contracts.json\` | Operations actually observed in traffic - method, path template, the operation name for a GraphQL or RPC call, and the response shape | \`node scripts/validate-api-contracts.mjs\` |
 | \`artifacts/analysis/feature-map.json\` | Features and the routes they span, the entities this application works with, what can happen to each one, its lifecycle, and the links between them | \`node scripts/derive-feature-map.mjs\` to draft, \`node scripts/validate-feature-map.mjs\` to check shape |
 | \`artifacts/analysis/test-conditions.json\` | Typed test conditions per route | \`node scripts/validate-test-conditions.mjs\` |
@@ -637,6 +638,8 @@ a proposed URL still goes through the frontier gatekeeper, and "wait, it is stil
 out after two retakes), \`scripts/overlay-ledger.mjs\` (every modal, drawer, banner and native dialog
 the crawl meets: which dismissal the crawl boundary permits, how many attempts are left, and what is
 still open - an overlay left open makes every later click land on a backdrop with no error at all),
+\`scripts/page-inventory.mjs\` (what is on each page, collected in the browser rather than read off by
+eye, and which frame regions recur across routes as shared widgets),
 \`scripts/skill-briefing.mjs\` (what a given skill is about to do,
 how, why, and what is worth knowing before agreeing to it - printed verbatim by every skill before
 it runs anything, and by the pipeline at each stage gate),
