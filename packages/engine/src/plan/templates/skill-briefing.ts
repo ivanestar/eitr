@@ -160,6 +160,7 @@ const BRIEFINGS = {
       'This is the long one: tens of minutes on a small app, hours on a large one, and it uses a real share of this session\\'s budget.',
       'It touches your live application. Before it starts you choose whether it may interact at all or only read - and if it may, it still never presses anything that commits (buy, delete, submit).',
       'It reports progress as it goes and picks up where it stopped if it is interrupted, so stopping costs you the current page and nothing more.',
+      'If the site answers with a bot check, a block page or a certificate the browser does not trust, it stops and tells you what it needs rather than mapping the refusal - a test or staging instance that lets automated browsers in avoids that.',
     ],
     produces: ['artifacts/site-map/site-map.json', 'artifacts/site-map/inventory/'],
     question: {

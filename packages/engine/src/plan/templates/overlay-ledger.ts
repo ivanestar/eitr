@@ -33,6 +33,7 @@ export function renderOverlayLedger(): string {
  *   node scripts/overlay-ledger.mjs begin [--reset] [--boundary=<read-only|safe-interactions|full|full-except>]
  *   node scripts/overlay-ledger.mjs probe
  *   node scripts/overlay-ledger.mjs open --route=<canonicalPath> --route-id=<routeId> --observation=<file> [--trigger=<label>]
+ *   node scripts/overlay-ledger.mjs label --overlay=<overlayId> --answers=<file>
  *   node scripts/overlay-ledger.mjs attempt --overlay=<overlayId> --method=<method> --cleared=<true|false>
  *   node scripts/overlay-ledger.mjs authorize --overlay=<overlayId> --method=<method>
  *   node scripts/overlay-ledger.mjs pending [--route=<canonicalPath>]
@@ -40,9 +41,11 @@ export function renderOverlayLedger(): string {
  *   node scripts/overlay-ledger.mjs report
  *
  * 'probe' hands back browser-side source to run with page.evaluate; write what it returns to a file
- * and pass that file to 'open'. 'open' answers with the dismissal plan to follow, in order. Report
- * each attempt back with 'attempt' - the ledger, not you, decides what to try next and when a route
- * has to be given up on.
+ * and pass that file to 'open'. 'open' answers with the dismissal plan to follow, in order, and the
+ * control to press when that plan says close-control. When the overlay's labels are in a language
+ * the ledger cannot read, 'open' also asks what each control does - answer with 'label' before
+ * trying anything. Report each attempt back with 'attempt' - the ledger, not you, decides what to
+ * try next and when a route has to be given up on.
  */
 
 import crypto from 'node:crypto';
@@ -108,7 +111,6 @@ const SAFE_LABELS = [
   'later',
   'skip',
   'back',
-  'x',
 ];
 
 // A label that commits to something. None of these is ever put in an automatic dismissal plan, at
@@ -230,6 +232,7 @@ function emptyState(boundary) {
       resolved: 0,
       gaveUp: 0,
       awaitingAuthorization: 0,
+      labelledByAssistant: 0,
     },
     warnings: [],
   };
@@ -274,17 +277,51 @@ function isDestructiveLabel(label) {
   return false;
 }
 
+// Whole words only. Matching a word's start let the single-letter entry "x" clear any label with a
+// word beginning in x - live-observed calling a product link "... Huawei Pura XMax ..." a close
+// control, and "Order Xbox" would have been one too. The destructive list keeps its looser match on
+// purpose: there, matching too much only ever means pressing less.
 function isSafeLabel(label) {
   const text = String(label || '').toLowerCase().trim().replace(/[^a-z0-9 ,]/g, '');
   if (text.length === 0) return false;
   if (isDestructiveLabel(text)) return false;
   for (const word of SAFE_LABELS) {
-    if (text === word || text.indexOf(word + ' ') === 0 || text.indexOf(' ' + word) !== -1) {
-      return true;
-    }
+    if (new RegExp('(^|[^a-z0-9])' + word + '([^a-z0-9]|$)').test(text)) return true;
   }
   return false;
 }
+
+// A label that is nothing but a cross. It means "close" in every language, and it is the one
+// label the English list above can never match, because it has no letters.
+const CLOSE_GLYPHS = ['\\u00d7', '\\u2715', '\\u2716', '\\u2717', '\\u2573', '\\u2a2f', 'x'];
+const CLOSE_CLASS_RE = /(^|[^a-z])(close|dismiss)([^a-z]|$)/;
+
+// Why a control may close its overlay, or null. The English label list comes first; the rest reads
+// what the markup says rather than what the visitor sees - a lone cross, a dismiss attribute, a
+// "close" class on a control that shows no words at all. A class never outranks words: "Accept and
+// close" carrying class="cookie-close" is still an accept button, which is why the class counts
+// only on a control with no label, or a cross for one.
+function closeEvidence(control) {
+  const label = String((control && control.label) || '').trim();
+  const lowered = label.toLowerCase();
+  if (CLOSE_GLYPHS.indexOf(lowered) !== -1) return 'glyph';
+  if (label.length > 0 && isSafeLabel(label)) return 'label';
+  if (label.length > 0) return null;
+  if (control && control.dismiss === true) return 'dismiss-attribute';
+  if (control && CLOSE_CLASS_RE.test(String(control.classHint || ''))) return 'close-class';
+  return null;
+}
+
+// A label the English lists neither clear nor forbid - "Закрыть", "닫기", "Akzeptieren". Only a
+// reader can place it, which is what 'label' is for.
+function isUnplacedLabel(label) {
+  const text = String(label || '').trim();
+  if (text.length === 0) return false;
+  if (CLOSE_GLYPHS.indexOf(text.toLowerCase()) !== -1) return false;
+  return !isSafeLabel(text) && !isDestructiveLabel(text);
+}
+
+const LABEL_ANSWERS = ['close', 'consent', 'other'];
 
 // Runs in the page. Returns a description of whatever is currently covering it, or present:false.
 // Deliberately reports only what it can see - which control is safe to press is decided by the
@@ -363,11 +400,22 @@ function detectOverlays(opts) {
       el.querySelectorAll('button, [role="button"], a[href], input[type="button"], input[type="submit"]'),
     );
     for (var c = 0; c < controlNodes.length && controls.length < 12; c++) {
-      if (!visible(controlNodes[c])) continue;
+      var controlNode = controlNodes[c];
+      if (!visible(controlNode)) continue;
+      // What the markup says the control does, in the developer's words rather than the visitor's
+      // language: Bootstrap-style dismiss attributes, and the class and id it was given.
       controls.push({
-        label: accessibleName(controlNodes[c]),
-        tag: controlNodes[c].tagName.toLowerCase(),
-        role: controlNodes[c].getAttribute('role') || '',
+        label: accessibleName(controlNode),
+        tag: controlNode.tagName.toLowerCase(),
+        role: controlNode.getAttribute('role') || '',
+        dismiss:
+          controlNode.hasAttribute('data-dismiss') ||
+          controlNode.hasAttribute('data-bs-dismiss') ||
+          controlNode.hasAttribute('data-close'),
+        classHint: String((controlNode.id || '') + ' ' + (controlNode.getAttribute('class') || ''))
+          .trim()
+          .toLowerCase()
+          .slice(0, 80),
       });
     }
 
@@ -509,15 +557,15 @@ function findOverlay(state, overlayId) {
 // whether a human has authorized something wider for it. A method that closed this signature once
 // goes first: the same modal closes the same way on every route, and re-deriving that per route
 // wastes a reload each time.
-function dismissPlanFor(state, kind, signature, controls) {
+function dismissPlanFor(state, kind, signature, graded) {
   if (kind === 'native-dialog') return ['native-dismiss'];
   const allowed = methodsForBoundary(state.boundary).slice();
   const record = state.signatures[signature];
   if (record && record.authorizedMethod && allowed.indexOf(record.authorizedMethod) === -1) {
     allowed.unshift(record.authorizedMethod);
   }
-  const hasSafeControl = (controls || []).some(function (control) {
-    return isSafeLabel(control.label);
+  const hasSafeControl = (graded || []).some(function (control) {
+    return control.safe;
   });
   const plan = allowed.filter(function (method) {
     return method !== 'close-control' || hasSafeControl;
@@ -589,7 +637,29 @@ function cmdOpen(args) {
     ? SCREENSHOT_DIR + '/' + toSlug(routePath) + '-overlay-' + index + '--' + routeId + '.jpg'
     : null;
 
-  const plan = dismissPlanFor(state, kind, signature, controls);
+  // Each control graded once, here: why it may close the overlay, or that it may not. A label an
+  // assistant placed for this same overlay on an earlier route counts again without asking again.
+  const assistantLabel = record.assistantClose ? record.assistantClose.label : null;
+  const graded = controls.map(function (control) {
+    const label = redact(control.label, 80);
+    let how = closeEvidence(control);
+    if (!how && assistantLabel !== null && label === assistantLabel && !isDestructiveLabel(label)) how = 'assistant';
+    const entry = { label: label, safe: how !== null };
+    if (how) entry.how = how;
+    return entry;
+  });
+  const plan = dismissPlanFor(state, kind, signature, graded);
+  const closeIndex = graded.findIndex(function (control) {
+    return control.safe;
+  });
+  // Only a button can close an overlay; a link navigates away. An overlay whose unreadable labels
+  // are all links - a product card, a weather widget - has nothing for a reader to place.
+  const needsLabels =
+    kind !== 'native-dialog' &&
+    closeIndex === -1 &&
+    controls.some(function (control) {
+      return control.tag !== 'a' && isUnplacedLabel(control.label);
+    });
   const overlay = {
     overlayId: overlayId,
     signature: signature,
@@ -598,9 +668,8 @@ function cmdOpen(args) {
     trigger: typeof args.trigger === 'string' ? redact(args.trigger, 80) : 'auto',
     textExcerpt: redact(observation.textExcerpt, 200),
     components: Array.isArray(observation.components) ? observation.components.slice(0, 10) : [],
-    controls: controls.map(function (control) {
-      return { label: redact(control.label, 80), safe: isSafeLabel(control.label) };
-    }),
+    controls: graded,
+    labelsRequested: needsLabels,
     coveragePct: Number.isFinite(observation.coveragePct) ? observation.coveragePct : null,
     screenshot: screenshot,
     plan: plan,
@@ -644,6 +713,9 @@ function cmdOpen(args) {
     screenshot: screenshot,
     dismissPlan: plan,
     nextMethod: plan.length > 0 ? plan[0] : null,
+    closeControl:
+      closeIndex === -1 ? null : { index: closeIndex, label: graded[closeIndex].label, how: graded[closeIndex].how },
+    labelRequest: needsLabels ? labelRequestFor(overlayId, graded) : null,
     status: overlay.status,
     warnings: warnings,
     instruction: investigate
@@ -751,6 +823,135 @@ function cmdAttempt(args) {
       'Record this route with "blocked-by-overlay" in visualTriage.flags and move on - do not keep ' +
       'clicking into a covered page. Say in the run summary that this route was only partly ' +
       'explored and why.',
+  };
+}
+
+function labelRequestFor(overlayId, graded) {
+  return {
+    controls: graded.map(function (control, index) {
+      return { index: index, label: control.label };
+    }),
+    answers: LABEL_ANSWERS,
+    answerFormat: '{"0": "close", "1": "consent", "2": "other"}',
+    command: 'node scripts/overlay-ledger.mjs label --overlay=' + overlayId + ' --answers=<file>',
+    instruction:
+      'Answer this before trying any method. For every control of the overlay, say what pressing it ' +
+      'does, reading its label in whatever language it is in: "close" when it only closes the overlay ' +
+      'and agrees to nothing, "consent" when it accepts, agrees, allows, subscribes or confirms ' +
+      'anything, "other" for the rest (settings, links, a second step). When a label could be either, ' +
+      'answer "other" - a wrong "close" presses a button that commits to something.',
+  };
+}
+
+// The assistant's reading of labels the English lists cannot place. The ledger still decides: the
+// answer must cover every control, and a control named "close" whose label reads as committing to
+// something in the list the ledger does know is refused. What it accepts becomes a close-control
+// step in the plan only where the crawl boundary already allows pressing a close control.
+function cmdLabel(args) {
+  const state = requireState('label');
+  const overlayId = typeof args.overlay === 'string' ? args.overlay.trim() : '';
+  if (!overlayId) fail('label', 'missing --overlay');
+  const hit = findOverlay(state, overlayId);
+  if (!hit) fail('label', 'unknown overlay: ' + overlayId);
+  const overlay = hit.overlay;
+  if (overlay.status === 'resolved' || overlay.status === 'gave-up') {
+    fail('label', 'this overlay is already ' + overlay.status + ' - there is nothing left to press');
+  }
+  if (typeof args.answers !== 'string') fail('label', 'missing --answers=<file>');
+  let answers;
+  try {
+    answers = JSON.parse(fs.readFileSync(path.resolve(CWD, args.answers), 'utf8').replace(/^\\uFEFF/, ''));
+  } catch (err) {
+    fail('label', 'could not read --answers: ' + err.message);
+  }
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    fail('label', '--answers must be a JSON object keyed by control index, e.g. {"0": "close", "1": "consent"}');
+  }
+
+  const errors = [];
+  for (const key of Object.keys(answers)) {
+    const index = Number.parseInt(key, 10);
+    if (String(index) !== key || index < 0 || index >= overlay.controls.length) {
+      errors.push('"' + key + '" is not a control index of this overlay (0-' + (overlay.controls.length - 1) + ')');
+    }
+  }
+  overlay.controls.forEach(function (control, index) {
+    const answer = answers[String(index)];
+    if (LABEL_ANSWERS.indexOf(answer) === -1) {
+      errors.push(index + ' ("' + control.label + '"): answer one of ' + LABEL_ANSWERS.join(', '));
+    }
+  });
+  if (errors.length > 0) {
+    process.stdout.write(JSON.stringify({ action: 'label', ok: false, errors: errors }, null, 2) + '\\n');
+    process.exit(1);
+  }
+
+  const refused = [];
+  let chosen = -1;
+  overlay.controls.forEach(function (control, index) {
+    if (answers[String(index)] !== 'close') return;
+    if (isDestructiveLabel(control.label)) {
+      refused.push(control.label || '(no label)');
+      return;
+    }
+    if (chosen === -1) chosen = index;
+  });
+  overlay.labels = overlay.controls.map(function (control, index) {
+    return { label: control.label, answer: answers[String(index)] };
+  });
+  state.totals.labelledByAssistant = (state.totals.labelledByAssistant || 0) + 1;
+
+  if (chosen !== -1) {
+    const control = overlay.controls[chosen];
+    control.safe = true;
+    control.how = 'assistant';
+    const record = state.signatures[overlay.signature];
+    if (record) record.assistantClose = { label: control.label };
+    const allowed = methodsForBoundary(state.boundary);
+    const authorized = record && record.authorizedMethod === 'close-control';
+    if ((allowed.indexOf('close-control') !== -1 || authorized) && overlay.plan.indexOf('close-control') === -1) {
+      const before = ['backdrop', 'reload'].map(function (method) {
+        return overlay.plan.indexOf(method);
+      }).filter(function (position) {
+        return position !== -1;
+      });
+      const at = before.length > 0 ? Math.min.apply(null, before) : overlay.plan.length;
+      overlay.plan.splice(at, 0, 'close-control');
+      if (overlay.status === 'awaiting-authorization') {
+        overlay.status = 'open';
+        state.totals.awaitingAuthorization = Math.max(0, state.totals.awaitingAuthorization - 1);
+      }
+    }
+  }
+  writeState(state);
+
+  const nextMethod =
+    overlay.plan.find(function (method) {
+      return !overlay.attempts.some(function (attempt) {
+        return attempt.method === method;
+      });
+    }) || null;
+  const warnings = [];
+  if (refused.length > 0) {
+    warnings.push(
+      'Refused as a close control, because the label reads as committing to something: ' +
+        refused.join(', ') +
+        '. It stays out of the plan.',
+    );
+  }
+  return {
+    action: 'label',
+    ok: true,
+    overlayId: overlayId,
+    closeControl: chosen === -1 ? null : { index: chosen, label: overlay.controls[chosen].label, how: 'assistant' },
+    dismissPlan: overlay.plan,
+    nextMethod: nextMethod,
+    warnings: warnings,
+    instruction:
+      chosen === -1
+        ? 'No control closes this overlay without committing to something, so the plan is unchanged - ' +
+          'carry on with nextMethod.'
+        : 'Carry on with the plan in order; "close-control" means pressing closeControl and nothing else.',
   };
 }
 
@@ -871,6 +1072,15 @@ function cmdReport() {
       });
     }
   }
+  // Every close control an assistant picked from labels the ledger could not read itself - listed so
+  // a person can see which buttons the crawl pressed on someone's reading rather than on a rule.
+  const assistantChoices = Object.values(state.signatures)
+    .filter(function (record) {
+      return record.assistantClose;
+    })
+    .map(function (record) {
+      return { title: record.title, kind: record.kind, pressed: record.assistantClose.label, routes: record.routes.length };
+    });
   return {
     action: 'report',
     boundary: state.boundary,
@@ -878,6 +1088,7 @@ function cmdReport() {
     uniqueOverlays: Object.keys(state.signatures).length,
     recurring: recurring,
     unresolved: unresolved,
+    assistantChoices: assistantChoices,
     warnings: state.warnings,
     summary:
       state.totals.overlaysSeen +
@@ -907,6 +1118,9 @@ function main() {
     case 'attempt':
       emit(cmdAttempt(args));
       break;
+    case 'label':
+      emit(cmdLabel(args));
+      break;
     case 'authorize':
       emit(cmdAuthorize(args));
       break;
@@ -924,7 +1138,7 @@ function main() {
         'usage',
         'unknown command: ' +
           String(command) +
-          ' (expected begin, probe, open, attempt, authorize, pending, entries or report)',
+          ' (expected begin, probe, open, label, attempt, authorize, pending, entries or report)',
       );
   }
 }

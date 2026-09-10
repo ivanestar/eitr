@@ -23,15 +23,19 @@ export function renderPageInventory(): string {
  * Usage:
  *   node scripts/page-inventory.mjs probe
  *   node scripts/page-inventory.mjs record --route=<canonicalPath> --route-id=<routeId> --observation=<file>
+ *                                          [--status=<http status>] [--mitigated=<cf-mitigated header>]
+ *   node scripts/page-inventory.mjs classify --route-id=<routeId> --answers=<file>
  *   node scripts/page-inventory.mjs shared
  *   node scripts/page-inventory.mjs prune
  *
  * 'probe' hands back browser-side source to run with page.evaluate once the page has settled and any
  * overlay is closed; write what it returns to a file and pass that file to 'record'. 'record' stores
  * artifacts/site-map/inventory/<routeId>.json and answers with the regions, components and
- * contentHash to put on the route's site-map entry. 'shared' runs once the site map is written and
- * names every header, navigation, footer or sidebar that recurs on two or more routes. 'prune'
- * removes inventory files no route in the site map refers to.
+ * contentHash to put on the route's site-map entry, whether the page is the application at all
+ * ('access'), and - when the page has elements only a reader can place - the questions for
+ * 'classify'. 'shared' runs once the site map is written and names every header, navigation, footer
+ * or sidebar that recurs across routes, marked up or not. 'prune' removes inventory files no route in
+ * the site map refers to.
  */
 
 import crypto from 'node:crypto';
@@ -89,6 +93,7 @@ const CONTROL_SELECTOR = [
   '[role="textbox"]',
   '[role="menuitem"]',
   '[contenteditable="true"]',
+  'summary',
 ].join(',');
 
 const CONSTRAINT_ATTRIBUTES = [
@@ -105,8 +110,46 @@ const CONSTRAINT_ATTRIBUTES = [
 ];
 
 // A control that hands the page's result to somewhere else - the clipboard, a file, a printer.
-// Each is a channel a test has to check the content of, and none of them is a form field.
+// Each is a channel a test has to check the content of, and none of them is a form field. The words
+// are English; a label in any other language is put to 'classify' instead of being matched here.
 const OUTPUT_PATTERN = '\\\\b(copy|export|download|print|share|save as)\\\\b';
+
+// A link to one of these is a download, whatever its text says.
+const FILE_EXTENSIONS = [
+  'pdf', 'csv', 'tsv', 'xlsx', 'xls', 'ods', 'docx', 'doc', 'odt', 'rtf', 'pptx', 'ppt', 'txt',
+  'json', 'xml', 'ics', 'zip', 'gz', 'tar', '7z', 'rar', 'epub',
+];
+
+// Embedded frames smaller than this are tracking pixels and spacer frames, not content.
+const MAX_FRAMES = 20;
+const MIN_FRAME_SIZE = 50;
+const MAX_CANVASES = 10;
+const MIN_CANVAS_SIZE = 200;
+const MAX_BLOCKS = 40;
+
+// Home-made controls: how many one page may hand over, and how many distinct ones one 'classify'
+// round may ask about. A listing repeats the same element per item, so the question is asked per
+// distinct element and the answer applied to every copy.
+const MAX_CANDIDATES = 200;
+const MAX_CLASSIFY_ITEMS = 40;
+const CANDIDATE_SKIP_TAGS = [
+  'html', 'head', 'body', 'main', 'header', 'footer', 'nav', 'aside', 'form', 'fieldset', 'script',
+  'style', 'noscript', 'template', 'slot', 'iframe', 'frame', 'video', 'audio', 'option', 'optgroup',
+];
+
+// What 'classify' may say an element is. 'none' is decoration - a pointer cursor on a heading.
+const CLASSIFY_ROLES = [
+  'button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'option', 'combobox', 'slider',
+  'none',
+];
+
+// A page the server refused, answered with a bot check, or served identically at two addresses has
+// little on it. Both numbers only corroborate a status code or a repeated page - on their own they
+// decide nothing, because a real page can be sparse.
+const THIN_CONTROLS = 5;
+const THIN_TEXT = 1500;
+const STUB_CONTROLS = 20;
+const REFUSAL_STATUSES = [403, 429, 503];
 
 function parseArgs(argv) {
   const args = {};
@@ -183,17 +226,103 @@ function inventoryPathFor(routeId) {
 
 // Runs in the page. Reads markup, labels, ARIA and option text only: never a field's value, checked
 // or selected state, which can hold the signed-in user's own data.
+//
+// It walks open shadow roots and same-origin frames as well as the document. Playwright's CSS and
+// role locators pierce open shadow roots, so a control inside one is a control a test can reach -
+// and a page assembled from web components otherwise looks empty: live-observed on a government
+// portal whose home page recorded zero controls while 118 sat inside shadow roots. A cross-origin
+// frame cannot be read from here at all, so it is listed instead of silently missing.
 function collectInventory(opts) {
   function clean(text, max) {
     return String(text || '').replace(/\\s+/g, ' ').trim().slice(0, max || 80);
   }
 
+  function styleOf(el) {
+    var view = (el.ownerDocument && el.ownerDocument.defaultView) || window;
+    return view.getComputedStyle(el);
+  }
+
   function visible(el) {
     var rect = el.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return false;
-    var style = window.getComputedStyle(el);
+    var style = styleOf(el);
     return style.visibility !== 'hidden' && style.display !== 'none';
   }
+
+  // The parent across a shadow boundary (the host) and across a same-origin frame (the frame
+  // element), so "inside" means what it means on screen.
+  function up(el) {
+    if (el.parentElement) return el.parentElement;
+    var parent = el.parentNode;
+    if (parent && parent.host) return parent.host;
+    if (parent && parent.nodeType === 9) {
+      try {
+        return (parent.defaultView && parent.defaultView.frameElement) || null;
+      } catch (err) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  function closestUp(el, selector) {
+    for (var node = el; node; node = up(node)) {
+      if (node.nodeType === 1 && node.matches(selector)) return node;
+    }
+    return null;
+  }
+
+  function isInside(ancestor, el) {
+    for (var node = el; node; node = up(node)) {
+      if (node === ancestor) return true;
+    }
+    return false;
+  }
+
+  // Every element in document order, descending into an open shadow root where its host sits and
+  // into a same-origin frame where the frame sits.
+  var elements = [];
+  var frames = [];
+  var shadowRoots = 0;
+  function walk(root, frameIndex, inShadow) {
+    var doc = root.nodeType === 9 ? root : root.ownerDocument;
+    var walker = doc.createTreeWalker(root, 1);
+    for (var node = walker.nextNode(); node; node = walker.nextNode()) {
+      elements.push({ el: node, frame: frameIndex, shadow: inShadow });
+      if (node.shadowRoot) {
+        shadowRoots++;
+        walk(node.shadowRoot, frameIndex, true);
+      }
+      var tagName = node.tagName;
+      if ((tagName === 'IFRAME' || tagName === 'FRAME') && frames.length < opts.maxFrames) {
+        var rect = node.getBoundingClientRect();
+        if (rect.width < opts.minFrameSize || rect.height < opts.minFrameSize || !visible(node)) continue;
+        var inner = null;
+        try {
+          inner = node.contentDocument;
+        } catch (err) {
+          inner = null;
+        }
+        var host = '';
+        try {
+          host = node.getAttribute('src') ? new URL(node.getAttribute('src'), doc.baseURI).hostname : '';
+        } catch (err) {
+          host = '';
+        }
+        var info = {
+          index: frames.length,
+          host: host,
+          title: clean(node.getAttribute('title') || node.getAttribute('name'), 60),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          readable: Boolean(inner && inner.documentElement),
+        };
+        frames.push(info);
+        if (info.readable) walk(inner, info.index, false);
+      }
+    }
+  }
+  walk(document, -1, false);
 
   function regionName(el) {
     var role = el.getAttribute('role');
@@ -209,11 +338,14 @@ function collectInventory(opts) {
     return el.tagName.toLowerCase();
   }
 
-  function textOfIds(ids) {
+  // aria-labelledby ids resolve inside the element's own tree - a shadow root has its own ids.
+  function textOfIds(el, ids) {
+    var root = el.getRootNode ? el.getRootNode() : document;
+    var lookup = root && root.getElementById ? root : el.ownerDocument || document;
     return String(ids)
       .split(/\\s+/)
       .map(function (id) {
-        var node = document.getElementById(id);
+        var node = lookup.getElementById(id);
         return node ? node.textContent : '';
       })
       .join(' ');
@@ -226,7 +358,7 @@ function collectInventory(opts) {
     if (aria && aria.trim()) return clean(aria);
     var labelledBy = el.getAttribute('aria-labelledby');
     if (labelledBy) {
-      var byIds = clean(textOfIds(labelledBy));
+      var byIds = clean(textOfIds(el, labelledBy));
       if (byIds) return byIds;
     }
     if (el.labels && el.labels.length) {
@@ -243,7 +375,7 @@ function collectInventory(opts) {
       return clean(el.getAttribute('value') || (type === 'submit' ? 'Submit' : type === 'reset' ? 'Reset' : ''));
     }
     if (tag === 'input' && type === 'image') return clean(el.getAttribute('alt'));
-    if (tag === 'a' || tag === 'button' || el.getAttribute('role')) {
+    if (tag === 'a' || tag === 'button' || tag === 'summary' || el.getAttribute('role')) {
       var text = clean(el.textContent);
       if (text) return text;
       var img = el.querySelector('img[alt]');
@@ -254,13 +386,28 @@ function collectInventory(opts) {
     return clean(el.getAttribute('title'));
   }
 
+  // The text a person reads as a field's label when the markup does not say so: whatever sits just
+  // before the field, or just before one of its first few wrappers - a label cell beside an input
+  // cell, a caption above a wrapped input. It stops climbing once a wrapper holds a second field,
+  // because past that point the text before it is a section heading, not this field's label.
   function nearbyText(el) {
-    var prev = el.previousElementSibling;
-    if (prev && clean(prev.textContent)) return clean(prev.textContent, 60);
-    var parent = el.parentElement;
-    if (parent) {
-      var candidate = parent.querySelector('label, legend');
-      if (candidate && candidate !== el && !candidate.contains(el)) return clean(candidate.textContent, 60);
+    var fields = 'input, select, textarea';
+    var node = el;
+    for (var depth = 0; node && depth < 4; depth++) {
+      var prev = node.previousElementSibling;
+      if (prev && !prev.matches(fields) && !prev.querySelector(fields)) {
+        var text = clean(prev.textContent, 60);
+        if (text) return text;
+      }
+      if (depth === 0 && node.parentElement) {
+        var candidate = node.parentElement.querySelector('label, legend');
+        if (candidate && candidate !== el && !candidate.contains(el)) {
+          var caption = clean(candidate.textContent, 60);
+          if (caption) return caption;
+        }
+      }
+      node = node.parentElement;
+      if (node && node.querySelectorAll(fields).length > 1) break;
     }
     return '';
   }
@@ -297,7 +444,7 @@ function collectInventory(opts) {
 
   function linkTarget(el) {
     try {
-      var url = new URL(el.getAttribute('href'), document.baseURI);
+      var url = new URL(el.getAttribute('href'), (el.ownerDocument || document).baseURI);
       if (url.origin === window.location.origin) return url.pathname;
       return 'external:' + url.hostname;
     } catch (err) {
@@ -305,42 +452,109 @@ function collectInventory(opts) {
     }
   }
 
-  var landmarkNodes = Array.prototype.slice.call(document.querySelectorAll(opts.landmarkSelector));
+  // A link to a document, a spreadsheet or an archive on this site hands the page's content to a
+  // file, whatever language the link text is in. One to another site is a link to someone else's
+  // file - a news aggregator pointing at a paper - not something this page produced.
+  function isFileLink(el) {
+    try {
+      var url = new URL(el.getAttribute('href'), (el.ownerDocument || document).baseURI);
+      if (url.origin !== window.location.origin) return false;
+      var pathname = url.pathname;
+      var dot = pathname.lastIndexOf('.');
+      if (dot === -1 || dot < pathname.lastIndexOf('/')) return false;
+      return opts.fileExtensions.indexOf(pathname.slice(dot + 1).toLowerCase()) !== -1;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // Landmarks come from the page itself, never from inside a frame: an embedded widget's own header
+  // is not the site's header.
+  var landmarkNodes = [];
+  var controlItems = [];
+  for (var e = 0; e < elements.length; e++) {
+    if (elements[e].frame === -1 && elements[e].el.matches(opts.landmarkSelector)) landmarkNodes.push(elements[e].el);
+    if (elements[e].el.matches(opts.controlSelector)) controlItems.push(elements[e]);
+  }
   var topLevel = landmarkNodes.filter(function (el) {
-    var parent = el.parentElement;
-    return !(parent && parent.closest(opts.landmarkSelector));
+    var parent = up(el);
+    return !(parent && closestUp(parent, opts.landmarkSelector));
   });
   var landmarks = topLevel.map(function (el) {
     var name = el.getAttribute('aria-label') || '';
-    if (!name && el.getAttribute('aria-labelledby')) name = textOfIds(el.getAttribute('aria-labelledby'));
+    if (!name && el.getAttribute('aria-labelledby')) name = textOfIds(el, el.getAttribute('aria-labelledby'));
     return { region: regionName(el), name: clean(name, 60) };
   });
 
+  function landmarkOf(el) {
+    for (var t = 0; t < topLevel.length; t++) {
+      if (isInside(topLevel[t], el)) return t;
+    }
+    return -1;
+  }
+
+  // The page's top-level blocks: step down through wrappers that hold the whole page (a #root, an
+  // .app) until a level has more than one child in normal flow, and take that level's children. A
+  // site that marks up no header or footer still repeats its frame on every page, and 'shared'
+  // recognises a block by that repetition alone - no markup, no words, no language involved.
+  function rendered(el) {
+    var rect = el.getBoundingClientRect();
+    if (rect.width * rect.height < 100) return false;
+    if (rect.right <= 0 || rect.left >= window.innerWidth) return false;
+    var style = styleOf(el);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+  }
+  function childrenOf(el) {
+    var list = el.shadowRoot && el.shadowRoot.children.length ? el.shadowRoot.children : el.children;
+    return Array.prototype.filter.call(list, rendered);
+  }
+  var container = document.body;
+  for (var depth = 0; container && depth < 12; depth++) {
+    var inFlow = childrenOf(container).filter(function (child) {
+      var position = styleOf(child).position;
+      return position !== 'fixed' && position !== 'absolute';
+    });
+    if (inFlow.length !== 1) break;
+    container = inFlow[0];
+  }
+  var blockNodes = container ? childrenOf(container).slice(0, opts.maxBlocks) : [];
+  var blocks = blockNodes.map(function (el) {
+    var rect = el.getBoundingClientRect();
+    return {
+      top: Math.round(rect.top + window.scrollY),
+      height: Math.round(rect.height),
+      left: Math.round(rect.left),
+      width: Math.round(rect.width),
+    };
+  });
+  function blockOf(el) {
+    for (var b = 0; b < blockNodes.length; b++) {
+      if (isInside(blockNodes[b], el)) return b;
+    }
+    return -1;
+  }
+
   var outputPattern = new RegExp(opts.outputPattern, 'i');
-  var nodes = Array.prototype.slice.call(document.querySelectorAll(opts.controlSelector));
   var controls = [];
+  var recorded = [];
   var total = 0;
-  for (var n = 0; n < nodes.length; n++) {
-    var el = nodes[n];
+  for (var n = 0; n < controlItems.length; n++) {
+    var item = controlItems[n];
+    var el = item.el;
     var tag = el.tagName.toLowerCase();
     var type = tag === 'input' ? String(el.getAttribute('type') || 'text').toLowerCase() : '';
     if (type === 'hidden') continue;
-    if (el.closest('[aria-hidden="true"]')) continue;
+    if (closestUp(el, '[aria-hidden="true"]')) continue;
     var isField = tag === 'input' || tag === 'select' || tag === 'textarea';
     // A button inside a link (or the reverse) is one control a person operates, not two.
-    if (!isField && el.parentElement && el.parentElement.closest('a[href], button, [role="button"], [role="link"]')) {
+    if (!isField && up(el) && closestUp(up(el), 'a[href], button, [role="button"], [role="link"]')) {
       continue;
     }
+    recorded.push(el);
     total++;
     if (controls.length >= opts.maxControls) continue;
 
-    var landmarkIndex = -1;
-    for (var t = 0; t < topLevel.length; t++) {
-      if (topLevel[t].contains(el)) {
-        landmarkIndex = t;
-        break;
-      }
-    }
+    var landmarkIndex = landmarkOf(el);
     var role = roleOf(el, tag, type);
     var name = accessibleName(el, tag, type);
     var entry = {
@@ -351,6 +565,10 @@ function collectInventory(opts) {
       tag: tag,
     };
     if (type) entry.type = type;
+    var blockIndex = blockOf(el);
+    if (blockIndex !== -1) entry.block = blockIndex;
+    if (item.shadow) entry.inShadow = true;
+    if (item.frame !== -1) entry.frame = item.frame;
     if (!name) {
       var hint = nearbyText(el);
       if (hint) entry.hint = hint;
@@ -385,7 +603,16 @@ function collectInventory(opts) {
     }
     if (tag === 'a') {
       entry.href = linkTarget(el);
-      if (el.hasAttribute('download')) entry.output = true;
+      if (el.hasAttribute('download') || isFileLink(el)) entry.output = true;
+    }
+    // clipboard.js wiring and an inline print/clipboard handler name the channel in code, not in
+    // the label, so they hold in any language.
+    if (
+      el.hasAttribute('data-clipboard-text') ||
+      el.hasAttribute('data-clipboard-target') ||
+      /print\\(|clipboard/i.test(el.getAttribute('onclick') || '')
+    ) {
+      entry.output = true;
     }
     if ((role === 'button' || role === 'link' || role === 'menuitem') && outputPattern.test(name)) {
       entry.output = true;
@@ -393,12 +620,86 @@ function collectInventory(opts) {
     controls.push(entry);
   }
 
+  // Elements that behave like controls - a pointer cursor, a click handler in the markup, a place in
+  // the keyboard order - but are none of the controls above: a calculator's keys drawn as spans, a
+  // tab strip made of divs. Only the outermost such element counts, since the cursor is inherited,
+  // and never one that holds a recorded control or sits inside one - that control already stands for
+  // it. What each one is gets decided by 'classify', never guessed here.
+  var holdsControl = new Set();
+  for (var h = 0; h < recorded.length; h++) {
+    for (var ancestor = up(recorded[h]); ancestor && !holdsControl.has(ancestor); ancestor = up(ancestor)) {
+      holdsControl.add(ancestor);
+    }
+  }
+  var skip = opts.candidateSkipTags;
+  var avoid = opts.controlSelector + ', label, [aria-hidden="true"]';
+  var candidates = [];
+  var candidateTotal = 0;
+  var canvases = [];
+  for (var k = 0; k < elements.length; k++) {
+    var node = elements[k].el;
+    var nodeTag = node.tagName.toLowerCase();
+    if (nodeTag === 'canvas' && canvases.length < opts.maxCanvases) {
+      var canvasRect = node.getBoundingClientRect();
+      if (canvasRect.width >= opts.minCanvasSize && canvasRect.height >= opts.minCanvasSize && visible(node)) {
+        canvases.push({
+          width: Math.round(canvasRect.width),
+          height: Math.round(canvasRect.height),
+          label: clean(node.getAttribute('aria-label') || node.getAttribute('title'), 60),
+        });
+      }
+      continue;
+    }
+    if (holdsControl.has(node) || skip.indexOf(nodeTag) !== -1) continue;
+    if (node.namespaceURI === 'http://www.w3.org/2000/svg' && nodeTag !== 'svg') continue;
+    var onclick = node.hasAttribute('onclick');
+    var tabindex = node.getAttribute('tabindex');
+    var focusable = tabindex !== null && tabindex !== '' && Number(tabindex) >= 0;
+    var nodeStyle = styleOf(node);
+    var pointer = nodeStyle.cursor === 'pointer';
+    if (!pointer && !onclick && !focusable) continue;
+    if (pointer && !onclick && !focusable) {
+      var parentNode = up(node);
+      if (parentNode && parentNode.nodeType === 1 && styleOf(parentNode).cursor === 'pointer') continue;
+    }
+    if (closestUp(node, avoid)) continue;
+    var nodeRect = node.getBoundingClientRect();
+    if (nodeRect.width < 8 || nodeRect.height < 8) continue;
+    if (nodeStyle.visibility === 'hidden' || nodeStyle.display === 'none' || Number(nodeStyle.opacity) === 0) continue;
+    candidateTotal++;
+    if (candidates.length >= opts.maxCandidates) continue;
+    var candidate = {
+      tag: nodeTag,
+      text: clean(node.textContent, 60),
+      label: clean(node.getAttribute('aria-label') || node.getAttribute('title') || node.getAttribute('alt'), 60),
+      classHint: clean(String(node.getAttribute('class') || '').split(/\\s+/).slice(0, 3).join(' '), 60),
+      signals: [pointer ? 'pointer' : '', onclick ? 'onclick' : '', focusable ? 'tabindex' : '']
+        .filter(Boolean)
+        .join(' '),
+      landmark: landmarkOf(node),
+    };
+    var candidateBlock = blockOf(node);
+    if (candidateBlock !== -1) candidate.block = candidateBlock;
+    if (elements[k].shadow) candidate.inShadow = true;
+    if (elements[k].frame !== -1) candidate.frame = elements[k].frame;
+    candidates.push(candidate);
+  }
+
   return {
     title: clean(document.title, 200),
     path: window.location.pathname,
+    lang: clean(document.documentElement.getAttribute('lang'), 20),
     landmarks: landmarks,
     controls: controls,
     totalControls: total,
+    candidates: candidates,
+    candidateTotal: candidateTotal,
+    blocks: blocks,
+    frames: frames,
+    canvases: canvases,
+    shadowRoots: shadowRoots,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    textLength: document.body ? String(document.body.innerText || '').length : 0,
   };
 }
 
@@ -412,13 +713,22 @@ function cmdProbe() {
       maxControls: MAX_CONTROLS,
       maxOptions: MAX_OPTIONS,
       outputPattern: OUTPUT_PATTERN,
+      fileExtensions: FILE_EXTENSIONS,
+      maxFrames: MAX_FRAMES,
+      minFrameSize: MIN_FRAME_SIZE,
+      maxCanvases: MAX_CANVASES,
+      minCanvasSize: MIN_CANVAS_SIZE,
+      maxBlocks: MAX_BLOCKS,
+      maxCandidates: MAX_CANDIDATES,
+      candidateSkipTags: CANDIDATE_SKIP_TAGS,
     },
     source: collectInventory.toString(),
     usage:
       'Evaluate source with options in the page (page.evaluate) once the navigation has settled and ' +
-      'any overlay is closed, write the result to a file, and pass it to "record". Take regions, ' +
-      'components and contentHash for the route entry from what "record" returns - never compose ' +
-      'them yourself.',
+      'any overlay is closed, write the result to a file, and pass it to "record" with the ' +
+      'navigation status (--status) and the response cf-mitigated header when there is one ' +
+      '(--mitigated). Take regions, components and contentHash for the route entry from what ' +
+      '"record" (or, after it, "classify") returns - never compose them yourself.',
   };
 }
 
@@ -427,10 +737,15 @@ function isLink(control) {
 }
 
 // "<role> "<name>"" - the form a Page Object author reads and getByRole matches. A control with no
-// accessible name says so and carries whatever text sits next to it.
+// accessible name says so and carries whatever text sits next to it. One 'classify' added has that
+// role only in the inventory, not in the page's markup, so getByRole cannot find it - the label says
+// so, since it is the one line a Page Object author is sure to read.
 function componentLabel(control) {
-  if (control.name) return control.role + ' "' + control.name + '"';
-  return control.role + ' (no accessible name' + (control.hint ? ', next to "' + control.hint + '"' : '') + ')';
+  const suffix = control.classifiedBy === 'assistant' ? ' [no role in markup]' : '';
+  if (control.name) return control.role + ' "' + control.name + '"' + suffix;
+  return (
+    control.role + ' (no accessible name' + (control.hint ? ', next to "' + control.hint + '"' : '') + ')' + suffix
+  );
 }
 
 // Structure only, never names: the crawl budget stops a route template once three pages under it
@@ -459,6 +774,533 @@ function regionFingerprint(region, controls) {
   return sha256(region + '\\n' + signatures.join('\\n')).slice(0, 16);
 }
 
+// Crawl-wide side files, next to the per-route inventories. Their names start with a dot so that
+// 'prune', which removes files no route refers to, never mistakes them for a route.
+const IDENTITY_FILE = '.identities.json';
+const CLASSIFICATION_FILE = '.classifications.json';
+
+// The tallest block holding controls is the page's own content and never part of the frame. A
+// header sits before it and starts near the top, a footer comes after it, a sidebar is narrow and at
+// least as tall as it is wide.
+const TOP_BAND = 250;
+
+// A block found only by repetition becomes part of the site frame once it recurs on this share of
+// the compared routes (and on two at the least). A landmark says "I am the header" in markup; a
+// block has only its recurrence to go on, so it has to recur widely - two product pages sharing a
+// "related items" strip is not a footer.
+const IMPLICIT_FRAME_SHARE = 0.3;
+
+const FIELD_TAGS = ['input', 'select', 'textarea'];
+const ASSISTANT_FIELD_ROLES = ['checkbox', 'radio', 'switch', 'combobox', 'slider'];
+
+function sideFile(name) {
+  return path.join(CWD, INVENTORY_DIR, name);
+}
+
+function writeSideFile(name, data) {
+  fs.mkdirSync(path.join(CWD, INVENTORY_DIR), { recursive: true });
+  fs.writeFileSync(sideFile(name), JSON.stringify(data, null, 2) + '\\n', 'utf8');
+}
+
+function writeInventory(relativePath, record) {
+  fs.mkdirSync(path.join(CWD, INVENTORY_DIR), { recursive: true });
+  fs.writeFileSync(path.join(CWD, relativePath), JSON.stringify(record, null, 2) + '\\n', 'utf8');
+}
+
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function whole(value) {
+  const number = Math.round(Number(value));
+  return Number.isFinite(number) ? number : 0;
+}
+
+// Two addresses served the same document when title, every control with its label, and the amount
+// of text all match. Names are in on purpose, unlike the structural hash: two pages of one listing
+// share structure, but only a block page or a picker shown at every address shares every label.
+function pageIdentity(title, controls, textLength) {
+  const names = controls
+    .map(function (control) {
+      return [control.role, control.type || '', normalizeText(control.name)].join('|');
+    })
+    .sort();
+  return sha256([title, String(textLength), names.join('\\n')].join('\\n')).slice(0, 24);
+}
+
+// Whether this page is the application at all. Each verdict rests on something the server or the
+// page states, never on words in a language: a bot-check header, a refusal status on a page with
+// next to nothing on it, or the identical page already recorded at another address.
+function accessVerdict(input) {
+  const visibleControls = input.controls.filter(function (control) {
+    return !control.hidden;
+  }).length;
+  const thin = visibleControls <= THIN_CONTROLS && (input.textLength === null || input.textLength <= THIN_TEXT);
+  // The header marks the response, not what the browser ended up showing: a check the browser
+  // passes on its own reloads into the real page. Live-observed on Stack Overflow - challenged,
+  // then 243 controls of the real site three seconds later.
+  if (input.mitigated === 'challenge' && thin) {
+    return {
+      state: 'challenge',
+      reason: 'The server answered with a bot check (cf-mitigated: challenge) and the page is still the check, not the application.',
+    };
+  }
+  const refusal = input.status !== null && REFUSAL_STATUSES.indexOf(input.status) !== -1;
+  const index = readJson(sideFile(IDENTITY_FILE)) || {};
+  const other = index[input.identity];
+  let verdict = { state: 'ok' };
+  let stale = !other || typeof other.routeId !== 'string' || !ROUTE_ID_RE.test(other.routeId);
+  if (!stale && other.routeId !== input.routeId) {
+    const otherRecord = readJson(path.join(CWD, inventoryPathFor(other.routeId)));
+    if (!otherRecord || otherRecord.identity !== input.identity) {
+      stale = true;
+    } else if (other.route !== input.routePath && visibleControls <= STUB_CONTROLS) {
+      verdict = {
+        state: 'stub',
+        sameAs: other.route,
+        reason:
+          'Identical to ' +
+          other.route +
+          ' - same title, same controls, same labels, same amount of text. Either the site served one ' +
+          'page at two different addresses (a block page, a country or language picker, a sign-in ' +
+          'screen shown everywhere), or these two addresses really are one page.',
+      };
+      if (refusal) verdict.status = input.status;
+    }
+  }
+  if (stale) {
+    index[input.identity] = { routeId: input.routeId, route: input.routePath };
+    writeSideFile(IDENTITY_FILE, index);
+  }
+  if (verdict.state === 'ok' && refusal && thin) {
+    return {
+      state: 'refused',
+      status: input.status,
+      reason:
+        'The server answered ' +
+        input.status +
+        ' with a near-empty page (' +
+        visibleControls +
+        ' visible control(s)) - a refusal or block page, not the application.',
+    };
+  }
+  return verdict;
+}
+
+// A block stands in for a header, footer or sidebar only where the page marks up none: on a page
+// with a real <header>, the strip above it is a cookie banner or a promo bar, not a second header.
+// Live-observed on GOV.UK, whose consent banner was otherwise named "Header" beside the real one.
+const REGION_AT = { top: 'header', bottom: 'footer', side: 'aside' };
+
+function describeBlocks(observation, controls, regions) {
+  const raw = Array.isArray(observation.blocks) ? observation.blocks.slice(0, MAX_BLOCKS) : [];
+  const viewportWidth =
+    isObject(observation.viewport) && Number(observation.viewport.width) > 0 ? Number(observation.viewport.width) : 1280;
+  const holding = [];
+  raw.forEach(function (block, index) {
+    if (
+      controls.some(function (control) {
+        return control.block === index;
+      })
+    ) {
+      holding.push(index);
+    }
+  });
+  let content = -1;
+  for (const index of holding) {
+    if (content === -1 || whole(raw[index] && raw[index].height) > whole(raw[content] && raw[content].height)) {
+      content = index;
+    }
+  }
+  return raw.map(function (block, index) {
+    const top = whole(block && block.top);
+    const height = whole(block && block.height);
+    const width = whole(block && block.width);
+    // Controls already inside a marked-up header, nav, footer or sidebar are left out, so a block and
+    // a landmark never both claim the same header.
+    const inside = controls.filter(function (control) {
+      return control.block === index && FRAME_REGIONS.indexOf(control.region) === -1;
+    });
+    let position = 'middle';
+    if (holding.length >= 2 && holding.indexOf(index) !== -1 && index !== content) {
+      if (width <= viewportWidth * 0.35 && height >= width) position = 'side';
+      else if (index < content && top <= TOP_BAND) position = 'top';
+      else if (index > content) position = 'bottom';
+    }
+    return {
+      position: position,
+      candidate: Boolean(REGION_AT[position]) && regions.indexOf(REGION_AT[position]) === -1 && inside.length >= 2,
+      top: top,
+      height: height,
+      width: width,
+      controlCount: inside.length,
+      fingerprint: inside.length > 0 ? regionFingerprint('block', inside) : null,
+    };
+  });
+}
+
+function readFrames(observation) {
+  if (!Array.isArray(observation.frames)) return [];
+  return observation.frames
+    .filter(isObject)
+    .slice(0, MAX_FRAMES)
+    .map(function (frame, index) {
+      return {
+        index: Number.isInteger(frame.index) ? frame.index : index,
+        host: redact(frame.host, 120),
+        title: redact(frame.title, 60),
+        width: whole(frame.width),
+        height: whole(frame.height),
+        readable: frame.readable === true,
+      };
+    });
+}
+
+function readCanvases(observation) {
+  if (!Array.isArray(observation.canvases)) return [];
+  return observation.canvases
+    .filter(isObject)
+    .slice(0, MAX_CANVASES)
+    .map(function (canvas) {
+      return { width: whole(canvas.width), height: whole(canvas.height), label: redact(canvas.label, 60) };
+    });
+}
+
+function readCandidates(observation, landmarks) {
+  if (!Array.isArray(observation.candidates)) return [];
+  return observation.candidates
+    .filter(isObject)
+    .slice(0, MAX_CANDIDATES)
+    .map(function (raw) {
+      const landmarkIndex = Number.isInteger(raw.landmark) && landmarks[raw.landmark] ? raw.landmark : -1;
+      const candidate = {
+        tag: redact(raw.tag, 20) || 'element',
+        text: redact(raw.text, 60),
+        label: redact(raw.label, 60),
+        classHint: redact(raw.classHint, 60),
+        signals: redact(raw.signals, 40),
+        landmark: landmarkIndex,
+        region: landmarkIndex === -1 ? 'body' : landmarks[landmarkIndex].region,
+      };
+      if (Number.isInteger(raw.block) && raw.block >= 0) candidate.block = raw.block;
+      if (raw.inShadow === true) candidate.inShadow = true;
+      if (Number.isInteger(raw.frame) && raw.frame >= 0) candidate.frame = raw.frame;
+      return candidate;
+    });
+}
+
+// Copies of one element on a listing - every "Add" span, every calculator digit - are one question.
+function candidateKey(candidate) {
+  return [candidate.tag, normalizeText(candidate.text), normalizeText(candidate.label)].join('|');
+}
+
+function outputKey(control) {
+  return control.role + '|' + normalizeText(control.name);
+}
+
+// The output words are English, so a page in any other language gets its labelled buttons asked
+// about instead. A page that declares no language counts as non-English when a good share of its
+// labels carry letters outside ASCII - one or two would be a language picker ("Español",
+// "Deutsch") on an English page, live-observed on Craigslist.
+const NON_ASCII_SHARE = 0.3;
+const MAX_OUTPUT_ITEMS = 20;
+
+function looksNonEnglish(lang, controls) {
+  if (lang) return !/^en(-|$)/i.test(lang);
+  const named = controls.filter(function (control) {
+    return control.name;
+  });
+  if (named.length === 0) return false;
+  const foreign = named.filter(function (control) {
+    return /[^\\u0000-\\u007f]/.test(control.name);
+  });
+  return foreign.length / named.length >= NON_ASCII_SHARE;
+}
+
+function nextControlId(record) {
+  let max = -1;
+  for (const control of record.controls) {
+    const number = Number.parseInt(String(control.id).slice(1), 10);
+    if (Number.isFinite(number) && number > max) max = number;
+  }
+  return 'c' + (max + 1);
+}
+
+function controlFromCandidate(candidate, role, output, id) {
+  const control = {
+    id: id,
+    landmark: candidate.landmark,
+    region: candidate.region,
+    role: role,
+    name: candidate.label || candidate.text,
+    tag: candidate.tag,
+    classifiedBy: 'assistant',
+  };
+  if (!control.name && candidate.classHint) control.hint = candidate.classHint;
+  if (Number.isInteger(candidate.block)) control.block = candidate.block;
+  if (candidate.inShadow) control.inShadow = true;
+  if (Number.isInteger(candidate.frame)) control.frame = candidate.frame;
+  if (output) {
+    control.output = true;
+    control.outputBy = 'assistant';
+  }
+  return control;
+}
+
+// Builds this route's questions and applies every answer this crawl has already given - the same
+// "Add to cart" span on forty routes is asked about once.
+function buildClassification(record, cache) {
+  const known = isObject(cache.controls) ? cache.controls : {};
+  const knownOutputs = isObject(cache.outputs) ? cache.outputs : {};
+  const items = [];
+  let overflow = 0;
+  const groups = new Map();
+  record.candidates.forEach(function (candidate, index) {
+    const key = candidateKey(candidate);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(index);
+  });
+  let controlItems = 0;
+  for (const [key, members] of groups) {
+    const answer = Object.prototype.hasOwnProperty.call(known, key) ? known[key] : null;
+    if (answer && CLASSIFY_ROLES.indexOf(answer.role) !== -1) {
+      if (answer.role === 'none') continue;
+      for (const member of members) {
+        record.controls.push(
+          controlFromCandidate(record.candidates[member], answer.role, answer.output === true, nextControlId(record)),
+        );
+      }
+      continue;
+    }
+    if (items.length >= MAX_CLASSIFY_ITEMS) {
+      overflow++;
+      continue;
+    }
+    const first = record.candidates[members[0]];
+    const examples = Array.from(
+      new Set(
+        members
+          .map(function (member) {
+            return record.candidates[member].label || record.candidates[member].text;
+          })
+          .filter(Boolean),
+      ),
+    ).slice(0, 5);
+    items.push({
+      id: 'k' + ++controlItems,
+      kind: 'control',
+      key: key,
+      tag: first.tag,
+      text: first.text,
+      label: first.label,
+      classHint: first.classHint,
+      signals: first.signals,
+      where: first.region,
+      count: members.length,
+      examples: examples,
+      members: members,
+    });
+  }
+
+  if (looksNonEnglish(record.lang, record.controls)) {
+    const byName = new Map();
+    for (const control of record.controls) {
+      if (control.output || control.classifiedBy === 'assistant') continue;
+      if ((control.role !== 'button' && control.role !== 'menuitem') || !control.name) continue;
+      // The site frame's buttons are menus and switchers far more often than exports, and they
+      // repeat on every route; the page's own buttons are where its result gets handed over.
+      if (FRAME_REGIONS.indexOf(control.region) !== -1) continue;
+      const key = outputKey(control);
+      if (Object.prototype.hasOwnProperty.call(knownOutputs, key)) {
+        if (knownOutputs[key] === true) {
+          control.output = true;
+          control.outputBy = 'assistant';
+        }
+        continue;
+      }
+      if (!byName.has(key)) byName.set(key, []);
+      byName.get(key).push(control.id);
+    }
+    let outputItems = 0;
+    for (const [key, members] of byName) {
+      if (items.length >= MAX_CLASSIFY_ITEMS || outputItems >= MAX_OUTPUT_ITEMS) {
+        overflow++;
+        continue;
+      }
+      const control = record.controls.find(function (candidate) {
+        return candidate.id === members[0];
+      });
+      items.push({
+        id: 'o' + ++outputItems,
+        kind: 'output',
+        key: key,
+        role: control.role,
+        name: control.name,
+        where: control.region,
+        count: members.length,
+        members: members,
+      });
+    }
+  }
+  return { items: items, overflow: overflow };
+}
+
+function classifyQuestion(record) {
+  const pending = record.pendingClassification;
+  if (!pending || !Array.isArray(pending.items) || pending.items.length === 0) return null;
+  return {
+    items: pending.items.map(function (item) {
+      if (item.kind === 'control') {
+        return {
+          id: item.id,
+          kind: item.kind,
+          tag: item.tag,
+          text: item.text,
+          label: item.label,
+          classHint: item.classHint,
+          signals: item.signals,
+          where: item.where,
+          count: item.count,
+          examples: item.examples,
+        };
+      }
+      return { id: item.id, kind: item.kind, role: item.role, name: item.name, where: item.where, count: item.count };
+    }),
+    roles: CLASSIFY_ROLES,
+    answerFormat: '{"k1": "button", "k2": "none", "k3": {"role": "button", "output": true}, "o1": true, "o2": false}',
+    command: 'node scripts/page-inventory.mjs classify --route-id=' + record.routeId + ' --answers=<file>',
+    instruction:
+      'Answer every item in one JSON object, then run command. A "control" item reacts to the pointer ' +
+      'or the keyboard but is marked up as none of the standard controls: from its text, label, tag, ' +
+      'class hint and where it sits, say what it is to a person using the page - one of roles - or ' +
+      '"none" for decoration (a pointer cursor on a heading, a card that leads nowhere). Add ' +
+      '"output": true when pressing it copies, downloads, prints or shares what the page produced. An ' +
+      '"output" item is a labelled control whose label is not English: answer true when pressing it ' +
+      'copies, downloads, prints or shares what the page produced, false otherwise. Judge only from ' +
+      'what the item shows, and when you cannot tell, answer "none" or false - a control left out is a ' +
+      'gap the run summary reports, a control invented is a test of something that does not exist.',
+    overflow: pending.overflow || 0,
+  };
+}
+
+function isFieldControl(control) {
+  if (FIELD_TAGS.indexOf(control.tag) !== -1) return true;
+  return control.classifiedBy === 'assistant' && ASSISTANT_FIELD_ROLES.indexOf(control.role) !== -1;
+}
+
+// What the route entry and the run summary need, from whatever the inventory holds right now.
+function summarize(record) {
+  const controls = record.controls;
+  const own = controls.filter(function (control) {
+    return FRAME_REGIONS.indexOf(control.region) === -1 && !isLink(control);
+  });
+  const marked = controls.filter(function (control) {
+    return control.classifiedBy !== 'assistant';
+  });
+  const counts = {
+    controls: controls.length,
+    fields: controls.filter(isFieldControl).length,
+    buttons: controls.filter(function (control) {
+      return control.role === 'button';
+    }).length,
+    links: controls.filter(isLink).length,
+    outputs: controls.filter(function (control) {
+      return control.output === true;
+    }).length,
+    unnamedFields: own.filter(function (control) {
+      return !control.name && isFieldControl(control);
+    }).length,
+    byAssistant: controls.filter(function (control) {
+      return control.classifiedBy === 'assistant' || control.outputBy === 'assistant';
+    }).length,
+    shadowControls: controls.filter(function (control) {
+      return control.inShadow === true;
+    }).length,
+    frameControls: controls.filter(function (control) {
+      return Number.isInteger(control.frame);
+    }).length,
+    candidates: record.candidateTotal || 0,
+  };
+
+  const warnings = [];
+  if (record.access && record.access.state !== 'ok') warnings.push(record.access.reason);
+  const totalControls = Number.isInteger(record.totalControls) ? record.totalControls : marked.length;
+  if (totalControls > marked.length) {
+    warnings.push(
+      (totalControls - marked.length) +
+        ' control(s) beyond the first ' +
+        marked.length +
+        ' were not recorded - this page is a listing, and its first ' +
+        marked.length +
+        ' controls are its shape.',
+    );
+  }
+  if (own.length > MAX_COMPONENTS) {
+    warnings.push(
+      'components lists the first ' + MAX_COMPONENTS + ' of ' + own.length + ' controls; the inventory file has all of them.',
+    );
+  }
+  if (counts.unnamedFields > 0) {
+    warnings.push(
+      counts.unnamedFields +
+        ' form field(s) have no accessible name, so getByLabel cannot reach them and getByRole only without a name - worth knowing before Page Objects are written.',
+    );
+  }
+  const unreadable = (record.frames || []).filter(function (frame) {
+    return !frame.readable;
+  });
+  if (unreadable.length > 0) {
+    warnings.push(
+      unreadable.length +
+        ' embedded frame(s) from another site (' +
+        Array.from(
+          new Set(
+            unreadable.map(function (frame) {
+              return frame.host || 'no address';
+            }),
+          ),
+        )
+          .slice(0, 5)
+          .join(', ') +
+        ') could not be read, so nothing inside them is in this inventory. A test reaches one through ' +
+        'frameLocator; say in the run summary whether it is part of this application (a payment or ' +
+        'sign-in form) or someone else (an ad, a map, a video).',
+    );
+  }
+  if ((record.canvases || []).length > 0) {
+    warnings.push(
+      record.canvases.length +
+        ' drawing surface(s) (canvas ' +
+        record.canvases
+          .map(function (canvas) {
+            return canvas.width + 'x' + canvas.height;
+          })
+          .join(', ') +
+        '): what is drawn there is pixels, not elements, so nothing inside is in this inventory and no ' +
+        'locator can reach it - worth one line in the run summary.',
+    );
+  }
+  const pending = record.pendingClassification;
+  if (pending && Array.isArray(pending.items) && pending.items.length > 0) {
+    warnings.push(
+      pending.items.length +
+        ' element(s) on this page need an answer before the route is committed - see "classify".',
+    );
+  }
+  if (pending && pending.overflow > 0) {
+    warnings.push(
+      pending.overflow +
+        ' further distinct element(s) were past this round and stay out of the inventory - the page ' +
+        'has more home-made controls than one question should carry.',
+    );
+  }
+  return {
+    components: own.slice(0, MAX_COMPONENTS).map(componentLabel),
+    counts: counts,
+    warnings: warnings,
+  };
+}
+
 function cmdRecord(args) {
   const routePath = typeof args.route === 'string' ? args.route : null;
   const routeId = typeof args['route-id'] === 'string' ? args['route-id'] : null;
@@ -471,6 +1313,8 @@ function cmdRecord(args) {
   if (!observation || typeof observation !== 'object') {
     fail('record', 'could not read --observation as JSON - write exactly what the probe returned');
   }
+  const status = args.status === undefined ? null : Number.parseInt(String(args.status), 10);
+  const mitigated = typeof args.mitigated === 'string' ? args.mitigated.trim().toLowerCase() : '';
   if (!Array.isArray(observation.controls) || !Array.isArray(observation.landmarks)) {
     fail('record', 'the observation has no controls/landmarks arrays - it is not the probe result');
   }
@@ -517,6 +1361,9 @@ function cmdRecord(args) {
     }
     if (raw.href) control.href = redact(raw.href, 120);
     if (raw.output === true) control.output = true;
+    if (Number.isInteger(raw.block) && raw.block >= 0) control.block = raw.block;
+    if (raw.inShadow === true) control.inShadow = true;
+    if (Number.isInteger(raw.frame) && raw.frame >= 0) control.frame = raw.frame;
     return control;
   });
 
@@ -541,79 +1388,189 @@ function cmdRecord(args) {
     };
   });
 
-  const own = controls.filter(function (control) {
-    return FRAME_REGIONS.indexOf(control.region) === -1 && !isLink(control);
-  });
-  const components = own.slice(0, MAX_COMPONENTS).map(componentLabel);
+  // Both the hash and the identity are taken over what the page itself marks up, before any control
+  // 'classify' adds: an answer given later in the crawl must not change what an earlier pass hashed.
   const contentHash = structuralHash(title, regions, controls);
   const totalControls = Number.isInteger(observation.totalControls) ? observation.totalControls : controls.length;
-
-  const counts = {
-    controls: controls.length,
-    fields: controls.filter(function (control) {
-      return ['input', 'select', 'textarea'].indexOf(control.tag) !== -1;
-    }).length,
-    buttons: controls.filter(function (control) {
-      return control.role === 'button';
-    }).length,
-    links: controls.filter(isLink).length,
-    outputs: controls.filter(function (control) {
-      return control.output === true;
-    }).length,
-    unnamedFields: own.filter(function (control) {
-      return !control.name && ['input', 'select', 'textarea'].indexOf(control.tag) !== -1;
-    }).length,
-  };
-
-  const warnings = [];
-  if (totalControls > controls.length) {
-    warnings.push(
-      (totalControls - controls.length) +
-        ' control(s) beyond the first ' +
-        controls.length +
-        ' were not recorded - this page is a listing, and its first ' +
-        controls.length +
-        ' controls are its shape.',
-    );
-  }
-  if (own.length > MAX_COMPONENTS) {
-    warnings.push(
-      'components lists the first ' + MAX_COMPONENTS + ' of ' + own.length + ' controls; the inventory file has all of them.',
-    );
-  }
-  if (counts.unnamedFields > 0) {
-    warnings.push(
-      counts.unnamedFields +
-        ' form field(s) have no accessible name, so getByLabel cannot reach them and getByRole only without a name - worth knowing before Page Objects are written.',
-    );
-  }
+  const textLength = Number.isInteger(observation.textLength) ? observation.textLength : null;
+  const identity = pageIdentity(title, controls, textLength);
+  const access = accessVerdict({
+    status: Number.isFinite(status) ? status : null,
+    mitigated: mitigated,
+    controls: controls,
+    textLength: textLength,
+    identity: identity,
+    routeId: routeId,
+    routePath: routePath,
+  });
 
   const record = {
     schemaVersion: 1,
     routeId: routeId,
     route: routePath,
     title: title,
+    lang: redact(observation.lang, 20),
     recordedAt: new Date().toISOString(),
     contentHash: contentHash,
+    identity: identity,
+    access: access,
     landmarks: landmarkRecords,
+    blocks: describeBlocks(observation, controls, regions),
     controls: controls,
     totalControls: totalControls,
+    frames: readFrames(observation),
+    canvases: readCanvases(observation),
+    shadowRoots: Number.isInteger(observation.shadowRoots) ? observation.shadowRoots : 0,
+    candidates: readCandidates(observation, landmarks),
+    candidateTotal: Number.isInteger(observation.candidateTotal) ? observation.candidateTotal : 0,
   };
+  const cache = readJson(sideFile(CLASSIFICATION_FILE)) || { controls: {}, outputs: {} };
+  const pending = buildClassification(record, cache);
+  if (pending.items.length > 0) record.pendingClassification = pending;
   const relativePath = inventoryPathFor(routeId);
-  fs.mkdirSync(path.join(CWD, INVENTORY_DIR), { recursive: true });
-  fs.writeFileSync(path.join(CWD, relativePath), JSON.stringify(record, null, 2) + '\\n', 'utf8');
+  writeInventory(relativePath, record);
 
+  const summary = summarize(record);
   return {
     action: 'record',
     ok: true,
     routeId: routeId,
     title: title,
     regions: regions,
-    components: components,
+    components: summary.components,
     contentHash: contentHash,
     inventory: relativePath,
-    counts: counts,
-    warnings: warnings,
+    access: access,
+    counts: summary.counts,
+    classify: classifyQuestion(record),
+    warnings: summary.warnings,
+  };
+}
+
+// Answers the questions 'record' put on a route: what each home-made control is, and whether a
+// control in another language hands the page's result somewhere. Every answer is checked against
+// the list that was asked - an id nobody asked about, a missing answer or a role outside the fixed
+// list rejects the whole reply and changes nothing. The name of every control added is the
+// element's own text or label, never words from the answer.
+function cmdClassify(args) {
+  const routeId = typeof args['route-id'] === 'string' ? args['route-id'] : null;
+  if (!routeId || !ROUTE_ID_RE.test(routeId)) fail('classify', 'missing or malformed --route-id');
+  if (typeof args.answers !== 'string') fail('classify', 'missing --answers=<file>');
+  const relativePath = inventoryPathFor(routeId);
+  const record = readJson(path.join(CWD, relativePath));
+  if (!record || !Array.isArray(record.controls)) {
+    fail('classify', 'no inventory for route-id ' + routeId + ' - run "record" first');
+  }
+  const pending = record.pendingClassification;
+  if (!pending || !Array.isArray(pending.items) || pending.items.length === 0) {
+    fail('classify', 'nothing on this route is waiting for an answer');
+  }
+  const answers = readJson(path.resolve(CWD, args.answers));
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    fail('classify', '--answers must be a JSON object keyed by item id, e.g. {"k1": "button", "o1": false}');
+  }
+
+  const ids = pending.items.map(function (item) {
+    return item.id;
+  });
+  const errors = [];
+  const decisions = [];
+  for (const key of Object.keys(answers)) {
+    if (ids.indexOf(key) === -1) errors.push('"' + key + '" was not asked about - the items are ' + ids.join(', '));
+  }
+  for (const item of pending.items) {
+    const answer = answers[item.id];
+    if (answer === undefined || answer === null) {
+      errors.push(item.id + ' has no answer - every item needs one, "none" included');
+      continue;
+    }
+    if (item.kind === 'control') {
+      const role = typeof answer === 'string' ? answer : typeof answer === 'object' ? answer.role : null;
+      const output = typeof answer === 'object' && answer.output === true;
+      if (CLASSIFY_ROLES.indexOf(role) === -1) {
+        errors.push(item.id + ': "' + role + '" is not one of ' + CLASSIFY_ROLES.join(', '));
+        continue;
+      }
+      if (role === 'none' && output) {
+        errors.push(item.id + ': decoration hands nothing over - give it a role, or drop "output"');
+        continue;
+      }
+      decisions.push({ item: item, role: role, output: output });
+    } else {
+      const output =
+        typeof answer === 'boolean'
+          ? answer
+          : typeof answer === 'object' && typeof answer.output === 'boolean'
+            ? answer.output
+            : null;
+      if (output === null) {
+        errors.push(item.id + ': answer true or false');
+        continue;
+      }
+      decisions.push({ item: item, output: output });
+    }
+  }
+  if (errors.length > 0) {
+    process.stdout.write(JSON.stringify({ action: 'classify', ok: false, errors: errors }, null, 2) + '\\n');
+    process.exit(1);
+  }
+
+  const cache = readJson(sideFile(CLASSIFICATION_FILE)) || { controls: {}, outputs: {} };
+  if (!cache.controls) cache.controls = {};
+  if (!cache.outputs) cache.outputs = {};
+  let added = 0;
+  let marked = 0;
+  for (const decision of decisions) {
+    const item = decision.item;
+    if (item.kind === 'control') {
+      cache.controls[item.key] = decision.output ? { role: decision.role, output: true } : { role: decision.role };
+      if (decision.role === 'none') continue;
+      for (const member of item.members) {
+        const candidate = record.candidates[member];
+        if (!candidate) continue;
+        record.controls.push(controlFromCandidate(candidate, decision.role, decision.output, nextControlId(record)));
+        added++;
+      }
+    } else {
+      cache.outputs[item.key] = decision.output;
+      if (!decision.output) continue;
+      for (const id of item.members) {
+        const control = record.controls.find(function (candidate) {
+          return candidate.id === id;
+        });
+        if (!control) continue;
+        control.output = true;
+        control.outputBy = 'assistant';
+        marked++;
+      }
+    }
+  }
+  record.assistantDecisions = (record.assistantDecisions || []).concat(
+    decisions.map(function (decision) {
+      const entry = {
+        kind: decision.item.kind,
+        text: decision.item.kind === 'control' ? decision.item.label || decision.item.text : decision.item.name,
+        count: decision.item.count,
+      };
+      if (decision.role) entry.role = decision.role;
+      if (decision.output !== undefined) entry.output = decision.output;
+      return entry;
+    }),
+  );
+  delete record.pendingClassification;
+  writeInventory(relativePath, record);
+  writeSideFile(CLASSIFICATION_FILE, cache);
+
+  const summary = summarize(record);
+  return {
+    action: 'classify',
+    ok: true,
+    routeId: routeId,
+    added: added,
+    outputsMarked: marked,
+    components: summary.components,
+    counts: summary.counts,
+    warnings: summary.warnings,
   };
 }
 
@@ -647,8 +1604,10 @@ function cmdShared() {
   if (!siteMap || typeof siteMap.routes !== 'object' || siteMap.routes === null) {
     fail('shared', 'artifacts/site-map/site-map.json is missing or unreadable - write the site map first');
   }
-  const groups = new Map();
+  const landmarkGroups = [];
+  const blockGroups = [];
   const withoutInventory = [];
+  const compared = [];
   let activeRoutes = 0;
   for (const [routePath, route] of Object.entries(siteMap.routes)) {
     if (!route || route.status === 'removed' || typeof route.routeId !== 'string') continue;
@@ -659,28 +1618,38 @@ function cmdShared() {
       withoutInventory.push(routePath);
       continue;
     }
+    const entry = { routePath: routePath, route: route, file: file, inventory: inventory, changed: false };
+    compared.push(entry);
+    // A page that marks up no header still repeats its frame. Blocks at the top, bottom or side
+    // that hold the same controls under the same labels are grouped the way landmarks are, and
+    // 'repeating' below decides which of them recur widely enough to be the frame.
+    (Array.isArray(inventory.blocks) ? inventory.blocks : []).forEach(function (block, index) {
+      if (!isObject(block) || !block.fingerprint) return;
+      const candidate =
+        typeof block.candidate === 'boolean'
+          ? block.candidate
+          : ['top', 'bottom', 'side'].indexOf(block.position) !== -1 && block.controlCount >= 2;
+      if (!candidate) return;
+      const inside = inventory.controls.filter(function (control) {
+        return control.block === index && inFrameBlock(control);
+      });
+      const group = placeInGroup(blockGroups, 'block', inside, function () {
+        return { fingerprint: block.fingerprint, positions: {}, members: [] };
+      });
+      group.positions[block.position] = (group.positions[block.position] || 0) + 1;
+      if (group.routeIds.indexOf(route.routeId) !== -1) return;
+      group.routeIds.push(route.routeId);
+      group.routes.push(routePath);
+      group.members.push({ entry: entry, block: index });
+    });
     inventory.landmarks.forEach(function (landmark, index) {
       if (FRAME_REGIONS.indexOf(landmark.region) === -1 || !landmark.controlCount) return;
-      let group = groups.get(landmark.fingerprint);
-      if (!group) {
-        group = {
-          region: landmark.region,
-          landmarkName: landmark.name || '',
-          fingerprint: landmark.fingerprint,
-          routeIds: [],
-          routes: [],
-          controls: inventory.controls
-            .filter(function (control) {
-              return control.landmark === index;
-            })
-            .map(function (control) {
-              const copy = Object.assign({}, control);
-              delete copy.landmark;
-              return copy;
-            }),
-        };
-        groups.set(landmark.fingerprint, group);
-      }
+      const inside = inventory.controls.filter(function (control) {
+        return control.landmark === index;
+      });
+      const group = placeInGroup(landmarkGroups, landmark.region, inside, function () {
+        return { region: landmark.region, landmarkName: landmark.name || '', fingerprint: landmark.fingerprint };
+      });
       if (group.routeIds.indexOf(route.routeId) === -1) {
         group.routeIds.push(route.routeId);
         group.routes.push(routePath);
@@ -688,11 +1657,63 @@ function cmdShared() {
     });
   }
 
+  const minimum = Math.max(2, Math.ceil(compared.length * IMPLICIT_FRAME_SHARE));
+  const repeating = blockGroups
+    .filter(function (group) {
+      return group.routeIds.length >= minimum;
+    })
+    .map(function (group) {
+      const position = Object.keys(group.positions).sort(function (a, b) {
+        return group.positions[b] - group.positions[a] || (a < b ? -1 : 1);
+      })[0];
+      const region = position === 'top' ? 'header' : position === 'bottom' ? 'footer' : 'aside';
+      // From here on these controls are the site frame on every route that carries the block: the
+      // next stage tests them once, on one route, instead of once per page.
+      for (const member of group.members) {
+        for (const control of member.entry.inventory.controls) {
+          if (control.block !== member.block || !inFrameBlock(control)) continue;
+          if (control.region !== region || control.frameBy !== 'repetition') {
+            control.region = region;
+            control.frameBy = 'repetition';
+            member.entry.changed = true;
+          }
+        }
+      }
+      return {
+        region: region,
+        landmarkName: '',
+        fingerprint: group.fingerprint,
+        routeIds: group.routeIds,
+        routes: group.routes,
+        controls: (group.controls || []).map(function (control) {
+          return Object.assign({}, control, { region: region, frameBy: 'repetition' });
+        }),
+        foundBy: 'repetition',
+      };
+    });
+  for (const entry of compared) {
+    if (!entry.changed) continue;
+    writeInventory(entry.file, entry.inventory);
+    siteMap.routes[entry.routePath].components = summarize(entry.inventory).components;
+  }
+
   const order = { header: 0, nav: 1, aside: 2, footer: 3 };
-  const recurring = Array.from(groups.values())
+  const recurring = landmarkGroups
     .filter(function (group) {
       return group.routeIds.length >= 2;
     })
+    .map(function (group) {
+      return {
+        region: group.region,
+        landmarkName: group.landmarkName,
+        fingerprint: group.fingerprint,
+        routeIds: group.routeIds,
+        routes: group.routes,
+        controls: group.controls,
+        foundBy: 'markup',
+      };
+    })
+    .concat(repeating)
     .sort(function (a, b) {
       return (
         b.routeIds.length - a.routeIds.length ||
@@ -700,9 +1721,17 @@ function cmdShared() {
         (a.fingerprint < b.fingerprint ? -1 : 1)
       );
     });
+  // A marked-up region is named first, so the site's own <header> is "Header" and a block found by
+  // repetition beside it takes the next free name, never the other way round.
   const used = new Set();
+  const names = new Map();
+  for (const pass of ['markup', 'repetition']) {
+    for (const group of recurring) {
+      if (group.foundBy === pass) names.set(group, widgetName(group.region, group.landmarkName, used));
+    }
+  }
   const widgets = recurring.map(function (group) {
-    return Object.assign({ name: widgetName(group.region, group.landmarkName, used) }, group, {
+    return Object.assign({ name: names.get(group) }, group, {
       routes: group.routes.slice().sort(),
     });
   });
@@ -734,6 +1763,41 @@ function cmdShared() {
         (withoutInventory.length > 20 ? ', ...' : ''),
     );
   }
+  const unanswered = compared.filter(function (entry) {
+    const pending = entry.inventory.pendingClassification;
+    return pending && Array.isArray(pending.items) && pending.items.length > 0;
+  });
+  if (unanswered.length > 0) {
+    warnings.push(
+      unanswered.length +
+        ' route(s) still have unanswered "classify" questions, so their home-made controls are not in ' +
+        'the inventory: ' +
+        unanswered
+          .slice(0, 20)
+          .map(function (entry) {
+            return entry.routePath;
+          })
+          .join(', '),
+    );
+  }
+
+  // Everything an assistant decided rather than the markup stating it, counted for the run summary:
+  // a person should be able to see how much of the inventory rests on judgment.
+  const byAssistant = { controls: 0, outputs: 0, routes: 0 };
+  for (const entry of compared) {
+    let touched = false;
+    for (const control of entry.inventory.controls) {
+      if (control.classifiedBy === 'assistant') {
+        byAssistant.controls++;
+        touched = true;
+      } else if (control.outputBy === 'assistant') {
+        byAssistant.outputs++;
+        touched = true;
+      }
+    }
+    if (touched) byAssistant.routes++;
+  }
+
   return {
     action: 'shared',
     ok: true,
@@ -744,11 +1808,71 @@ function cmdShared() {
         region: widget.region,
         routeCount: widget.routeIds.length,
         controlCount: widget.controls.length,
+        foundBy: widget.foundBy,
       };
     }),
     shared: sharedPath,
+    byAssistant: byAssistant,
     warnings: warnings,
   };
+}
+
+// A control a block can hand to the frame: not already inside a marked-up header, nav, footer or
+// sidebar - unless an earlier 'shared' pass put it in the frame by repetition, which this pass is
+// about to decide again.
+function inFrameBlock(control) {
+  return FRAME_REGIONS.indexOf(control.region) === -1 || control.frameBy === 'repetition';
+}
+
+// Region instances are grouped by how much of their content they share, not by an exact match: a
+// header that carries breadcrumbs or marks the current page differs in a few controls from route to
+// route and is still one header. Live-observed on MDN, whose header held 119 controls on one page
+// and 122 on the next and was never recognised while the comparison demanded identity.
+const SIMILARITY = 0.8;
+
+function signaturesOf(controls) {
+  return new Set(
+    controls.map(function (control) {
+      return [control.role, control.type || '', normalizeText(control.name)].join('|');
+    }),
+  );
+}
+
+function similarity(a, b) {
+  let common = 0;
+  a.forEach(function (value) {
+    if (b.has(value)) common++;
+  });
+  const union = a.size + b.size - common;
+  return union === 0 ? 0 : common / union;
+}
+
+// The first group of this kind the instance resembles closely enough, or a new one seeded from it.
+// The first instance also supplies the widget's control list, so the result depends only on the
+// site map's own (sorted) route order.
+function placeInGroup(groups, kind, controls, seed) {
+  const signatures = signaturesOf(controls);
+  let group = groups.find(function (candidate) {
+    return candidate.kind === kind && similarity(candidate.signatures, signatures) >= SIMILARITY;
+  });
+  if (!group) {
+    group = Object.assign(
+      {
+        kind: kind,
+        signatures: signatures,
+        routeIds: [],
+        routes: [],
+        controls: controls.map(function (control) {
+          const copy = Object.assign({}, control);
+          delete copy.landmark;
+          return copy;
+        }),
+      },
+      seed(),
+    );
+    groups.push(group);
+  }
+  return group;
 }
 
 // Inventory files are keyed by routeId and a create pass issues fresh ids, so each re-crawl would
@@ -774,12 +1898,26 @@ function cmdPrune() {
   let kept = 0;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name === SHARED_FILE) continue;
+    if (entry.name.startsWith('.')) continue;
     if (known.has(entry.name.slice(0, -'.json'.length))) {
       kept++;
       continue;
     }
     fs.unlinkSync(path.join(dir, entry.name));
     removed++;
+  }
+  // The identity index points at recordings; one whose route is gone would otherwise make a later
+  // page look like a copy of a page that no longer exists.
+  const identities = readJson(sideFile(IDENTITY_FILE));
+  if (isObject(identities)) {
+    let dropped = 0;
+    for (const key of Object.keys(identities)) {
+      if (!isObject(identities[key]) || !known.has(identities[key].routeId)) {
+        delete identities[key];
+        dropped++;
+      }
+    }
+    if (dropped > 0) writeSideFile(IDENTITY_FILE, identities);
   }
   return { action: 'prune', ok: true, removed: removed, kept: kept };
 }
@@ -795,6 +1933,9 @@ function main() {
     case 'record':
       result = cmdRecord(args);
       break;
+    case 'classify':
+      result = cmdClassify(args);
+      break;
     case 'shared':
       result = cmdShared();
       break;
@@ -802,7 +1943,7 @@ function main() {
       result = cmdPrune();
       break;
     default:
-      fail(String(action), 'unknown action "' + action + '" (expected probe, record, shared or prune)');
+      fail(String(action), 'unknown action "' + action + '" (expected probe, record, classify, shared or prune)');
   }
   emit(result);
 }

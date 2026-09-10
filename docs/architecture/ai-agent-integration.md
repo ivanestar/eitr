@@ -166,7 +166,22 @@ answers with the route entry's `regions`, `components` and `contentHash` (`recor
 structure only (title with digits normalized, regions, each control's region, role and type), so a
 pagination chain still repeats it and the crawl budget still stops the chain; names go into
 per-region fingerprints instead, which `shared` compares across routes to name the header,
-navigation, footer and sidebar regions that recur as shared widgets. See
+navigation, footer and sidebar regions that recur as shared widgets.
+
+The probe walks open shadow roots and same-origin frames as well as the document, and lists what it
+cannot read into (cross-origin frames, drawing surfaces) instead of leaving it silently out. A page
+that marks up no header or footer is split into its top-level blocks; `shared` recognises a block
+that recurs, with at least 80% of its labelled controls in common, on a large share of the routes
+as the site frame by that repetition alone, and matches marked-up regions the same way, so a
+header carrying breadcrumbs is still one header. `record` also says whether the page is the application at all (`access`: a bot
+check, a refusal status on a near-empty page, or one identical page served at two addresses), and
+`scripts/crawl-budget.mjs` stops the pass on it rather than mapping the refusal. What deterministic
+code cannot place in every language and markup - elements that react to the pointer but are marked
+up as no control, labels outside the English output words, overlay buttons in the visitor's
+language - goes to the crawling assistant as a numbered question (`classify`, and the overlay
+ledger's `label`); the script checks every answer against the list it asked, takes control names
+from the page rather than the answer, remembers each decision for the rest of the crawl, and counts
+them in the run summary. See
 [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
 for the design decision this implements and what remains out of scope for this first stage
 (transport choice, cross-route journey synthesis).

@@ -32,7 +32,8 @@ export function renderCrawlBudget(): string {
  *                                 [--max-stall-minutes=N]
  *   node scripts/crawl-budget.mjs check --url=<url> --depth=<n> --visible=<true|false>
  *   node scripts/crawl-budget.mjs visited --url=<url> [--status=<n>] [--content-type=<mime>]
- *                                 [--content-hash=<hash>]
+ *                                 [--content-hash=<hash>] [--access=<ok|challenge|refused|stub>]
+ *                                 [--error=<navigation error>]
  *   node scripts/crawl-budget.mjs scroll --url=<url>
  *   node scripts/crawl-budget.mjs seed
  *   node scripts/crawl-budget.mjs rejected [--reason=<reason>]
@@ -44,8 +45,10 @@ export function renderCrawlBudget(): string {
  *
  * Pass --content-hash on every 'visited'. It is what lets the script notice a pagination chain or an
  * infinite feed on its third page rather than at the page ceiling: identical rendered structure
- * repeating under one route template is not a set of distinct pages. Any result can carry a
- * 'warning' string - show it to the human when it is not null.
+ * repeating under one route template is not a set of distinct pages. Pass --access (the 'access.state'
+ * page-inventory.mjs record returned) too, and --error instead of a status when the navigation itself
+ * threw: a 'halt' in the answer means the site is not letting the crawler see it, and the pass stops
+ * there. Any result can carry a 'warning' string - show it to the human when it is not null.
  */
 
 import fs from 'node:fs';
@@ -250,6 +253,11 @@ function emptyState() {
     rejectedOverflow: 0,
     lastAnnounceAt: null,
     lastAnnounceCount: 0,
+    // How many pages this pass has reported back at all, kept or not - the first one is the one
+    // that says whether the crawler can see the application in the first place.
+    visitReports: 0,
+    consecutiveFailures: 0,
+    halted: null,
   };
 }
 
@@ -635,6 +643,10 @@ function cmdCheck(args) {
 
   if (!rawUrl) return deny('unparseable-url');
 
+  // Once the pass has stopped because the site is not letting the crawler in, every further
+  // navigation would map the same refusal again.
+  if (state.halted) return deny('halted', { warning: state.halted.message });
+
   // Visibility is the crawler's own observation - this script never touches a page - but the policy
   // that acts on it lives here so it holds identically every run. A link that exists only in markup
   // and is never rendered is not something a user can reach, and following it manufactures routes
@@ -809,6 +821,131 @@ function cmdCheck(args) {
   };
 }
 
+// How many failures in a row - navigations that threw, or pages refused with 429/503 - mean the site
+// has stopped serving this crawl rather than having one broken page.
+const MAX_CONSECUTIVE_FAILURES = 3;
+
+// When to stop the whole pass rather than record one more page. Every rule rests on what the page
+// inventory or the browser observed, never on words: 'access' is page-inventory.mjs record's
+// verdict, 'error' is the navigation's own exception text.
+//   - A bot check (cf-mitigated: challenge) the browser did not get past, on any page.
+//   - The very first page refused, or the first two addresses serving one identical page with the
+//     second refused: the crawler cannot see the application at all.
+//   - The first navigation failing outright - an untrusted certificate, an unknown host.
+//   - Three failures in a row later on: the site has started refusing (a rate limit), or stopped
+//     answering. A single 403 mid-crawl is not one - that is a protected route, recorded as such.
+function haltFor(state, observed) {
+  const at = new Date().toISOString();
+  if (observed.access === 'challenge') {
+    return {
+      reason: 'bot-check',
+      url: observed.url,
+      at,
+      message:
+        'Stopping: ' +
+        observed.url +
+        ' answered with a bot check (a Cloudflare challenge) instead of the application, and every page ' +
+        'after it would be the same check. To map this site, crawl an environment that lets this browser ' +
+        'in - a staging or test instance, or an allowlist for this machine.',
+    };
+  }
+  if (observed.navigationError) {
+    const certificate = /ERR_CERT|CERT_|SSL|certificate/i.test(observed.navigationError);
+    if (observed.firstReport) {
+      return {
+        reason: certificate ? 'untrusted-certificate' : 'unreachable',
+        url: observed.url,
+        at,
+        message: certificate
+          ? 'Stopping: the browser does not trust the certificate of ' +
+            observed.url +
+            ' (' +
+            observed.navigationError +
+            '). Common for sites signed by a national or corporate certificate authority. Install that ' +
+            'authority where the browser trusts it, or - only with your go-ahead, and only for this crawl - ' +
+            'let the crawl ignore certificate errors (ignoreHTTPSErrors).'
+          : 'Stopping: the first page, ' +
+            observed.url +
+            ', could not be loaded (' +
+            observed.navigationError +
+            '). Check the address and that the site is reachable from this machine.',
+      };
+    }
+    state.consecutiveFailures = (state.consecutiveFailures || 0) + 1;
+    if (state.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      return {
+        reason: 'unreachable',
+        url: observed.url,
+        at,
+        message:
+          'Stopping: the last ' +
+          state.consecutiveFailures +
+          ' navigations failed (most recently ' +
+          observed.navigationError +
+          ') - the site has stopped answering. The route list is whatever was reached before that.',
+      };
+    }
+    return null;
+  }
+  if (observed.access === 'refused' && observed.firstReport) {
+    return {
+      reason: 'refused',
+      url: observed.url,
+      at,
+      message:
+        'Stopping: the first page, ' +
+        observed.url +
+        ', answered ' +
+        (observed.status || 'with a refusal') +
+        ' and an almost empty page - a refusal or block page, not the application. If the application ' +
+        'needs a sign-in, run /auth-setup first; if it blocks automated browsers, crawl a staging or test ' +
+        'instance or ask for this machine to be allowlisted.',
+    };
+  }
+  // The same page at the first two addresses stops the pass only when the server also refused the
+  // second one - a block page served with 200 on the first address and 403 on the next. On its own
+  // it is a warning: two addresses of one real page look exactly alike too.
+  if (
+    observed.access === 'stub' &&
+    state.visitReports <= 2 &&
+    (observed.status === 401 || observed.status === 403 || observed.status === 429 || observed.status === 503)
+  ) {
+    return {
+      reason: 'refused',
+      url: observed.url,
+      at,
+      message:
+        'Stopping: the first two addresses showed the same almost empty page, and ' +
+        observed.url +
+        ' answered ' +
+        observed.status +
+        ' - the site is serving one refusal or block page for every address. If the application needs a ' +
+        'sign-in, run /auth-setup first; if it blocks automated browsers, crawl a staging or test instance or ' +
+        'ask for this machine to be allowlisted.',
+    };
+  }
+  if (observed.access === 'refused' && (observed.status === 429 || observed.status === 503)) {
+    state.consecutiveFailures = (state.consecutiveFailures || 0) + 1;
+    if (state.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      return {
+        reason: 'rate-limited',
+        url: observed.url,
+        at,
+        message:
+          'Stopping: the last ' +
+          state.consecutiveFailures +
+          ' pages answered ' +
+          observed.status +
+          ' with a refusal page - the site has started limiting this crawl. The route list is whatever ' +
+          'was reached before that; wait and run /map-site update, or crawl an instance without a rate limit.',
+      };
+    }
+    return null;
+  }
+  state.consecutiveFailures = 0;
+  return null;
+}
+
 function cmdVisited(args) {
   const state = requireState();
   const rawUrl = typeof args.url === 'string' ? args.url : '';
@@ -818,6 +955,57 @@ function cmdVisited(args) {
   // An extensionless endpoint that turned out to serve a file rather than a page. The route slot is
   // already spent, but the route itself must not enter the site map - a binary blob is not a page.
   const status = args.status === undefined ? null : Number.parseInt(String(args.status), 10);
+
+  // Whether the crawler is looking at the application at all comes before everything else: a map
+  // of a bot check, a block page or a certificate error is a map of nothing. Live-observed on 11 of
+  // 50 public sites in one run - Cloudflare checks, block pages in Russian, a country picker, an
+  // untrusted national certificate - every one of them recorded as if it were the site.
+  const access = typeof args.access === 'string' && args.access.trim() !== '' ? args.access.trim() : 'ok';
+  const navigationError = typeof args.error === 'string' && args.error.trim() !== '' ? args.error.trim() : null;
+  const firstReport = !state.visitReports;
+  state.visitReports = (state.visitReports || 0) + 1;
+  const halt = haltFor(state, { url: rawUrl, status, access, navigationError, firstReport });
+  if (halt) {
+    state.halted = halt;
+    bumpSkip(state, 'halted', rawUrl, canonical.ok ? canonical.canonicalPath : null);
+    saveState(state);
+    return {
+      action: 'visited',
+      keep: false,
+      reason: 'halted',
+      halt,
+      canonicalPath: canonical.ok ? canonical.canonicalPath : null,
+      budget: budgetView(state),
+      warning: halt.message,
+      announce: null,
+    };
+  }
+  const earlyStub =
+    access === 'stub' && state.visitReports <= 2
+      ? addWarning(
+          state,
+          'early-stub',
+          'The first two addresses showed the same page - same title, controls, labels and text. If it is a ' +
+            'block page, a country or language picker or a sign-in screen, stop the crawl here: everything ' +
+            'after it would map that page again. If the application really serves one page at both ' +
+            'addresses, carry on.',
+        )
+      : null;
+  if (navigationError) {
+    state.droppedAfterVisit += 1;
+    bumpSkip(state, 'navigation-failed', rawUrl, canonical.ok ? canonical.canonicalPath : null);
+    saveState(state);
+    return {
+      action: 'visited',
+      keep: false,
+      reason: 'navigation-failed',
+      error: navigationError,
+      canonicalPath: canonical.ok ? canonical.canonicalPath : null,
+      budget: budgetView(state),
+      warning: null,
+      announce: null,
+    };
+  }
 
   // Status is read BEFORE the content type, and the order is the whole point. An authentication
   // challenge is a real route - something exists behind it - and it frequently answers with no HTML
@@ -837,7 +1025,7 @@ function cmdVisited(args) {
       canonicalPath: canonical.ok ? canonical.canonicalPath : null,
       trapDetected: false,
       budget: budgetView(state),
-      warning: null,
+      warning: earlyStub,
       announce: announceNow,
     };
   }
@@ -892,7 +1080,7 @@ function cmdVisited(args) {
   // same thing regardless of what their URLs look like.
   const contentHash = typeof args['content-hash'] === 'string' ? args['content-hash'] : null;
   const template = canonical.ok ? canonical.canonicalPath : null;
-  let warning = null;
+  let warning = earlyStub;
   let trapDetected = false;
 
   if (contentHash && template) {
@@ -1142,6 +1330,7 @@ function cmdReport() {
     coverage: state.boundedBy
       ? { boundedBy: state.boundedBy, pagesVisited: state.pagesVisited }
       : null,
+    halted: state.halted || null,
     budget: budgetView(state),
   };
 }

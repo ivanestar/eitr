@@ -607,7 +607,7 @@ recorded. These files are written by the analysis workflows and are the project'
 |---|---|---|
 | \`artifacts/analysis/app-profile.json\` | Everything established about the application as a whole: what kind of application it is (production / sandbox-demo / internal tool), its confirmed core purpose, what each role is for, how it talks to its backend (\`apiStyle\`), the crawl boundary a human set, domain knowledge a person volunteered, which test types are in scope | \`node scripts/app-profile.mjs\` |
 | \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, per-role access, and the overlays met on it - each with what raised it, what it contains, its own screenshot, and how it was closed | \`node scripts/validate-site-map.mjs\` to check shape |
-| \`artifacts/site-map/inventory/<routeId>.json\` | Every control on one page, collected from the live DOM - role, accessible name, type, HTML5 constraints, options, and whether it sends a result elsewhere (copy, export, download) - plus its landmark regions. \`shared.json\` beside them names the header, navigation, footer and sidebar regions that recur across routes | \`node scripts/page-inventory.mjs\` (\`record\` writes one, \`shared\` compares them) |
+| \`artifacts/site-map/inventory/<routeId>.json\` | Every control on one page, collected from the live DOM including open shadow roots and same-origin frames - role, accessible name, type, HTML5 constraints, options, whether it sends a result elsewhere (copy, export, download), and where it sits (\`inShadow\`, \`frame\`) - plus its landmark regions, the frames and drawing surfaces it could not read into, and whether the page was the application at all (\`access\`). Controls marked \`classifiedBy: "assistant"\` have their role only here, not in the markup, so \`getByRole\` cannot find them. \`shared.json\` beside them names the header, navigation, footer and sidebar regions that recur across routes, \`foundBy\` markup or by repetition | \`node scripts/page-inventory.mjs\` (\`record\` writes one, \`classify\` answers what only a reader can place, \`shared\` compares them) |
 | \`artifacts/site-map/api-contracts.json\` | Operations actually observed in traffic - method, path template, the operation name for a GraphQL or RPC call, and the response shape | \`node scripts/validate-api-contracts.mjs\` |
 | \`artifacts/analysis/feature-map.json\` | Features and the routes they span, the entities this application works with, what can happen to each one, its lifecycle, and the links between them | \`node scripts/derive-feature-map.mjs\` to draft, \`node scripts/validate-feature-map.mjs\` to check shape |
 | \`artifacts/analysis/test-conditions.json\` | Typed test conditions per route | \`node scripts/validate-test-conditions.mjs\` |
@@ -639,7 +639,10 @@ out after two retakes), \`scripts/overlay-ledger.mjs\` (every modal, drawer, ban
 the crawl meets: which dismissal the crawl boundary permits, how many attempts are left, and what is
 still open - an overlay left open makes every later click land on a backdrop with no error at all),
 \`scripts/page-inventory.mjs\` (what is on each page, collected in the browser rather than read off by
-eye, and which frame regions recur across routes as shared widgets),
+eye - inside open shadow roots and same-origin frames too - whether the page is the application at
+all or a bot check or block page standing in for it, which elements only a reader can place
+(\`classify\` checks every answer against what it asked), and which frame regions recur across routes
+as shared widgets, marked up or not),
 \`scripts/skill-briefing.mjs\` (what a given skill is about to do,
 how, why, and what is worth knowing before agreeing to it - printed verbatim by every skill before
 it runs anything, and by the pipeline at each stage gate),
