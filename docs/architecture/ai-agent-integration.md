@@ -198,7 +198,12 @@ covered only in all-valid vectors, since a rejected input never exercised the va
 Extraction starts from the route's page inventory rather than a fresh reading of the page: every
 field the crawl recorded outside the site frame must end up a parameter (citing the field's
 inventory id) or an exclusion with a reason from a closed list, and the gate checks the rest of the
-extraction against the same record - offered options, HTML5 attributes, field types.
+extraction against the same record - offered options, HTML5 attributes, field types. For a page
+that turns input into output, the agent also writes `property` and `metamorphic` conditions from
+closed relation lists (count, uniqueness, format, pair coverage, round-trip, idempotence and so on),
+since such a page has no example answer to state in advance; every copy, export or download
+control needs one of them, or a stated exclusion; and the site frame's own fields are tested once,
+on the route the file names in `frameRouteId`.
 The same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
 deterministic redaction backstop - independent of what the LLM step already did - masking
 digit-run and majority-digit PII shapes in every evidence excerpt, sample value and option label

@@ -81,7 +81,18 @@ const TECHNIQUE_VALUES = new Set([
   'state-transition',
   'use-case',
   'architectural-invariant',
+  'property',
+  'metamorphic',
 ]);
+const PROPERTY_RELATIONS = new Set([
+  'count-matches-request',
+  'all-unique',
+  'format-conformance',
+  'covers-all-pairs',
+  'output-matches-display',
+  'persists-across-navigation',
+]);
+const METAMORPHIC_RELATIONS = new Set(['round-trip', 'idempotence', 'symmetry', 'permutation-invariance']);
 const NEGATIVE_CATEGORY_VALUES = new Set([
   'invalid_input',
   'boundary',
@@ -625,6 +636,35 @@ function isCondition(value, label, errors) {
       );
     }
   }
+  if (value.technique === 'property' || value.technique === 'metamorphic') {
+    const metamorphic = value.technique === 'metamorphic';
+    const allowed = metamorphic ? METAMORPHIC_RELATIONS : PROPERTY_RELATIONS;
+    if (!allowed.has(value.relation)) {
+      errors.push(label + '.relation must be one of ' + Array.from(allowed).join('|') + ' for a ' + value.technique + ' condition.');
+    }
+    if (typeof value.sourceInput !== 'string' || value.sourceInput.trim().length === 0) {
+      errors.push(label + '.sourceInput must say what the run enters, concretely enough to reproduce.');
+    }
+    if (metamorphic && (typeof value.followUpInput !== 'string' || value.followUpInput.trim().length === 0)) {
+      errors.push(label + '.followUpInput must say how the second run is derived from the first - that link is the relation.');
+    }
+    if (value.scenario !== 'positive') {
+      errors.push(label + '.scenario must be "positive" - a ' + value.technique + ' condition states what the output always obeys.');
+    }
+  }
+  if (value.outputs !== undefined) {
+    if (
+      !Array.isArray(value.outputs) ||
+      !value.outputs.every(function (id) {
+        return typeof id === 'string';
+      })
+    ) {
+      errors.push(label + '.outputs, when present, must be an array of inventory control ids.');
+    }
+  }
+  if (value.relation === 'output-matches-display' && (!Array.isArray(value.outputs) || value.outputs.length === 0)) {
+    errors.push(label + '.outputs must name the copy, export or download control whose delivery this checks.');
+  }
   isVerificationContract(value.verification, label + '.verification', errors);
   if (typeof value.isSpeculative !== 'boolean') {
     errors.push(label + '.isSpeculative must be a boolean.');
@@ -660,33 +700,41 @@ function isUnsatisfiedPair(value, label, errors) {
 // Every field the crawl recorded outside the site frame is a parameter or an explicit exclusion.
 // Live-observed without this: a GUID generator's five format checkboxes and a pairwise tool's value
 // fields never became parameters, while the header's language switcher became one on 13 routes.
-function accountForFields(entry, label, inventory, controlById, errors) {
+// The site frame's fields are the one exception: they belong to the route named in frameRouteId,
+// where they are tested once, and to no other. Returns how many frame fields this inventory holds,
+// so the caller can tell whether the frame needs a route at all.
+function accountForFields(entry, label, inventory, controlById, isFrameRoute, errors) {
+  const frameFieldCount = inventory.controls.filter(function (control) {
+    return isField(control) && FRAME_REGIONS.has(control.region);
+  }).length;
   if (typeof inventory.contentHash === 'string' && inventory.contentHash !== entry.sourceContentHash) {
     errors.push(
       label +
         '.sourceContentHash does not match the inventory recorded for this route - the page was re-crawled after these parameters were extracted, so the control ids they cite may point at other fields. Re-extract this route.',
     );
-    return;
+    return frameFieldCount;
   }
   const accounted = new Map();
-  function cite(id, where) {
+  // An exclusion may also name an output control, which is how a copy or download nobody should
+  // check gets a stated reason instead of a missing condition.
+  function cite(id, where, allowOutput) {
     const control = controlById.get(id);
     if (!control) {
       errors.push(where + ' cites control "' + id + '", which the inventory does not list.');
       return;
     }
-    if (FRAME_REGIONS.has(control.region)) {
+    if (FRAME_REGIONS.has(control.region) && !isFrameRoute) {
       errors.push(
         where +
           ' cites ' +
           describeControl(control) +
           ' in the ' +
           control.region +
-          ', which belongs to the site frame shared by every page rather than to this route - leave it out.',
+          ', which belongs to the site frame shared by every page - its fields are tested once, on the route named in frameRouteId, and nowhere else.',
       );
       return;
     }
-    if (!isField(control)) {
+    if (!isField(control) && !(allowOutput && control.output === true)) {
       errors.push(where + ' cites ' + describeControl(control) + ', which is not a field a value can be entered into.');
       return;
     }
@@ -705,7 +753,7 @@ function accountForFields(entry, label, inventory, controlById, errors) {
   entry.parameters.forEach(function (p, i) {
     const where = label + '.parameters[' + i + ']';
     if (p && typeof p.control === 'string') {
-      cite(p.control, where);
+      cite(p.control, where, false);
       return;
     }
     // A field the inventory does not list exists only because a probe on this page revealed it, so
@@ -731,11 +779,12 @@ function accountForFields(entry, label, inventory, controlById, errors) {
     if ('note' in x && typeof x.note !== 'string') {
       errors.push(where + '.note, when present, must be a string.');
     }
-    cite(x.control, where);
+    cite(x.control, where, true);
   });
 
   for (const control of inventory.controls) {
-    if (!isField(control) || FRAME_REGIONS.has(control.region) || accounted.has(control.id)) continue;
+    if (!isField(control) || accounted.has(control.id)) continue;
+    if (FRAME_REGIONS.has(control.region) && !isFrameRoute) continue;
     errors.push(
       label +
         ' leaves ' +
@@ -743,6 +792,45 @@ function accountForFields(entry, label, inventory, controlById, errors) {
         ' unaccounted - make it a parameter (control: "' +
         control.id +
         '") or list it under excluded with a reason.',
+    );
+  }
+  return frameFieldCount;
+}
+
+// A copy, export or download control hands the page's result to somewhere a test has to look at
+// separately - live-observed, not one condition on a whole toolkit checked an Excel export or a
+// "Copy to Clipboard". Each needs a condition naming it in outputs, or an exclusion with a reason.
+function checkOutputs(entry, label, controlById, inventory, isFrameRoute, errors) {
+  const covered = new Set();
+  (Array.isArray(entry.conditions) ? entry.conditions : []).forEach(function (condition, i) {
+    const outputs = condition && Array.isArray(condition.outputs) ? condition.outputs : [];
+    outputs.forEach(function (id) {
+      const control = controlById.get(id);
+      if (!control || control.output !== true) {
+        errors.push(
+          label +
+            '.conditions[' +
+            i +
+            '].outputs cites "' +
+            id +
+            '", which the inventory does not record as a copy, export or download control.',
+        );
+        return;
+      }
+      covered.add(id);
+    });
+  });
+  for (const item of Array.isArray(entry.excluded) ? entry.excluded : []) {
+    if (item && typeof item.control === 'string') covered.add(item.control);
+  }
+  for (const control of inventory.controls) {
+    if (control.output !== true || covered.has(control.id)) continue;
+    if (FRAME_REGIONS.has(control.region) && !isFrameRoute) continue;
+    errors.push(
+      label +
+        ': ' +
+        describeControl(control) +
+        ' sends the page\\'s result elsewhere, and no condition checks what it delivers - add a property condition with relation output-matches-display naming it in outputs, or exclude it with a reason.',
     );
   }
 }
@@ -793,6 +881,11 @@ function validate() {
     }
   }
   const warnings = [];
+  const frameRouteId = data.frameRouteId;
+  if (frameRouteId !== undefined && (typeof frameRouteId !== 'string' || !(frameRouteId in data.routes))) {
+    errors.push('frameRouteId, when present, must name a route in this file - it is where the site frame is tested.');
+  }
+  let frameFieldsSeen = 0;
 
   // An api-level value is only testable where the crawl actually saw the route call an API. A
   // missing contracts file means nothing was observed anywhere, which is exactly that answer.
@@ -857,8 +950,9 @@ function validate() {
     if ('excluded' in entry && !Array.isArray(entry.excluded)) {
       errors.push(label + '.excluded, when present, must be an array.');
     }
+    const isFrameRoute = frameRouteId === key;
     if (inventory && Array.isArray(entry.parameters)) {
-      accountForFields(entry, label, inventory, controlById, errors);
+      frameFieldsSeen += accountForFields(entry, label, inventory, controlById, isFrameRoute, errors);
     } else if (!inventory && inventoryPath) {
       warnings.push(
         label +
@@ -927,7 +1021,14 @@ function validate() {
       if (typeof entry.sourceParamsHash !== 'string') {
         errors.push(label + '.sourceParamsHash must be a string.');
       }
+      if (inventory) checkOutputs(entry, label, controlById, inventory, isFrameRoute, errors);
     }
+  }
+
+  if (frameFieldsSeen > 0 && !frameRouteId) {
+    warnings.push(
+      'The site frame carries fields of its own (a language switcher, a theme toggle) and no route is named in frameRouteId, so they are tested nowhere - name the route that should carry them, usually the one with the fewest fields of its own.',
+    );
   }
 
   return { status: errors.length === 0 ? 'PASSED' : 'FAILED', errors, warnings };

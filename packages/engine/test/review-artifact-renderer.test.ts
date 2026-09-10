@@ -151,6 +151,27 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
       expect(output.markdown).toContain(
         'Fields left out: checkbox "Gift wrap" - disabled (enabled only after checkout); textbox next to "Result" - result-output',
       );
+
+      // With a route named for the frame, the line says where the frame's fields are tested; and a
+      // property shows the relation it checks next to its technique.
+      const conditions = JSON.parse(
+        readFileSync(join(dir, 'artifacts', 'analysis', 'test-conditions.json'), 'utf8'),
+      );
+      conditions.frameRouteId = 'id-0';
+      conditions.routes['id-0'].conditions = [
+        {
+          conditionId: 'p1',
+          technique: 'property',
+          relation: 'all-unique',
+          description: 'Verify no two generated values are the same',
+        },
+      ];
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', conditions);
+      const framed = run(dir, '--kind=test-conditions').output;
+      expect(framed.markdown).toContain('Site frame fields are tested once, on /route-00');
+      expect(framed.markdown).toContain(
+        'Verify no two generated values are the same  [property, all-unique]',
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

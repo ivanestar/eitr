@@ -155,6 +155,10 @@ export interface VerificationContract {
 // project that has none. A 'state-transition' condition is either one defined transition or one
 // (state, trigger) pair the lifecycle leaves undefined; a 'use-case' condition is one entity's whole
 // main flow, which is what a cross-route journey gets built from.
+// 'property' and 'metamorphic' are the oracle for a page that turns input into output - generates,
+// converts, formats, compares - where no example answer can be written down in advance but the
+// output still has to obey a rule. A 'property' holds over one run's whole output; a 'metamorphic'
+// relation links two runs. Both are written by the agent, like 'architectural-invariant'.
 export type TestConditionTechnique =
   | 'combinatorial'
   | 'boundary-value'
@@ -162,7 +166,33 @@ export type TestConditionTechnique =
   | 'checklist-based'
   | 'state-transition'
   | 'use-case'
-  | 'architectural-invariant';
+  | 'architectural-invariant'
+  | 'property'
+  | 'metamorphic';
+
+// Closed lists, so every relation is one a test can compute rather than a phrase to interpret.
+//   count-matches-request      - the output holds exactly as many items as the input asked for
+//   all-unique                 - no two items of the output are the same
+//   format-conformance         - every item matches a stated format (a UUID v4, an ISO date)
+//   covers-all-pairs           - every pair of input values appears together in some output row,
+//                                except the pairs a constraint stated on the page rules out
+//   output-matches-display     - what a copy, export or download control delivers equals what the
+//                                page shows; the condition names that control in outputs
+//   persists-across-navigation - a setting (language, theme) survives a reload and a move to
+//                                another page
+export type PropertyRelation =
+  | 'count-matches-request'
+  | 'all-unique'
+  | 'format-conformance'
+  | 'covers-all-pairs'
+  | 'output-matches-display'
+  | 'persists-across-navigation';
+//   round-trip             - converting there and back returns the original, within the precision
+//                            the page states
+//   idempotence            - applying the operation to its own output changes nothing
+//   symmetry               - swapping the two inputs mirrors the result
+//   permutation-invariance - reordering the input does not change the result
+export type MetamorphicRelation = 'round-trip' | 'idempotence' | 'symmetry' | 'permutation-invariance';
 
 // Whether every parameter value in a TestCondition's vector is drawn from a 'valid' partition (or
 // the inclusive/still-inside side of a boundary) - 'negative' when one is an 'invalid'-kind
@@ -172,7 +202,7 @@ export type TestConditionTechnique =
 export type TestConditionScenario = 'positive' | 'negative';
 
 export interface TestCondition {
-  // sha256(routeId + '|' + (technique === 'architectural-invariant' ? (negativeCategory || '') + '|' + description : JSON.stringify(sorted [paramName, value] tuples))).slice(0, 16)
+  // sha256(routeId + '|' + (technique === 'architectural-invariant' ? (negativeCategory || '') + '|' + description : technique is 'property' or 'metamorphic' ? technique + '|' + relation + '|' + description : JSON.stringify(sorted [paramName, value] tuples))).slice(0, 16)
   conditionId: string;
   // paramName -> partitionId for technique: 'combinatorial' and 'equivalence-partition'. For
   // technique: 'boundary-value' or 'checklist-based', the target parameter's own entry holds the
@@ -192,6 +222,14 @@ export interface TestCondition {
   // Present only when the condition cannot be driven through the page's own controls - copied from
   // the invalid partition it carries.
   executionLevel?: 'dom' | 'api';
+  // Required on 'property' and 'metamorphic' conditions, from the list matching the technique.
+  relation?: PropertyRelation | MetamorphicRelation;
+  // 'property' and 'metamorphic': what the (first) run enters, concretely enough to reproduce.
+  sourceInput?: string;
+  // 'metamorphic' only: how the second run's input is derived from the first run or its output.
+  followUpInput?: string;
+  // Inventory ids of the output controls (copy, export, download) this condition checks.
+  outputs?: string[];
   scenario: TestConditionScenario;
   // Closed taxonomy category for negative scenarios. Applicable strictly when scenario === 'negative';
   // required when technique === 'architectural-invariant'.
@@ -242,6 +280,10 @@ export interface TestConditionsEntry {
 export interface TestConditionsReport {
   schemaVersion: 2;
   generatedAt: string;
+  // The one route whose entry carries the site frame's own fields - the header's language switcher,
+  // the theme toggle - so they are tested once rather than on every page or on none. Usually the
+  // route with the fewest fields of its own. Every other route leaves the frame out.
+  frameRouteId?: string;
   routes: Record<string, TestConditionsEntry>;
 }
 `;

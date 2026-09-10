@@ -1227,6 +1227,50 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       }
     });
 
+    it('keeps the property and metamorphic conditions the agent wrote across a regeneration, filling in an id', () => {
+      const report = singleTextParamRoute('route-tool') as unknown as {
+        routes: Record<string, { conditions: unknown[] }>;
+      };
+      const written = {
+        parameters: {},
+        scenario: 'positive',
+        verification: {},
+        isSpeculative: true,
+        reviewed: false,
+      };
+      report.routes['route-tool'].conditions = [
+        {
+          ...written,
+          technique: 'property',
+          relation: 'count-matches-request',
+          sourceInput: 'ask for 5 values',
+          description: 'Verify asking for 5 values lists exactly 5',
+          expectedOutcome: 'exactly 5 values are listed',
+        },
+        {
+          ...written,
+          technique: 'metamorphic',
+          relation: 'round-trip',
+          sourceInput: '100 metres to feet',
+          followUpInput: 'the result converted back to metres',
+          description: 'Verify converting the result back to metres gives 100',
+          expectedOutcome: 'the second result reads 100',
+        },
+      ];
+      const dir = setupProject(report);
+      try {
+        expect(run(dir).status).toBe(0);
+        const kept = readReport(dir).routes['route-tool'].conditions.filter(
+          (c) => c.technique === 'property' || c.technique === 'metamorphic',
+        );
+        expect(kept).toHaveLength(2);
+        expect(kept.every((c) => /^[a-f0-9]{16}$/.test(c.conditionId))).toBe(true);
+        expect(new Set(kept.map((c) => c.conditionId)).size).toBe(2);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it('refuses to generate from a partition with no recorded outcome rather than inventing one', () => {
       const report = singleTextParamRoute('route-greet') as {
         routes: Record<

@@ -738,7 +738,11 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
       return report;
     }
 
-    function validateWith(report: unknown, inventory: unknown = checkoutInventory()) {
+    function validateWith(
+      report: unknown,
+      inventory: unknown = checkoutInventory(),
+      args: string[] = ['--stage=parameters'],
+    ) {
       const dir = setupProject();
       try {
         writeReport(dir, report);
@@ -750,7 +754,7 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
             'utf8',
           );
         }
-        return JSON.parse(run(dir, ['--stage=parameters']).stdout) as {
+        return JSON.parse(run(dir, args).stdout) as {
           errors: string[];
           warnings: string[];
         };
@@ -893,6 +897,158 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
         controls: checkoutInventory().controls.filter((c) => c.id === 'c0' || c.id === 'c5'),
       });
       expect(validateWith(report, inventory).errors).toEqual([]);
+    });
+
+    describe('output properties, output channels and the site frame', () => {
+      const copyControl = {
+        id: 'c7',
+        region: 'main',
+        role: 'button',
+        name: 'Copy summary',
+        tag: 'button',
+        output: true,
+      };
+
+      function withOutputs() {
+        return checkoutInventory({ controls: [...checkoutInventory().controls, copyControl] });
+      }
+
+      function property(overrides: Record<string, unknown> = {}) {
+        return {
+          conditionId: 'p1',
+          parameters: {},
+          technique: 'property',
+          relation: 'output-matches-display',
+          sourceInput: 'an order of 2 with standard shipping',
+          outputs: ['c7'],
+          description: 'Verify Copy summary copies exactly the summary the page shows',
+          expectedOutcome: 'the clipboard holds the same text as the summary box',
+          scenario: 'positive',
+          verification: {},
+          isSpeculative: true,
+          reviewed: false,
+          ...overrides,
+        };
+      }
+
+      function withConditions(conditions: unknown[]) {
+        const report = accounted() as unknown as Report & {
+          routes: Record<string, Record<string, unknown>>;
+        };
+        Object.assign(report.routes['route-checkout'], {
+          conditions,
+          unsatisfiedPairs: [],
+          sourceParamsHash: '',
+        });
+        return report;
+      }
+
+      const full: string[] = [];
+
+      it('passes a property that checks the page output channel', () => {
+        expect(validateWith(withConditions([property()]), withOutputs(), full).errors).toEqual([]);
+      });
+
+      it('fails an output control no condition checks, unless excluded with a reason', () => {
+        const uncovered = validateWith(withConditions([]), withOutputs(), full);
+        expect(
+          uncovered.errors.some((e) =>
+            e.includes('c7 button "Copy summary" sends the page\'s result elsewhere'),
+          ),
+        ).toBe(true);
+
+        const excluded = withConditions([]);
+        (excluded.routes['route-checkout'].excluded as unknown[]).push({
+          control: 'c7',
+          reason: 'off-limits',
+          note: 'the human left the clipboard out of scope',
+        });
+        expect(validateWith(excluded, withOutputs(), full).errors).toEqual([]);
+      });
+
+      it('fails a relation from the wrong list, a metamorphic relation with no follow-up run, and a negative property', () => {
+        const wrong = validateWith(
+          withConditions([property({ relation: 'round-trip' })]),
+          withOutputs(),
+          full,
+        );
+        expect(
+          wrong.errors.some((e) => e.includes('.relation must be one of count-matches-request')),
+        ).toBe(true);
+
+        const metamorphic = validateWith(
+          withConditions([
+            property(),
+            property({
+              conditionId: 'm1',
+              technique: 'metamorphic',
+              relation: 'round-trip',
+              outputs: undefined,
+            }),
+          ]),
+          withOutputs(),
+          full,
+        );
+        expect(metamorphic.errors.some((e) => e.includes('.followUpInput must say'))).toBe(true);
+
+        const negative = validateWith(
+          withConditions([property({ scenario: 'negative' })]),
+          withOutputs(),
+          full,
+        );
+        expect(negative.errors.some((e) => e.includes('.scenario must be "positive"'))).toBe(true);
+      });
+
+      it('fails outputs naming a control that is not an output', () => {
+        const output = validateWith(
+          withConditions([property({ outputs: ['c7', 'c5'] })]),
+          withOutputs(),
+          full,
+        );
+        expect(output.errors.some((e) => e.includes('outputs cites "c5"'))).toBe(true);
+      });
+
+      // The frame's fields are tested once: allowed, and required, on the route frameRouteId names.
+      it('takes the site frame fields on the frame route only, and warns when no route carries them', () => {
+        const unhomed = validateWith(accounted());
+        expect(unhomed.warnings.some((w) => w.includes('no route is named in frameRouteId'))).toBe(
+          true,
+        );
+
+        const framed = accounted() as unknown as Record<string, unknown> & Report;
+        framed.frameRouteId = 'route-checkout';
+        const missing = validateWith(framed);
+        expect(
+          missing.errors.some((e) => e.includes('leaves c0 combobox "Language" unaccounted')),
+        ).toBe(true);
+
+        framed.routes['route-checkout'].parameters.push({
+          name: 'language',
+          kind: 'select',
+          control: 'c0',
+          partitions: [
+            {
+              id: 'en',
+              kind: 'valid',
+              sampleValues: ['English'],
+              expectedOutcome: 'the page reads in English',
+            },
+          ],
+          boundaries: [],
+          evidence: [{ signal: 'form-label', excerpt: 'Language' }],
+        });
+        const homed = validateWith(framed);
+        expect(homed.errors).toEqual([]);
+        expect(homed.warnings.some((w) => w.includes('frameRouteId'))).toBe(false);
+
+        const dangling = accounted() as unknown as Record<string, unknown>;
+        dangling.frameRouteId = 'route-nowhere';
+        expect(
+          validateWith(dangling).errors.some((e) =>
+            e.includes('frameRouteId, when present, must name a route'),
+          ),
+        ).toBe(true);
+      });
     });
 
     it('warns, without failing, when the route has no inventory to check against', () => {

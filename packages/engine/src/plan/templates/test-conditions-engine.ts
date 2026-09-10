@@ -53,6 +53,7 @@ const CWD = process.cwd();
 const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
+const MODEL_AUTHORED_TECHNIQUES = ['architectural-invariant', 'property', 'metamorphic'];
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -894,17 +895,19 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle) {
     criticalityTier,
   );
   const useCaseConditions = buildUseCaseConditions(routeId, lifecycleBundle);
+  // Conditions the agent wrote rather than this script - invariants, output properties, metamorphic
+  // relations - survive every regeneration untouched; only an id is filled in when one is missing.
   const invariantConditions = (entry.conditions || [])
     .filter(function (c) {
-      return c.technique === 'architectural-invariant';
+      return MODEL_AUTHORED_TECHNIQUES.indexOf(c.technique) !== -1;
     })
     .map(function (c) {
       if (!c.conditionId) {
-        c.conditionId = conditionId(
-          routeId,
-          c.parameters || {},
-          (c.negativeCategory || '') + '|' + (c.description || ''),
-        );
+        const salt =
+          c.technique === 'architectural-invariant'
+            ? (c.negativeCategory || '') + '|' + (c.description || '')
+            : c.technique + '|' + (c.relation || '') + '|' + (c.description || '');
+        c.conditionId = conditionId(routeId, c.parameters || {}, salt);
       }
       return c;
     });

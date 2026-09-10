@@ -146,8 +146,9 @@ function renderTestConditions(labels, data) {
   });
 
   const lines = [];
-  // The site frame's own fields are left out of every page on purpose, so say where they went
-  // rather than let a reader conclude the language switcher is simply untested by accident.
+  // The site frame's own fields are tested once, on the route named in frameRouteId, and left out of
+  // every other page on purpose - so say where they went rather than let a reader conclude the
+  // language switcher is simply untested, or tested nowhere without anyone having decided that.
   const shared = loadJson(path.join(INVENTORY_DIR, 'shared.json'));
   const frameFields = [];
   for (const widget of shared && Array.isArray(shared.widgets) ? shared.widgets : []) {
@@ -158,7 +159,12 @@ function renderTestConditions(labels, data) {
     }
   }
   if (frameFields.length > 0) {
-    lines.push('Site frame fields are not part of any page below: ' + frameFields.join('; '));
+    const frameRouteId = data && typeof data.frameRouteId === 'string' ? data.frameRouteId : null;
+    lines.push(
+      (frameRouteId
+        ? 'Site frame fields are tested once, on ' + labelFor(labels, frameRouteId) + ': '
+        : 'Site frame fields are not part of any page below: ') + frameFields.join('; '),
+    );
     lines.push('');
   }
   let conditionCount = 0;
@@ -192,7 +198,14 @@ function renderTestConditions(labels, data) {
       const technique = condition.technique || 'unspecified';
       techniqueCounts[technique] = (techniqueCounts[technique] || 0) + 1;
       lines.push(
-        '' + (index + 1) + '. ' + (condition.description || '(no description)') + '  [' + technique + ']',
+        '' +
+          (index + 1) +
+          '. ' +
+          (condition.description || '(no description)') +
+          '  [' +
+          technique +
+          (condition.relation ? ', ' + condition.relation : '') +
+          ']',
       );
     });
     const unsatisfied = Array.isArray(entry.unsatisfiedPairs) ? entry.unsatisfiedPairs.length : 0;
