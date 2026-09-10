@@ -19,13 +19,6 @@ import {
   type TextSpec,
 } from './io.js';
 import { detectStack, type DetectionResult } from './detect.js';
-import {
-  checkPython,
-  checkDotnet,
-  checkJava,
-  checkMaven,
-  checkGradle,
-} from '../commands/doctor.js';
 import { getPlannedInstallSteps } from '../commands/install.js';
 
 // The driver owns ALL control flow — sequencing, the re-ask-on-invalid loop, the editable
@@ -211,45 +204,9 @@ export async function runQuestionnaire(io: IoPort, opts: RunOptions): Promise<Qu
   for (;;) {
     if (step === QUESTIONS.length) {
       // Environment check warnings for Review step (passed to io.review so rendered UNDER table)
+      // Every toolchain warning here belonged to a frozen stack (Python, .NET, JDK, Maven,
+      // Gradle). The one stack this generates needs Node, which is already running this process.
       const warnings: string[] = [];
-      if (answers.language === 'python') {
-        const py = await checkPython();
-        if (py.warning) {
-          warnings.push(
-            '[WARN] Note: Python was not found in PATH. Framework will be generated, but running tests requires Python 3.8+.',
-          );
-        }
-      } else if (answers.language === 'csharp') {
-        const cs = await checkDotnet();
-        if (cs.warning) {
-          warnings.push(
-            '[WARN] Note: .NET SDK (dotnet) was not found in PATH. Framework will be generated, but running tests requires .NET 8+ SDK.',
-          );
-        }
-      } else if (answers.language === 'java') {
-        const javaCheck = await checkJava();
-        if (javaCheck.warning) {
-          warnings.push(
-            '[WARN] Note: Java JDK (java) was not found in PATH. Framework will be generated, but running tests requires JDK 17+.',
-          );
-        }
-        const isGradle = answers.automationTool?.includes('gradle');
-        if (isGradle) {
-          const gradleCheck = await checkGradle();
-          if (gradleCheck.warning) {
-            warnings.push(
-              '[WARN] Note: Gradle (gradle) was not found in PATH. Running tests requires Gradle installed.',
-            );
-          }
-        } else {
-          const mvnCheck = await checkMaven();
-          if (mvnCheck.warning) {
-            warnings.push(
-              '[WARN] Note: Maven (mvn) was not found in PATH. Running tests requires Apache Maven installed.',
-            );
-          }
-        }
-      }
 
       // Review step
       const reviewAnswers: Record<string, string> = {};

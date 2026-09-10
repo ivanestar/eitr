@@ -1,10 +1,10 @@
 # EITR
 
-> CLI tool that generates a complete, standalone Playwright test automation framework from a target URL. Supports TypeScript, Python, C#, and Java.
+> CLI tool that generates a complete, standalone Playwright test automation framework from a target URL. Generates TypeScript + Playwright projects.
 
 EITR is an interactive CLI wizard invoked via `npx @onlytests/eitr new`. It inspects a target URL, asks for stack preferences (language, CI provider, TMS), and generates a ready-to-run test project with page objects, CI pipeline, and optional TMS integration.
 
-For headless or CI usage, pass all options as flags: `npx @onlytests/eitr new --start-url <URL> --language <typescript|python|java|csharp> --ci-cd <github|gitlab|jenkins|teamcity> --yes`. Run `npx @onlytests/eitr new --help` for the full flag list.
+For headless or CI usage, pass all options as flags: `npx @onlytests/eitr new --start-url <URL> --language <typescript> --ci-cd <github|gitlab|jenkins|teamcity> --yes`. Run `npx @onlytests/eitr new --help` for the full flag list.
 
 Other commands: `npx @onlytests/eitr auth` captures an authenticated browser session (handles SSO/MFA) into `.auth/user.json` for test reuse. `npx @onlytests/eitr doctor --ai` checks environment and AI tooling setup.
 

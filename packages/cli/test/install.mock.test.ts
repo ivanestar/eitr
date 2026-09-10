@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { frozenDescribe, frozenIt } from '../../engine/test/helpers/frozen.js';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -179,7 +180,7 @@ describe('runInstall (spawn injected) - Node.js', () => {
   });
 });
 
-describe('runInstall (spawn injected) - C# / Playwright', () => {
+frozenDescribe('runInstall (spawn injected) - C# / Playwright', () => {
   it('runs dotnet build and browser install for C# project', async () => {
     const proj = makeCsharpProject();
     const { run, calls } = recorder([
@@ -214,7 +215,7 @@ describe('runInstall (spawn injected) - C# / Playwright', () => {
   });
 });
 
-describe('runInstall (spawn injected) - Java / Maven', () => {
+frozenDescribe('runInstall (spawn injected) - Java / Maven', () => {
   it('runs mvn test-compile then the Playwright CLI browser install', async () => {
     const proj = makeJavaProject(false);
     const { run, calls } = recorder([
@@ -283,7 +284,7 @@ describe('runInstall (spawn injected) - Java / Maven', () => {
   });
 });
 
-describe('runInstall (spawn injected) - Java / Gradle', () => {
+frozenDescribe('runInstall (spawn injected) - Java / Gradle', () => {
   it('runs gradle testClasses then the playwrightInstall task', async () => {
     const proj = makeJavaProject(true);
     const { run, calls } = recorder([
@@ -313,7 +314,7 @@ describe('runInstall (spawn injected) - Java / Gradle', () => {
   });
 });
 
-describe('runInstall (spawn injected) - Python / pytest', () => {
+frozenDescribe('runInstall (spawn injected) - Python / pytest', () => {
   it('creates venv (if absent), runs pip install, and installs playwright browsers', async () => {
     const proj = makePythonProject(false); // venv python executable is absent initially
     // 1. check python --version -> ok
@@ -415,7 +416,7 @@ describe('manualInstallHint', () => {
     );
   });
 
-  it('returns appropriate commands for C#', () => {
+  frozenIt('returns appropriate commands for C#', () => {
     expect(manualInstallHint('.', 'csharp')).toBe(
       'dotnet build\n  npx playwright install chromium\n  dotnet test',
     );
@@ -424,7 +425,7 @@ describe('manualInstallHint', () => {
     );
   });
 
-  it('returns appropriate commands for Python / pytest', () => {
+  frozenIt('returns appropriate commands for Python / pytest', () => {
     const isWindows = process.platform === 'win32';
     const winCmd =
       'python -m venv .venv\n  .\\.venv\\Scripts\\pip install -e .[api]\n  .\\.venv\\Scripts\\playwright install chromium\n  pytest';
@@ -452,7 +453,7 @@ describe('getPlannedInstallSteps', () => {
     ]);
   });
 
-  it('returns human-readable steps for Cypress', () => {
+  frozenIt('returns human-readable steps for Cypress', () => {
     const steps = getPlannedInstallSteps('typescript', 'cypress');
     expect(steps).toEqual([
       { description: 'Install Cypress framework & Node.js dependencies', command: 'npm install' },
@@ -460,7 +461,7 @@ describe('getPlannedInstallSteps', () => {
     ]);
   });
 
-  it('returns human-readable steps for C#', () => {
+  frozenIt('returns human-readable steps for C#', () => {
     const steps = getPlannedInstallSteps('csharp', 'playwright');
     expect(steps).toEqual([
       {
@@ -474,7 +475,7 @@ describe('getPlannedInstallSteps', () => {
     ]);
   });
 
-  it('returns human-readable steps for Java (Maven)', () => {
+  frozenIt('returns human-readable steps for Java (Maven)', () => {
     const steps = getPlannedInstallSteps('java', 'playwright-maven');
     expect(steps).toEqual([
       {
@@ -489,7 +490,7 @@ describe('getPlannedInstallSteps', () => {
     ]);
   });
 
-  it('returns human-readable steps for Java (Gradle)', () => {
+  frozenIt('returns human-readable steps for Java (Gradle)', () => {
     const steps = getPlannedInstallSteps('java', 'playwright-gradle');
     expect(steps).toEqual([
       {

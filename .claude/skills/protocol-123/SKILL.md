@@ -79,7 +79,7 @@ To eliminate LLM reasoning drift or omission of mandatory subagents (such as ski
   2. TypeScript & Language Safety (strict typing, zero `any`, cross-platform paths).
   3. Security & Privacy (no hardcoded secrets, safe credential retrieval from env, path traversal prevention, gitignore).
   4. Flake & Determinism (zero arbitrary sleep, proper async order, web-first auto-retrying assertions).
-  5. Polyglot Parity (multi-language alignment across TS, Python, C#, Java).
+  5. Cross-Target Parity (a capability landing across every AI assistant, CI provider and TMS it applies to - the generated stack is TypeScript + Playwright alone).
 - **Arbiter Escalation Gateway (`review-arbiter`)**:
   - For standard single-reviewer execution, findings are output directly as actionable bullet points (`[SEVERITY] File:Line -- Issue -- Fix`) and hardened into the plan, eliminating extra token round-trips.
   - In multi-party or high-conflict escalations, `review-arbiter` remains available to adjudicate disputed findings against Ground Truth (`AGENTS.md`, `CONVENTIONS.md`).

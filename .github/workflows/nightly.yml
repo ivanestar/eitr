@@ -1,9 +1,9 @@
 name: Nightly Full Suite
 
 # Runs the complete gate (same steps as ci.yml) plus the slow pairwise CLI E2E suite
-# (packages/evals/test/e2e/cli.test.ts - 16 real npm/pip/mvn/gradle scaffold-and-build
-# combinations, ~6-7 minutes) that is deliberately NOT part of every push/PR run in ci.yml to
-# keep that feedback loop fast. Scheduled at 03:00 UTC daily (~04:00 CET / ~05:00 CEST Warsaw
+# (packages/evals/test/e2e/cli.test.ts - real scaffold-and-build combinations covering every
+# framework, UI library, CI provider and AI assistant the questionnaire offers) that is
+# deliberately NOT part of every push/PR run in ci.yml to keep that feedback loop fast. Scheduled at 03:00 UTC daily (~04:00 CET / ~05:00 CEST Warsaw
 # time - GitHub Actions cron is fixed UTC and does not shift for DST, so the local time drifts by
 # an hour across the year; 03:00 UTC keeps it inside the requested 04:00-05:00 Warsaw window
 # either way).

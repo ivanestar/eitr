@@ -66,75 +66,35 @@ export async function checkGit(): Promise<CheckResult> {
   };
 }
 
-export async function checkPython(): Promise<CheckResult> {
-  const raw =
-    runCommand('python --version') || runCommand('python3 --version') || runCommand('py --version');
+// Python, .NET, Java, Maven and Gradle were checked here while those stacks were generated. They
+// are frozen now, and reporting on a toolchain nothing can produce tells a reader that something
+// is missing when nothing is: this command reports on what the questionnaire actually offers.
+
+// The two hosting CLIs /auth-setup uses to push CI secrets on the user's own say-so. Neither is
+// required to generate anything, which is why a missing one is a warning with the manual path
+// named rather than an error: without them, secrets are added by hand in the provider's UI.
+export async function checkGitHubCli(): Promise<CheckResult> {
+  const raw = runCommand('gh --version');
   const ver = extractVersion(raw);
   return {
-    name: 'Python',
+    name: 'GitHub CLI (gh)',
     ok: true,
-    message: ver ? `v${ver}` : 'Not found in PATH (Python generators disabled)',
+    message: ver
+      ? `v${ver}`
+      : 'Not found in PATH (optional - CI secrets would be added by hand in repo settings)',
     warning: !raw,
   };
 }
 
-export async function checkPip(): Promise<CheckResult> {
-  const raw = runCommand('pip --version') || runCommand('pip3 --version');
+export async function checkGitLabCli(): Promise<CheckResult> {
+  const raw = runCommand('glab --version');
   const ver = extractVersion(raw);
   return {
-    name: 'pip',
+    name: 'GitLab CLI (glab)',
     ok: true,
-    message: ver ? `v${ver}` : 'Not found in PATH',
-    warning: !raw,
-  };
-}
-
-export async function checkDotnet(): Promise<CheckResult> {
-  const raw = runCommand('dotnet --version');
-  const ver = extractVersion(raw);
-  return {
-    name: '.NET SDK',
-    ok: true,
-    message: ver ? `v${ver}` : 'Not found in PATH (C# generators disabled)',
-    warning: !raw,
-  };
-}
-
-export async function checkJava(): Promise<CheckResult> {
-  const raw = runCommand('java -version') || runCommand('java --version');
-  const ver = extractVersion(raw);
-  return {
-    name: 'Java JDK',
-    ok: true,
-    message: ver ? `v${ver}` : 'Not found in PATH (Java generators disabled)',
-    warning: !raw,
-  };
-}
-
-export async function checkMaven(): Promise<CheckResult> {
-  const isWindows = process.platform === 'win32';
-  const raw =
-    runCommand(isWindows ? 'mvn.cmd -version' : 'mvn -version') || runCommand('mvn -version');
-  const ver = extractVersion(raw);
-  return {
-    name: 'Maven',
-    ok: true,
-    message: ver ? `v${ver}` : 'Not found in PATH',
-    warning: !raw,
-  };
-}
-
-export async function checkGradle(): Promise<CheckResult> {
-  const isWindows = process.platform === 'win32';
-  const raw =
-    runCommand(isWindows ? 'gradle.bat -version' : 'gradle -version') ||
-    runCommand('gradle -version');
-  const gradleMatch = raw ? raw.match(/Gradle\s+(\d+\.\d+(?:\.\d+)?)/i) : null;
-  const ver = gradleMatch ? gradleMatch[1] : extractVersion(raw);
-  return {
-    name: 'Gradle',
-    ok: true,
-    message: ver ? `v${ver}` : 'Not found in PATH',
+    message: ver
+      ? `v${ver}`
+      : 'Not found in PATH (optional - CI variables would be added by hand in project settings)',
     warning: !raw,
   };
 }
@@ -235,7 +195,7 @@ export async function checkAiTooling(): Promise<CheckResult[]> {
 export async function runDoctor(argv: string[] = []): Promise<number> {
   if (argv.includes('-h') || argv.includes('--help')) {
     process.stdout.write(
-      'Usage: eitr doctor [--ai]\n\nChecks system environment (Node.js, npm, Python, .NET SDK, Git, Playwright) and AI tooling for EITR compatibility.\n',
+      'Usage: eitr doctor [--ai]\n\nChecks what generating and running a project actually needs: Node.js, npm, Git, the gh/glab CLIs used to push CI secrets, and the Playwright browsers. Add --ai to also check the AI assistant CLIs.\n',
     );
     return 0;
   }
@@ -252,12 +212,8 @@ export async function runDoctor(argv: string[] = []): Promise<number> {
     await checkNode(),
     await checkNpm(),
     await checkGit(),
-    await checkPython(),
-    await checkPip(),
-    await checkDotnet(),
-    await checkJava(),
-    await checkMaven(),
-    await checkGradle(),
+    await checkGitHubCli(),
+    await checkGitLabCli(),
     await checkPlaywrightCache(),
   ];
 

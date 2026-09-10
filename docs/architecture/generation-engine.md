@@ -38,7 +38,7 @@ Descriptor | null` (per-role; `null` ⇒ fall back to a universal primitive), so
 Adapters currently resolved: MUI, Ant Design, Radix, plus universal primitives as the fallback for
 any role no adapter claims.
 
-## Polyglot registry (language & tool adapters)
+## Language & tool adapter registry (Python, C# and Java frozen)
 
 `LanguageAdapter` (`id` matches `PlanOptions.language`: `typescript`/`python`/`csharp`/`java`) and
 `ToolAdapter` (`id` matches `PlanOptions.automationTool`: `playwright`/`cypress`/`pytest`/`maven`/
@@ -48,6 +48,12 @@ interfaces and registering it, not touching `plan()`'s own logic. This is the la
 generated test's own code independent of which language/runner combination produced it: the same
 separation a test automation architecture generally draws between defining a test and adapting it to
 a specific technology stack, just applied to code generation rather than execution.
+
+The registry still holds every adapter, but only `typescript` + `playwright` is reachable: the
+questionnaire offers no other pair and `eitr generate` refuses one. The Python, C#, Java and Cypress
+adapters are frozen - present, working, unoffered and unsupported - see
+[decisions/0013-freeze-non-typescript-stacks.md](decisions/0013-freeze-non-typescript-stacks.md) for
+what that costs and how it is undone.
 
 ## Idempotency & re-run (path authority)
 

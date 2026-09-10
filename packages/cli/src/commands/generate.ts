@@ -108,25 +108,21 @@ export async function runGenerate(argv: string[], deps: GenerateDeps = {}): Prom
     return 1;
   }
 
-  // Extensible supported-combo list. Add a new entry here when a new
-  // TargetGenerator is registered in packages/engine/src/plan/plan.ts.
-  // Cypress (typescript) is temporarily withheld from release pending a
-  // CPOM primitive redesign native to Cypress's own retry/command-chain model rather
-  // than the Playwright-shaped one it currently reuses - the generator code itself is
-  // untouched and still works, it is just not offered to users yet. Re-add the entry
-  // here (and the questionnaire/schema.ts choices) when that redesign lands.
+  // What this release generates. Python, C#, Java and Cypress are frozen rather than deleted -
+  // their generators are still in packages/engine and still work, but nothing offers them and
+  // nothing supports them, so an answers file naming one is refused here rather than quietly
+  // producing a project no one maintains. Unfreezing is this list plus the questionnaire choices
+  // in packages/cli/src/questionnaire/schema.ts.
   const SUPPORTED: Array<{ language: string; automationTool: string }> = [
     { language: 'typescript', automationTool: 'playwright' },
-    { language: 'python', automationTool: 'playwright' },
-    { language: 'python', automationTool: 'pytest' },
-    { language: 'csharp', automationTool: 'playwright' },
-    { language: 'java', automationTool: 'playwright' },
-    { language: 'java', automationTool: 'playwright-maven' },
-    { language: 'java', automationTool: 'playwright-gradle' },
   ];
+  const FROZEN_LANGUAGES = ['python', 'csharp', 'java'];
   if (!SUPPORTED.some((s) => s.language === language && s.automationTool === tool)) {
+    const frozen = FROZEN_LANGUAGES.includes(language) || tool === 'cypress';
     process.stderr.write(
-      `eitr generate: generation for language "${language}" and E2E automation tool "${tool}" is not implemented yet.\n`,
+      frozen
+        ? `eitr generate: "${language}" + "${tool}" is frozen in this release - the generator still exists but is not offered or supported. This release generates TypeScript + Playwright.\n`
+        : `eitr generate: generation for language "${language}" and E2E automation tool "${tool}" is not implemented yet.\n`,
     );
     return 1;
   }

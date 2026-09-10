@@ -39,8 +39,10 @@ describe('reading the pins out of the real templates', () => {
     expect(pinned).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it('covers all four supported language stacks', () => {
-    expect(STACKS.map((s) => s.id).sort()).toEqual(['csharp', 'java', 'python', 'typescript']);
+  // One stack, because one stack is generated. The frozen languages keep their pins in the
+  // templates; nothing checks them for staleness, because nothing produces a project from them.
+  it('covers the stack this release generates', () => {
+    expect(STACKS.map((s) => s.id)).toEqual(['typescript']);
   });
 });
 
@@ -81,7 +83,7 @@ describe('the script as a CLI', () => {
     });
     const report = JSON.parse(res.stdout);
 
-    expect(report.stacks).toHaveLength(4);
+    expect(report.stacks).toHaveLength(1);
     expect(report.renderedImages.length).toBeGreaterThan(0);
     // A rendered tag that does not resolve is a defect in what this repository ships, so it fails
     // regardless of flags. Being behind a release is only news, and never fails on its own.

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 
 /**
  * Reports whether this repository's pinned Playwright versions have fallen behind their registries,
@@ -35,6 +35,13 @@ const TEMPLATES = path.join(REPO_ROOT, 'packages', 'engine', 'src', 'plan', 'tem
 
 // Every pin is read out of the file that actually renders it, never restated here - a checker
 // carrying its own copy of the numbers it checks is one edit away from validating a fiction.
+//
+// One stack, because one stack is generated. The Python, Java and C# entries were removed with the
+// freeze: their pins are still in the templates and still valid, but nothing produces a project
+// from them, so reporting them as behind would be asking for maintenance on something explicitly
+// unmaintained. Unfreezing a stack means restoring its entry here alongside the questionnaire
+// choice - and the image-tag check below still covers every rendered playwright image, frozen ones
+// included, since a template that renders an unresolvable tag is a broken template either way.
 export const STACKS = [
   {
     id: 'typescript',
@@ -42,47 +49,6 @@ export const STACKS = [
     pin: { file: path.join(TEMPLATES, 'package-json.ts'), re: /'@playwright\/test': '([^']+)'/ },
     image: 'playwright',
     latest: async () => await npmLatest('@playwright/test'),
-  },
-  {
-    id: 'python',
-    label: 'Python (PyPI)',
-    pin: { file: path.join(TEMPLATES, 'python', 'project.ts'), re: /"playwright==([^"]+)"/ },
-    image: 'playwright/python',
-    latest: async () => {
-      const data = await getJson('https://pypi.org/pypi/playwright/json');
-      return data?.info?.version ?? null;
-    },
-  },
-  {
-    id: 'java',
-    label: 'Java (Maven Central)',
-    pin: {
-      file: path.join(TEMPLATES, 'java', 'project.ts'),
-      re: /<playwright\.version>([^<]+)<\/playwright\.version>/,
-    },
-    image: 'playwright/java',
-    latest: async () => {
-      const xml = await getText(
-        'https://repo1.maven.org/maven2/com/microsoft/playwright/playwright/maven-metadata.xml',
-      );
-      return xml ? (xml.match(/<latest>([^<]+)<\/latest>/)?.[1] ?? null) : null;
-    },
-  },
-  {
-    id: 'csharp',
-    label: 'C# (NuGet)',
-    pin: {
-      file: path.join(TEMPLATES, 'csharp', 'project.ts'),
-      re: /Microsoft\.Playwright\.NUnit" Version="([^"]+)"/,
-    },
-    image: 'playwright/dotnet',
-    latest: async () => {
-      const data = await getJson(
-        'https://api.nuget.org/v3-flatcontainer/microsoft.playwright.nunit/index.json',
-      );
-      const stable = (data?.versions ?? []).filter((v) => !v.includes('-'));
-      return stable.length > 0 ? stable[stable.length - 1] : null;
-    },
   },
 ];
 

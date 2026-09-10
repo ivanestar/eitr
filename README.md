@@ -6,7 +6,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
 
-EITR scaffolds a Playwright test framework from your app's URL and a short questionnaire – TypeScript, Python, C#, or Java.
+EITR scaffolds a TypeScript + Playwright test framework from your app's URL and a short questionnaire.
 
 ---
 
@@ -47,11 +47,13 @@ npx @onlytests/eitr new
 
 The wizard inspects your target URL and prompts for your project stack:
 
-- **Language & test framework:** TypeScript, Python, C#, Java (Playwright)
+- **Language & test framework:** TypeScript + Playwright
 - **AI-assistant tooling:** Cursor, Claude Code, Devin Desktop, Copilot, Antigravity, Aider, Codex
 - **CI/CD pipeline:** GitHub Actions, GitLab CI, Jenkins, TeamCity
 - **Task tracker:** Jira, Azure DevOps (Work Items), or None / Skip
 - **Test Management System (TMS):** Jira Xray, Azure DevOps (Test Plans), TestRail, Zephyr Scale
+
+One stack, carried all the way through. More languages and runners get added when there is demand for them and the capacity to support them.
 
 ### 2. Fill in `.env` and capture a session
 

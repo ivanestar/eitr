@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { frozenIt } from './helpers/frozen.js';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -54,7 +55,7 @@ describe('Per-language CPOM contract linter parity', () => {
     testIdAttribute: { value: 'data-testid', confidence: 'high' },
   };
 
-  it('emits scripts/lint_cpom.py only for language: python', () => {
+  frozenIt('emits scripts/lint_cpom.py only for language: python', () => {
     const pythonFiles = planSharedScaffold({ language: 'python', automationTool: 'pytest' });
     expect(pythonFiles.map((f) => f.path)).toContain('scripts/lint_cpom.py');
 
@@ -62,7 +63,7 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(tsFiles.map((f) => f.path)).not.toContain('scripts/lint_cpom.py');
   });
 
-  it('emits scripts/LintCpom.java only for language: java', () => {
+  frozenIt('emits scripts/LintCpom.java only for language: java', () => {
     const javaFiles = planSharedScaffold({ language: 'java', automationTool: 'playwright-maven' });
     expect(javaFiles.map((f) => f.path)).toContain('scripts/LintCpom.java');
 
@@ -70,7 +71,7 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(csharpFiles.map((f) => f.path)).not.toContain('scripts/LintCpom.java');
   });
 
-  it('emits scripts/LintCpom.cs only for language: csharp', () => {
+  frozenIt('emits scripts/LintCpom.cs only for language: csharp', () => {
     const csharpFiles = planSharedScaffold({ language: 'csharp', automationTool: 'playwright' });
     expect(csharpFiles.map((f) => f.path)).toContain('scripts/LintCpom.cs');
 
@@ -78,7 +79,7 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(javaFiles.map((f) => f.path)).not.toContain('scripts/LintCpom.cs');
   });
 
-  it('Python linter documents Rules 1-3, 5, and 6 real, Rule 4 N/A', () => {
+  frozenIt('Python linter documents Rules 1-3, 5, and 6 real, Rule 4 N/A', () => {
     const text = renderCpomLinterPython();
     expect(text).toContain('Rule 1: Zero Arbitrary Delays');
     expect(text).toContain('Rule 2: Mandatory _now Suffix');
@@ -93,7 +94,7 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(text).not.toContain('Eitr');
   });
 
-  it('Java linter covers all 7 rules with Now()/get*Now() parity', () => {
+  frozenIt('Java linter covers all 7 rules with Now()/get*Now() parity', () => {
     const text = renderCpomLinterJava();
     expect(text).toContain('Rule 1: Zero Arbitrary Delays');
     expect(text).toContain('Rule 2: Mandatory Now() Suffix');
@@ -107,33 +108,36 @@ describe('Per-language CPOM contract linter parity', () => {
     expect(text).not.toContain('Eitr');
   });
 
-  it('C# linter covers all 7 rules, flags raw Assert.* as the anti-pattern, and recognizes Expect(...) as the real assertion idiom', () => {
-    const text = renderCpomLinterCsharp();
-    expect(text).toContain('Rule 1: Zero Arbitrary Delays');
-    expect(text).toContain('Rule 2: Mandatory NowAsync() Suffix');
-    expect(text).toContain('Rule 3: Zero Assertions in Components');
-    expect(text).toContain('Rule 4: Non-Retrying State Assertion Guard');
-    expect(text).toContain('Rule 5: Fixture Dependency Injection');
-    expect(text).toContain('Rule 6: Inappropriate Mocking Guard');
-    expect(text).toContain('Rule 7: Hardcoded Credential Literal');
-    expect(text).toContain('@allow-credential-literal:');
-    // Rule 3 flags an assertion of ANY kind inside a component (Assert.* or Expect(...) alike -
-    // components must have neither); Rule 4 specifically flags a raw Assert.That/IsTrue/IsFalse
-    // wrapping a state-read call in tests, recommending Expect(...) instead. Both patterns must
-    // be present for the linter to actually catch what its own rule descriptions promise.
-    expect(text).toContain('"Expect("');
-    expect(text).toContain('Assert.That(');
-    expect(text).not.toContain('EITR');
-    expect(text).not.toContain('Eitr');
-  });
+  frozenIt(
+    'C# linter covers all 7 rules, flags raw Assert.* as the anti-pattern, and recognizes Expect(...) as the real assertion idiom',
+    () => {
+      const text = renderCpomLinterCsharp();
+      expect(text).toContain('Rule 1: Zero Arbitrary Delays');
+      expect(text).toContain('Rule 2: Mandatory NowAsync() Suffix');
+      expect(text).toContain('Rule 3: Zero Assertions in Components');
+      expect(text).toContain('Rule 4: Non-Retrying State Assertion Guard');
+      expect(text).toContain('Rule 5: Fixture Dependency Injection');
+      expect(text).toContain('Rule 6: Inappropriate Mocking Guard');
+      expect(text).toContain('Rule 7: Hardcoded Credential Literal');
+      expect(text).toContain('@allow-credential-literal:');
+      // Rule 3 flags an assertion of ANY kind inside a component (Assert.* or Expect(...) alike -
+      // components must have neither); Rule 4 specifically flags a raw Assert.That/IsTrue/IsFalse
+      // wrapping a state-read call in tests, recommending Expect(...) instead. Both patterns must
+      // be present for the linter to actually catch what its own rule descriptions promise.
+      expect(text).toContain('"Expect("');
+      expect(text).toContain('Assert.That(');
+      expect(text).not.toContain('EITR');
+      expect(text).not.toContain('Eitr');
+    },
+  );
 
-  it('Link.java no longer duplicates hrefNow()/getHrefNow()', () => {
+  frozenIt('Link.java no longer duplicates hrefNow()/getHrefNow()', () => {
     const text = renderJavaLink();
     expect(text).toContain('getHrefNow');
     expect(text).not.toMatch(/public String hrefNow\(\)/);
   });
 
-  it('full plan() includes the language-appropriate linter for python/java/csharp', () => {
+  frozenIt('full plan() includes the language-appropriate linter for python/java/csharp', () => {
     const pythonPlan = plan(dummyProfile, {
       language: 'python',
       automationTool: 'pytest',
@@ -342,15 +346,18 @@ describe('Per-language CPOM contract linter parity', () => {
     },
   );
 
-  it('C# linter is structurally well-formed (best-effort, no .NET 10 SDK assumed present)', () => {
-    const text = renderCpomLinterCsharp();
-    const openBraces = (text.match(/\{/g) ?? []).length;
-    const closeBraces = (text.match(/\}/g) ?? []).length;
-    expect(openBraces).toBe(closeBraces);
-    expect(text).toContain('using System;');
-    expect(text).toContain('void Walk(');
-    expect(text).toContain('void AuditFile(');
-  });
+  frozenIt(
+    'C# linter is structurally well-formed (best-effort, no .NET 10 SDK assumed present)',
+    () => {
+      const text = renderCpomLinterCsharp();
+      const openBraces = (text.match(/\{/g) ?? []).length;
+      const closeBraces = (text.match(/\}/g) ?? []).length;
+      expect(openBraces).toBe(closeBraces);
+      expect(text).toContain('using System;');
+      expect(text).toContain('void Walk(');
+      expect(text).toContain('void AuditFile(');
+    },
+  );
 
   // Real Disk Rule (CLAUDE.md Section 8): the two tests below run the linter against plan()'s
   // actual generated component tree (including FrameContainer), not a hand-written synthetic

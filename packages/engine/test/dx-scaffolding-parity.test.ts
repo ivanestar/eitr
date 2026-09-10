@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { frozenDescribe, frozenIt } from './helpers/frozen.js';
 import { planAiAgents } from '../src/plan/templates/ai-agents.js';
 import { renderExampleTest } from '../src/plan/templates/example-test.js';
 import {
@@ -87,7 +88,7 @@ describe('DX Scaffolding Parity & Bugfix Suite', () => {
     });
   });
 
-  describe('AC-4: Python scaffolding, fixtures & dependencies', () => {
+  frozenDescribe('AC-4: Python scaffolding, fixtures & dependencies', () => {
     it('provides api_client fixture in conftest.py using collections.abc.Iterator and dynamic base_url', () => {
       const conftest = renderPythonConftest('pytest');
       expect(conftest).toContain('from collections.abc import Iterator');
@@ -123,7 +124,7 @@ describe('DX Scaffolding Parity & Bugfix Suite', () => {
     });
   });
 
-  describe('AC-5: git-hooks.ts path casing & dynamic python runner', () => {
+  frozenDescribe('AC-5: git-hooks.ts path casing & dynamic python runner', () => {
     it('executes scripts/lint_cpom.py with PYTHON="${PYTHON:-python3}" resolution', () => {
       const hookContent = renderGitHooks('python');
       expect(hookContent).toContain('scripts/lint_cpom.py');
@@ -202,42 +203,54 @@ describe('DX Scaffolding Parity & Bugfix Suite', () => {
       expect(fixtures).toContain('new ApiClient(context.request)');
     });
 
-    it('Python: ApiClient supports set_auth_token and env-var fallback; fixture loads .auth/user.json cookies', () => {
-      const apiClient = renderPythonApiClient({ baseUrl: 'http://localhost:3000' });
-      expect(apiClient).toContain('def set_auth_token');
-      expect(apiClient).toContain('os.getenv("E2E_API_TOKEN")');
-      expect(apiClient).toContain('os.getenv("AUTH_TOKEN")');
+    frozenIt(
+      'Python: ApiClient supports set_auth_token and env-var fallback; fixture loads .auth/user.json cookies',
+      () => {
+        const apiClient = renderPythonApiClient({ baseUrl: 'http://localhost:3000' });
+        expect(apiClient).toContain('def set_auth_token');
+        expect(apiClient).toContain('os.getenv("E2E_API_TOKEN")');
+        expect(apiClient).toContain('os.getenv("AUTH_TOKEN")');
 
-      const conftest = renderPythonConftest('pytest');
-      expect(conftest).toContain('.auth/user.json');
-      expect(conftest).toContain(
-        'cookies = {c["name"]: c["value"] for c in state.get("cookies", [])}',
-      );
-    });
+        const conftest = renderPythonConftest('pytest');
+        expect(conftest).toContain('.auth/user.json');
+        expect(conftest).toContain(
+          'cookies = {c["name"]: c["value"] for c in state.get("cookies", [])}',
+        );
+      },
+    );
 
-    it('C#: ApiClient defaults to loading .auth/user.json via a real CookieContainer, supports SetAuthToken', () => {
-      const apiClient = renderCsharpApiClient();
-      expect(apiClient).toContain('string? storageStatePath = ".auth/user.json"');
-      expect(apiClient).toContain('new CookieContainer()');
-      expect(apiClient).toContain('public void SetAuthToken(string? token)');
-      expect(apiClient).toContain('Environment.GetEnvironmentVariable("E2E_API_TOKEN")');
-      // Regression guard: no unescaped manual "Cookie" header string-concatenation.
-      expect(apiClient).not.toContain('DefaultRequestHeaders.Add("Cookie"');
-    });
+    frozenIt(
+      'C#: ApiClient defaults to loading .auth/user.json via a real CookieContainer, supports SetAuthToken',
+      () => {
+        const apiClient = renderCsharpApiClient();
+        expect(apiClient).toContain('string? storageStatePath = ".auth/user.json"');
+        expect(apiClient).toContain('new CookieContainer()');
+        expect(apiClient).toContain('public void SetAuthToken(string? token)');
+        expect(apiClient).toContain('Environment.GetEnvironmentVariable("E2E_API_TOKEN")');
+        // Regression guard: no unescaped manual "Cookie" header string-concatenation.
+        expect(apiClient).not.toContain('DefaultRequestHeaders.Add("Cookie"');
+      },
+    );
 
-    it('Java: ApiClient defaults to .auth/user.json via native setStorageStatePath, supports setAuthToken', () => {
-      const apiClient = renderJavaApiClient();
-      expect(apiClient).toContain('this(playwright, baseUrl, ".auth/user.json", null)');
-      expect(apiClient).toContain('.setStorageStatePath(');
-      expect(apiClient).toContain('public void setAuthToken(String token)');
-      expect(apiClient).toContain('System.getenv("E2E_API_TOKEN")');
-    });
+    frozenIt(
+      'Java: ApiClient defaults to .auth/user.json via native setStorageStatePath, supports setAuthToken',
+      () => {
+        const apiClient = renderJavaApiClient();
+        expect(apiClient).toContain('this(playwright, baseUrl, ".auth/user.json", null)');
+        expect(apiClient).toContain('.setStorageStatePath(');
+        expect(apiClient).toContain('public void setAuthToken(String token)');
+        expect(apiClient).toContain('System.getenv("E2E_API_TOKEN")');
+      },
+    );
 
-    it('Cypress: ApiClient supports setAuthToken via Cypress.env fallback, injects Authorization header', () => {
-      const apiClient = renderCypressApiClient();
-      expect(apiClient).toContain('setAuthToken');
-      expect(apiClient).toContain("Cypress.env('E2E_API_TOKEN')");
-      expect(apiClient).toContain('Authorization');
-    });
+    frozenIt(
+      'Cypress: ApiClient supports setAuthToken via Cypress.env fallback, injects Authorization header',
+      () => {
+        const apiClient = renderCypressApiClient();
+        expect(apiClient).toContain('setAuthToken');
+        expect(apiClient).toContain("Cypress.env('E2E_API_TOKEN')");
+        expect(apiClient).toContain('Authorization');
+      },
+    );
   });
 });
