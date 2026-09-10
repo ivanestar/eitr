@@ -158,20 +158,56 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
         readFileSync(join(dir, 'artifacts', 'analysis', 'test-conditions.json'), 'utf8'),
       );
       conditions.frameRouteId = 'id-0';
+      conditions.features = {
+        'f-gen': {
+          featureId: 'f-gen',
+          purpose: 'Generates GUIDs.',
+          fitsApplication: 'One of the testing tools the application collects.',
+          archetype: 'id generator',
+          fields: [],
+          questions: [{ text: 'Is 1000 the real upper limit?', about: 'c9' }],
+          research: { status: 'skipped', archetype: 'id generator', reason: 'no web access' },
+        },
+      };
       conditions.routes['id-0'].conditions = [
         {
           conditionId: 'p1',
           technique: 'property',
           relation: 'all-unique',
           description: 'Verify no two generated values are the same',
+          featureId: 'f-gen',
+          layer: 'behavior',
+          oracle: 'domain',
+          priority: 'P1',
+          riskScore: 6,
+        },
+        {
+          conditionId: 'p2',
+          technique: 'boundary-value',
+          description: 'With count="1001": the count is refused',
+          featureId: 'f-gen',
+          layer: 'field',
+          oracle: 'markup',
+          priority: 'P2',
+          riskScore: 4,
         },
       ];
       writeJson(dir, 'artifacts/analysis/test-conditions.json', conditions);
       const framed = run(dir, '--kind=test-conditions').output;
       expect(framed.markdown).toContain('Site frame fields are tested once, on /route-00');
+      // Per feature: what it is, the research behind it, the open question, then the conditions in
+      // priority order, each saying whether it checks correctness or only guards against a change.
+      expect(framed.markdown).toContain('What it is: Generates GUIDs.');
+      expect(framed.markdown).toContain('Research: skipped - no web access');
+      expect(framed.markdown).toContain('1. Is 1000 the real upper limit?');
       expect(framed.markdown).toContain(
-        'Verify no two generated values are the same  [property, all-unique]',
+        '1. Verify no two generated values are the same  [P1 | behavior | property/all-unique | correct: domain]',
       );
+      expect(framed.markdown).toContain(
+        '2. With count="1001": the count is refused  [P2 | field | boundary-value | regression: markup]',
+      );
+      expect(framed.summary).toContain('P1: 1, P2: 1, P3: 0');
+      expect(framed.summary).toContain('1 question(s) for you');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

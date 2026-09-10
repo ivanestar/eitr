@@ -392,10 +392,13 @@ function collectInventory(opts) {
   // because past that point the text before it is a section heading, not this field's label.
   function nearbyText(el) {
     var fields = 'input, select, textarea';
+    // A label is never a control: the link before a field is a link, not what the field is for -
+    // live-observed naming a unit converter's measure list "Back to Home".
+    var controls = 'input, select, textarea, a[href], button, [role="button"], [role="link"]';
     var node = el;
     for (var depth = 0; node && depth < 4; depth++) {
       var prev = node.previousElementSibling;
-      if (prev && !prev.matches(fields) && !prev.querySelector(fields)) {
+      if (prev && !prev.matches(controls) && !prev.querySelector(controls)) {
         var text = clean(prev.textContent, 60);
         if (text) return text;
       }

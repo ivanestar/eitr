@@ -194,11 +194,13 @@ const BRIEFINGS = {
 
   'define-test-conditions': {
     command: '/define-test-conditions',
-    what: 'Produces artifacts/analysis/test-conditions.json: what should be tested on each page - valid and invalid inputs, the boundaries around them, and the failure modes worth defending against.',
-    how: "Reads each page's fields and the rules already declared in its markup, briefly toggles optional controls to reveal fields a static read would miss, and generates the mechanical conditions deterministically - reasoning only where the answer genuinely needs it.",
+    what: 'Produces artifacts/analysis/test-conditions.json: for every feature you approved, what it is for and what each of its fields means, and a ranked list of what to test - from what its fields let in to what the feature has to get right - each saying whether it checks that something is correct or only that it stays as it is.',
+    how: 'Works feature by feature, riskiest first: understands each one in the light of what the whole application is for, looks up how that kind of feature is tested and where it usually breaks (5-7 sources, reused for every feature of the same kind), tries values in fields whose limits the page does not state, then writes the checks only reasoning can find and generates the mechanical ones.',
     why: 'This is the one stage where a real defect can be found before any code exists, and the one place your own knowledge - a business rule, a past incident - changes what gets tested.',
     notes: [
-      'It toggles and fills fields to see what appears, and never presses a button: nothing is submitted, created or deleted.',
+      'With your permission to interact it types values into fields to see what they accept, and puts them back. It presses submit only if you allowed any action and this is not production.',
+      'Questions it cannot settle - what a field means, a limit nothing states - come to you together at the review, not one by one.',
+      'Nothing is thrown away as "minor": everything is ranked, and you decide what to cut.',
       'If your app saves on every keystroke, say so and it will stay with static markup only.',
     ],
     produces: ['artifacts/analysis/test-conditions.json'],

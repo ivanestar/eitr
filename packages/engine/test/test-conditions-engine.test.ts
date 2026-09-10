@@ -1511,3 +1511,117 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     });
   });
 });
+
+// Every condition reaches the review with its feature, what it exercises, where its expected result
+// comes from and a rank - the generator fills these for its own and ranks everything.
+describe('scripts/generate-test-conditions.mjs annotates and ranks', () => {
+  function withControls() {
+    const report = threeParamRoute() as any;
+    report.routes['route-checkout'].parameters[0].control = 'c3';
+    report.routes['route-checkout'].parameters[1].control = 'c4';
+    report.routes['route-checkout'].parameters[2].control = 'c7';
+    return report;
+  }
+
+  function generated(tier: string, report: unknown = withControls()) {
+    const dir = setupProject(report);
+    writeRouteCriticality(dir, 'route-checkout', tier);
+    const result = run(dir);
+    expect(result.status, result.stdout).toBe(0);
+    return { dir, conditions: readReport(dir).routes['route-checkout'].conditions as any[] };
+  }
+
+  it('gives every generated condition its feature, layer, oracle and anchors, and ranks it by the feature impact', () => {
+    const { dir, conditions } = generated('high');
+    try {
+      expect(conditions.every((c) => c.featureId === 'f1' && c.origin === 'generated')).toBe(true);
+      const boundary = conditions.find((c) => c.technique === 'boundary-value');
+      expect(boundary).toMatchObject({
+        layer: 'field',
+        oracle: 'markup',
+        anchors: [{ kind: 'control', ref: 'c7' }],
+        risk: { likelihood: 'medium' },
+        riskScore: 6,
+        priority: 'P1',
+      });
+      const positive = conditions.find(
+        (c) => c.technique === 'combinatorial' && c.scenario === 'positive',
+      );
+      expect(positive).toMatchObject({
+        layer: 'behavior',
+        oracle: 'domain',
+        riskScore: 3,
+        priority: 'P2',
+      });
+      expect(positive.anchors.map((a: { ref: string }) => a.ref).sort()).toEqual([
+        'c3',
+        'c4',
+        'c7',
+      ]);
+      const negative = conditions.find(
+        (c) => c.technique === 'combinatorial' && c.scenario === 'negative',
+      );
+      expect(negative).toMatchObject({
+        layer: 'field',
+        oracle: 'markup',
+        anchors: [{ kind: 'control', ref: 'c7' }],
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a limit a label states as a rule of the business, and ranks it down on a low-impact feature', () => {
+    const report = withControls();
+    const quantity = report.routes['route-checkout'].parameters[2];
+    quantity.boundaries[0].rule = { signal: 'form-label', excerpt: 'Quantity (1-10)' };
+    const { dir, conditions } = generated('low', report);
+    try {
+      const boundary = conditions.find((c) => c.technique === 'boundary-value');
+      expect(boundary).toMatchObject({
+        layer: 'rule',
+        oracle: 'markup',
+        riskScore: 2,
+        priority: 'P3',
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a condition the analysis wrote exactly as written, and ranks it by its own likelihood', () => {
+    const report = withControls();
+    const authored = {
+      conditionId: 'feed00000000beef',
+      parameters: {},
+      technique: 'error-guessing',
+      description: 'Ordering the last item from two tabs at once sells it once, not twice',
+      expectedOutcome: 'one tab confirms the order and the other says the item is sold out',
+      scenario: 'negative',
+      negativeCategory: 'concurrent_conflict',
+      verification: {},
+      isSpeculative: true,
+      reviewed: false,
+      featureId: 'f1',
+      layer: 'behavior',
+      oracle: 'domain',
+      anchors: [{ kind: 'feature', ref: 'f1' }],
+      origin: 'model',
+      risk: { likelihood: 'high', reason: 'stock is read and written in two separate steps' },
+    };
+    report.routes['route-checkout'].conditions = [authored];
+    const { dir, conditions } = generated('high', report);
+    try {
+      const kept = conditions.find((c) => c.conditionId === 'feed00000000beef');
+      expect(kept).toMatchObject({ ...authored, riskScore: 9, priority: 'P1' });
+      // A second run leaves it exactly as it is.
+      run(dir);
+      const again = (readReport(dir).routes['route-checkout'].conditions as any[]).find(
+        (c) => c.conditionId === 'feed00000000beef',
+      );
+      expect(again).toEqual(kept);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

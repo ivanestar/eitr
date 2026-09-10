@@ -899,7 +899,9 @@ making that route's drafted test conditions impossible to actually automate.
   \`artifacts/analysis/test-conditions.json\` (when it exists) - every name in its \`parameters[]\`
   array must have a corresponding named child on the Page Object, composed per the Component Reuse
   Order above. A parameter with no matching child is a real gap: go back and add it, not a
-  discrepancy to silently ignore.
+  discrepancy to silently ignore. The same file's \`features[<featureId>].fields[]\` says what each
+  field means in its feature (its role and unit) - name the child after that meaning, not after its
+  position or tag.
 - Cross-reference the route's inventory too, \`artifacts/site-map/inventory/<routeId>.json\`, written
   by the crawl from the live DOM: every control in it outside the header, navigation, footer and
   sidebar needs a child here. Controls inside a region that \`artifacts/site-map/inventory/shared.json\`

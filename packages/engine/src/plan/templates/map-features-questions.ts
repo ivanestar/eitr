@@ -156,7 +156,9 @@ function planFor(answers, status) {
       ? Number(purpose.slice('candidate:'.length))
       : null;
   return {
-    applicationKind: kind,
+    // Already in app-profile.json's own vocabulary, so the value recorded is the one its validator
+    // accepts rather than the option id.
+    applicationKind: kind === 'staging' ? 'staging-of-production' : kind,
     // Whether the answer carries its own evidence forward, or is the person's own words. The
     // distinction is what tells a later reader how much the recorded purpose is worth.
     corePurpose:

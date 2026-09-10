@@ -69,8 +69,61 @@ const SOURCE_VALUES = new Set([
   'html5-constraint',
   'aria-relationship',
   'select-option-text',
+  'field-probe',
   'manual',
 ]);
+const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
+const PROBES_PATH = path.join(CWD, 'artifacts', 'analysis', 'field-probes.json');
+const RESEARCH_DIR = 'artifacts/analysis/research';
+// Research below this many sources is one opinion restated, not a picture of practice.
+const MIN_RESEARCH_SOURCES = 5;
+const BASIS_MODES = new Set(['live-app', 'documents', 'mixed']);
+const ORACLE_VALUES = new Set(['requirement', 'human', 'research', 'domain', 'observed', 'markup']);
+const LAYER_VALUES = new Set(['field', 'rule', 'behavior', 'frame']);
+const ORIGIN_VALUES = new Set(['generated', 'model', 'research', 'human']);
+const LEVEL_VALUES = new Set(['high', 'medium', 'low']);
+const ANCHOR_KINDS = new Set([
+  'control',
+  'probe',
+  'research',
+  'feature',
+  'entity',
+  'human',
+  'requirement',
+  'ticket',
+  'code',
+  'document',
+]);
+// An anchor whose ref says where but not what: the words relied on travel with it.
+const QUOTED_ANCHORS = new Set(['human', 'requirement', 'ticket', 'code', 'document']);
+const BASIS_ANCHORS = new Set(['requirement', 'ticket', 'code', 'document']);
+const FIELD_ROLE_VALUES = new Set([
+  'quantity',
+  'money',
+  'date-time',
+  'identifier',
+  'credential',
+  'free-text',
+  'choice',
+  'toggle',
+  'search-filter',
+  'file',
+  'setting',
+  'other',
+]);
+const ENFORCEMENT_VALUES = new Set(['markup', 'observed', 'not-enforced', 'unknown']);
+const RESEARCH_STATUSES = new Set(['done', 'cached', 'skipped']);
+const DEPENDENCY_KINDS = new Set(['feature', 'entity', 'external']);
+// Only scripts/generate-test-conditions.mjs builds these, and it rebuilds them on every run.
+const GENERATED_TECHNIQUES = new Set([
+  'combinatorial',
+  'boundary-value',
+  'equivalence-partition',
+  'checklist-based',
+  'state-transition',
+  'use-case',
+]);
+const WEIGHT = { high: 3, medium: 2, low: 1 };
 const PARTITION_KIND_VALUES = new Set(['valid', 'invalid']);
 const BOUNDARY_VALUES = new Set(['min', 'max']);
 const TECHNIQUE_VALUES = new Set([
@@ -83,6 +136,8 @@ const TECHNIQUE_VALUES = new Set([
   'architectural-invariant',
   'property',
   'metamorphic',
+  'decision-table',
+  'error-guessing',
 ]);
 const PROPERTY_RELATIONS = new Set([
   'count-matches-request',
@@ -601,7 +656,9 @@ function isCondition(value, label, errors) {
     value.expectedOutcome,
     label + '.expectedOutcome',
     errors,
-    value.technique === 'architectural-invariant',
+    value.technique === 'architectural-invariant' ||
+      value.technique === 'error-guessing' ||
+      value.technique === 'decision-table',
   );
   if (value.executionLevel !== undefined && !CONDITION_EXECUTION_LEVEL_VALUES.has(value.executionLevel)) {
     errors.push(label + '.executionLevel, when present, must be one of dom|api.');
@@ -625,16 +682,30 @@ function isCondition(value, label, errors) {
       errors.push(label + '.negativeCategory cannot be set when scenario is "positive".');
     }
   }
-  if (value.technique === 'architectural-invariant') {
+  const categorised =
+    value.technique === 'architectural-invariant' ||
+    (value.technique === 'error-guessing' && value.scenario === 'negative');
+  if (categorised) {
     if (
       typeof value.negativeCategory !== 'string' ||
       !NEGATIVE_CATEGORY_VALUES.has(value.negativeCategory)
     ) {
       errors.push(
         label +
-          '.negativeCategory is required and must be a valid NegativeCategory when technique is "architectural-invariant".',
+          '.negativeCategory is required and must be a valid NegativeCategory on an ' +
+          (value.technique === 'architectural-invariant' ? 'architectural-invariant' : 'negative error-guessing') +
+          ' condition.',
       );
     }
+  }
+  if (
+    value.technique === 'decision-table' &&
+    (!value.parameters || typeof value.parameters !== 'object' || Object.keys(value.parameters).length === 0)
+  ) {
+    errors.push(
+      label +
+        '.parameters must name the inputs this rule combines, with the literal value each takes in this column - a decision rule with no inputs is not one.',
+    );
   }
   if (value.technique === 'property' || value.technique === 'metamorphic') {
     const metamorphic = value.technique === 'metamorphic';
@@ -835,6 +906,385 @@ function checkOutputs(entry, label, controlById, inventory, isFrameRoute, errors
   }
 }
 
+// Everything outside test-conditions.json that an anchor may point at: the feature map, the field
+// probes, the research each feature cites, and every route's inventory. Loaded once; a file that is
+// missing leaves its kind of anchor unverifiable, and the anchor check says so rather than passing it.
+function loadContext(data) {
+  const featureMapLoaded = loadJson(FEATURE_MAP_PATH, 'artifacts/analysis/feature-map.json');
+  const featureMap = featureMapLoaded.error ? null : featureMapLoaded.value;
+  const probesLoaded = loadJson(PROBES_PATH, 'artifacts/analysis/field-probes.json');
+  const probeIds = new Set();
+  if (!probesLoaded.error && probesLoaded.value && Array.isArray(probesLoaded.value.probes)) {
+    for (const probe of probesLoaded.value.probes) {
+      if (probe && typeof probe.id === 'string') probeIds.add(probe.id);
+    }
+  }
+  const researchIds = new Map();
+  const features = data.features && typeof data.features === 'object' ? data.features : {};
+  for (const [featureId, analysis] of Object.entries(features)) {
+    const research = analysis && analysis.research;
+    const ids = new Set();
+    if (research && typeof research.file === 'string') {
+      const loaded = loadJson(path.join(CWD, research.file), research.file);
+      if (!loaded.error && loaded.value && Array.isArray(loaded.value.sources)) {
+        for (const source of loaded.value.sources) {
+          if (source && typeof source.id === 'string') ids.add(source.id);
+        }
+      }
+    }
+    researchIds.set(featureId, ids);
+  }
+  // Which routes each feature owns, by the feature map; and the one feature each route belongs to.
+  const membersOf = new Map();
+  const featureOfRoute = new Map();
+  if (featureMap && featureMap.features && typeof featureMap.features === 'object') {
+    for (const [featureId, feature] of Object.entries(featureMap.features)) {
+      membersOf.set(featureId, new Set(feature && Array.isArray(feature.memberRouteIds) ? feature.memberRouteIds : []));
+    }
+  }
+  if (featureMap && featureMap.routes && typeof featureMap.routes === 'object') {
+    for (const [routeId, intent] of Object.entries(featureMap.routes)) {
+      if (!intent || typeof intent.featureId !== 'string') continue;
+      featureOfRoute.set(routeId, intent.featureId);
+      if (!membersOf.has(intent.featureId)) membersOf.set(intent.featureId, new Set());
+      membersOf.get(intent.featureId).add(routeId);
+    }
+  }
+  return {
+    featureMap: featureMap,
+    probesFileExists: !probesLoaded.error,
+    probeIds: probeIds,
+    researchIds: researchIds,
+    membersOf: membersOf,
+    featureOfRoute: featureOfRoute,
+    // Filled per route by validate(): routeId -> Map(controlId -> control).
+    controlsByRoute: new Map(),
+  };
+}
+
+// An anchor is a claim about where something comes from, so it has to point at something that
+// exists. scope.routeIds are the routes whose inventories a control id may come from; scope.featureId
+// is the feature whose research a source id may come from.
+function checkAnchors(anchors, label, scope, ctx, errors, required) {
+  if (!Array.isArray(anchors)) {
+    errors.push(label + ' must be an array of anchors (kind, ref[, quote]).');
+    return [];
+  }
+  if (required && anchors.length === 0) {
+    errors.push(label + ' must hold at least one anchor - what this rests on.');
+  }
+  const kinds = [];
+  anchors.forEach(function (anchor, i) {
+    const where = label + '[' + i + ']';
+    if (!anchor || typeof anchor !== 'object') {
+      errors.push(where + ' must be an object.');
+      return;
+    }
+    if (!ANCHOR_KINDS.has(anchor.kind)) {
+      errors.push(where + '.kind must be one of ' + Array.from(ANCHOR_KINDS).join('|') + '.');
+      return;
+    }
+    kinds.push(anchor.kind);
+    if (typeof anchor.ref !== 'string' || anchor.ref.trim().length === 0 || anchor.ref.length > 200) {
+      errors.push(where + '.ref must be a non-empty string of at most 200 characters.');
+      return;
+    }
+    if (QUOTED_ANCHORS.has(anchor.kind)) {
+      if (typeof anchor.quote !== 'string' || anchor.quote.trim().length === 0 || anchor.quote.length > 200) {
+        errors.push(where + '.quote must hold the words relied on (at most 200 characters) - a ' + anchor.kind + ' anchor says where, the quote says what.');
+      }
+    }
+    if (anchor.kind === 'control') {
+      const routeIds = scope.routeIds || [];
+      const known = routeIds.filter(function (routeId) {
+        return ctx.controlsByRoute.has(routeId);
+      });
+      if (known.length > 0) {
+        const exists = known.some(function (routeId) {
+          return ctx.controlsByRoute.get(routeId).has(anchor.ref);
+        });
+        if (!exists) errors.push(where + ' cites control "' + anchor.ref + '", which no inventory of ' + routeIds.join(', ') + ' lists.');
+      }
+    } else if (anchor.kind === 'probe') {
+      if (!ctx.probeIds.has(anchor.ref)) {
+        errors.push(
+          where +
+            ' cites probe "' +
+            anchor.ref +
+            '", which artifacts/analysis/field-probes.json does not hold' +
+            (ctx.probesFileExists ? '' : ' (no probe was recorded at all)') +
+            ' - an observation nobody recorded is not one.',
+        );
+      }
+    } else if (anchor.kind === 'research') {
+      const ids = ctx.researchIds.get(scope.featureId);
+      if (!ids || !ids.has(anchor.ref)) {
+        errors.push(where + ' cites research source "' + anchor.ref + '", which the research record of this feature does not list.');
+      }
+    } else if (anchor.kind === 'feature' || anchor.kind === 'entity') {
+      const table = ctx.featureMap ? ctx.featureMap[anchor.kind === 'feature' ? 'features' : 'entities'] : null;
+      if (table && typeof table === 'object' && !(anchor.ref in table)) {
+        errors.push(where + ' cites ' + anchor.kind + ' "' + anchor.ref + '", which the feature map does not hold.');
+      }
+    } else if (anchor.kind === 'human' && !/^(?:domainNotes|question):\\d+$/.test(anchor.ref)) {
+      errors.push(where + '.ref must be "domainNotes:<index>" or "question:<index>" - where the person said it.');
+    }
+  });
+  return kinds;
+}
+
+// Which anchor kinds make each source of an expected result checkable. A result said to come from
+// research, a person or a requirement has to point at it; one observed has to point at the
+// observation; one the markup states, at the control.
+function checkOracleAnchors(oracle, kinds, label, errors) {
+  const needs = {
+    research: ['research'],
+    human: ['human'],
+    requirement: Array.from(BASIS_ANCHORS),
+    observed: ['probe', 'entity'],
+    markup: ['control'],
+  }[oracle];
+  if (!needs) return;
+  const found = kinds.some(function (kind) {
+    return needs.indexOf(kind) !== -1;
+  });
+  if (!found) {
+    errors.push(label + ' says the expected result comes from "' + oracle + '" but no anchor points at one (' + needs.join(' or ') + ').');
+  }
+}
+
+function checkLevel(value, label, errors) {
+  if (!LEVEL_VALUES.has(value)) errors.push(label + ' must be one of high|medium|low.');
+}
+
+function checkText(value, label, errors, max) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    errors.push(label + ' must be a non-empty string.');
+    return;
+  }
+  if (max && value.length > max) errors.push(label + ' must be at most ' + max + ' characters.');
+  const phrase = placeholderIn(value);
+  if (phrase) errors.push(label + ' says "' + phrase + '" - say what it actually is.');
+}
+
+// The analysis of one feature: what it is for, how it serves the application, what each of its
+// fields means and should obey, what it depends on, what is still a question, and what research
+// backs it. Every condition of the feature is derived from this, so it is checked before any is.
+function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
+  if (!analysis || typeof analysis !== 'object') {
+    errors.push(label + ' must be an object.');
+    return;
+  }
+  if (analysis.featureId !== featureId) errors.push(label + '.featureId must equal its own key ("' + featureId + '").');
+  if (ctx.featureMap && ctx.featureMap.features && !(featureId in ctx.featureMap.features)) {
+    errors.push(label + ' analyses a feature the feature map does not hold - re-run /map-features or drop it.');
+  }
+  checkText(analysis.purpose, label + '.purpose', errors, 300);
+  checkText(analysis.fitsApplication, label + '.fitsApplication', errors, 500);
+  checkText(analysis.archetype, label + '.archetype', errors, 60);
+  checkLevel(analysis.confidence, label + '.confidence', errors);
+  const members = Array.from(ctx.membersOf.get(featureId) || []);
+  const scope = { routeIds: members.length > 0 ? members : Object.keys(data.routes), featureId: featureId };
+  checkAnchors(analysis.anchors, label + '.anchors', scope, ctx, errors, true);
+
+  if (!Array.isArray(analysis.fields)) {
+    errors.push(label + '.fields must be an array - one meaning per field of the feature.');
+  } else {
+    analysis.fields.forEach(function (field, i) {
+      const where = label + '.fields[' + i + ']';
+      if (!field || typeof field !== 'object') {
+        errors.push(where + ' must be an object.');
+        return;
+      }
+      if (typeof field.routeId !== 'string' || !(field.routeId in data.routes)) {
+        errors.push(where + '.routeId must name a route in this file.');
+      } else if (members.length > 0 && members.indexOf(field.routeId) === -1) {
+        errors.push(where + '.routeId "' + field.routeId + '" is not a route of this feature in the feature map.');
+      }
+      const hasControl = typeof field.control === 'string' && field.control.length > 0;
+      const hasParameter = typeof field.parameter === 'string' && field.parameter.length > 0;
+      if (hasControl === hasParameter) {
+        errors.push(where + ' must name exactly one of control (its inventory id) or parameter (a field a probe revealed).');
+      }
+      if (hasControl && ctx.controlsByRoute.has(field.routeId) && !ctx.controlsByRoute.get(field.routeId).has(field.control)) {
+        errors.push(where + '.control "' + field.control + '" is not in the inventory of ' + field.routeId + '.');
+      }
+      checkText(field.meaning, where + '.meaning', errors, 300);
+      if (!FIELD_ROLE_VALUES.has(field.role)) errors.push(where + '.role must be one of ' + Array.from(FIELD_ROLE_VALUES).join('|') + '.');
+      if ('unit' in field && typeof field.unit !== 'string') errors.push(where + '.unit, when present, must be a string.');
+      checkLevel(field.confidence, where + '.confidence', errors);
+      if (!Array.isArray(field.constraints)) {
+        errors.push(where + '.constraints must be an array (empty is a statement too: "any value").');
+        return;
+      }
+      field.constraints.forEach(function (constraint, j) {
+        const at = where + '.constraints[' + j + ']';
+        if (!constraint || typeof constraint !== 'object') {
+          errors.push(at + ' must be an object.');
+          return;
+        }
+        checkText(constraint.statement, at + '.statement', errors, 200);
+        if (!ORACLE_VALUES.has(constraint.source)) errors.push(at + '.source must be one of ' + Array.from(ORACLE_VALUES).join('|') + '.');
+        checkLevel(constraint.confidence, at + '.confidence', errors);
+        if (!ENFORCEMENT_VALUES.has(constraint.enforcement)) {
+          errors.push(at + '.enforcement must be one of ' + Array.from(ENFORCEMENT_VALUES).join('|') + '.');
+        }
+        const kinds = checkAnchors(constraint.anchors, at + '.anchors', { routeIds: [field.routeId], featureId: featureId }, ctx, errors, true);
+        checkOracleAnchors(constraint.source, kinds, at, errors);
+        if ((constraint.enforcement === 'observed' || constraint.enforcement === 'not-enforced') && kinds.indexOf('probe') === -1) {
+          errors.push(at + ' says the page ' + (constraint.enforcement === 'observed' ? 'enforces' : 'does not enforce') + ' it, which only a field probe can show - anchor the probe.');
+        }
+      });
+    });
+  }
+
+  if (!Array.isArray(analysis.dependencies)) {
+    errors.push(label + '.dependencies must be an array.');
+  } else {
+    analysis.dependencies.forEach(function (dependency, i) {
+      const where = label + '.dependencies[' + i + ']';
+      if (!dependency || typeof dependency !== 'object') return errors.push(where + ' must be an object.');
+      checkText(dependency.on, where + '.on', errors, 100);
+      if (!DEPENDENCY_KINDS.has(dependency.kind)) errors.push(where + '.kind must be one of feature|entity|external.');
+      checkText(dependency.why, where + '.why', errors, 300);
+    });
+  }
+  if (!Array.isArray(analysis.questions)) {
+    errors.push(label + '.questions must be an array (empty when nothing is in doubt).');
+  } else {
+    analysis.questions.forEach(function (question, i) {
+      const where = label + '.questions[' + i + ']';
+      if (!question || typeof question !== 'object') return errors.push(where + ' must be an object.');
+      checkText(question.text, where + '.text', errors, 300);
+      checkText(question.about, where + '.about', errors, 100);
+      if ('answer' in question && typeof question.answer !== 'string') errors.push(where + '.answer, when present, must be what the person said.');
+    });
+  }
+
+  const research = analysis.research;
+  if (!research || typeof research !== 'object') {
+    errors.push(label + '.research must say whether research was done, reused or skipped, and why.');
+  } else {
+    if (!RESEARCH_STATUSES.has(research.status)) errors.push(label + '.research.status must be one of done|cached|skipped.');
+    checkText(research.archetype, label + '.research.archetype', errors, 60);
+    if (research.status === 'skipped') {
+      checkText(research.reason, label + '.research.reason', errors, 200);
+    } else if (research.status === 'done' || research.status === 'cached') {
+      if (typeof research.file !== 'string' || research.file.indexOf(RESEARCH_DIR + '/') !== 0) {
+        errors.push(label + '.research.file must be the record under ' + RESEARCH_DIR + '/ that scripts/test-research.mjs wrote.');
+      } else {
+        const ids = ctx.researchIds.get(featureId);
+        if (!ids || ids.size < MIN_RESEARCH_SOURCES) {
+          errors.push(
+            label +
+              '.research.file ' +
+              research.file +
+              ' holds ' +
+              (ids ? ids.size : 0) +
+              ' source(s); research rests on at least ' +
+              MIN_RESEARCH_SOURCES +
+              ' - record it with node scripts/test-research.mjs, or mark it skipped with the reason.',
+          );
+        }
+      }
+    }
+  }
+  checkText(analysis.analyzedAt, label + '.analyzedAt', errors);
+}
+
+// Every parameter of a route stands on a meaning: what the field is for decides which partitions,
+// limits and rules are real. A parameter nobody explained was extracted from the markup alone - the
+// exact failure this stage exists to stop.
+function checkMeaningCoverage(routeId, entry, label, data, ctx, errors) {
+  const featureId = ctx.featureOfRoute.get(routeId);
+  if (!featureId) return;
+  const analysis = data.features && data.features[featureId];
+  if (!analysis || typeof analysis !== 'object') {
+    errors.push(label + ' belongs to feature ' + featureId + ', which has no analysis under features - analyse the feature before its fields.');
+    return;
+  }
+  const meanings = Array.isArray(analysis.fields) ? analysis.fields : [];
+  (Array.isArray(entry.parameters) ? entry.parameters : []).forEach(function (param, i) {
+    if (!param || typeof param !== 'object') return;
+    const explained = meanings.some(function (field) {
+      if (!field || field.routeId !== routeId) return false;
+      if (typeof param.control === 'string') return field.control === param.control;
+      return field.parameter === param.name;
+    });
+    if (!explained) {
+      errors.push(
+        label +
+          '.parameters[' +
+          i +
+          '] ("' +
+          param.name +
+          '") has no meaning in features["' +
+          featureId +
+          '"].fields - say what the field is for before partitioning it.',
+      );
+    }
+  });
+}
+
+// What every condition carries for the review, checked against the feature it claims and the anchors
+// it cites. Priority is the generator's arithmetic, so it has to agree with the risk it was built from.
+function checkConditionContext(condition, label, routeId, data, ctx, errors) {
+  if (!condition || typeof condition !== 'object') return;
+  const featureId = condition.featureId;
+  if (typeof featureId !== 'string' || featureId.length === 0) {
+    errors.push(label + '.featureId must name the feature this condition serves.');
+  } else {
+    if (!data.features || !(featureId in data.features)) {
+      errors.push(label + '.featureId "' + featureId + '" has no analysis under features.');
+    }
+    const members = ctx.membersOf.get(featureId);
+    if (members && members.size > 0 && !members.has(routeId)) {
+      errors.push(label + '.featureId "' + featureId + '" is not a feature of this route in the feature map.');
+    }
+  }
+  if (!LAYER_VALUES.has(condition.layer)) errors.push(label + '.layer must be one of field|rule|behavior|frame.');
+  if (!ORACLE_VALUES.has(condition.oracle)) errors.push(label + '.oracle must be one of ' + Array.from(ORACLE_VALUES).join('|') + '.');
+  if (!ORIGIN_VALUES.has(condition.origin)) {
+    errors.push(label + '.origin must be one of generated|model|research|human.');
+  } else if ((condition.origin === 'generated') !== GENERATED_TECHNIQUES.has(condition.technique)) {
+    errors.push(
+      label +
+        (condition.origin === 'generated'
+          ? '.origin is "generated" but the generator never builds a ' + condition.technique + ' condition.'
+          : ' is a ' + condition.technique + ' condition, which only the generator builds - re-run node scripts/generate-test-conditions.mjs instead of writing one.'),
+    );
+  }
+  const kinds = checkAnchors(condition.anchors, label + '.anchors', { routeIds: [routeId], featureId: featureId }, ctx, errors, true);
+  checkOracleAnchors(condition.oracle, kinds, label, errors);
+  if (condition.origin === 'research' && kinds.indexOf('research') === -1) {
+    errors.push(label + ' comes from research but cites no research source.');
+  }
+  if (condition.origin === 'human' && kinds.indexOf('human') === -1) {
+    errors.push(label + ' comes from a person but cites no human anchor.');
+  }
+  const risk = condition.risk;
+  if (!risk || typeof risk !== 'object') {
+    errors.push(label + '.risk must state how likely this is to break here (likelihood) and why (reason).');
+  } else {
+    checkLevel(risk.likelihood, label + '.risk.likelihood', errors);
+    checkText(risk.reason, label + '.risk.reason', errors, 300);
+  }
+  if (!Number.isInteger(condition.riskScore) || condition.riskScore < 1 || condition.riskScore > 9) {
+    errors.push(label + '.riskScore is missing - run node scripts/generate-test-conditions.mjs, which ranks every condition.');
+  } else {
+    const tier = condition.riskScore >= 6 ? 'P1' : condition.riskScore >= 3 ? 'P2' : 'P3';
+    if (condition.priority !== tier) {
+      errors.push(label + '.priority "' + condition.priority + '" does not match riskScore ' + condition.riskScore + ' - re-run node scripts/generate-test-conditions.mjs rather than setting it by hand.');
+    }
+    if (risk && WEIGHT[risk.likelihood] && condition.riskScore % WEIGHT[risk.likelihood] !== 0) {
+      errors.push(label + '.riskScore ' + condition.riskScore + ' is not the likelihood times an impact - re-run the generator.');
+    }
+  }
+  if ('valueNote' in condition && (typeof condition.valueNote !== 'string' || condition.valueNote.length > 300)) {
+    errors.push(label + '.valueNote, when present, must be one sentence of at most 300 characters.');
+  }
+}
+
 function validate() {
   const errors = [];
   const report = loadJson(REPORT_PATH, 'artifacts/analysis/test-conditions.json');
@@ -852,9 +1302,9 @@ function validate() {
     return { status: 'FAILED', errors };
   }
 
-  if (data.schemaVersion !== 2) {
+  if (data.schemaVersion !== 3) {
     errors.push(
-      'schemaVersion must be exactly 2 (found ' +
+      'schemaVersion must be exactly 3 (found ' +
         JSON.stringify(data.schemaVersion) +
         '). Treat as absent and re-run /define-test-conditions rather than migrating in place.',
     );
@@ -866,6 +1316,23 @@ function validate() {
     errors.push('routes must be an object keyed by routeId.');
     return { status: 'FAILED', errors };
   }
+  const basis = data.basis;
+  if (!basis || typeof basis !== 'object' || !BASIS_MODES.has(basis.mode)) {
+    errors.push('basis.mode must be one of live-app|documents|mixed - what these conditions were derived from.');
+  } else if (
+    !Array.isArray(basis.sources) ||
+    basis.sources.length === 0 ||
+    !basis.sources.every(function (source) {
+      return typeof source === 'string' && source.length > 0;
+    })
+  ) {
+    errors.push('basis.sources must list what was read: the base URL of a live application, the documents or tickets used.');
+  }
+  if (!data.features || typeof data.features !== 'object' || Array.isArray(data.features)) {
+    errors.push('features must be an object keyed by featureId - the analysis every condition is derived from.');
+    data.features = {};
+  }
+  const ctx = loadContext(data);
 
   const siteMap = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
   const knownRouteIds = new Set();
@@ -924,7 +1391,45 @@ function validate() {
       for (const control of inventory.controls) {
         if (control && typeof control.id === 'string') controlById.set(control.id, control);
       }
+      ctx.controlsByRoute.set(key, controlById);
     }
+    checkMeaningCoverage(key, entry, label, data, ctx, errors);
+    // A partition or boundary saying where its expected result comes from has to point at it, the
+    // same way a condition does - the generator carries both onto every condition it builds.
+    (Array.isArray(entry.parameters) ? entry.parameters : []).forEach(function (param, i) {
+      const sets = []
+        .concat((param && Array.isArray(param.partitions) ? param.partitions : []).map(function (p, j) { return [p, 'partitions[' + j + ']']; }))
+        .concat((param && Array.isArray(param.boundaries) ? param.boundaries : []).map(function (b, j) { return [b, 'boundaries[' + j + ']']; }));
+      sets.forEach(function (pair) {
+        const set = pair[0];
+        if (!set || typeof set !== 'object') return;
+        const where = label + '.parameters[' + i + '].' + pair[1];
+        if ('oracle' in set && !ORACLE_VALUES.has(set.oracle)) {
+          errors.push(where + '.oracle must be one of ' + Array.from(ORACLE_VALUES).join('|') + '.');
+          return;
+        }
+        const scope = { routeIds: [key], featureId: ctx.featureOfRoute.get(key) };
+        const kinds = 'anchors' in set ? checkAnchors(set.anchors, where + '.anchors', scope, ctx, errors, false) : [];
+        if (set.oracle && ['research', 'human', 'requirement'].indexOf(set.oracle) !== -1) {
+          checkOracleAnchors(set.oracle, kinds, where, errors);
+        }
+      });
+    });
+    // A rule grounded in a field probe quotes that probe: "<probe id>: <what the page did>".
+    (Array.isArray(entry.parameters) ? entry.parameters : []).forEach(function (param, i) {
+      const rules = []
+        .concat((param && Array.isArray(param.partitions) ? param.partitions : []).map(function (p) { return p && p.rule; }))
+        .concat((param && Array.isArray(param.boundaries) ? param.boundaries : []).map(function (b) { return b && b.rule; }));
+      rules.forEach(function (rule) {
+        if (!rule || rule.signal !== 'field-probe' || typeof rule.excerpt !== 'string') return;
+        const id = rule.excerpt.split(':')[0].trim();
+        if (!ctx.probeIds.has(id)) {
+          errors.push(
+            label + '.parameters[' + i + '] cites field probe "' + id + '", which artifacts/analysis/field-probes.json does not hold - start the excerpt with the probe id.',
+          );
+        }
+      });
+    });
 
     // Without an inventory nothing can say a field was missed, so an empty list is refused outright;
     // with one, the accounting below is what decides - a page with no fields of its own has none.
@@ -983,6 +1488,7 @@ function validate() {
         const parameters = Array.isArray(entry.parameters) ? entry.parameters : [];
         entry.conditions.forEach(function (c, i) {
           isCondition(c, label + '.conditions[' + i + ']', errors);
+          checkConditionContext(c, label + '.conditions[' + i + ']', key, data, ctx, errors);
           if (c && c.parameters && typeof c.parameters === 'object') {
             const invalid = invalidPartitionCount(c, parameters);
             const combining = c.technique === 'combinatorial' || c.technique === 'equivalence-partition';
@@ -1029,6 +1535,22 @@ function validate() {
     warnings.push(
       'The site frame carries fields of its own (a language switcher, a theme toggle) and no route is named in frameRouteId, so they are tested nowhere - name the route that should carry them, usually the one with the fewest fields of its own.',
     );
+  }
+
+  // After the routes, so every inventory is loaded for the control anchors the analyses cite.
+  for (const [featureId, analysis] of Object.entries(data.features)) {
+    checkFeatureAnalysis(featureId, analysis, 'features["' + featureId + '"]', data, ctx, errors);
+  }
+  // A question still open is a decision the tests depend on and nobody has made.
+  const open = [];
+  for (const [featureId, analysis] of Object.entries(data.features)) {
+    const questions = analysis && Array.isArray(analysis.questions) ? analysis.questions : [];
+    questions.forEach(function (question) {
+      if (question && typeof question.answer !== 'string') open.push(featureId + ': ' + String(question.text).slice(0, 80));
+    });
+  }
+  if (open.length > 0) {
+    warnings.push(open.length + ' question(s) for a person are still open - ask them with the review: ' + open.slice(0, 5).join(' | '));
   }
 
   return { status: errors.length === 0 ? 'PASSED' : 'FAILED', errors, warnings };

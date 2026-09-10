@@ -53,7 +53,42 @@ const CWD = process.cwd();
 const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
-const MODEL_AUTHORED_TECHNIQUES = ['architectural-invariant', 'property', 'metamorphic'];
+const INVENTORY_DIR = path.join(CWD, 'artifacts', 'site-map', 'inventory');
+// Techniques only the analysis writes. Together with any condition whose origin is not 'generated',
+// these survive every regeneration untouched.
+const MODEL_AUTHORED_TECHNIQUES = [
+  'architectural-invariant',
+  'property',
+  'metamorphic',
+  'decision-table',
+  'error-guessing',
+];
+const FRAME_REGIONS = ['header', 'nav', 'footer', 'aside'];
+
+// Risk level = likelihood x impact, each on a 1-3 scale - the conventional risk-matrix product.
+const WEIGHT = { high: 3, medium: 2, low: 1 };
+
+// How strongly a source says the expected result is right, strongest first. When a condition draws
+// on several partitions, it carries the strongest of their oracles.
+const ORACLE_ORDER = ['requirement', 'human', 'research', 'domain', 'observed', 'markup'];
+
+// A generated condition's likelihood, by what it probes. The analysis states its own for every
+// condition it writes; these are the generator's defaults for the ones it builds.
+const DEFAULT_RISK = {
+  'checklist-based': {
+    likelihood: 'low',
+    reason: 'a malformed or injection-shaped value that every field of this kind should turn away',
+  },
+  'boundary-value': { likelihood: 'medium', reason: 'limits are where off-by-one mistakes live' },
+  'invalid-value': { likelihood: 'medium', reason: 'a value outside what the field should take' },
+  'valid-combination': { likelihood: 'low', reason: 'valid values of several inputs meeting in one run' },
+  'valid-value': { likelihood: 'low', reason: 'a representative value the feature should accept' },
+  'state-transition': {
+    likelihood: 'medium',
+    reason: 'a transition of the entity lifecycle, where state handling usually breaks',
+  },
+  'use-case': { likelihood: 'medium', reason: 'the entity main flow walked end to end' },
+};
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -701,6 +736,7 @@ function loadFeatureLifecycles() {
       })
       .map(function (entity) {
         return {
+          entityId: entity.entityId,
           name: entity.name,
           states: entity.lifecycle.states,
           transitions: Array.isArray(entity.lifecycle.transitions) ? entity.lifecycle.transitions : [],
@@ -710,9 +746,17 @@ function loadFeatureLifecycles() {
         return String(a.name).localeCompare(String(b.name));
       });
     if (featureEntities.length === 0) continue;
-    byRouteId[primaryRouteId] = { featureName: feature.name, entities: featureEntities };
+    byRouteId[primaryRouteId] = {
+      featureId: feature.featureId,
+      featureName: feature.name,
+      entities: featureEntities,
+    };
   }
   return byRouteId;
+}
+
+function entityAnchors(entity) {
+  return entity.entityId ? [{ kind: 'entity', ref: entity.entityId }] : [];
 }
 
 // State transition testing, the textbook construction: every defined transition is one positive
@@ -741,6 +785,8 @@ function buildStateTransitionConditions(routeId, bundle, criticalityTier) {
         technique: 'state-transition',
         description: description,
         expectedOutcome: 'the ' + entity.name + ' is now "' + transition.to + '"',
+        featureId: bundle.featureId,
+        anchors: entityAnchors(entity),
         scenario: 'positive',
         verification: {},
         isSpeculative: true,
@@ -781,6 +827,8 @@ function buildStateTransitionConditions(routeId, bundle, criticalityTier) {
           technique: 'state-transition',
           description: description,
           expectedOutcome: trigger + ' is refused and the ' + entity.name + ' stays "' + state.name + '"',
+          featureId: bundle.featureId,
+          anchors: entityAnchors(entity),
           scenario: 'negative',
           negativeCategory: 'state_violation',
           verification: {},
@@ -822,6 +870,8 @@ function buildUseCaseConditions(routeId, bundle) {
       description: description,
       expectedOutcome:
         'the ' + entity.name + ' ends "' + finalState + '", with the result of each step visible in the next',
+      featureId: bundle.featureId,
+      anchors: entityAnchors(entity),
       scenario: 'positive',
       verification: {},
       isSpeculative: true,
@@ -895,12 +945,11 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle) {
     criticalityTier,
   );
   const useCaseConditions = buildUseCaseConditions(routeId, lifecycleBundle);
-  // Conditions the agent wrote rather than this script - invariants, output properties, metamorphic
-  // relations - survive every regeneration untouched; only an id is filled in when one is missing.
+  // Conditions the analysis wrote rather than this script - invariants, output properties,
+  // metamorphic relations, decision rules, expected failures, research findings, a person's own -
+  // survive every regeneration untouched; only an id is filled in when one is missing.
   const invariantConditions = (entry.conditions || [])
-    .filter(function (c) {
-      return MODEL_AUTHORED_TECHNIQUES.indexOf(c.technique) !== -1;
-    })
+    .filter(isAuthored)
     .map(function (c) {
       if (!c.conditionId) {
         const salt =
@@ -970,6 +1019,237 @@ function checkShape(data) {
   return errors;
 }
 
+function isAuthored(condition) {
+  if (!condition) return false;
+  if (condition.origin && condition.origin !== 'generated') return true;
+  return MODEL_AUTHORED_TECHNIQUES.indexOf(condition.technique) !== -1;
+}
+
+// Everything the review needs to rank a condition that the generator can know itself: which feature
+// it serves (from the feature map), how bad a failure there is (the feature's impact), and which of
+// a route's controls are the site frame (from its inventory).
+function loadRankingContext() {
+  const loaded = loadJson(FEATURE_MAP_PATH, 'artifacts/analysis/feature-map.json');
+  const data = loaded.error ? null : loaded.value;
+  const featureByRoute = {};
+  const impactByFeature = {};
+  const criticalityByRoute = {};
+  if (data && typeof data.features === 'object' && data.features !== null) {
+    for (const [featureId, feature] of Object.entries(data.features)) {
+      if (!feature) continue;
+      if (typeof feature.impact === 'string') impactByFeature[featureId] = feature.impact;
+      for (const routeId of Array.isArray(feature.memberRouteIds) ? feature.memberRouteIds : []) {
+        if (!featureByRoute[routeId]) featureByRoute[routeId] = featureId;
+      }
+    }
+  }
+  if (data && typeof data.routes === 'object' && data.routes !== null) {
+    for (const [routeId, intent] of Object.entries(data.routes)) {
+      if (!intent) continue;
+      if (typeof intent.featureId === 'string') featureByRoute[routeId] = intent.featureId;
+      if (intent.criticality && typeof intent.criticality.value === 'string') {
+        criticalityByRoute[routeId] = intent.criticality.value;
+      }
+    }
+  }
+  return { featureByRoute, impactByFeature, criticalityByRoute };
+}
+
+function frameControlsOf(routeId) {
+  const file = path.join(INVENTORY_DIR, routeId + '.json');
+  const loaded = loadJson(file, 'inventory');
+  const frame = new Set();
+  if (loaded.error || !loaded.value || !Array.isArray(loaded.value.controls)) return frame;
+  for (const control of loaded.value.controls) {
+    if (control && FRAME_REGIONS.indexOf(control.region) !== -1) frame.add(control.id);
+  }
+  return frame;
+}
+
+function oracleOfSignal(signal) {
+  if (signal === 'manual') return 'human';
+  if (signal === 'field-probe') return 'observed';
+  return 'markup';
+}
+
+// A rule only the markup states is about the field; one a label or a person states carries meaning
+// for the business, even though it is checked at the field.
+function layerOfSignal(signal) {
+  return signal === 'form-label' || signal === 'manual' ? 'rule' : 'field';
+}
+
+function strongest(oracles) {
+  let best = null;
+  for (const oracle of oracles) {
+    if (ORACLE_ORDER.indexOf(oracle) === -1) continue;
+    if (best === null || ORACLE_ORDER.indexOf(oracle) < ORACLE_ORDER.indexOf(best)) best = oracle;
+  }
+  return best;
+}
+
+// A rule grounded in a field probe quotes it as "<probe id>: <what the page did>"; the condition
+// built from it points at that probe, which is what makes its "observed" oracle checkable.
+function probeAnchorOf(rule) {
+  if (!rule || rule.signal !== 'field-probe' || typeof rule.excerpt !== 'string') return null;
+  const id = rule.excerpt.split(':')[0].trim();
+  return /^p\\d+$/.test(id) ? { kind: 'probe', ref: id } : null;
+}
+
+function controlAnchor(param) {
+  if (!param) return null;
+  if (param.control) return { kind: 'control', ref: param.control };
+  if (param.revealedBy) return { kind: 'control', ref: param.revealedBy };
+  return null;
+}
+
+// Layer, oracle, anchors and default risk of a condition this script built, read off the partitions
+// and boundaries it was built from.
+function describeGenerated(condition, entry) {
+  const parameters = entry.parameters || [];
+  const anchors = [];
+  function addAnchor(anchor) {
+    if (!anchor) return;
+    const known = anchors.some(function (existing) {
+      return existing.kind === anchor.kind && existing.ref === anchor.ref;
+    });
+    if (!known) anchors.push(anchor);
+  }
+
+  // The entity anchor was set where the condition was built, from the lifecycle it walks.
+  if (condition.technique === 'state-transition' || condition.technique === 'use-case') {
+    (Array.isArray(condition.anchors) ? condition.anchors : []).forEach(addAnchor);
+    return {
+      layer: 'behavior',
+      oracle: 'observed',
+      anchors: anchors,
+      risk: DEFAULT_RISK[condition.technique],
+    };
+  }
+
+  if (condition.technique === 'boundary-value' || condition.technique === 'checklist-based') {
+    let target = null;
+    let literal = null;
+    for (const [name, value] of Object.entries(condition.parameters || {})) {
+      const param = paramByName(parameters, name);
+      if (!param) continue;
+      const isPartition = (param.partitions || []).some(function (partition) {
+        return partition.id === value;
+      });
+      if (!isPartition) {
+        target = param;
+        literal = value;
+        break;
+      }
+    }
+    addAnchor(controlAnchor(target));
+    if (condition.technique === 'checklist-based') {
+      return { layer: 'field', oracle: 'domain', anchors: anchors, risk: DEFAULT_RISK['checklist-based'] };
+    }
+    const boundary = target
+      ? (target.boundaries || []).find(function (candidate) {
+          return Array.isArray(candidate.values) && candidate.values.indexOf(literal) !== -1;
+        })
+      : null;
+    const signal = boundary && boundary.rule ? boundary.rule.signal : 'html5-constraint';
+    if (boundary) addAnchor(probeAnchorOf(boundary.rule));
+    if (boundary && Array.isArray(boundary.anchors)) boundary.anchors.forEach(addAnchor);
+    return {
+      layer: layerOfSignal(signal),
+      oracle: (boundary && boundary.oracle) || oracleOfSignal(signal),
+      anchors: anchors,
+      risk: DEFAULT_RISK['boundary-value'],
+    };
+  }
+
+  // combinatorial and equivalence-partition: a vector of partition ids.
+  let invalid = null;
+  const oracles = [];
+  for (const [name, partitionId] of Object.entries(condition.parameters || {})) {
+    const param = paramByName(parameters, name);
+    if (!param) continue;
+    const partition = (param.partitions || []).find(function (candidate) {
+      return candidate.id === partitionId;
+    });
+    if (!partition) continue;
+    if (partition.kind === 'invalid') {
+      invalid = { param: param, partition: partition };
+      addAnchor(controlAnchor(param));
+      addAnchor(probeAnchorOf(partition.rule));
+      if (Array.isArray(partition.anchors)) partition.anchors.forEach(addAnchor);
+    } else {
+      oracles.push(partition.oracle || 'domain');
+      if (partition.oracle && Array.isArray(partition.anchors)) partition.anchors.forEach(addAnchor);
+    }
+  }
+  if (invalid) {
+    const signal = invalid.partition.rule ? invalid.partition.rule.signal : 'html5-constraint';
+    return {
+      layer: layerOfSignal(signal),
+      oracle: invalid.partition.oracle || oracleOfSignal(signal),
+      anchors: anchors,
+      risk: DEFAULT_RISK['invalid-value'],
+    };
+  }
+  for (const name of Object.keys(condition.parameters || {})) {
+    addAnchor(controlAnchor(paramByName(parameters, name)));
+  }
+  return {
+    layer: 'behavior',
+    oracle: strongest(oracles) || 'domain',
+    anchors: anchors,
+    risk:
+      condition.technique === 'combinatorial'
+        ? DEFAULT_RISK['valid-combination']
+        : DEFAULT_RISK['valid-value'],
+  };
+}
+
+// Fills in what every condition carries for the review - its feature, layer, oracle, anchors and
+// default risk on the generator's own conditions - then ranks every condition, authored ones
+// included: risk score = likelihood x the feature's impact, and the priority tier it lands in.
+// Runs on every pass, so a feature whose impact changed at review re-ranks without regenerating.
+function annotateAndRank(data, context) {
+  for (const [routeId, entry] of Object.entries(data.routes)) {
+    const frameControls = routeId === data.frameRouteId ? frameControlsOf(routeId) : new Set();
+    for (const condition of entry.conditions || []) {
+      if (!isAuthored(condition)) {
+        const described = describeGenerated(condition, entry);
+        condition.origin = 'generated';
+        // A lifecycle condition belongs to the feature whose entity it walks, set when it was built;
+        // every other one to the feature its route belongs to now, which a review may have changed.
+        const lifecycle = condition.technique === 'state-transition' || condition.technique === 'use-case';
+        if (!lifecycle || !condition.featureId) condition.featureId = context.featureByRoute[routeId] || null;
+        condition.layer = described.layer;
+        condition.oracle = described.oracle;
+        condition.risk = { likelihood: described.risk.likelihood, reason: described.risk.reason };
+        condition.anchors =
+          described.anchors.length > 0
+            ? described.anchors
+            : condition.featureId
+              ? [{ kind: 'feature', ref: condition.featureId }]
+              : [];
+        const allFrame =
+          frameControls.size > 0 &&
+          condition.anchors.length > 0 &&
+          condition.anchors.every(function (anchor) {
+            return anchor.kind === 'control' && frameControls.has(anchor.ref);
+          });
+        if (allFrame) condition.layer = 'frame';
+      }
+      const impact =
+        context.impactByFeature[condition.featureId] || context.criticalityByRoute[routeId] || 'high';
+      const likelihood = condition.risk && condition.risk.likelihood;
+      if (WEIGHT[likelihood] && WEIGHT[impact]) {
+        condition.riskScore = WEIGHT[likelihood] * WEIGHT[impact];
+        condition.priority = condition.riskScore >= 6 ? 'P1' : condition.riskScore >= 3 ? 'P2' : 'P3';
+      } else {
+        delete condition.riskScore;
+        delete condition.priority;
+      }
+    }
+  }
+}
+
 function generate() {
   const report = loadJson(REPORT_PATH, 'artifacts/analysis/test-conditions.json');
   if (report.error) {
@@ -997,9 +1277,16 @@ function generate() {
   for (const [routeId, entry] of Object.entries(data.routes)) {
     generateForRoute(routeId, entry, criticalityByRoute[routeId], lifecyclesByRoute[routeId]);
   }
+  annotateAndRank(data, loadRankingContext());
   fs.writeFileSync(REPORT_PATH, JSON.stringify(data, null, 2) + '\\n', 'utf8');
+  const tiers = { P1: 0, P2: 0, P3: 0 };
+  for (const entry of Object.values(data.routes)) {
+    for (const condition of entry.conditions || []) {
+      if (tiers[condition.priority] !== undefined) tiers[condition.priority]++;
+    }
+  }
   process.stdout.write(
-    JSON.stringify({ status: 'GENERATED', routes: Object.keys(data.routes).length }) + '\\n',
+    JSON.stringify({ status: 'GENERATED', routes: Object.keys(data.routes).length, priorities: tiers }) + '\\n',
   );
 }
 

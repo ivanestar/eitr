@@ -128,12 +128,69 @@ function setupProject(): string {
   return dir;
 }
 
-function writeReport(dir: string, data: unknown) {
+const GENERATED_TECHNIQUES = new Set([
+  'combinatorial',
+  'boundary-value',
+  'equivalence-partition',
+  'checklist-based',
+  'state-transition',
+  'use-case',
+]);
+
+// The feature analysis every schema-3 report carries. These fixtures have no feature map, so no
+// route belongs to it by the map and no field meaning is demanded - the tests below that exercise
+// the analysis write their own.
+function checkoutAnalysis() {
+  return {
+    featureId: 'feature-checkout',
+    purpose: 'Takes an order: the email to confirm it to and how many items',
+    fitsApplication: 'The shop exists to sell, and this is where a sale is completed',
+    archetype: 'checkout',
+    confidence: 'high',
+    anchors: [{ kind: 'feature', ref: 'feature-checkout' }],
+    fields: [],
+    dependencies: [],
+    questions: [],
+    research: { status: 'skipped', archetype: 'checkout', reason: 'no web access in this test' },
+    analyzedAt: '2026-09-03T11:00:00.000Z',
+  };
+}
+
+// Fills what schema 3 adds - the basis, the feature analysis, and on every condition its feature,
+// layer, oracle, anchors, origin, risk and rank - wherever a fixture written for what it tests has
+// left them out. writeRawReport skips this, for the tests about exactly those fields.
+function upgrade(data: unknown): unknown {
+  if (!data || typeof data !== 'object' || !('routes' in (data as object))) return data;
+  const report = structuredClone(data) as Record<string, any>;
+  if (report.schemaVersion === 2) report.schemaVersion = 3;
+  if (!report.basis) report.basis = { mode: 'live-app', sources: ['https://example.com'] };
+  if (!report.features) report.features = { 'feature-checkout': checkoutAnalysis() };
+  for (const entry of Object.values(report.routes as Record<string, any>)) {
+    for (const condition of Array.isArray(entry?.conditions) ? entry.conditions : []) {
+      if (!condition || typeof condition !== 'object') continue;
+      condition.featureId ??= 'feature-checkout';
+      condition.layer ??= 'behavior';
+      condition.oracle ??= 'domain';
+      condition.anchors ??= [{ kind: 'feature', ref: 'feature-checkout' }];
+      condition.origin ??= GENERATED_TECHNIQUES.has(condition.technique) ? 'generated' : 'model';
+      condition.risk ??= { likelihood: 'medium', reason: 'a representative case for this fixture' };
+      condition.riskScore ??= 6;
+      condition.priority ??= 'P1';
+    }
+  }
+  return report;
+}
+
+function writeRawReport(dir: string, data: unknown) {
   writeFileSync(
     join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
+}
+
+function writeReport(dir: string, data: unknown) {
+  writeRawReport(dir, upgrade(data));
 }
 
 function run(dir: string, args: string[] = []) {
@@ -1075,14 +1132,193 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
   });
 });
 
+// Schema 3: every condition derives from an analysis of its feature, and every claim in either
+// points at something that exists. These tests write the report as it is, without the upgrade.
+describe('scripts/validate-test-conditions.mjs - feature analysis, anchors and ranking', () => {
+  function withFeatureMap(dir: string) {
+    writeFileSync(
+      join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        features: {
+          'feature-checkout': {
+            featureId: 'feature-checkout',
+            name: 'Checkout',
+            memberRouteIds: ['route-checkout'],
+            entityIds: [],
+            impact: 'high',
+            evidence: [],
+            reviewed: true,
+          },
+        },
+        entities: {},
+        routes: { 'route-checkout': { routeId: 'route-checkout', featureId: 'feature-checkout' } },
+      }),
+      'utf8',
+    );
+  }
+
+  function meanings() {
+    return [
+      {
+        routeId: 'route-checkout',
+        parameter: 'email',
+        meaning: 'where the order confirmation is sent',
+        role: 'identifier',
+        confidence: 'high',
+        constraints: [],
+      },
+      {
+        routeId: 'route-checkout',
+        parameter: 'quantity',
+        meaning: 'how many of the item are ordered',
+        role: 'quantity',
+        confidence: 'high',
+        constraints: [
+          {
+            statement: 'at most 10',
+            source: 'markup',
+            confidence: 'high',
+            enforcement: 'markup',
+            anchors: [{ kind: 'control', ref: 'c1' }],
+          },
+        ],
+      },
+    ];
+  }
+
+  function report() {
+    const data = upgrade(wellFormedWithConditions()) as Record<string, any>;
+    data.features['feature-checkout'].fields = meanings();
+    return data;
+  }
+
+  function validateRaw(data: unknown, args: string[] = []) {
+    const dir = setupProject();
+    try {
+      withFeatureMap(dir);
+      writeRawReport(dir, data);
+      return JSON.parse(run(dir, args).stdout);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('passes a report whose every parameter stands on a field meaning', () => {
+    const output = validateRaw(report());
+    expect(output.errors).toEqual([]);
+    expect(output.status).toBe('PASSED');
+  });
+
+  it('refuses a schema-2 file rather than reading it as the new shape', () => {
+    const data = report();
+    data.schemaVersion = 2;
+    expect(validateRaw(data).errors.join(' ')).toContain('schemaVersion must be exactly 3');
+  });
+
+  it('refuses a parameter nobody explained', () => {
+    const data = report();
+    data.features['feature-checkout'].fields = meanings().slice(0, 1);
+    const errors = validateRaw(data, ['--stage=parameters']).errors.join(' ');
+    expect(errors).toContain('("quantity") has no meaning');
+  });
+
+  it('refuses an anchor that points at nothing: a research source never recorded, a probe never run', () => {
+    const data = report();
+    data.routes['route-checkout'].conditions.push({
+      conditionId: 'feed00000000beef',
+      parameters: {},
+      technique: 'error-guessing',
+      description: 'Ordering 10 items twice in a row keeps one order of 10, not two',
+      expectedOutcome: 'one order of 10 appears in the order list',
+      scenario: 'positive',
+      verification: {},
+      isSpeculative: true,
+      reviewed: false,
+      featureId: 'feature-checkout',
+      layer: 'behavior',
+      oracle: 'research',
+      anchors: [{ kind: 'research', ref: 's9' }],
+      origin: 'research',
+      risk: {
+        likelihood: 'medium',
+        reason: 'a repeated click is the classic duplicate-order defect',
+      },
+      riskScore: 6,
+      priority: 'P1',
+    });
+    data.features['feature-checkout'].fields[1].constraints[0] = {
+      statement: 'never below 1',
+      source: 'domain',
+      confidence: 'high',
+      enforcement: 'observed',
+      anchors: [{ kind: 'probe', ref: 'p1' }],
+    };
+    const errors = validateRaw(data).errors.join(' ');
+    expect(errors).toContain('cites research source "s9"');
+    expect(errors).toContain('cites probe "p1"');
+  });
+
+  it('refuses a constraint said to be enforced, or not, with no probe behind it', () => {
+    const data = report();
+    data.features['feature-checkout'].fields[1].constraints[0].enforcement = 'not-enforced';
+    expect(validateRaw(data).errors.join(' ')).toContain('which only a field probe can show');
+  });
+
+  it('keeps origin and technique honest, and the priority to the arithmetic', () => {
+    const data = report();
+    const condition = data.routes['route-checkout'].conditions[0];
+    condition.priority = 'P3';
+    data.routes['route-checkout'].conditions.push({
+      ...structuredClone(condition),
+      conditionId: 'feed00000000cafe',
+      technique: 'error-guessing',
+      origin: 'generated',
+      priority: 'P1',
+    });
+    const errors = validateRaw(data).errors.join(' ');
+    expect(errors).toContain('does not match riskScore 6');
+    expect(errors).toContain('the generator never builds a error-guessing condition');
+  });
+
+  it('refuses research that rests on fewer than five sources', () => {
+    const dir = setupProject();
+    try {
+      withFeatureMap(dir);
+      mkdirSync(join(dir, 'artifacts', 'analysis', 'research'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'analysis', 'research', 'checkout.json'),
+        JSON.stringify({ sources: [{ id: 's1' }, { id: 's2' }, { id: 's3' }] }),
+        'utf8',
+      );
+      const data = report();
+      data.features['feature-checkout'].research = {
+        status: 'done',
+        archetype: 'checkout',
+        file: 'artifacts/analysis/research/checkout.json',
+      };
+      writeRawReport(dir, data);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.errors.join(' ')).toContain('holds 3 source(s)');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('renderTestConditionsTypes (real standalone tsc check)', () => {
   // AC7 - "tsc-clean" verified by an actual isolated compile, not a substring match.
-  it('renders a schemaVersion-2 TestConditionsReport interface keyed by routeId, and the output is tsc --noEmit clean in isolation', () => {
+  it('renders a schemaVersion-3 TestConditionsReport interface with features and routes, and the output is tsc --noEmit clean in isolation', () => {
     const text = renderTestConditionsTypes();
     expect(text).toContain('TestConditionsReport');
     expect(text).toContain('TestConditionsEntry');
     expect(text).toContain('UnsatisfiedPair');
-    expect(text).toContain('schemaVersion: 2');
+    expect(text).toContain('schemaVersion: 3');
+    expect(text).toContain('features: Record<string, FeatureAnalysis>;');
+    expect(text).toContain(
+      "export type OracleSource = 'requirement' | 'human' | 'research' | 'domain' | 'observed' | 'markup';",
+    );
+    expect(text).toContain("export type ConditionLayer = 'field' | 'rule' | 'behavior' | 'frame';");
     expect(text).toContain('expectedOutcome: string;');
     expect(text).toContain("export type ExecutionLevel = 'ui' | 'dom' | 'api';");
     expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot';");

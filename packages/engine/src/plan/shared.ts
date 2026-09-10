@@ -51,6 +51,9 @@ import { renderCrawlBudget } from './templates/crawl-budget.js';
 import { renderVisualCopilot } from './templates/visual-copilot.js';
 import { renderOverlayLedger } from './templates/overlay-ledger.js';
 import { renderPageInventory } from './templates/page-inventory.js';
+import { renderFieldProbe } from './templates/field-probe.js';
+import { renderTestResearch } from './templates/test-research.js';
+import { renderTestAnalysisPlan } from './templates/test-analysis-plan.js';
 import { renderSkillBriefing } from './templates/skill-briefing.js';
 import { renderMapSiteQuestions } from './templates/map-site-questions.js';
 import { renderMapFeaturesQuestions } from './templates/map-features-questions.js';
@@ -254,6 +257,24 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderPageInventory() },
+          },
+          {
+            path: 'scripts/field-probe.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderFieldProbe() },
+          },
+          {
+            path: 'scripts/test-research.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderTestResearch() },
+          },
+          {
+            path: 'scripts/test-analysis-plan.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderTestAnalysisPlan() },
           },
           {
             path: 'scripts/artifact-journal.mjs',

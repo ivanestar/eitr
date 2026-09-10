@@ -191,6 +191,23 @@ for the design decision this implements and what remains out of scope for this f
 Stage 2 and Stage 3 below take their names (test analysis defines test conditions, test design
 designs test cases from them) from the ISTQB Foundation Level syllabus's fundamental test process.
 
+The stage works feature by feature, riskiest first, and starts every feature from an analysis
+rather than from its fields (ADR 0014). The analysis records what the feature does and how it
+serves the application's confirmed purpose, what each field means and should obey, where each
+constraint comes from and what the page enforces today, the feature's dependencies, and the
+questions only a person can settle. `scripts/test-analysis-plan.mjs` decides the test basis and
+computes the step each feature is at: a crawled application, or one with requirements, tickets or
+code as evidence. `scripts/field-probe.mjs` types values into fields to see what they accept,
+within the crawl boundary and never submitting on production. `scripts/test-research.mjs` keeps
+research per kind of feature: at least five sources from four sites, and no query naming the
+application.
+
+Every condition carries its feature, its layer (field, rule, behaviour, frame), the source of its
+expected result - which separates checks of correctness from regression checks - its anchors
+(checked to exist, one matching that source), and a likelihood. The generator ranks all of them as
+likelihood times the feature's impact, and removes nothing. What follows describes the mechanical
+half of the stage.
+
 A second, explicit-request-only, strictly read-only skill consumes the feature map's
 `reviewed: true` routes plus `site-map.json` and derives typed test conditions per route into
 `artifacts/analysis/test-conditions.json` (`.scaffold/schemas/test-conditions.types.ts` documents its

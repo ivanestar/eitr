@@ -138,14 +138,115 @@ function controlLabel(control) {
   return control.role + (control.hint ? ' next to "' + control.hint + '"' : ' with no label');
 }
 
+// Where a condition's expected result comes from decides what it can catch: a result that is known to
+// be right catches a defect already there; one read off the application as it stands only catches a
+// change. The review says which, per condition.
+const REGRESSION_ORACLES = ['observed', 'markup'];
+const PRIORITY_ORDER = { P1: 0, P2: 1, P3: 2 };
+const LAYER_ORDER = { behavior: 0, rule: 1, field: 2, frame: 3 };
+const IMPACT_RANK = { high: 0, medium: 1, low: 2 };
+
+function oracleTag(condition) {
+  if (!condition.oracle) return '';
+  return (REGRESSION_ORACLES.indexOf(condition.oracle) !== -1 ? 'regression: ' : 'correct: ') + condition.oracle;
+}
+
+function researchLine(research) {
+  if (!research || typeof research !== 'object') return 'Research: not recorded';
+  if (research.status === 'skipped') return 'Research: skipped - ' + (research.reason || 'no reason given');
+  const record = typeof research.file === 'string' ? loadJson(path.join(CWD, research.file)) : null;
+  const count = record && Array.isArray(record.sources) ? record.sources.length : 0;
+  return (
+    'Research: ' +
+    (research.status === 'cached' ? 'reused, ' : '') +
+    count +
+    ' source(s) on "' +
+    (research.archetype || '?') +
+    '"' +
+    (research.file ? ' (' + research.file + ')' : '')
+  );
+}
+
+// One feature's block: what the analysis understood, what is still a question for the reader, and
+// every condition in priority order - the list a person approves, cuts or reorders.
+function renderFeatureBlock(lines, labels, feature, analysis, items, controlsByRoute) {
+  lines.push('**' + feature.name + '** (impact ' + feature.impact + ')');
+  if (analysis) {
+    lines.push('What it is: ' + analysis.purpose + ' ' + (analysis.fitsApplication || ''));
+    lines.push('Kind: ' + analysis.archetype + ' - ' + researchLine(analysis.research));
+    const fields = Array.isArray(analysis.fields) ? analysis.fields : [];
+    if (fields.length > 0) {
+      lines.push('Fields:');
+      fields.forEach(function (field) {
+        const control = field.control && controlsByRoute[field.routeId] ? controlsByRoute[field.routeId][field.control] : null;
+        const constraints = (Array.isArray(field.constraints) ? field.constraints : [])
+          .map(function (constraint) {
+            return constraint.statement + ' [' + constraint.source + (constraint.enforcement === 'not-enforced' ? ', NOT ENFORCED' : '') + ']';
+          })
+          .join('; ');
+        lines.push(
+          '- ' +
+            (controlLabel(control) || field.parameter || field.control) +
+            ': ' +
+            field.meaning +
+            (field.unit ? ' (' + field.unit + ')' : '') +
+            (constraints ? ' - ' + constraints : ''),
+        );
+      });
+    }
+    const questions = Array.isArray(analysis.questions) ? analysis.questions : [];
+    const open = questions.filter(function (question) {
+      return question && typeof question.answer !== 'string';
+    });
+    if (open.length > 0) {
+      lines.push('Questions for you:');
+      open.forEach(function (question, index) {
+        lines.push('' + (index + 1) + '. ' + question.text);
+      });
+    }
+  } else {
+    lines.push('(no analysis recorded for this feature)');
+  }
+  const tiers = { P1: 0, P2: 0, P3: 0 };
+  items.forEach(function (item) {
+    if (tiers[item.condition.priority] !== undefined) tiers[item.condition.priority]++;
+  });
+  lines.push('Conditions - P1: ' + tiers.P1 + ', P2: ' + tiers.P2 + ', P3: ' + tiers.P3);
+  items.forEach(function (item, index) {
+    const condition = item.condition;
+    const tags = [condition.priority || '?', condition.layer || '?', (condition.technique || '?') + (condition.relation ? '/' + condition.relation : '')];
+    const oracle = oracleTag(condition);
+    if (oracle) tags.push(oracle);
+    lines.push(
+      '' +
+        (index + 1) +
+        '. ' +
+        (condition.description || '(no description)') +
+        '  [' +
+        tags.join(' | ') +
+        ']' +
+        (item.routeCount > 1 ? ' on ' + labelFor(labels, item.routeId) : '') +
+        (condition.risk && condition.risk.reason && condition.origin !== 'generated' ? ' - why: ' + condition.risk.reason : '') +
+        (condition.valueNote ? ' - note: ' + condition.valueNote : ''),
+    );
+  });
+}
+
 function renderTestConditions(labels, data) {
   const routes = data && data.routes && typeof data.routes === 'object' ? data.routes : {};
   const entries = Object.values(routes).filter(Boolean);
   entries.sort(function (a, b) {
     return labelFor(labels, a.routeId).localeCompare(labelFor(labels, b.routeId));
   });
+  const analyses = data && data.features && typeof data.features === 'object' ? data.features : {};
+  const featureMap = loadJson(path.join(CWD, 'artifacts', 'analysis', 'feature-map.json'));
+  const mapped = featureMap && featureMap.features && typeof featureMap.features === 'object' ? featureMap.features : {};
 
   const lines = [];
+  lines.push(
+    'Each condition says where its expected result comes from: "correct" (a requirement, a person, research, the meaning of the feature) can catch a defect that is already there; "regression" (what the page states or was seen doing) only catches a change.',
+  );
+  lines.push('');
   // The site frame's own fields are tested once, on the route named in frameRouteId, and left out of
   // every other page on purpose - so say where they went rather than let a reader conclude the
   // language switcher is simply untested, or tested nowhere without anyone having decided that.
@@ -169,11 +270,66 @@ function renderTestConditions(labels, data) {
   }
   let conditionCount = 0;
   const techniqueCounts = {};
+  const tierCounts = { P1: 0, P2: 0, P3: 0 };
   let unsatisfiedTotal = 0;
 
+  // Conditions by the feature they serve, each feature's in priority order - then layer, so what a
+  // feature does comes before what its fields let in.
+  const byFeature = new Map();
+  const controlsByRoute = {};
   for (const entry of entries) {
-    lines.push('**' + labelFor(labels, entry.routeId) + '**');
+    const inventory = loadJson(path.join(INVENTORY_DIR, entry.routeId + '.json'));
+    const byId = {};
+    for (const control of inventory && Array.isArray(inventory.controls) ? inventory.controls : []) byId[control.id] = control;
+    controlsByRoute[entry.routeId] = byId;
+    for (const condition of Array.isArray(entry.conditions) ? entry.conditions : []) {
+      const featureId = typeof condition.featureId === 'string' ? condition.featureId : '(none)';
+      if (!byFeature.has(featureId)) byFeature.set(featureId, []);
+      byFeature.get(featureId).push({ condition: condition, routeId: entry.routeId });
+      conditionCount += 1;
+      const technique = condition.technique || 'unspecified';
+      techniqueCounts[technique] = (techniqueCounts[technique] || 0) + 1;
+      if (tierCounts[condition.priority] !== undefined) tierCounts[condition.priority]++;
+    }
+  }
+  for (const featureId of Object.keys(analyses)) if (!byFeature.has(featureId)) byFeature.set(featureId, []);
+  const featureIds = Array.from(byFeature.keys()).sort(function (a, b) {
+    const fa = mapped[a] || {};
+    const fb = mapped[b] || {};
+    return (IMPACT_RANK[fa.impact] ?? 3) - (IMPACT_RANK[fb.impact] ?? 3) || String(fa.name || a).localeCompare(String(fb.name || b));
+  });
+  for (const featureId of featureIds) {
+    const items = byFeature.get(featureId);
+    const routeSet = new Set(
+      items.map(function (item) {
+        return item.routeId;
+      }),
+    );
+    items.forEach(function (item) {
+      item.routeCount = routeSet.size;
+    });
+    items.sort(function (a, b) {
+      return (
+        (PRIORITY_ORDER[a.condition.priority] ?? 3) - (PRIORITY_ORDER[b.condition.priority] ?? 3) ||
+        (b.condition.riskScore || 0) - (a.condition.riskScore || 0) ||
+        (LAYER_ORDER[a.condition.layer] ?? 4) - (LAYER_ORDER[b.condition.layer] ?? 4) ||
+        String(a.condition.description).localeCompare(String(b.condition.description))
+      );
+    });
+    const feature = mapped[featureId] || { name: featureId === '(none)' ? 'Conditions with no feature' : featureId, impact: '?' };
+    renderFeatureBlock(lines, labels, feature, analyses[featureId], items, controlsByRoute);
+    lines.push('');
+  }
+
+  // What stays per route: the constraints a route's fields carry, pairs it could not cover, and the
+  // fields it left out - each a decision a person should see.
+  for (const entry of entries) {
     const constraints = Array.isArray(entry.constraints) ? entry.constraints : [];
+    const unsatisfied = Array.isArray(entry.unsatisfiedPairs) ? entry.unsatisfiedPairs.length : 0;
+    const excluded = Array.isArray(entry.excluded) ? entry.excluded : [];
+    unsatisfiedTotal += unsatisfied;
+    if (constraints.length === 0 && unsatisfied === 0 && excluded.length === 0) continue;
+    lines.push('**' + labelFor(labels, entry.routeId) + '**');
     if (constraints.length > 0) {
       lines.push(
         'Constraints: ' +
@@ -192,33 +348,10 @@ function renderTestConditions(labels, data) {
             .join('; '),
       );
     }
-    const conditions = Array.isArray(entry.conditions) ? entry.conditions : [];
-    conditions.forEach(function (condition, index) {
-      conditionCount += 1;
-      const technique = condition.technique || 'unspecified';
-      techniqueCounts[technique] = (techniqueCounts[technique] || 0) + 1;
-      lines.push(
-        '' +
-          (index + 1) +
-          '. ' +
-          (condition.description || '(no description)') +
-          '  [' +
-          technique +
-          (condition.relation ? ', ' + condition.relation : '') +
-          ']',
-      );
-    });
-    const unsatisfied = Array.isArray(entry.unsatisfiedPairs) ? entry.unsatisfiedPairs.length : 0;
-    unsatisfiedTotal += unsatisfied;
     if (unsatisfied > 0) lines.push('Unsatisfied pairs: ' + unsatisfied);
     // A field left out is a decision a person should see and be able to overturn.
-    const excluded = Array.isArray(entry.excluded) ? entry.excluded : [];
     if (excluded.length > 0) {
-      const inventory = loadJson(path.join(INVENTORY_DIR, entry.routeId + '.json'));
-      const byId = {};
-      for (const control of inventory && Array.isArray(inventory.controls) ? inventory.controls : []) {
-        byId[control.id] = control;
-      }
+      const byId = controlsByRoute[entry.routeId] || {};
       lines.push(
         'Fields left out: ' +
           excluded
@@ -243,16 +376,31 @@ function renderTestConditions(labels, data) {
     })
     .join(', ');
 
+  let openQuestions = 0;
+  for (const analysis of Object.values(analyses)) {
+    for (const question of analysis && Array.isArray(analysis.questions) ? analysis.questions : []) {
+      if (question && typeof question.answer !== 'string') openQuestions++;
+    }
+  }
+
   return {
-    entryCount: entries.length,
+    entryCount: featureIds.length,
     markdown: lines.join('\\n').trimEnd(),
     summary:
       conditionCount +
       ' condition(s) across ' +
+      featureIds.length +
+      ' feature(s) and ' +
       entries.length +
-      ' route(s)' +
+      ' route(s) - P1: ' +
+      tierCounts.P1 +
+      ', P2: ' +
+      tierCounts.P2 +
+      ', P3: ' +
+      tierCounts.P3 +
       (techniqueSummary ? ' (' + techniqueSummary + ')' : '') +
-      (unsatisfiedTotal > 0 ? ', ' + unsatisfiedTotal + ' uncoverable parameter pair(s)' : ''),
+      (unsatisfiedTotal > 0 ? ', ' + unsatisfiedTotal + ' uncoverable parameter pair(s)' : '') +
+      (openQuestions > 0 ? ', ' + openQuestions + ' question(s) for you' : ''),
   };
 }
 
