@@ -9,9 +9,22 @@ interface ConditionFixture {
   conditionId: string;
   parameters: Record<string, string>;
   technique: string;
+  description: string;
+  expectedOutcome: string;
+  executionLevel?: string;
+  scenario: string;
   verification: Record<string, unknown>;
   isSpeculative: boolean;
   reviewed: boolean;
+}
+
+interface PartitionFixture {
+  id: string;
+  kind: string;
+  sampleValues: string[];
+  expectedOutcome: string;
+  rule?: { signal: string; excerpt: string };
+  executionLevel?: string;
 }
 
 interface RouteEntry {
@@ -19,9 +32,16 @@ interface RouteEntry {
   parameters: Array<{
     name: string;
     kind: string;
-    partitions: Array<{ id: string; kind: string; sampleValues: string[] }>;
-    boundaries: Array<{ boundary: string; values: [string, string, string] }>;
+    partitions: PartitionFixture[];
+    boundaries: Array<{
+      boundary: string;
+      values: [string, string, string];
+      rule: { signal: string; excerpt: string };
+      acceptedOutcome: string;
+      rejectedOutcome: string;
+    }>;
     evidence: Array<{ signal: string; excerpt: string }>;
+    options?: string[];
   }>;
   constraints: Array<{
     ifParam: string;
@@ -43,12 +63,12 @@ interface RouteEntry {
 }
 
 function threeParamRoute(): {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
   routes: Record<string, RouteEntry>;
 } {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-09-03T11:00:00.000Z',
     routes: {
       'route-checkout': {
@@ -57,9 +77,20 @@ function threeParamRoute(): {
           {
             name: 'shippingMethod',
             kind: 'select',
+            options: ['Standard', 'Express'],
             partitions: [
-              { id: 'standard', kind: 'valid', sampleValues: ['Standard'] },
-              { id: 'express', kind: 'valid', sampleValues: ['Express'] },
+              {
+                id: 'standard',
+                kind: 'valid',
+                sampleValues: ['Standard'],
+                expectedOutcome: 'the summary shows a standard shipping line',
+              },
+              {
+                id: 'express',
+                kind: 'valid',
+                sampleValues: ['Express'],
+                expectedOutcome: 'the summary shows an express shipping line',
+              },
             ],
             boundaries: [],
             evidence: [{ signal: 'select-option-text', excerpt: 'Standard' }],
@@ -67,9 +98,20 @@ function threeParamRoute(): {
           {
             name: 'paymentMethod',
             kind: 'select',
+            options: ['Card', 'PayPal'],
             partitions: [
-              { id: 'card', kind: 'valid', sampleValues: ['Card'] },
-              { id: 'paypal', kind: 'valid', sampleValues: ['PayPal'] },
+              {
+                id: 'card',
+                kind: 'valid',
+                sampleValues: ['Card'],
+                expectedOutcome: 'the card number fields appear',
+              },
+              {
+                id: 'paypal',
+                kind: 'valid',
+                sampleValues: ['PayPal'],
+                expectedOutcome: 'a PayPal button appears',
+              },
             ],
             boundaries: [],
             evidence: [{ signal: 'select-option-text', excerpt: 'Card' }],
@@ -78,10 +120,29 @@ function threeParamRoute(): {
             name: 'quantity',
             kind: 'number',
             partitions: [
-              { id: 'valid', kind: 'valid', sampleValues: ['5'] },
-              { id: 'too-high', kind: 'invalid', sampleValues: ['1000'] },
+              {
+                id: 'valid',
+                kind: 'valid',
+                sampleValues: ['5'],
+                expectedOutcome: 'the line total updates to the chosen quantity.',
+              },
+              {
+                id: 'too-high',
+                kind: 'invalid',
+                sampleValues: ['1000'],
+                expectedOutcome: 'a message under the field says at most 10 can be ordered',
+                rule: { signal: 'html5-constraint', excerpt: 'max=10' },
+              },
             ],
-            boundaries: [{ boundary: 'max', values: ['9', '10', '11'] }],
+            boundaries: [
+              {
+                boundary: 'max',
+                values: ['9', '10', '11'],
+                rule: { signal: 'html5-constraint', excerpt: 'max=10' },
+                acceptedOutcome: 'the line total matches the quantity entered.',
+                rejectedOutcome: 'the field is marked invalid and the order cannot be placed',
+              },
+            ],
             evidence: [{ signal: 'html5-constraint', excerpt: 'max=10' }],
           },
         ],
@@ -161,7 +222,7 @@ function writeRouteCriticality(dir: string, routeId: string, tier: string, revie
 
 function singleTextParamRoute(routeId: string) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-09-03T11:00:00.000Z',
     routes: {
       [routeId]: {
@@ -170,7 +231,14 @@ function singleTextParamRoute(routeId: string) {
           {
             name: 'name',
             kind: 'text',
-            partitions: [{ id: 'valid-name', kind: 'valid', sampleValues: ['Ann'] }],
+            partitions: [
+              {
+                id: 'valid-name',
+                kind: 'valid',
+                sampleValues: ['Ann'],
+                expectedOutcome: 'the greeting reads "Hello, Ann"',
+              },
+            ],
             boundaries: [],
             evidence: [{ signal: 'form-label', excerpt: 'Name' }],
           },
@@ -271,12 +339,21 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       expect(byValue['11'].description).toContain('quantity="11"');
       expect(byValue['11'].description).toContain('(negative)');
       expect(byValue['9'].description).toContain('(positive)');
-      // Boundary-value phrasing is distinct from the generic accepts/handles verb - grounded in
-      // this being an edge-value verdict, not cosmetic rotation.
-      expect(byValue['11'].description).toContain('boundary value');
-      expect(byValue['11'].description).toContain('is rejected');
-      expect(byValue['9'].description).toContain('boundary value');
-      expect(byValue['9'].description).toContain('is accepted');
+      // Each probe says where it sits relative to the limit and takes its outcome from the boundary:
+      // the value past the limit the recorded rejection, the values at and inside it the accepted
+      // outcome - never the valid partition's, which was written for a different value (trailing
+      // full stop trimmed so the sentence still reads as one).
+      expect(byValue['11'].description).toContain('quantity="11" (one above the maximum)');
+      expect(byValue['11'].expectedOutcome).toBe(
+        'the field is marked invalid and the order cannot be placed',
+      );
+      expect(byValue['10'].description).toContain('quantity="10" (at the maximum)');
+      for (const inside of ['9', '10']) {
+        expect(byValue[inside].expectedOutcome).toBe('the line total matches the quantity entered');
+      }
+      expect(byValue['9'].description).toContain(
+        ': the line total matches the quantity entered (positive)',
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -396,7 +473,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
   // third column around the seed).
   it('discovers a 3-way conflict between two independent constraints interacting through a third parameter', () => {
     const route = {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       generatedAt: '2026-09-03T11:00:00.000Z',
       routes: {
         'route-checkout': {
@@ -406,8 +483,13 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
               name: 'paramA',
               kind: 'select',
               partitions: [
-                { id: 'x', kind: 'valid', sampleValues: ['X'] },
-                { id: 'not-x', kind: 'valid', sampleValues: ['Not X'] },
+                { id: 'x', kind: 'valid', sampleValues: ['X'], expectedOutcome: 'X is shown' },
+                {
+                  id: 'not-x',
+                  kind: 'valid',
+                  sampleValues: ['Not X'],
+                  expectedOutcome: 'Not X is shown',
+                },
               ],
               boundaries: [],
               evidence: [{ signal: 'select-option-text', excerpt: 'X' }],
@@ -416,8 +498,13 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
               name: 'paramB',
               kind: 'select',
               partitions: [
-                { id: 'y', kind: 'valid', sampleValues: ['Y'] },
-                { id: 'not-y', kind: 'valid', sampleValues: ['Not Y'] },
+                { id: 'y', kind: 'valid', sampleValues: ['Y'], expectedOutcome: 'Y is shown' },
+                {
+                  id: 'not-y',
+                  kind: 'valid',
+                  sampleValues: ['Not Y'],
+                  expectedOutcome: 'Not Y is shown',
+                },
               ],
               boundaries: [],
               evidence: [{ signal: 'select-option-text', excerpt: 'Y' }],
@@ -426,8 +513,8 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
               name: 'paramC',
               kind: 'select',
               partitions: [
-                { id: 'z', kind: 'valid', sampleValues: ['Z'] },
-                { id: 'w', kind: 'valid', sampleValues: ['W'] },
+                { id: 'z', kind: 'valid', sampleValues: ['Z'], expectedOutcome: 'Z is shown' },
+                { id: 'w', kind: 'valid', sampleValues: ['W'], expectedOutcome: 'W is shown' },
               ],
               boundaries: [],
               evidence: [{ signal: 'select-option-text', excerpt: 'Z' }],
@@ -555,7 +642,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
 
   it('reports a clean FAILED shape (not a crash) for a route entry missing a valid parameters array', () => {
     const dir = setupProject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: '2026-09-03T11:00:00.000Z',
       routes: {
         'route-checkout': {
@@ -621,7 +708,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
   // which is the common case on a simple real site, not a rare edge case.
   it('covers a single-parameter route with one condition per partition instead of zero', () => {
     const dir = setupProject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: '2026-09-03T11:00:00.000Z',
       routes: {
         'route-search': {
@@ -631,9 +718,25 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
               name: 's',
               kind: 'text',
               partitions: [
-                { id: 'valid-search-term', kind: 'valid', sampleValues: ['widgets'] },
-                { id: 'empty-search-term', kind: 'invalid', sampleValues: [''] },
-                { id: 'special-characters', kind: 'valid', sampleValues: ['A&B!'] },
+                {
+                  id: 'valid-search-term',
+                  kind: 'valid',
+                  sampleValues: ['widgets'],
+                  expectedOutcome: 'results containing the term are listed',
+                },
+                {
+                  id: 'empty-search-term',
+                  kind: 'invalid',
+                  sampleValues: [''],
+                  expectedOutcome: 'the search button stays disabled',
+                  rule: { signal: 'html5-constraint', excerpt: 'required' },
+                },
+                {
+                  id: 'special-characters',
+                  kind: 'valid',
+                  sampleValues: ['A&B!'],
+                  expectedOutcome: 'results containing the term are listed',
+                },
               ],
               boundaries: [],
               evidence: [{ signal: 'form-label', excerpt: 'Search' }],
@@ -687,7 +790,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
   // injection-class values per parameter kind, independent of parameter count or boundaries.
   it('probes the closed checklist for text/email/number/date parameters, holding other parameters at their valid partition', () => {
     const dir = setupProject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: '2026-09-03T11:00:00.000Z',
       routes: {
         'route-contact': {
@@ -696,28 +799,56 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
             {
               name: 'name',
               kind: 'text',
-              partitions: [{ id: 'valid-name', kind: 'valid', sampleValues: ['Ann'] }],
+              partitions: [
+                {
+                  id: 'valid-name',
+                  kind: 'valid',
+                  sampleValues: ['Ann'],
+                  expectedOutcome: 'the name shows in the summary',
+                },
+              ],
               boundaries: [],
               evidence: [{ signal: 'form-label', excerpt: 'Name' }],
             },
             {
               name: 'email',
               kind: 'email',
-              partitions: [{ id: 'valid-email', kind: 'valid', sampleValues: ['ann@example.com'] }],
+              partitions: [
+                {
+                  id: 'valid-email',
+                  kind: 'valid',
+                  sampleValues: ['ann@example.com'],
+                  expectedOutcome: 'the email shows in the summary',
+                },
+              ],
               boundaries: [],
               evidence: [{ signal: 'form-label', excerpt: 'Email' }],
             },
             {
               name: 'age',
               kind: 'number',
-              partitions: [{ id: 'valid-age', kind: 'valid', sampleValues: ['30'] }],
+              partitions: [
+                {
+                  id: 'valid-age',
+                  kind: 'valid',
+                  sampleValues: ['30'],
+                  expectedOutcome: 'the age shows in the summary',
+                },
+              ],
               boundaries: [],
               evidence: [{ signal: 'form-label', excerpt: 'Age' }],
             },
             {
               name: 'birthdate',
               kind: 'date',
-              partitions: [{ id: 'valid-birthdate', kind: 'valid', sampleValues: ['1996-05-01'] }],
+              partitions: [
+                {
+                  id: 'valid-birthdate',
+                  kind: 'valid',
+                  sampleValues: ['1996-05-01'],
+                  expectedOutcome: 'the birthdate shows in the summary',
+                },
+              ],
               boundaries: [],
               evidence: [{ signal: 'form-label', excerpt: 'Birthdate' }],
             },
@@ -746,12 +877,14 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
         expect(c.parameters.email).toBe('valid-email');
         expect(c.parameters.age).toBe('valid-age');
         expect(c.parameters.birthdate).toBe('valid-birthdate');
-        // Checklist probes are malformed/injection-class by construction - always negative, with
-        // a safety-claim phrasing distinct from the generic accepts/handles verb.
+        // Checklist probes are malformed/injection-class by construction - always negative, and the
+        // outcome is the robustness a person can check whether or not the value is accepted.
         expect(c.scenario).toBe('negative');
         expect(c.description).toContain('(negative)');
-        expect(c.description).toContain('safely rejects the malformed input');
-        expect(c.description).toContain('name=' + JSON.stringify(c.parameters.name));
+        expect(c.description).toContain(
+          'name=' + JSON.stringify(c.parameters.name) + ' (malformed-input checklist)',
+        );
+        expect(c.expectedOutcome).toContain('no script runs');
       }
       const emailProbes = checklist.filter((c) => c.parameters.email !== 'valid-email');
       expect(emailProbes.length).toBe(4);
@@ -863,6 +996,260 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe('single-fault vectors and recorded outcomes', () => {
+    // Shaped on the live unit-converter case: a select whose invalid value the control cannot
+    // produce, a number field with a stated rule, and a free-text field - three parameters that
+    // each carry one invalid partition, so a naive covering array would pair invalid with invalid.
+    function faultRoute() {
+      return {
+        schemaVersion: 2,
+        generatedAt: '2026-09-10T11:00:00.000Z',
+        routes: {
+          'route-convert': {
+            routeId: 'route-convert',
+            parameters: [
+              {
+                name: 'measure',
+                kind: 'select',
+                options: ['Length', 'Weight'],
+                partitions: [
+                  {
+                    id: 'length',
+                    kind: 'valid',
+                    sampleValues: ['Length'],
+                    expectedOutcome: 'the result lists metres, feet and inches',
+                  },
+                  {
+                    id: 'weight',
+                    kind: 'valid',
+                    sampleValues: ['Weight'],
+                    expectedOutcome: 'the result lists kilograms and pounds',
+                  },
+                  {
+                    id: 'unknown-measure',
+                    kind: 'invalid',
+                    sampleValues: ['Speed of light'],
+                    expectedOutcome:
+                      'no result is shown and the measure list keeps its last choice',
+                    rule: { signal: 'select-option-text', excerpt: 'Length, Weight' },
+                    executionLevel: 'dom',
+                  },
+                ],
+                boundaries: [],
+                evidence: [{ signal: 'form-label', excerpt: 'Measure' }],
+              },
+              {
+                name: 'amount',
+                kind: 'number',
+                partitions: [
+                  {
+                    id: 'number',
+                    kind: 'valid',
+                    sampleValues: ['100'],
+                    expectedOutcome: 'every listed unit shows a converted value',
+                  },
+                  {
+                    id: 'not-a-number',
+                    kind: 'invalid',
+                    sampleValues: ['abc'],
+                    expectedOutcome: 'a message under the field asks for a number',
+                    rule: { signal: 'html5-constraint', excerpt: 'type=number' },
+                  },
+                ],
+                boundaries: [],
+                evidence: [{ signal: 'form-label', excerpt: 'Amount' }],
+              },
+              {
+                name: 'label',
+                kind: 'text',
+                partitions: [
+                  {
+                    id: 'short',
+                    kind: 'valid',
+                    sampleValues: ['Trip'],
+                    expectedOutcome: 'the result is titled with the label',
+                  },
+                  {
+                    id: 'too-long',
+                    kind: 'invalid',
+                    sampleValues: ['x'.repeat(41)],
+                    expectedOutcome: 'the counter under the field turns red at 41 of 40',
+                    rule: { signal: 'html5-constraint', excerpt: 'maxlength=40' },
+                  },
+                ],
+                boundaries: [],
+                evidence: [{ signal: 'form-label', excerpt: 'Label' }],
+              },
+            ],
+            constraints: [],
+            conditions: [],
+            unsatisfiedPairs: [],
+            sourceContentHash: 'abc123',
+            sourceParamsHash: '',
+            analyzedAt: '2026-09-10T11:00:00.000Z',
+          },
+        },
+      };
+    }
+
+    type Report = ReturnType<typeof faultRoute>;
+    type FaultParam = Report['routes']['route-convert']['parameters'][number];
+
+    function combinatorialOf(dir: string) {
+      return readReport(dir).routes['route-convert'].conditions.filter(
+        (c) => c.technique === 'combinatorial',
+      );
+    }
+
+    function invalidIn(condition: ConditionFixture, parameters: FaultParam[]): string[] {
+      return parameters
+        .filter((p) =>
+          p.partitions.some(
+            (part) => part.kind === 'invalid' && part.id === condition.parameters[p.name],
+          ),
+        )
+        .map((p) => p.name);
+    }
+
+    it('never puts two invalid values in one vector, and pairs each with every valid value of the other parameters', () => {
+      const report = faultRoute();
+      const parameters = report.routes['route-convert'].parameters;
+      const dir = setupProject(report);
+      try {
+        expect(run(dir).status).toBe(0);
+        const combinatorial = combinatorialOf(dir);
+        for (const c of combinatorial) {
+          expect(invalidIn(c, parameters).length).toBeLessThanOrEqual(1);
+        }
+        for (const p of parameters) {
+          for (const bad of p.partitions.filter((part) => part.kind === 'invalid')) {
+            for (const q of parameters.filter((other) => other.name !== p.name)) {
+              for (const good of q.partitions.filter((part) => part.kind === 'valid')) {
+                expect(
+                  combinatorial.some(
+                    (c) => c.parameters[p.name] === bad.id && c.parameters[q.name] === good.id,
+                  ),
+                  p.name + '=' + bad.id + ' with ' + q.name + '=' + good.id,
+                ).toBe(true);
+              }
+            }
+          }
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    // A rejected submission never exercised the valid values beside the rejected one, so a valid
+    // pair only counts as covered in a vector where every value is valid.
+    it('covers every valid pair in an all-valid vector', () => {
+      const report = faultRoute();
+      const parameters = report.routes['route-convert'].parameters;
+      const dir = setupProject(report);
+      try {
+        run(dir);
+        const positives = combinatorialOf(dir).filter((c) => invalidIn(c, parameters).length === 0);
+        for (let i = 0; i < parameters.length; i++) {
+          for (let j = i + 1; j < parameters.length; j++) {
+            for (const a of parameters[i].partitions.filter((part) => part.kind === 'valid')) {
+              for (const b of parameters[j].partitions.filter((part) => part.kind === 'valid')) {
+                expect(
+                  positives.some(
+                    (c) =>
+                      c.parameters[parameters[i].name] === a.id &&
+                      c.parameters[parameters[j].name] === b.id,
+                  ),
+                  parameters[i].name + '=' + a.id + ' with ' + parameters[j].name + '=' + b.id,
+                ).toBe(true);
+              }
+            }
+          }
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('takes a negative condition outcome from its one invalid value and a positive one from every value it holds', () => {
+      const report = faultRoute();
+      const parameters = report.routes['route-convert'].parameters;
+      const dir = setupProject(report);
+      try {
+        run(dir);
+        const conditions = readReport(dir).routes['route-convert'].conditions;
+        for (const c of combinatorialOf(dir)) {
+          const invalid = invalidIn(c, parameters);
+          if (invalid.length === 1) {
+            const param = parameters.find((p) => p.name === invalid[0])!;
+            const partition = param.partitions.find(
+              (part) => part.id === c.parameters[param.name],
+            )!;
+            expect(c.scenario).toBe('negative');
+            expect(c.expectedOutcome).toBe(partition.expectedOutcome);
+            expect(c.description).toContain(': ' + partition.expectedOutcome + ' (negative)');
+          } else {
+            expect(c.scenario).toBe('positive');
+            for (const p of parameters) {
+              const partition = p.partitions.find((part) => part.id === c.parameters[p.name])!;
+              expect(c.expectedOutcome).toContain(partition.expectedOutcome);
+            }
+          }
+        }
+        for (const c of conditions) {
+          expect(c.description).not.toMatch(/correctly handles|as expected/i);
+          expect(c.expectedOutcome.length).toBeGreaterThan(0);
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('carries a dom-level invalid value onto the condition and says how it is delivered', () => {
+      const dir = setupProject(faultRoute());
+      try {
+        run(dir);
+        const combinatorial = combinatorialOf(dir);
+        const forced = combinatorial.filter((c) => c.parameters.measure === 'unknown-measure');
+        expect(forced.length).toBeGreaterThan(0);
+        for (const c of forced) {
+          expect(c.executionLevel).toBe('dom');
+          expect(c.description).toContain(
+            'measure="Speed of light" (invalid, set by script - the control does not offer it)',
+          );
+        }
+        for (const c of combinatorial.filter((c) => c.parameters.measure !== 'unknown-measure')) {
+          expect(c.executionLevel).toBeUndefined();
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('refuses to generate from a partition with no recorded outcome rather than inventing one', () => {
+      const report = singleTextParamRoute('route-greet') as {
+        routes: Record<
+          string,
+          { parameters: Array<{ partitions: Array<Record<string, unknown>> }> }
+        >;
+      };
+      delete report.routes['route-greet'].parameters[0].partitions[0].expectedOutcome;
+      const dir = setupProject(report);
+      try {
+        const result = run(dir);
+        expect(result.status).toBe(1);
+        const output = JSON.parse(result.stdout);
+        expect(output.status).toBe('FAILED');
+        expect(
+          output.errors.some((e: string) =>
+            e.includes('partitions[0].expectedOutcome must be a non-empty string'),
+          ),
+        ).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('flow-oriented techniques from the feature map', () => {

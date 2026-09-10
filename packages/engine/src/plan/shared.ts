@@ -73,7 +73,7 @@ import { renderJourneysValidator } from './templates/journeys-validator.js';
  *
  * This function is called once per generation and its output is the same regardless of the
  * language + tool combination chosen. When a new language or tool is added, only the
- * LanguageAdapter and ToolAdapter need to change вЂ” this function stays untouched.
+ * LanguageAdapter and ToolAdapter need to change - this function stays untouched.
  */
 export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
   const ciCd = opts.ciCd ?? 'none';

@@ -1,4 +1,4 @@
-﻿// Template for scripts/render-review-artifact.mjs вЂ” renders a stage's review artifact from its own
+﻿// Template for scripts/render-review-artifact.mjs - renders a stage's review artifact from its own
 // JSON, and decides deterministically whether it is small enough to print into the chat or big
 // enough to belong in a file the human can actually read.
 //

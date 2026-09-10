@@ -320,6 +320,48 @@ describe('scripts/compose-journeys.mjs (real execution)', () => {
       }
     });
 
+    // A value the control cannot offer is set by script in a browser, whatever the default for its
+    // technique would be; an api-level one goes to the endpoint the crawl saw.
+    it('keeps the execution level a condition carries: dom in the browser, api at the endpoint', () => {
+      const dir = setupProject();
+      try {
+        const routes = routeAFixture();
+        routes['route-checkout'].conditions.push(
+          {
+            ...condition(
+              'forceddom000001',
+              { email: 'invalid', quantity: 'valid' },
+              'combinatorial',
+            ),
+            executionLevel: 'dom',
+          } as ReturnType<typeof condition>,
+          {
+            ...condition(
+              'forcedapi000001',
+              { email: 'valid', quantity: 'invalid' },
+              'combinatorial',
+            ),
+            executionLevel: 'api',
+          } as ReturnType<typeof condition>,
+        );
+        writeTestConditions(dir, testConditionsFixture(routes));
+        expect(run(dir).status).toBe(0);
+        const dom = journeyCarrying(dir, 'forceddom000001');
+        expect(dom?.testInterface).toBe('ui');
+        expect(
+          dom?.conditionAssignments.find((a) => a.conditionId === 'forceddom000001')?.reason,
+        ).toBe('dom-level-value');
+        // Without the level, this vector would go to the UI under the html5-constraint override.
+        const api = journeyCarrying(dir, 'forcedapi000001');
+        expect(api?.testInterface).toBe('api');
+        expect(
+          api?.conditionAssignments.find((a) => a.conditionId === 'forcedapi000001')?.reason,
+        ).toBe('api-level-value');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it('splits one route into a UI journey and an API journey rather than one journey absorbing both', () => {
       const dir = setupProject();
       try {

@@ -1,4 +1,4 @@
-﻿// Template for scripts/coverage-status.mjs вЂ” the deterministic answer to "is this test suite done
+﻿// Template for scripts/coverage-status.mjs - the deterministic answer to "is this test suite done
 // yet", computed entirely from artifacts that already exist.
 //
 // Every other stage in this pipeline can say what it produced; none of them could say whether what

@@ -25,7 +25,7 @@ const SITE_MAP = {
 
 function wellFormedParametersOnly() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-09-03T11:00:00.000Z',
     routes: {
       'route-checkout': {
@@ -35,8 +35,19 @@ function wellFormedParametersOnly() {
             name: 'email',
             kind: 'email',
             partitions: [
-              { id: 'valid', kind: 'valid', sampleValues: ['user@example.com'] },
-              { id: 'empty', kind: 'invalid', sampleValues: [''] },
+              {
+                id: 'valid',
+                kind: 'valid',
+                sampleValues: ['user@example.com'],
+                expectedOutcome: 'the confirmation names the address',
+              },
+              {
+                id: 'empty',
+                kind: 'invalid',
+                sampleValues: [''],
+                expectedOutcome: 'a message under the field says the email is required',
+                rule: { signal: 'html5-constraint', excerpt: 'required' },
+              },
             ],
             boundaries: [],
             evidence: [{ signal: 'form-label', excerpt: 'Email' }],
@@ -45,10 +56,29 @@ function wellFormedParametersOnly() {
             name: 'quantity',
             kind: 'number',
             partitions: [
-              { id: 'valid', kind: 'valid', sampleValues: ['5'] },
-              { id: 'too-high', kind: 'invalid', sampleValues: ['1000'] },
+              {
+                id: 'valid',
+                kind: 'valid',
+                sampleValues: ['5'],
+                expectedOutcome: 'the line total updates to the chosen quantity',
+              },
+              {
+                id: 'too-high',
+                kind: 'invalid',
+                sampleValues: ['1000'],
+                expectedOutcome: 'a message under the field says at most 10 can be ordered',
+                rule: { signal: 'html5-constraint', excerpt: 'max=10' },
+              },
             ],
-            boundaries: [{ boundary: 'max', values: ['9', '10', '11'] }],
+            boundaries: [
+              {
+                boundary: 'max',
+                values: ['9', '10', '11'],
+                rule: { signal: 'html5-constraint', excerpt: 'max=10' },
+                acceptedOutcome: 'the line total matches the quantity entered',
+                rejectedOutcome: 'the field is marked invalid and the order cannot be placed',
+              },
+            ],
             evidence: [{ signal: 'html5-constraint', excerpt: 'max=10' }],
           },
         ],
@@ -72,7 +102,10 @@ function wellFormedWithConditions() {
       conditionId: 'a1b2c3d4e5f6a1b2',
       parameters: { email: 'valid', quantity: 'valid' },
       technique: 'combinatorial',
-      description: 'Verify the page accepts email="user@example.com", quantity="5" (positive)',
+      description:
+        'With email="user@example.com", quantity="5": the confirmation names the address; the line total updates to the chosen quantity (positive)',
+      expectedOutcome:
+        'the confirmation names the address; the line total updates to the chosen quantity',
       scenario: 'positive',
       verification: {},
       isSpeculative: true,
@@ -364,6 +397,248 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     }
   });
 
+  describe('oracle and partition validity', () => {
+    type Fixture = {
+      routes: Record<
+        string,
+        {
+          parameters: Array<Record<string, any>>;
+          conditions: Array<Record<string, any>>;
+        }
+      >;
+    };
+
+    function paramsFixture(): Fixture {
+      return structuredClone(wellFormedParametersOnly()) as unknown as Fixture;
+    }
+
+    function conditionsFixture(): Fixture {
+      return structuredClone(wellFormedWithConditions()) as unknown as Fixture;
+    }
+
+    // The unit-converter shape: a select with its offered options recorded.
+    function withMeasureSelect(report: Fixture, partitions: Array<Record<string, any>>) {
+      report.routes['route-checkout'].parameters.push({
+        name: 'measure',
+        kind: 'select',
+        options: ['Length', 'Weight', 'Speed'],
+        partitions,
+        boundaries: [],
+        evidence: [{ signal: 'form-label', excerpt: 'Measure' }],
+      });
+      return report;
+    }
+
+    const lengthPartition = {
+      id: 'length',
+      kind: 'valid',
+      sampleValues: ['Length'],
+      expectedOutcome: 'the result lists metres, feet and inches',
+    };
+
+    function errorsFor(report: unknown, args: string[] = []): string[] {
+      const dir = setupProject();
+      try {
+        writeReport(dir, report);
+        const output = JSON.parse(run(dir, args).stdout);
+        return output.errors as string[];
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    it('fails an invalid partition that names no rule it breaks', () => {
+      const report = paramsFixture();
+      delete report.routes['route-checkout'].parameters[0].partitions[1].rule;
+      const errors = errorsFor(report, ['--stage=parameters']);
+      expect(errors.some((e) => e.includes('partitions[1].rule is required'))).toBe(true);
+    });
+
+    it('fails a rule or a boundary that quotes a placeholder example', () => {
+      const report = paramsFixture();
+      report.routes['route-checkout'].parameters[1].boundaries[0].rule = {
+        signal: 'form-label',
+        excerpt: 'e.g. 20',
+      };
+      const errors = errorsFor(report, ['--stage=parameters']);
+      expect(errors.some((e) => e.includes('"e.g. 20" is an example value, not a rule'))).toBe(
+        true,
+      );
+    });
+
+    it('fails a boundary with no stated limit or without either of its outcomes', () => {
+      const report = paramsFixture();
+      delete report.routes['route-checkout'].parameters[1].boundaries[0].rule;
+      delete report.routes['route-checkout'].parameters[1].boundaries[0].acceptedOutcome;
+      delete report.routes['route-checkout'].parameters[1].boundaries[0].rejectedOutcome;
+      const errors = errorsFor(report, ['--stage=parameters']);
+      expect(errors.some((e) => e.includes('boundaries[0].rule is required'))).toBe(true);
+      for (const field of ['acceptedOutcome', 'rejectedOutcome']) {
+        expect(
+          errors.some((e) => e.includes('boundaries[0].' + field + ' must be a non-empty string')),
+        ).toBe(true);
+      }
+    });
+
+    // A positive vector's outcome joins one outcome per value, so over six parameters it runs long;
+    // the ceiling is for what a model writes by hand.
+    it('lets a generated condition outcome run long but caps the one an invariant states itself', () => {
+      const long = 'every GUID is wrapped in braces; '.repeat(8).trim();
+      const generated = conditionsFixture();
+      generated.routes['route-checkout'].conditions[0].expectedOutcome = long;
+      expect(errorsFor(generated)).toEqual([]);
+
+      const invariant = conditionsFixture();
+      invariant.routes['route-checkout'].conditions[0] = {
+        ...invariant.routes['route-checkout'].conditions[0],
+        technique: 'architectural-invariant',
+        parameters: {},
+        scenario: 'negative',
+        negativeCategory: 'concurrent_conflict',
+        description: 'Verify a double-clicked order button places one order',
+        expectedOutcome: long,
+      };
+      expect(
+        errorsFor(invariant).some((e) => e.includes('.expectedOutcome must be <=200 chars')),
+      ).toBe(true);
+    });
+
+    it('fails a partition whose outcome is a placeholder phrase', () => {
+      const report = paramsFixture();
+      report.routes['route-checkout'].parameters[0].partitions[1].expectedOutcome =
+        'the page correctly handles the empty value';
+      const errors = errorsFor(report, ['--stage=parameters']);
+      expect(errors.some((e) => e.includes('says "correctly handles"'))).toBe(true);
+    });
+
+    // Live-observed: "speed" from a converter's own unit list recorded as invalid.
+    it('fails an invalid sample that is one of the options the select itself offers', () => {
+      const report = withMeasureSelect(paramsFixture(), [
+        lengthPartition,
+        {
+          id: 'invalid-measure',
+          kind: 'invalid',
+          sampleValues: ['speed'],
+          expectedOutcome: 'no result is shown',
+          rule: { signal: 'select-option-text', excerpt: 'Length, Weight' },
+          executionLevel: 'dom',
+        },
+      ]);
+      const errors = errorsFor(report, ['--stage=parameters']);
+      expect(errors.some((e) => e.includes('sample "speed" is one of the options'))).toBe(true);
+    });
+
+    it('fails a valid sample the select does not offer, and a select with no options recorded', () => {
+      const offered = withMeasureSelect(paramsFixture(), [
+        { ...lengthPartition, sampleValues: ['Volume'] },
+      ]);
+      expect(
+        errorsFor(offered, ['--stage=parameters']).some((e) =>
+          e.includes('sample "Volume" is not one of the options'),
+        ),
+      ).toBe(true);
+
+      const unlisted = withMeasureSelect(paramsFixture(), [lengthPartition]);
+      delete unlisted.routes['route-checkout'].parameters[2].options;
+      expect(
+        errorsFor(unlisted, ['--stage=parameters']).some((e) =>
+          e.includes('.options must list the option labels'),
+        ),
+      ).toBe(true);
+    });
+
+    it('requires a dom or api level on an invalid select value, and accepts dom', () => {
+      const invalidMeasure = {
+        id: 'unknown-measure',
+        kind: 'invalid',
+        sampleValues: ['Parsecs'],
+        expectedOutcome: 'no result is shown and the list keeps its last choice',
+        rule: { signal: 'select-option-text', excerpt: 'Length, Weight, Speed' },
+      };
+      const missing = withMeasureSelect(paramsFixture(), [lengthPartition, invalidMeasure]);
+      expect(
+        errorsFor(missing, ['--stage=parameters']).some((e) =>
+          e.includes('which the control itself can never produce'),
+        ),
+      ).toBe(true);
+
+      const dom = withMeasureSelect(paramsFixture(), [
+        lengthPartition,
+        { ...invalidMeasure, executionLevel: 'dom' },
+      ]);
+      expect(errorsFor(dom, ['--stage=parameters'])).toEqual([]);
+    });
+
+    it('allows an api-level value only on a route where the crawl observed an API call', () => {
+      const report = withMeasureSelect(paramsFixture(), [
+        lengthPartition,
+        {
+          id: 'unknown-measure',
+          kind: 'invalid',
+          sampleValues: ['Parsecs'],
+          expectedOutcome: 'the API answers 400 and names the measure',
+          rule: { signal: 'select-option-text', excerpt: 'Length, Weight, Speed' },
+          executionLevel: 'api',
+        },
+      ]);
+      expect(
+        errorsFor(report, ['--stage=parameters']).some((e) =>
+          e.includes('no API call was observed on this route'),
+        ),
+      ).toBe(true);
+
+      const dir = setupProject();
+      try {
+        writeReport(dir, report);
+        writeFileSync(
+          join(dir, 'artifacts', 'site-map', 'api-contracts.json'),
+          JSON.stringify({ contracts: [{ observedFromRouteIds: ['route-checkout'] }] }),
+          'utf8',
+        );
+        const output = JSON.parse(run(dir, ['--stage=parameters']).stdout);
+        expect(output.errors).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('fails a parameter with no valid partition even when it has no boundaries', () => {
+      const report = paramsFixture();
+      report.routes['route-checkout'].parameters[0].partitions.splice(0, 1);
+      const errors = errorsFor(report, ['--stage=parameters']);
+      expect(errors.some((e) => e.includes("no 'valid'-kind partition"))).toBe(true);
+    });
+
+    it('fails a condition with no expected outcome, or a description that only says it is handled', () => {
+      const missing = conditionsFixture();
+      delete missing.routes['route-checkout'].conditions[0].expectedOutcome;
+      expect(
+        errorsFor(missing).some((e) => e.includes('.expectedOutcome must be a non-empty string')),
+      ).toBe(true);
+
+      const vague = conditionsFixture();
+      vague.routes['route-checkout'].conditions[0].description =
+        'Verify the page correctly handles email="", quantity="5" (negative)';
+      expect(
+        errorsFor(vague).some((e) => e.includes('.description says "correctly handles"')),
+      ).toBe(true);
+    });
+
+    it('fails a combinatorial condition carrying two invalid values', () => {
+      const report = conditionsFixture();
+      report.routes['route-checkout'].conditions[0] = {
+        ...report.routes['route-checkout'].conditions[0],
+        parameters: { email: 'empty', quantity: 'too-high' },
+        scenario: 'negative',
+        negativeCategory: 'invalid_input',
+        expectedOutcome: 'a message under the field says the email is required',
+      };
+      expect(errorsFor(report).some((e) => e.includes('carries more than one invalid value'))).toBe(
+        true,
+      );
+    });
+  });
+
   it('fails cleanly (not a crash) when the report file content is the literal JSON value null', () => {
     const dir = setupProject();
     try {
@@ -383,12 +658,14 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
 
 describe('renderTestConditionsTypes (real standalone tsc check)', () => {
   // AC7 - "tsc-clean" verified by an actual isolated compile, not a substring match.
-  it('renders a schemaVersion-1 TestConditionsReport interface keyed by routeId, and the output is tsc --noEmit clean in isolation', () => {
+  it('renders a schemaVersion-2 TestConditionsReport interface keyed by routeId, and the output is tsc --noEmit clean in isolation', () => {
     const text = renderTestConditionsTypes();
     expect(text).toContain('TestConditionsReport');
     expect(text).toContain('TestConditionsEntry');
     expect(text).toContain('UnsatisfiedPair');
-    expect(text).toContain('schemaVersion: 1');
+    expect(text).toContain('schemaVersion: 2');
+    expect(text).toContain('expectedOutcome: string;');
+    expect(text).toContain("export type ExecutionLevel = 'ui' | 'dom' | 'api';");
     expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot';");
 
     const dir = mkdtempSync(join(tmpdir(), 'eitr-test-conditions-types-'));
