@@ -1,15 +1,14 @@
-import { parseArgs } from 'node:util';
+﻿import { parseArgs } from 'node:util';
 import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { runQuestionnaire, type Mode } from '../questionnaire/driver.js';
 import { createStdioIo, type IoPort } from '../questionnaire/io.js';
 import type { InitAnswers, QuestionId } from '../questionnaire/schema.js';
-import { checkPython, checkDotnet, checkJava, checkMaven, checkGradle } from './doctor.js';
 
 const INIT_USAGE = `Usage: eitr init [options]
 
 Runs the interactive questionnaire (start URL, output directory, optional stack hints) and
-writes .scaffold/init.json — the input for generation. Never asks for login or credentials.
+writes .scaffold/init.json вЂ” the input for generation. Never asks for login or credentials.
 (Use "eitr new" to also generate the framework in one go.)
 
 Options:
@@ -19,8 +18,8 @@ Options:
   --framework <id>     Framework hint: react|vue|angular|svelte|other
   --ui-library <id>    UI library hint: mui|antd|radix|chakra|tailwind|none|other
   --yes                Non-interactive: take flags as-is, ask nothing
-  --language <id>      Programming language: typescript|python|java|csharp
-  --automation-tool <id> E2E automation tool
+  --language <id>      Programming language: typescript
+  --automation-tool <id> E2E automation tool: playwright
   --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,devin,codex,copilot
   --task-tracker <id>    Task/issue tracker: jira|azure-devops|none
   --tms-providers <ids>  Test Management System(s) (comma-separated): azure-devops,testrail,xray,zephyr
@@ -138,45 +137,6 @@ export async function collectInit(argv: string[]): Promise<CollectResult> {
 
   process.stdout.write(`${renderAnswers(result.answers)}\n`);
   process.stdout.write(`Wrote ${path.relative(cwd, file).split(path.sep).join('/')}\n`);
-
-  if (result.answers.stackHints?.language === 'python') {
-    const pyCheck = await checkPython();
-    if (!pyCheck.ok || pyCheck.warning) {
-      process.stdout.write(
-        '[WARN] Note: Python was not found in your local PATH. Framework will be generated, but running tests locally requires Python 3.8+.\n',
-      );
-    }
-  } else if (result.answers.stackHints?.language === 'csharp') {
-    const csCheck = await checkDotnet();
-    if (!csCheck.ok || csCheck.warning) {
-      process.stdout.write(
-        '[WARN] Note: .NET SDK (dotnet) was not found in your local PATH. Framework will be generated, but running tests locally requires .NET 8+ SDK.\n',
-      );
-    }
-  } else if (result.answers.stackHints?.language === 'java') {
-    const javaCheck = await checkJava();
-    if (!javaCheck.ok || javaCheck.warning) {
-      process.stdout.write(
-        '[WARN] Note: Java JDK (java) was not found in your local PATH. Framework will be generated, but running tests locally requires JDK 17+.\n',
-      );
-    }
-    const isGradle = result.answers.stackHints?.automationTool?.includes('gradle');
-    if (isGradle) {
-      const gradleCheck = await checkGradle();
-      if (!gradleCheck.ok || gradleCheck.warning) {
-        process.stdout.write(
-          '[WARN] Note: Gradle (gradle) was not found in your local PATH. Running tests locally requires Gradle installed.\n',
-        );
-      }
-    } else {
-      const mvnCheck = await checkMaven();
-      if (!mvnCheck.ok || mvnCheck.warning) {
-        process.stdout.write(
-          '[WARN] Note: Maven (mvn) was not found in your local PATH. Running tests locally requires Apache Maven installed.\n',
-        );
-      }
-    }
-  }
 
   return { code: 0, cwd, ok: true };
 }

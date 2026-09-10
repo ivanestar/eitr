@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
+import { frozenIt } from '../../engine/test/helpers/frozen.js';
 import { runQuestionnaire } from '../src/questionnaire/driver.js';
 import { CANCELLED, NAV_LEFT } from '../src/questionnaire/io.js';
 import { createFakeIo } from './io.fake.js';
@@ -9,7 +10,7 @@ const noDetect = async () => ({});
 const textIds = (io: ReturnType<typeof createFakeIo>): string[] =>
   io.calls.filter((c) => c.type === 'text').map((c) => c.id);
 
-describe('runQuestionnaire — interactive', () => {
+describe('runQuestionnaire вЂ” interactive', () => {
   it('happy path collects and reduces every answer, asking in order', async () => {
     const fake = createFakeIo({
       text: { startUrl: ['https://app.example.com/login'] },
@@ -161,10 +162,10 @@ describe('runQuestionnaire — interactive', () => {
     const fake = createFakeIo({
       text: { startUrl: ['https://a.com', 'https://b.com'] },
       select: {
-        language: ['typescript', 'python'],
+        language: ['typescript'],
         automationTool: ['playwright'],
-        ciCd: ['none'],
-        review: ['edit:startUrl', 'edit:language', 'submit'],
+        ciCd: ['none', 'github'],
+        review: ['edit:startUrl', 'edit:ciCd', 'submit'],
       },
     });
     const result = await runQuestionnaire(fake.io, {
@@ -175,7 +176,7 @@ describe('runQuestionnaire — interactive', () => {
     expect(result.status).toBe('ok');
     if (result.status === 'ok') {
       expect(result.answers.startUrl).toBe('https://b.com/');
-      expect(result.answers.stackHints?.language).toBe('python');
+      expect(result.answers.ciCd).toBe('github');
     }
   });
 
@@ -265,7 +266,7 @@ describe('runQuestionnaire — interactive', () => {
   });
 });
 
-describe('runQuestionnaire — non-interactive', () => {
+describe('runQuestionnaire вЂ” non-interactive', () => {
   it('takes valid flags with ZERO io calls', async () => {
     const fake = createFakeIo({});
     const result = await runQuestionnaire(fake.io, {
@@ -326,7 +327,9 @@ describe('runQuestionnaire — non-interactive', () => {
     if (result.status === 'error') expect(result.message).toContain('start-url');
   });
 
-  it('uses a derived output directory from the selected automation tool', async () => {
+  // The per-language output directory naming is still in the code and still works; it has nothing
+  // to name while only one stack is generated.
+  frozenIt('uses a derived output directory from the selected automation tool', async () => {
     const fake = createFakeIo({});
     const result = await runQuestionnaire(fake.io, {
       mode: 'non-interactive',
@@ -345,7 +348,9 @@ describe('runQuestionnaire — non-interactive', () => {
     });
   });
 
-  it('errors in non-interactive mode if language and automation tool are incompatible', async () => {
+  // A flag naming a frozen stack is refused before anything is generated, rather than producing a
+  // project nobody supports.
+  it('errors in non-interactive mode when the flags name a frozen stack', async () => {
     const fake = createFakeIo({});
     const result = await runQuestionnaire(fake.io, {
       mode: 'non-interactive',
@@ -358,17 +363,17 @@ describe('runQuestionnaire — non-interactive', () => {
 
     expect(result.status).toBe('error');
     if (result.status === 'error') {
-      expect(result.message).toContain('is not supported for language "python"');
+      expect(result.message).toContain('language');
     }
   });
 });
 
-describe('runQuestionnaire — language and automation tool interactive filtering', () => {
-  it('filters E2E automation tool choices based on the chosen language', async () => {
+describe('runQuestionnaire вЂ” language and automation tool interactive filtering', () => {
+  it('offers only the runner this release generates', async () => {
     const fake = createFakeIo({
       text: { startUrl: ['https://app.com'] },
       select: {
-        language: ['python'],
+        language: ['typescript'],
         automationTool: ['playwright'],
         ciCd: ['none'],
         review: ['submit'],
@@ -384,35 +389,40 @@ describe('runQuestionnaire — language and automation tool interactive filterin
 
     const automationToolCall = fake.calls.find((c) => c.id === 'automationTool');
     expect(automationToolCall).toBeDefined();
-    expect(automationToolCall?.choices).toEqual(['playwright', 'pytest']);
+    expect(automationToolCall?.choices).toEqual(['playwright']);
   });
 
-  it('resets incompatible E2E automation tool to playwright when language is edited to an incompatible one', async () => {
-    const fake = createFakeIo({
-      text: { startUrl: ['https://app.com'] },
-      select: {
-        language: ['java', 'typescript'],
-        automationTool: ['playwright-gradle'],
-        ciCd: ['none'],
-        review: ['edit:language', 'submit'],
-      },
-    });
+  // The reset mechanism is still in the driver and still correct; with one language and one runner
+  // there is no incompatible pair left for it to act on.
+  frozenIt(
+    'resets incompatible E2E automation tool to playwright when language is edited to an incompatible one',
+    async () => {
+      const fake = createFakeIo({
+        text: { startUrl: ['https://app.com'] },
+        select: {
+          language: ['java', 'typescript'],
+          automationTool: ['playwright-gradle'],
+          ciCd: ['none'],
+          review: ['edit:language', 'submit'],
+        },
+      });
 
-    const result = await runQuestionnaire(fake.io, {
-      mode: 'interactive',
-      prefill: {},
-      detect: noDetect,
-    });
-    expect(result.status).toBe('ok');
-    if (result.status === 'ok') {
-      // It should have reset from playwright-gradle to playwright because typescript does not support playwright-gradle.
-      expect(result.answers.stackHints?.language).toBe('typescript');
-      expect(result.answers.stackHints?.automationTool).toBe('playwright');
-    }
-    expect(fake.notes.some((n) => /resetting E2E automation tool to Playwright/i.test(n))).toBe(
-      true,
-    );
-  });
+      const result = await runQuestionnaire(fake.io, {
+        mode: 'interactive',
+        prefill: {},
+        detect: noDetect,
+      });
+      expect(result.status).toBe('ok');
+      if (result.status === 'ok') {
+        // It should have reset from playwright-gradle to playwright because typescript does not support playwright-gradle.
+        expect(result.answers.stackHints?.language).toBe('typescript');
+        expect(result.answers.stackHints?.automationTool).toBe('playwright');
+      }
+      expect(fake.notes.some((n) => /resetting E2E automation tool to Playwright/i.test(n))).toBe(
+        true,
+      );
+    },
+  );
 
   it('re-prompts after invalid URL and accepts valid one', async () => {
     const fake = createFakeIo({

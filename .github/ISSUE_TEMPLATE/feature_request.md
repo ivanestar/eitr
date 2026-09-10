@@ -14,6 +14,6 @@ assignees: ''
 
 <!-- Why is this feature needed? How does it improve test automation robustness? -->
 
-## Polyglot Impact
+## Cross-Target Impact
 
-<!-- Does this affect all 5 supported languages (TS, JS, Python, C#, Java)? -->
+<!-- Which targets does this touch: AI assistants, CI/CD providers, TMS integrations? The generated stack is TypeScript + Playwright; the other languages are frozen. -->

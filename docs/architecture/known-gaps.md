@@ -5,6 +5,12 @@ framework that are known and deliberately deferred, not accidental. For day-to-d
 tracking, see the repository's local `TODO.md` (gitignored, not part of this document) - this page
 is for gaps significant enough to shape future architecture, not routine findings.
 
+- **Frozen stacks carry no test signal:** the Python, C#, Java and Cypress generators are still in
+  the repository and still work, but nothing offers them and none of their tests run
+  ([decisions/0013-freeze-non-typescript-stacks.md](decisions/0013-freeze-non-typescript-stacks.md)).
+  An unrelated refactor can therefore break one silently, and unfreezing will begin with repairs
+  rather than a green suite. Accepted knowingly: the alternative was paying for four stacks' worth
+  of verification before a single one had shipped.
 - **Dependency Injection & IoC:** cross-cutting concerns (`ApiClient`, logging) are currently
   coupled to the test runner via Playwright fixtures rather than resolved through a standalone IoC
   container independent of the test runner.

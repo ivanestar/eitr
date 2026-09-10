@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   pull_request:
@@ -21,47 +21,6 @@ jobs:
           node-version: 20.x
           cache: 'npm'
 
-      # packages/cli/test/e2e.full-cycle.test.ts generates real Python/Java/C# projects and
-      # actually builds/tests them (not just typechecks) - these caches are the build TOOLS'
-      # own dependency caches (Maven Central artifacts, Gradle distribution/modules, NuGet
-      # packages, pip wheels), not Playwright browser binaries. Deliberately NOT caching
-      # ~/.cache/ms-playwright: Playwright's own docs explicitly advise against it (restore time
-      # is comparable to a fresh download), so this would add cache-maintenance cost for no real
-      # speedup.
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install Dependencies
         run: npm ci
 
@@ -74,8 +33,12 @@ jobs:
       - name: Build All Packages
         run: npm run build
 
+      # The build-tool caches (Maven, Gradle, NuGet, pip) that used to sit above were only ever
+      # needed by the Python/Java/C# full-cycle tests. Those stacks are frozen and their tests no
+      # longer run, so the caches restored nothing and cost time on every run.
+      #
       # Runs the full engine + CLI unit/integration suite (60+ files). terminal-e2e.test.ts (spawns
-      # the real CLI end-to-end, including real npm/pip/mvn/gradle installs) previously had 1
+      # the real CLI end-to-end, including real npm installs) previously had 1
       # failing assertion ("3. CPOM Contract Linter Negative Tests" - a clean-state re-run
       # returning exit code 1 instead of 0) and was excluded here as tracked debt in TODO.md.
       # Re-verified 2026-08-29: 5 separate runs (isolated via -t, the full file alone x3, and
@@ -95,6 +58,6 @@ jobs:
       - name: Run Deterministic Eval Suite
         run: npm run eval
 
-      # packages/evals/test/e2e/cli.test.ts (16 real npm/pip/mvn/gradle scaffold-and-build
-      # combinations, ~6-7 minutes) is intentionally NOT run here - it runs nightly instead via
-      # nightly.yml, to keep this push/PR gate fast. Run it locally with `npm run test:e2e:pairwise`.
+      # packages/evals/test/e2e/cli.test.ts (real scaffold-and-build combinations) is intentionally
+      # NOT run here - it runs nightly instead via nightly.yml, to keep this push/PR gate fast. Run
+      # it locally with `npm run test:e2e:pairwise`.

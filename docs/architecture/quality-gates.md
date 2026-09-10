@@ -4,10 +4,13 @@ Part of [EITR Architecture](README.md).
 
 ## Static CPOM contract linter
 
-Every generated project ships a zero-dependency static CPOM auditor - no pip/npm/NuGet/Maven
-package install, no network access, runs in under a second before any browser launches. The
-concrete implementation is per-language, each at a rigor tier matched to what a single-file,
-zero-dependency script can reasonably check in that language:
+Every generated project ships a zero-dependency static CPOM auditor - no npm package install, no
+network access, runs in under a second before any browser launches. The concrete implementation is
+per-language, each at a rigor tier matched to what a single-file, zero-dependency script can
+reasonably check in that language. Only the TypeScript linter ships in a generated project today;
+the others belong to the frozen stacks
+([decisions/0013-freeze-non-typescript-stacks.md](decisions/0013-freeze-non-typescript-stacks.md))
+and are described here because the rules they enforce are the same contract:
 
 | Language           | Script                                                                                | Mechanism                                 | Rules                |
 | ------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------- |

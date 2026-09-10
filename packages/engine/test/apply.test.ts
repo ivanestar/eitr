@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
+﻿import { describe, it, expect, afterEach } from 'vitest';
+import { frozenIt } from './helpers/frozen.js';
 import { mkdtempSync, rmSync, existsSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -157,7 +158,7 @@ describe('apply() (runnable project)', () => {
     await expect(apply(genPlan, cwd)).rejects.toThrow('merge-fragment not implemented');
   });
 
-  it('applies a complete runnable TypeScript + Cypress project', async () => {
+  frozenIt('applies a complete runnable TypeScript + Cypress project', async () => {
     const cwd = makeTempCwd();
     const cyPlan = plan(muiProfile(), {
       ...planOptions(),
@@ -176,7 +177,7 @@ describe('apply() (runnable project)', () => {
     }
   });
 
-  it(
+  frozenIt(
     'applies a complete runnable Python + Playwright project and checks python syntax',
     { timeout: 90000 },
     async () => {

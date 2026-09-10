@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { frozenIt } from '../../engine/test/helpers/frozen.js';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,7 +27,7 @@ afterEach(() => {
 
 describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generators)', () => {
   // 1. Python + Playwright
-  it(
+  frozenIt(
     '1/7: E2E Full Cycle — Python + Playwright (questionnaire -> generate -> pytest run -> cleanup)',
     { timeout: 180000 },
     async () => {
@@ -212,7 +213,7 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
   );
 
   // 5. C# + Playwright
-  it(
+  frozenIt(
     '5/7: E2E Full Cycle — C# + Playwright (questionnaire -> generate -> real dotnet test run -> cleanup)',
     { timeout: 120000 },
     async () => {
@@ -266,7 +267,7 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
   );
 
   // 6. Java + Playwright (Maven)
-  it(
+  frozenIt(
     '6/7: E2E Full Cycle — Java + Playwright Maven (questionnaire -> generate -> real mvn test run -> cleanup)',
     { timeout: 180000 },
     async () => {
@@ -324,7 +325,7 @@ describe('EITR Full-Cycle End-to-End Test Suite (Covering 100% of Target Generat
   );
 
   // 7. Java + Playwright (Gradle)
-  it(
+  frozenIt(
     '7/7: E2E Full Cycle — Java + Playwright Gradle (questionnaire -> generate -> real gradle test run -> cleanup)',
     // 300s, not 180s like the other combinations: this path pays 3 separate cold Gradle JVM/daemon
     // startups (testClasses, playwrightInstall, test) plus first-ever resolution of the pinned

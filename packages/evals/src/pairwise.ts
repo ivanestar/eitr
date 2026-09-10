@@ -8,6 +8,11 @@ export interface TestCombination {
   aiAssistants?: string[];
 }
 
+// One stack, every other axis covered. This list used to carry 16 combinations because the language
+// and runner axes had four values each; with Python, C#, Java and Cypress frozen, those axes have
+// one value apiece and the remaining variation is what the questionnaire still asks about -
+// framework, UI library, CI provider, AI assistants. Six combinations reach every value of each,
+// which is what the coverage check below actually enforces.
 export const TEST_COMBINATIONS: TestCombination[] = [
   {
     id: 'combo-01-ts-pw-react-mui-github',
@@ -19,17 +24,17 @@ export const TEST_COMBINATIONS: TestCombination[] = [
     aiAssistants: ['antigravity', 'cursor'],
   },
   {
-    id: 'combo-02-ts-cy-vue-antd-gitlab',
+    id: 'combo-02-ts-pw-vue-antd-gitlab',
     language: 'typescript',
-    automationTool: 'cypress',
+    automationTool: 'playwright',
     framework: 'vue',
     uiLibrary: 'antd',
     ciCd: 'gitlab',
     aiAssistants: ['claude'],
   },
   {
-    id: 'combo-03-py-pw-angular-radix-jenkins',
-    language: 'python',
+    id: 'combo-03-ts-pw-angular-radix-jenkins',
+    language: 'typescript',
     automationTool: 'playwright',
     framework: 'angular',
     uiLibrary: 'radix',
@@ -37,8 +42,8 @@ export const TEST_COMBINATIONS: TestCombination[] = [
     aiAssistants: ['devin'],
   },
   {
-    id: 'combo-04-cs-pw-svelte-chakra-teamcity',
-    language: 'csharp',
+    id: 'combo-04-ts-pw-svelte-chakra-teamcity',
+    language: 'typescript',
     automationTool: 'playwright',
     framework: 'svelte',
     uiLibrary: 'chakra',
@@ -46,109 +51,32 @@ export const TEST_COMBINATIONS: TestCombination[] = [
     aiAssistants: ['codex'],
   },
   {
-    id: 'combo-05-java-mvn-unknown-tailwind-none',
-    language: 'java',
-    automationTool: 'playwright-maven',
+    id: 'combo-05-ts-pw-unknown-tailwind-none',
+    language: 'typescript',
+    automationTool: 'playwright',
     framework: 'unknown',
     uiLibrary: 'tailwind',
     ciCd: 'none',
     aiAssistants: ['copilot'],
   },
   {
-    id: 'combo-06-java-gradle-react-unknown-github',
-    language: 'java',
-    automationTool: 'playwright-gradle',
+    id: 'combo-06-ts-pw-react-unknown-github',
+    language: 'typescript',
+    automationTool: 'playwright',
     framework: 'react',
     uiLibrary: 'unknown',
     ciCd: 'github',
-  },
-  {
-    id: 'combo-07-ts-cy-vue-mui-jenkins',
-    language: 'typescript',
-    automationTool: 'cypress',
-    framework: 'vue',
-    uiLibrary: 'mui',
-    ciCd: 'jenkins',
-  },
-  {
-    id: 'combo-08-py-pw-angular-antd-teamcity',
-    language: 'python',
-    automationTool: 'playwright',
-    framework: 'angular',
-    uiLibrary: 'antd',
-    ciCd: 'teamcity',
-  },
-  {
-    id: 'combo-09-py-pw-svelte-mui-gitlab',
-    language: 'python',
-    automationTool: 'playwright',
-    framework: 'svelte',
-    uiLibrary: 'mui',
-    ciCd: 'gitlab',
-  },
-  {
-    id: 'combo-10-cs-pw-react-radix-none',
-    language: 'csharp',
-    automationTool: 'playwright',
-    framework: 'react',
-    uiLibrary: 'radix',
-    ciCd: 'none',
-  },
-  {
-    id: 'combo-11-ts-pw-unknown-chakra-github',
-    language: 'typescript',
-    automationTool: 'playwright',
-    framework: 'unknown',
-    uiLibrary: 'chakra',
-    ciCd: 'github',
-  },
-  {
-    id: 'combo-12-ts-cy-react-tailwind-none',
-    language: 'typescript',
-    automationTool: 'cypress',
-    framework: 'react',
-    uiLibrary: 'tailwind',
-    ciCd: 'none',
-  },
-  {
-    id: 'combo-13-py-pw-vue-unknown-jenkins',
-    language: 'python',
-    automationTool: 'playwright',
-    framework: 'vue',
-    uiLibrary: 'unknown',
-    ciCd: 'jenkins',
-  },
-  {
-    id: 'combo-14-cs-pw-angular-mui-gitlab',
-    language: 'csharp',
-    automationTool: 'playwright',
-    framework: 'angular',
-    uiLibrary: 'mui',
-    ciCd: 'gitlab',
-  },
-  {
-    id: 'combo-15-java-mvn-svelte-antd-teamcity',
-    language: 'java',
-    automationTool: 'playwright-maven',
-    framework: 'svelte',
-    uiLibrary: 'antd',
-    ciCd: 'teamcity',
-  },
-  {
-    id: 'combo-16-ts-cy-angular-unknown-gitlab',
-    language: 'typescript',
-    automationTool: 'cypress',
-    framework: 'angular',
-    uiLibrary: 'unknown',
-    ciCd: 'gitlab',
+    aiAssistants: ['claude', 'copilot'],
   },
 ];
 
 export function verifyFullCoverage(): { ok: boolean; missing: string[] } {
   const missing: string[] = [];
 
-  const languages = ['typescript', 'python', 'csharp', 'java'];
-  const tools = ['playwright', 'playwright-maven', 'playwright-gradle', 'cypress'];
+  // Only what the questionnaire offers. A frozen stack listed here would report a permanent gap
+  // nobody can close, which is a check that has stopped meaning anything.
+  const languages = ['typescript'];
+  const tools = ['playwright'];
   const frameworks = ['react', 'vue', 'angular', 'svelte', 'unknown'];
   const uiLibs = ['mui', 'antd', 'radix', 'chakra', 'tailwind', 'unknown'];
   const ciCds = ['github', 'gitlab', 'jenkins', 'teamcity', 'none'];

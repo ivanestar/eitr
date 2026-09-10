@@ -63,23 +63,26 @@ describe('validateOutputDir', () => {
 describe('validateAnswer choice validation', () => {
   const toolQuestion = QUESTIONS.find((q) => q.id === 'automationTool')!;
 
-  it('allows tools supported by the chosen language', () => {
-    const res = validateAnswer(toolQuestion, 'playwright', { language: 'python' });
+  it('allows the pair this release actually generates', () => {
+    const res = validateAnswer(toolQuestion, 'playwright', { language: 'typescript' });
     expect(res).toEqual({ ok: true, value: 'playwright' });
   });
 
-  it('rejects tools not supported by the chosen language', () => {
-    const res = validateAnswer(toolQuestion, 'playwright-gradle', { language: 'python' });
-    expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.error).toContain('is not supported for language "python"');
+  // A frozen stack is refused at the same gate the questionnaire uses, so an answers file left
+  // over from before the freeze cannot slip a Python or Java project through by hand.
+  it('rejects a runner belonging to a frozen stack', () => {
+    for (const tool of ['pytest', 'playwright-maven', 'playwright-gradle']) {
+      const res = validateAnswer(toolQuestion, tool, { language: 'typescript' });
+      expect(res.ok, tool).toBe(false);
     }
   });
 
-  it('allows supported tools for TypeScript and Python', () => {
-    expect(validateAnswer(toolQuestion, 'playwright', { language: 'typescript' }).ok).toBe(true);
-    expect(validateAnswer(toolQuestion, 'playwright', { language: 'python' }).ok).toBe(true);
-    expect(validateAnswer(toolQuestion, 'pytest', { language: 'python' }).ok).toBe(true);
+  it('rejects a frozen language even with a runner that is otherwise real', () => {
+    for (const language of ['python', 'java', 'csharp']) {
+      const res = validateAnswer(toolQuestion, 'playwright', { language });
+      expect(res.ok, language).toBe(false);
+      if (!res.ok) expect(res.error).toContain(`language "${language}"`);
+    }
   });
 
   it('rejects javascript as a language choice (removed in Track 11)', () => {

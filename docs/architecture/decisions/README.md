@@ -38,3 +38,4 @@ sequentially, zero-padded to 4 digits, kebab-case slug after the number.
 | 0010 | [AI-agent-driven operations ship as assistant skills, never CLI](0010-agent-operations-as-skills-not-cli.md)                                | Accepted |
 | 0011 | [Removal of the untyped JavaScript target](0011-removal-of-untyped-javascript-target.md)                                                    | Accepted |
 | 0012 | [App-analysis and requirements-to-test synthesis as a staged, gated pipeline](0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md) | Accepted |
+| 0013 | [Freeze the non-TypeScript stacks rather than ship four half-carried ones](0013-freeze-non-typescript-stacks.md)                            | Accepted |

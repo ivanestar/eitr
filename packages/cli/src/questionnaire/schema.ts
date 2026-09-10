@@ -111,21 +111,19 @@ const UI_LIBRARY_CHOICES: readonly Choice[] = [
   { label: 'None / Other (Let recon decide)', value: HINT_UNKNOWN },
 ];
 
-const LANGUAGE_CHOICES: readonly Choice[] = [
-  { label: 'TypeScript', value: 'typescript' },
-  { label: 'Python', value: 'python' },
-  { label: 'C# (.NET 8)', value: 'csharp' },
-  { label: 'Java (JDK 17+)', value: 'java' },
-];
+// Python, C# and Java are frozen: their generators, templates and CPOM linters are all still in
+// the repository and still work, but they are not offered, not generated, and not supported. One
+// stack carried all the way to a verified working suite is worth more than four carried most of
+// the way - and Playwright's own ecosystem is not evenly distributed either, since the test
+// runner, UI mode, HTML reporter and VS Code extension exist for Node only. Unfreezing means
+// re-adding the choice here, the pair in generate.ts's SUPPORTED list, and the tests under
+// packages/*/test/frozen/ that vitest.config.ts currently excludes.
+const LANGUAGE_CHOICES: readonly Choice[] = [{ label: 'TypeScript', value: 'typescript' }];
 
-// Cypress is temporarily withheld from the questionnaire pending a CPOM primitive redesign
-// native to its own retry/command-chain model - see the SUPPORTED-combo comment in
-// packages/cli/src/commands/generate.ts. Not deleted, just not offered.
+// Cypress is withheld pending a CPOM primitive redesign native to its own retry/command-chain
+// model; the Maven/Gradle/pytest runners are frozen with their languages, per the note above.
 export const AUTOMATION_TOOL_CHOICES: readonly Choice[] = [
   { label: 'Playwright', value: 'playwright' },
-  { label: 'Playwright (Maven)', value: 'playwright-maven' },
-  { label: 'Playwright (Gradle)', value: 'playwright-gradle' },
-  { label: 'Pytest + Playwright', value: 'pytest' },
 ];
 
 const CI_CD_CHOICES: readonly Choice[] = [
@@ -146,20 +144,12 @@ const AI_ASSISTANT_CHOICES: readonly Choice[] = [
   { label: 'Aider (.aider.conf.yml)', value: 'aider' },
 ];
 
+// What this release actually generates. The frozen stacks answer false here deliberately rather
+// than being absent from the switch: an answers file left over from before the freeze, or one
+// written by hand, has to be rejected by the same check the questionnaire uses, not slip through
+// on a default.
 export function isToolSupportedByLanguage(tool: string, language: string): boolean {
-  switch (language) {
-    case 'typescript':
-      return tool === 'playwright';
-    case 'python':
-      return tool === 'playwright' || tool === 'pytest';
-    case 'csharp':
-      return tool === 'playwright';
-    case 'java':
-      return tool === 'playwright-maven' || tool === 'playwright-gradle';
-
-    default:
-      return false;
-  }
+  return language === 'typescript' && tool === 'playwright';
 }
 
 export function getChoicesForLanguage(

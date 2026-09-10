@@ -134,7 +134,10 @@ describe('scripts/auth-questions.mjs - every emitted question is askable', () =>
     }
   });
 
-  it('gives every option a distinct id and a non-empty label', () => {
+  // Walks every recorded state and spawns the real script once per question, so this one test
+  // is dozens of processes: the default 30s ceiling is a stopwatch on the machine, not on the
+  // code, and it timed out under a parallel full-suite run while passing on its own.
+  it('gives every option a distinct id and a non-empty label', { timeout: 120_000 }, () => {
     const dir = setupProject();
     try {
       for (const [, status] of STATUSES) {

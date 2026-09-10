@@ -4,12 +4,8 @@ import {
   checkNode,
   checkNpm,
   checkGit,
-  checkPython,
-  checkPip,
-  checkDotnet,
-  checkJava,
-  checkMaven,
-  checkGradle,
+  checkGitHubCli,
+  checkGitLabCli,
   runDoctor,
 } from '../src/commands/doctor.js';
 
@@ -64,22 +60,45 @@ describe('eitr doctor command (Mocked Failure Paths)', () => {
     expect(res.message).toContain('Not found in PATH');
   });
 
-  it('checkPython warns when not in PATH', async () => {
+  // Neither hosting CLI is needed to generate anything - they are what /auth-setup uses to push
+  // CI secrets on the user's own say-so, so a missing one is a warning that names the manual path
+  // rather than an error.
+  it('checkGitHubCli warns when not in PATH and names the manual path', async () => {
     vi.mocked(cp.execSync).mockImplementation(() => {
       throw new Error('ENOENT');
     });
 
-    const res = await checkPython();
+    const res = await checkGitHubCli();
+    expect(res.ok).toBe(true);
     expect(res.warning).toBe(true);
+    expect(res.message).toContain('by hand');
   });
 
-  it('checkJava warns when not in PATH', async () => {
+  it('checkGitLabCli warns when not in PATH and names the manual path', async () => {
     vi.mocked(cp.execSync).mockImplementation(() => {
       throw new Error('ENOENT');
     });
 
-    const res = await checkJava();
+    const res = await checkGitLabCli();
+    expect(res.ok).toBe(true);
     expect(res.warning).toBe(true);
+    expect(res.message).toContain('by hand');
+  });
+
+  // A toolchain nothing can generate has no business being reported on: a warning about a missing
+  // JDK tells a reader something is wrong with their setup when nothing is.
+  it('reports nothing about the frozen stacks', async () => {
+    const doctor = await import('../src/commands/doctor.js');
+    for (const gone of [
+      'checkPython',
+      'checkPip',
+      'checkDotnet',
+      'checkJava',
+      'checkMaven',
+      'checkGradle',
+    ]) {
+      expect(doctor, gone).not.toHaveProperty(gone);
+    }
   });
 
   it('runs doctor command cleanly when help flag is passed', async () => {

@@ -25,7 +25,7 @@ Whenever an AI agent, operational skill, or rule generator is created or modifie
   1. **Presence Invariants:** Verify mandatory frontmatter, exact method signatures, and critical SDET directives exist.
   2. **Negative Constraint Bans:** Verify forbidden anti-patterns are rejected (Zero-Emoji regex check, zero arbitrary `sleep` check, no assertions in Page Objects check).
   3. **Output Schema Validation:** Verify returned artifacts and templates conform to exact Markdown headers, JSON schemas, or AST contracts.
-  4. **Zero Lock-in & Polyglot Parity:** Verify generated code does not mention "EITR" and maintains 100% feature parity across TypeScript, JavaScript, Python, C#, and Java.
+  4. **Zero Lock-in & Cross-Target Parity:** Verify generated code does not mention "EITR", and that a capability lands across every target its own axis has - each configured AI assistant, each CI/CD provider, each TMS. Generated languages are not one of those axes any more: TypeScript + Playwright is the only stack produced, and Python, C#, Java and Cypress are frozen.
 
 ### 3. Continuous Benchmark Registration
 
