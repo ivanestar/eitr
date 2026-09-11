@@ -754,6 +754,12 @@ function isCondition(value, label, errors) {
   if (value.reviewed === true && value.reviewedBy !== 'human' && value.reviewedBy !== 'auto-pilot') {
     errors.push(label + '.reviewedBy must be "human" or "auto-pilot" when reviewed is true.');
   }
+  if ('cut' in value && typeof value.cut !== 'boolean') {
+    errors.push(label + '.cut, when present, must be a boolean.');
+  }
+  if (value.cut === true && value.reviewed === true) {
+    errors.push(label + ' is cut and approved at once - a cut condition is one nobody wants tested.');
+  }
 }
 
 function isUnsatisfiedPair(value, label, errors) {
@@ -1057,6 +1063,75 @@ function checkLevel(value, label, errors) {
   if (!LEVEL_VALUES.has(value)) errors.push(label + ' must be one of high|medium|low.');
 }
 
+// How sure a reading may say it is depends on how many independent sources stand behind it: the
+// page's own markup, what a probe saw the page do, published research, a person, a document. One
+// source is one reading, however confidently it is written down; two that agree, or a person's own
+// word, is more. The ceiling is computed here, never chosen.
+const LEVEL_RANK = { low: 1, medium: 2, high: 3 };
+const GROUP_OF_ANCHOR = {
+  probe: 'a probe',
+  research: 'research',
+  human: 'a person',
+  requirement: 'a document',
+  ticket: 'a document',
+  code: 'a document',
+  document: 'a document',
+};
+
+function fieldCeiling(field, analysis, control, inventoryKnown) {
+  const groups = new Set();
+  const context = !inventoryKnown || Boolean(control && (control.hint || control.placeholder || control.options || control.constraints || (control.type && control.type !== 'text')));
+  if (!inventoryKnown || (control && (control.name || context))) groups.add(context ? "the page's markup" : "the field's label alone");
+  for (const constraint of Array.isArray(field.constraints) ? field.constraints : []) {
+    for (const anchor of constraint && Array.isArray(constraint.anchors) ? constraint.anchors : []) {
+      if (anchor && GROUP_OF_ANCHOR[anchor.kind]) groups.add(GROUP_OF_ANCHOR[anchor.kind]);
+    }
+  }
+  for (const question of Array.isArray(analysis.questions) ? analysis.questions : []) {
+    if (question && field.control && question.about === field.control && typeof question.answer === 'string' && question.answer.trim()) {
+      groups.add('a person');
+    }
+  }
+  const level =
+    groups.has('a person') || groups.has('a document') || groups.size >= 2
+      ? 'high'
+      : groups.size === 1 && !groups.has("the field's label alone")
+        ? 'medium'
+        : 'low';
+  return { level: level, groups: Array.from(groups) };
+}
+
+// A constraint the markup states, a probe saw enforced, a person gave or a requirement says is as
+// sure as its source. One reasoned from the meaning of the field, or taken from research, needs a
+// second source to be sure - and a probe that saw the page accept a value breaking it disagrees.
+function constraintCeiling(constraint, kinds) {
+  if (['markup', 'observed', 'human', 'requirement'].indexOf(constraint.source) !== -1) return { level: 'high', groups: [] };
+  const groups = new Set([constraint.source === 'research' ? 'research' : 'reasoning']);
+  for (const kind of kinds) {
+    if (kind === 'probe') {
+      if (constraint.enforcement === 'observed') groups.add('a probe');
+    } else if (GROUP_OF_ANCHOR[kind]) groups.add(GROUP_OF_ANCHOR[kind]);
+  }
+  let level = groups.size >= 2 ? 'high' : 'medium';
+  if (groups.has('a person') || groups.has('a document')) level = 'high';
+  else if (constraint.enforcement === 'not-enforced') level = 'medium';
+  return { level: level, groups: Array.from(groups) };
+}
+
+function checkCeiling(claimed, ceiling, label, errors) {
+  if (!LEVEL_RANK[claimed] || LEVEL_RANK[claimed] <= LEVEL_RANK[ceiling.level]) return;
+  errors.push(
+    label +
+      ' is "' +
+      claimed +
+      '", but it rests on ' +
+      (ceiling.groups.length > 0 ? ceiling.groups.join(' and ') : 'nothing recorded') +
+      ' only - "' +
+      ceiling.level +
+      '" at most. A second independent source (a probe, research, a person\\'s answer) is what raises it.',
+  );
+}
+
 function checkText(value, label, errors, max) {
   if (typeof value !== 'string' || value.trim().length === 0) {
     errors.push(label + ' must be a non-empty string.');
@@ -1134,7 +1209,11 @@ function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
         if ((constraint.enforcement === 'observed' || constraint.enforcement === 'not-enforced') && kinds.indexOf('probe') === -1) {
           errors.push(at + ' says the page ' + (constraint.enforcement === 'observed' ? 'enforces' : 'does not enforce') + ' it, which only a field probe can show - anchor the probe.');
         }
+        checkCeiling(constraint.confidence, constraintCeiling(constraint, kinds), at + '.confidence', errors);
       });
+      const inventoryKnown = ctx.controlsByRoute.has(field.routeId);
+      const control = hasControl && inventoryKnown ? ctx.controlsByRoute.get(field.routeId).get(field.control) : null;
+      checkCeiling(field.confidence, fieldCeiling(field, analysis, control, inventoryKnown), where + '.confidence', errors);
     });
   }
 

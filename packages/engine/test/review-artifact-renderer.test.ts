@@ -4,10 +4,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderReviewArtifactRenderer } from '../src/plan/templates/review-artifact-renderer.js';
+import { renderCorroboration } from '../src/plan/templates/corroboration.js';
 
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-review-renderer-'));
   writeFileSync(join(dir, 'render-review-artifact.mjs'), renderReviewArtifactRenderer(), 'utf8');
+  writeFileSync(join(dir, 'corroboration.mjs'), renderCorroboration(), 'utf8');
   mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
   mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
   mkdirSync(join(dir, 'artifacts', 'test-cases'), { recursive: true });
@@ -214,38 +216,68 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
   });
 });
 
-// Approving a review changes the entries it describes, and nothing re-renders it - so the file
-// left behind states the pre-approval draft. Live-observed claiming "criticality (draft)" for 45
-// entries a human had confirmed, with the JSON written two minutes after the markdown.
-describe('scripts/render-review-artifact.mjs --discard', () => {
-  it('removes the rendered view and leaves the artifact untouched', () => {
+// A person may review by editing the file, so it is always written for the editable stages - with
+// the rendering kept beside it, what apply-review.mjs compares an edited file against - and it is
+// never deleted: rendering again after a change is what keeps it from showing an older state.
+describe('scripts/render-review-artifact.mjs editable review files', () => {
+  it('always writes the file for an editable stage, with the rendering and its labels beside it', () => {
     const dir = setupProject();
     try {
-      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(20));
-      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(20));
-      const rendered = run(dir, '--kind=feature-map').output;
-      expect(rendered.mode).toBe('file');
-      const reviewPath = join(dir, 'artifacts', 'review', 'feature-map-review.md');
-      expect(existsSync(reviewPath)).toBe(true);
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(2));
+      const output = run(dir, '--kind=feature-map').output;
+      expect(output.mode).toBe('inline');
+      expect(output.editable).toBe(true);
+      expect(output.filePath).toBe('artifacts/review/feature-map-review.md');
 
-      const discarded = run(dir, '--kind=feature-map', '--discard').output;
-      expect(discarded.discarded).toBe(true);
-      expect(existsSync(reviewPath)).toBe(false);
-      // The record survives; only the view was thrown away.
-      expect(existsSync(join(dir, 'artifacts', 'analysis', 'feature-map.json'))).toBe(true);
-      expect(discarded.note).toContain('Re-render');
+      const written = readFileSync(
+        join(dir, 'artifacts', 'review', 'feature-map-review.md'),
+        'utf8',
+      );
+      expect(written.split('\n')[0]).toMatch(
+        /^<!-- review of artifacts\/analysis\/feature-map\.json @ [0-9a-f]{16} /,
+      );
+      expect(written).toContain('- [ ] ALL. Approve every entry I did not change');
+      expect(written).toContain('- [ ] F1. Feature 0 - **HIGH IMPACT**');
+      expect(written).toContain('   - [ ] P1. /route-00 - Page 0 - **HIGH**');
+
+      const base = JSON.parse(
+        readFileSync(join(dir, 'artifacts', 'review', '.base', 'feature-map-review.json'), 'utf8'),
+      );
+      expect(base.text).toBe(written);
+      expect(base.source).toBe('artifacts/analysis/feature-map.json');
+      expect(base.labels.F1).toEqual({ type: 'feature', id: 'f-0' });
+      expect(base.labels.P1).toEqual({ type: 'page', routeId: 'id-0' });
+      expect(base.owners.length).toBe(written.split('\n').length);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('is harmless when there is nothing rendered to discard', () => {
+  it('ticks the box of what is already approved, so a later rendering shows the current state', () => {
     const dir = setupProject();
     try {
+      const map = featureMapWith(2) as any;
+      map.features['f-0'].reviewed = true;
+      map.features['f-0'].reviewedBy = 'human';
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
-      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(2));
-      const output = run(dir, '--kind=feature-map', '--discard').output;
-      expect(output.discarded).toBe(false);
+      writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+      const { markdown } = run(dir, '--kind=feature-map').output;
+      expect(markdown).toContain('- [x] F1. Feature 0');
+      expect(markdown).toContain('- [ ] F2. Feature 1');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('writes the test-cases view only past the threshold - it is read, not edited, for now', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      writeJson(dir, 'artifacts/test-cases/test-cases.json', { schemaVersion: 2, journeys: {} });
+      const output = run(dir, '--kind=test-cases').output;
+      expect(output.editable).toBe(false);
+      expect(output.filePath).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -262,9 +294,8 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
 
       const { output } = run(dir, '--kind=feature-map');
       expect(output.mode).toBe('inline');
-      expect(output.filePath).toBeNull();
       expect(output.markdown).toContain('Confirmed core purpose: A test fixture application');
-      expect(output.markdown).toContain('1. Feature 0 - **HIGH IMPACT**');
+      expect(output.markdown).toContain('- [ ] F1. Feature 0 - **HIGH IMPACT**');
       // Renders the route's resolved path/title, never the raw routeId.
       expect(output.markdown).toContain('/route-00 - Page 0');
       expect(output.markdown).toContain('tier reason 0');
@@ -564,7 +595,7 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
         expect(output.summary).toBe(
           '1 feature(s) over 2 page(s) (1 high, 1 medium), 2 thing(s), 1 link(s) between them to confirm',
         );
-        expect(output.markdown).toContain('1. Ordering - **HIGH IMPACT**');
+        expect(output.markdown).toContain('- [ ] F1. Ordering - **HIGH IMPACT**');
         // Route ids are resolved to something a person can recognise, with the tier a reviewer is
         // actually being asked to check sitting next to the page it was given for.
         expect(output.markdown).toContain('/route-00 - Page 0 - **HIGH**');
@@ -588,13 +619,13 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
         writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
         const { markdown } = run(dir, '--kind=feature-map').output;
         // A page's reasoning and evidence end before the next page starts.
-        expect(markdown).toMatch(/Evidences: "Place an order"\n\n {3}- \/route-01/);
+        expect(markdown).toMatch(/Evidences: "Place an order"\n\n {3}- \[ \] P2\. \/route-01/);
         // The feature's last line ends before the entity section starts.
         expect(markdown).toMatch(
           /Impact comes from: [^\n]+\n\n\*\*Things this application works with\*\*/,
         );
         // One entity's block ends before the next one's heading.
-        expect(markdown).toMatch(/\n\nE2\. orders\n/);
+        expect(markdown).toMatch(/\n\n- \[ \] E2\. orders\n/);
         expect(markdown).not.toMatch(/\n{3}/);
         expect(markdown).not.toMatch(/\s$/);
       } finally {

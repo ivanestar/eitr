@@ -130,6 +130,34 @@ describe('scripts/page-inventory.mjs record', () => {
     }
   });
 
+  // Headings are what a later stage quotes as evidence of what a page is for - so they are kept, to
+  // check that quote against.
+  it('keeps the headings the page shows, redacted like every other text', () => {
+    const dir = setupProject();
+    try {
+      const observation = {
+        ...guidObservation(),
+        headings: [
+          { level: 1, text: 'UUID/GUID Generator' },
+          { level: 2, text: 'Order 1234567 shipped' },
+          { level: 9, text: 'Odd level' },
+          { level: 2, text: '' },
+        ],
+      };
+      const { output } = record(dir, 'route-guid', observation);
+      expect(readJson(join(dir, output.inventory)).headings).toEqual([
+        { level: 1, text: 'UUID/GUID Generator' },
+        { level: 2, text: 'Order [REDACTED] shipped' },
+        { level: 2, text: 'Odd level' },
+      ]);
+      // An observation from before headings were collected records none rather than failing.
+      const { output: older } = record(dir, 'route-old', guidObservation(), '/old');
+      expect(readJson(join(dir, older.inventory)).headings).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // The live failure this replaces: `components` held tag names, and the next stage saw two
   // parameters on a page with seven while taking the header's language switcher for a field.
   it("lists the page's own fields and buttons as components and leaves the frame and links out", () => {

@@ -120,7 +120,13 @@ script (`scripts/render-review-artifact.mjs`) rather than each skill re-specifyi
 prose: it builds the artifact from the stored JSON, so the text a human approves cannot drift from
 what was actually written, and it decides by entry count whether the artifact belongs inline or in
 `artifacts/review/<kind>-review.md` - a large run previously scrolled past the top of the terminal
-and got abbreviated by the model, which asks a human to approve entries they never saw. When more
+and got abbreviated by the model, which asks a human to approve entries they never saw. For the
+site map, feature map and test conditions the file is always written and never deleted: a person
+may tick, answer and correct right in it, and `scripts/apply-review.mjs` reads the edits back
+against the exact rendering they were made on (ADR 0015). Before the site-map and feature-map
+gates, `scripts/corroboration.mjs` checks what the stage concluded against the independent records
+about each page - status, markup, screenshot, traffic, per-role access - and journals every
+disagreement and how it was settled (ADR 0016). When more
 than one role session exists, `/map-site` can also crawl once per role, recording `crawledAsRoles`
 and a per-route `access` map in the site map; the resulting access differences are the only
 observed evidence of a permission boundary anywhere in the pipeline, and `/define-test-conditions`

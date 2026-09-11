@@ -436,11 +436,14 @@ export interface TestCondition {
   verification: VerificationContract;
   isSpeculative: boolean;
   reviewed: boolean;
-  // Who set reviewed:true - 'human' for an actual conversational approval, 'auto-pilot' only when
-  // /ground-zero-setup's auto-pilot mode set it on the user's own explicit pre-authorization.
-  // Required once reviewed is true (mechanically enforced); expected but not mechanically
-  // enforced to be absent while reviewed is false.
+  // Who set reviewed:true - 'human' for an actual approval (in conversation or ticked in the review
+  // file), 'auto-pilot' only when /ground-zero-setup's auto-pilot mode set it on the user's own
+  // explicit pre-authorization. Required once reviewed is true (mechanically enforced); expected but
+  // not mechanically enforced to be absent while reviewed is false.
   reviewedBy?: 'human' | 'auto-pilot';
+  // A person cut it at the review. It stays in the file, so the cut is visible and can be undone, but
+  // it is never reviewed, nothing downstream uses it, and the generator does not bring it back.
+  cut?: boolean;
   // The feature this condition belongs to - one of the route's features in the feature map. The
   // review lists conditions by feature, ordered by priority.
   featureId: string;

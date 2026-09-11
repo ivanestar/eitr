@@ -16,6 +16,98 @@ function run(dir: string) {
   return JSON.parse(result.stdout);
 }
 
+// A token shaped like the ones apps keep in local storage: header.payload.signature, with the
+// payload carrying the expiry in seconds.
+function token(expSeconds: number): string {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return (
+    encode({ alg: 'HS256', typ: 'JWT' }) +
+    '.' +
+    encode({ sub: 'user', exp: expSeconds }) +
+    '.c2lnbmF0dXJl'
+  );
+}
+
+function writeSession(dir: string, name: string, state: unknown) {
+  mkdirSync(join(dir, '.auth'), { recursive: true });
+  writeFileSync(join(dir, '.auth', name + '.json'), JSON.stringify(state), 'utf8');
+}
+
+describe('scripts/auth-status.mjs session health', () => {
+  const now = Math.floor(Date.now() / 1000);
+
+  it('reports a session whose every token has expired, and sends the chain back to capture', () => {
+    const dir = setupProject();
+    try {
+      writeSession(dir, 'user', {
+        cookies: [],
+        origins: [
+          {
+            origin: 'https://app.test',
+            localStorage: [{ name: 'token', value: token(now - 3600) }],
+          },
+        ],
+      });
+      const output = run(dir);
+      expect(output.sessionHealth).toEqual([
+        expect.objectContaining({
+          file: 'user.json',
+          verdict: 'expired',
+          reason: 'every token in it expired',
+        }),
+      ]);
+      expect(output.nextStep).toBe('session-expired');
+      // Only the expiry is read - no value of the session reaches the output.
+      expect(JSON.stringify(output)).not.toContain(token(now - 3600));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('says a live token has not expired, and one expiring within a day is close to it', () => {
+    const dir = setupProject();
+    try {
+      writeSession(dir, 'admin', {
+        cookies: [{ name: 'jwt', value: token(now + 7 * 86400), expires: -1 }],
+        origins: [],
+      });
+      writeSession(dir, 'viewer', {
+        cookies: [{ name: 'jwt', value: token(now + 600), expires: -1 }],
+        origins: [],
+      });
+      const output = run(dir);
+      expect(output.sessionHealth.map((entry: { verdict: string }) => entry.verdict)).toEqual([
+        'not-expired',
+        'expires-soon',
+      ]);
+      expect(output.nextStep).toBe('session-exists');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('claims nothing from cookies alone unless every dated one is past its date', () => {
+    const dir = setupProject();
+    try {
+      writeSession(dir, 'user', {
+        cookies: [{ name: 'sid', value: 'opaque', expires: -1 }],
+        origins: [],
+      });
+      expect(run(dir).sessionHealth[0].verdict).toBe('unknown');
+      writeSession(dir, 'user', {
+        cookies: [{ name: 'sid', value: 'opaque', expires: now - 60 }],
+        origins: [],
+      });
+      expect(run(dir).sessionHealth[0]).toMatchObject({
+        verdict: 'expired',
+        reason: 'every cookie in it expired',
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('scripts/auth-status.mjs (real execution)', () => {
   it('detects gitlab from .gitlab-ci.yml on disk even with no .scaffold/init.json present', () => {
     const dir = setupProject();

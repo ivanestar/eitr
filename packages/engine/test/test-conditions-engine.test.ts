@@ -1271,6 +1271,40 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       }
     });
 
+    it('keeps a condition a person cut cut when the route is generated again', () => {
+      const dir = setupProject(singleTextParamRoute('route-tool'));
+      try {
+        expect(run(dir).status).toBe(0);
+        const first = readReport(dir) as unknown as {
+          routes: Record<
+            string,
+            { conditions: Array<Record<string, unknown>>; sourceParamsHash: string }
+          >;
+        };
+        const target = first.routes['route-tool'].conditions[0];
+        Object.assign(target, { cut: true, reviewed: false });
+        // A changed parameter hash is what makes the generator rebuild the route's own conditions.
+        first.routes['route-tool'].sourceParamsHash = 'stale';
+        writeFileSync(
+          join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
+          JSON.stringify(first),
+          'utf8',
+        );
+        expect(run(dir).status).toBe(0);
+        const again = readReport(dir).routes['route-tool'].conditions.find(
+          (c) => c.conditionId === target.conditionId,
+        ) as unknown as Record<string, unknown>;
+        expect(again).toMatchObject({ cut: true, reviewed: false });
+        expect(
+          readReport(dir).routes['route-tool'].conditions.filter(
+            (c) => (c as unknown as { cut?: boolean }).cut,
+          ),
+        ).toHaveLength(1);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it('refuses to generate from a partition with no recorded outcome rather than inventing one', () => {
       const report = singleTextParamRoute('route-greet') as {
         routes: Record<

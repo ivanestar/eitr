@@ -1165,7 +1165,7 @@ describe('scripts/validate-test-conditions.mjs - feature analysis, anchors and r
         parameter: 'email',
         meaning: 'where the order confirmation is sent',
         role: 'identifier',
-        confidence: 'high',
+        confidence: 'medium',
         constraints: [],
       },
       {
@@ -1173,7 +1173,7 @@ describe('scripts/validate-test-conditions.mjs - feature analysis, anchors and r
         parameter: 'quantity',
         meaning: 'how many of the item are ordered',
         role: 'quantity',
-        confidence: 'high',
+        confidence: 'medium',
         constraints: [
           {
             statement: 'at most 10',
@@ -1263,6 +1263,59 @@ describe('scripts/validate-test-conditions.mjs - feature analysis, anchors and r
     const data = report();
     data.features['feature-checkout'].fields[1].constraints[0].enforcement = 'not-enforced';
     expect(validateRaw(data).errors.join(' ')).toContain('which only a field probe can show');
+  });
+
+  // One source is one reading, however confidently it is written down.
+  it('caps how sure a field meaning may be by how many independent sources stand behind it', () => {
+    const data = report();
+    data.features['feature-checkout'].fields[0].confidence = 'high';
+    const errors = validateRaw(data).errors.join(' ');
+    expect(errors).toContain(
+      'fields[0].confidence is "high", but it rests on the page\'s markup only - "medium" at most',
+    );
+
+    // A person's own words are a second, independent source.
+    data.features['feature-checkout'].fields[0].constraints = [
+      {
+        statement: 'a real, deliverable address',
+        source: 'human',
+        confidence: 'high',
+        enforcement: 'unknown',
+        anchors: [
+          {
+            kind: 'human',
+            ref: 'domainNotes:0',
+            quote: 'confirmations bounce if the address is wrong',
+          },
+        ],
+      },
+    ];
+    expect(validateRaw(data).errors).toEqual([]);
+  });
+
+  it('caps a constraint reasoned from the meaning alone at medium', () => {
+    const data = report();
+    data.features['feature-checkout'].fields[1].constraints.push({
+      statement: 'never more than stock on hand',
+      source: 'domain',
+      confidence: 'high',
+      enforcement: 'unknown',
+      anchors: [{ kind: 'control', ref: 'c1' }],
+    });
+    expect(validateRaw(data).errors.join(' ')).toContain(
+      'constraints[1].confidence is "high", but it rests on reasoning only - "medium" at most',
+    );
+  });
+
+  it('refuses a condition that is cut and approved at once', () => {
+    const data = report();
+    Object.assign(data.routes['route-checkout'].conditions[0], {
+      cut: true,
+      reviewed: true,
+      reviewedBy: 'human',
+      isSpeculative: false,
+    });
+    expect(validateRaw(data).errors.join(' ')).toContain('is cut and approved at once');
   });
 
   it('keeps origin and technique honest, and the priority to the arithmetic', () => {

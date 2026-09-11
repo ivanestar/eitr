@@ -126,6 +126,9 @@ const MIN_FRAME_SIZE = 50;
 const MAX_CANVASES = 10;
 const MIN_CANVAS_SIZE = 200;
 const MAX_BLOCKS = 40;
+// Headings are what a page calls itself and its sections - the words a later stage most often quotes
+// as evidence of what the page is for, and so the words it has to be able to check that quote against.
+const MAX_HEADINGS = 30;
 
 // Home-made controls: how many one page may hand over, and how many distinct ones one 'classify'
 // round may ask about. A listing repeats the same element per item, so the question is asked per
@@ -688,11 +691,27 @@ function collectInventory(opts) {
     candidates.push(candidate);
   }
 
+  var headings = [];
+  for (var h = 0; h < elements.length && headings.length < opts.maxHeadings; h++) {
+    var headingNode = elements[h].el;
+    var headingTag = headingNode.tagName;
+    var numbered = /^H[1-6]$/.test(headingTag);
+    if (!numbered && headingNode.getAttribute('role') !== 'heading') continue;
+    if (!visible(headingNode)) continue;
+    var headingText = clean(headingNode.textContent, 120);
+    if (!headingText) continue;
+    headings.push({
+      level: numbered ? Number(headingTag.charAt(1)) : Number(headingNode.getAttribute('aria-level')) || 2,
+      text: headingText,
+    });
+  }
+
   return {
     title: clean(document.title, 200),
     path: window.location.pathname,
     lang: clean(document.documentElement.getAttribute('lang'), 20),
     landmarks: landmarks,
+    headings: headings,
     controls: controls,
     totalControls: total,
     candidates: candidates,
@@ -722,6 +741,7 @@ function cmdProbe() {
       maxCanvases: MAX_CANVASES,
       minCanvasSize: MIN_CANVAS_SIZE,
       maxBlocks: MAX_BLOCKS,
+      maxHeadings: MAX_HEADINGS,
       maxCandidates: MAX_CANDIDATES,
       candidateSkipTags: CANDIDATE_SKIP_TAGS,
     },
@@ -940,6 +960,20 @@ function describeBlocks(observation, controls, regions) {
       fingerprint: inside.length > 0 ? regionFingerprint('block', inside) : null,
     };
   });
+}
+
+function readHeadings(observation) {
+  if (!Array.isArray(observation.headings)) return [];
+  return observation.headings
+    .filter(isObject)
+    .slice(0, MAX_HEADINGS)
+    .map(function (heading) {
+      const level = whole(heading.level);
+      return { level: level >= 1 && level <= 6 ? level : 2, text: redact(heading.text, 120) };
+    })
+    .filter(function (heading) {
+      return heading.text;
+    });
 }
 
 function readFrames(observation) {
@@ -1418,6 +1452,7 @@ function cmdRecord(args) {
     identity: identity,
     access: access,
     landmarks: landmarkRecords,
+    headings: readHeadings(observation),
     blocks: describeBlocks(observation, controls, regions),
     controls: controls,
     totalControls: totalControls,

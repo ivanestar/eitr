@@ -148,6 +148,29 @@ const QUESTIONS = [
     applies: function (answers, status) {
       return answers.proceed === 'continue' && status.hasSession === true;
     },
+    // A session file that exists is not a session that works. When the file's own expiry dates say
+    // it has run out, say so and put the fresh capture first - reusing it would crawl the sign-in page.
+    adapt: function (status) {
+      const expired = (status && Array.isArray(status.sessionHealth) ? status.sessionHealth : []).filter(function (entry) {
+        return entry.verdict === 'expired';
+      });
+      if (expired.length === 0) return null;
+      return {
+        text:
+          'A saved login session exists, but it looks expired (' +
+          expired
+            .map(function (entry) {
+              return '.auth/' + entry.file + ': ' + entry.reason;
+            })
+            .join('; ') +
+          '). A crawl that starts from it sees the sign-in page instead of the application. Capture a fresh one over it, reuse it anyway, or keep it and add another role alongside?',
+        options: [
+          { id: 'capture-fresh', label: 'Capture a fresh one, replacing it', recommended: true },
+          { id: 'reuse', label: 'Reuse it as-is' },
+          { id: 'add-role', label: 'Add another role' },
+        ],
+      };
+    },
   },
   {
     id: 'roles',
@@ -405,14 +428,15 @@ function main() {
   for (const question of QUESTIONS) {
     if (Object.prototype.hasOwnProperty.call(answers, question.id)) continue;
     if (!question.applies(answers, status)) continue;
+    const shown = (typeof question.adapt === 'function' && question.adapt(status)) || {};
     process.stdout.write(
       JSON.stringify(
         {
           status: 'ASK',
           question: {
             id: question.id,
-            text: question.text,
-            options: question.options,
+            text: shown.text || question.text,
+            options: shown.options || question.options,
             allowsFreeText: question.allowsFreeText === true,
             freeTextHint: question.freeTextHint || null,
           },

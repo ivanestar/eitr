@@ -317,6 +317,37 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
+  it('reports a review file a person edited and nobody applied yet', () => {
+    const dir = setupProject();
+    try {
+      const reviewDir = join(dir, 'artifacts', 'review');
+      mkdirSync(join(reviewDir, '.base'), { recursive: true });
+      const rendered = '<!-- review -->\n# Review: feature-map\n\n- [ ] F1. Checkout\n';
+      writeFileSync(join(reviewDir, 'feature-map-review.md'), rendered, 'utf8');
+      writeFileSync(
+        join(reviewDir, '.base', 'feature-map-review.json'),
+        JSON.stringify({ kind: 'feature-map', text: rendered }),
+        'utf8',
+      );
+      expect(JSON.parse(run(dir).stdout).pendingReviewEdits).toEqual([]);
+
+      writeFileSync(
+        join(reviewDir, 'feature-map-review.md'),
+        rendered.replace('[ ]', '[x]'),
+        'utf8',
+      );
+      expect(JSON.parse(run(dir).stdout).pendingReviewEdits).toEqual([
+        {
+          kind: 'feature-map',
+          filePath: 'artifacts/review/feature-map-review.md',
+          apply: 'node scripts/apply-review.mjs --kind=feature-map',
+        },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('keeps every stage description in one column when the bracketed stage is the widest name', () => {
     const dir = setupProject();
     writeSiteMap(dir);

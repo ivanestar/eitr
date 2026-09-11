@@ -40,3 +40,5 @@ sequentially, zero-padded to 4 digits, kebab-case slug after the number.
 | 0012 | [App-analysis and requirements-to-test synthesis as a staged, gated pipeline](0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)           | Accepted |
 | 0013 | [Freeze the non-TypeScript stacks rather than ship four half-carried ones](0013-freeze-non-typescript-stacks.md)                                      | Accepted |
 | 0014 | [Test analysis starts from what a feature means, and every condition says where its expected result comes from](0014-context-driven-test-analysis.md) | Accepted |
+| 0015 | [A person reviews in the file, and the JSON stays the only record](0015-editable-review-files.md)                                                     | Accepted |
+| 0016 | [Analysis conclusions are checked against independent records, and every disagreement is journaled](0016-corroboration-of-analysis-conclusions.md)    | Accepted |

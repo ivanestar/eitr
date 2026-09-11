@@ -62,6 +62,8 @@ import { renderMapSiteStatus } from './templates/map-site-status.js';
 import { renderAutomateTestStatus } from './templates/automate-test-status.js';
 import { renderEnvRoleStubs } from './templates/env-role-stubs.js';
 import { renderReviewArtifactRenderer } from './templates/review-artifact-renderer.js';
+import { renderReviewApply } from './templates/review-apply.js';
+import { renderCorroboration } from './templates/corroboration.js';
 import { renderAppProfile } from './templates/app-profile.js';
 import { renderAppProfileTypes } from './templates/app-profile-types.js';
 import { renderCoverageStatus } from './templates/coverage-status.js';
@@ -305,6 +307,18 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderReviewArtifactRenderer() },
+          },
+          {
+            path: 'scripts/apply-review.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderReviewApply() },
+          },
+          {
+            path: 'scripts/corroboration.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderCorroboration() },
           },
           {
             path: '.scaffold/schemas/app-profile.types.ts',

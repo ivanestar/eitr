@@ -32,6 +32,7 @@ const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
+const REVIEW_DIR = path.join(CWD, 'artifacts', 'review');
 
 function loadJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -362,6 +363,37 @@ function computeStatus(siteMap, featureMap, testConditions, journeysData) {
   };
 }
 
+// A review file a person edited that nobody has applied yet: their approvals and corrections are on
+// disk, but not in the JSON the next stage reads. Compared with the rendering the file was made from,
+// which render-review-artifact.mjs keeps beside it.
+function pendingReviewEdits() {
+  const pending = [];
+  const tidy = function (text) {
+    return String(text)
+      .replace(/\\r\\n/g, '\\n')
+      .split('\\n')
+      .map(function (line) {
+        return line.replace(/\\s+$/, '');
+      })
+      .join('\\n')
+      .trim();
+  };
+  for (const kind of ['site-map', 'feature-map', 'test-conditions']) {
+    const view = path.join(REVIEW_DIR, kind + '-review.md');
+    const base = path.join(REVIEW_DIR, '.base', kind + '-review.json');
+    if (!fs.existsSync(view) || !fs.existsSync(base)) continue;
+    const rendered = loadJson(base);
+    if (!rendered || typeof rendered.text !== 'string') continue;
+    if (tidy(fs.readFileSync(view, 'utf8')) === tidy(rendered.text)) continue;
+    pending.push({
+      kind: kind,
+      filePath: 'artifacts/review/' + kind + '-review.md',
+      apply: 'node scripts/apply-review.mjs --kind=' + kind,
+    });
+  }
+  return pending;
+}
+
 function main() {
   const siteMap = loadJson(SITE_MAP_PATH);
   const featureMap = loadJson(FEATURE_MAP_PATH);
@@ -382,7 +414,13 @@ function main() {
   process.stdout.write(
     JSON.stringify(
       Object.assign(
-        { roadmap: roadmap, routeCoverage: routeCoverage, stageTimings: stageTimings, preFlightNotice: preFlightNotice },
+        {
+          roadmap: roadmap,
+          routeCoverage: routeCoverage,
+          stageTimings: stageTimings,
+          preFlightNotice: preFlightNotice,
+          pendingReviewEdits: pendingReviewEdits(),
+        },
         status,
       ),
       null,

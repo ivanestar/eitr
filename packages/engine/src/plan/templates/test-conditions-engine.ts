@@ -923,6 +923,17 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle) {
   if (entry.conditions && entry.conditions.length > 0 && entry.sourceParamsHash === currentHash) {
     return;
   }
+  // A condition a person cut stays cut when the route is regenerated: the same inputs rebuild the same
+  // id, and a cut undone by regenerating is a decision silently thrown away.
+  const cutIds = new Set(
+    (entry.conditions || [])
+      .filter(function (c) {
+        return c && c.cut === true && c.conditionId;
+      })
+      .map(function (c) {
+        return c.conditionId;
+      }),
+  );
   const { vectors, unsatisfied } = buildVectors(entry.parameters, entry.constraints || []);
   const combinatorialConditions = vectors.map(function (vector) {
     const described = describeCondition(entry.parameters, vector);
@@ -972,6 +983,11 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle) {
   )) {
     if (seen.has(c.conditionId)) continue;
     seen.add(c.conditionId);
+    if (cutIds.has(c.conditionId)) {
+      c.cut = true;
+      c.reviewed = false;
+      delete c.reviewedBy;
+    }
     deduped.push(c);
   }
   entry.conditions = deduped;
