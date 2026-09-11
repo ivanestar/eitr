@@ -19,7 +19,12 @@ export type ParameterKind =
 // page as rendered; 'field-probe' is what the page did when a value was typed into the field and the
 // focus moved away (scripts/field-probe.mjs), and its excerpt starts with the probe id.
 export type TestConditionSource =
-  'form-label' | 'html5-constraint' | 'aria-relationship' | 'select-option-text' | 'field-probe' | 'manual';
+  | 'form-label'
+  | 'html5-constraint'
+  | 'aria-relationship'
+  | 'select-option-text'
+  | 'field-probe'
+  | 'manual';
 
 export interface Evidence {
   signal: TestConditionSource;
@@ -290,7 +295,8 @@ export interface Parameter {
 //   disabled      - disabled, and nothing short of pressing a button enables it
 //   needs-button  - only takes a value after a button this stage may not press opens it
 //   off-limits    - inside an area the human put off-limits for this project
-export type ExclusionReason = 'result-output' | 'duplicate' | 'disabled' | 'needs-button' | 'off-limits';
+export type ExclusionReason =
+  'result-output' | 'duplicate' | 'disabled' | 'needs-button' | 'off-limits';
 
 export interface ExcludedControl {
   control: string;
@@ -390,7 +396,8 @@ export type PropertyRelation =
 //   idempotence            - applying the operation to its own output changes nothing
 //   symmetry               - swapping the two inputs mirrors the result
 //   permutation-invariance - reordering the input does not change the result
-export type MetamorphicRelation = 'round-trip' | 'idempotence' | 'symmetry' | 'permutation-invariance';
+export type MetamorphicRelation =
+  'round-trip' | 'idempotence' | 'symmetry' | 'permutation-invariance';
 
 // Whether every parameter value in a TestCondition's vector is drawn from a 'valid' partition (or
 // the inclusive/still-inside side of a boundary) - 'negative' when one is an 'invalid'-kind
