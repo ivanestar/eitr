@@ -242,7 +242,9 @@ describe('MCP TMS & AI-First Subsystem Generators', () => {
 
     const mapSkill = files.find((f) => f.path === '.agents/skills/map-site/SKILL.md');
     expect(mapSkill?.source.text).toContain('artifacts/site-map/site-map.json');
-    expect(mapSkill?.source.text).toContain('Shared Widget Mining');
+    expect(mapSkill?.source.text).toContain('Shared Widgets (script-driven, every pass)');
+    expect(mapSkill?.source.text).toContain('node scripts/page-inventory.mjs shared');
+    expect(mapSkill?.source.text).toContain('node scripts/page-inventory.mjs record');
     expect(mapSkill?.source.text).toContain('Fan-Out to POM Engineers');
     expect(mapSkill?.source.text).not.toContain('APP_GRAPH.md');
 

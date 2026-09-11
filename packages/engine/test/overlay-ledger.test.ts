@@ -393,6 +393,197 @@ describe('scripts/overlay-ledger.mjs (real execution)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // Live-observed: consent banners arrive in the visitor's language ("닫기", "閉じる", a Polish
+  // banner on an English site), and a bare cross has no letters for an English word list to match.
+  it('finds the close control by a lone cross, a dismiss attribute or a close class, whatever the language', () => {
+    const dir = setupProject('safe-interactions');
+    try {
+      run(dir, 'begin');
+      const cross = open(
+        dir,
+        '/a',
+        'id-a',
+        observation({
+          title: 'Cookies',
+          controls: [
+            { label: 'Принять', tag: 'button', role: '' },
+            { label: '×', tag: 'button', role: '' },
+          ],
+        }),
+      );
+      expect(cross.closeControl).toEqual({ index: 1, label: '×', how: 'glyph' });
+      expect(cross.dismissPlan).toContain('close-control');
+      expect(cross.labelRequest).toBeNull();
+
+      const byAttribute = open(
+        dir,
+        '/b',
+        'id-b',
+        observation({ title: 'Promo', controls: [{ label: '', tag: 'button', dismiss: true }] }),
+      );
+      expect(byAttribute.closeControl.how).toBe('dismiss-attribute');
+
+      const byClass = open(
+        dir,
+        '/c',
+        'id-c',
+        observation({
+          title: 'Newsletter',
+          controls: [{ label: '', tag: 'button', classHint: 'popup__close icon' }],
+        }),
+      );
+      expect(byClass.closeControl.how).toBe('close-class');
+
+      // Words outrank a class: this is an accept button, whatever its class says.
+      const wordsWin = open(
+        dir,
+        '/d',
+        'id-d',
+        observation({
+          title: 'Consent',
+          controls: [{ label: 'Accept and close', tag: 'button', classHint: 'cookie-close' }],
+        }),
+      );
+      expect(wordsWin.closeControl).toBeNull();
+      expect(wordsWin.dismissPlan).not.toContain('close-control');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('asks about labels it cannot read, presses only what the answer names as closing, and remembers it', () => {
+    const dir = setupProject('safe-interactions');
+    try {
+      run(dir, 'begin');
+      const banner = observation({
+        title: 'Cookies',
+        controls: [
+          { label: 'Принять все', tag: 'button', role: '' },
+          { label: 'Закрыть', tag: 'button', role: '' },
+        ],
+      });
+      const opened = open(dir, '/a', 'id-a', banner);
+      expect(opened.dismissPlan).toEqual(['escape', 'backdrop', 'reload']);
+      expect(opened.labelRequest.controls).toEqual([
+        { index: 0, label: 'Принять все' },
+        { index: 1, label: 'Закрыть' },
+      ]);
+
+      writeFileSync(join(dir, 'labels.json'), JSON.stringify({ 0: 'consent' }), 'utf8');
+      const partial = run(dir, 'label', '--overlay=' + opened.overlayId, '--answers=labels.json');
+      expect(partial.exitCode).toBe(1);
+      expect(partial.errors.join(' ')).toContain('1 ("Закрыть")');
+
+      writeFileSync(join(dir, 'labels.json'), JSON.stringify({ 0: 'consent', 1: 'close' }), 'utf8');
+      const labelled = run(dir, 'label', '--overlay=' + opened.overlayId, '--answers=labels.json');
+      expect(labelled.closeControl).toEqual({ index: 1, label: 'Закрыть', how: 'assistant' });
+      expect(labelled.dismissPlan).toEqual(['escape', 'close-control', 'backdrop', 'reload']);
+
+      const again = open(dir, '/b', 'id-b', banner);
+      expect(again.closeControl).toEqual({ index: 1, label: 'Закрыть', how: 'assistant' });
+      expect(again.labelRequest).toBeNull();
+
+      expect(run(dir, 'report').assistantChoices).toEqual([
+        { title: 'Cookies', kind: 'modal', pressed: 'Закрыть', routes: 2 },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Live: a product link "... Huawei Pura XMax ..." counted as a close control, because "x" in the
+  // English list matched the start of any word.
+  it('matches close words whole, and asks nothing about an overlay made only of links', () => {
+    const dir = setupProject('safe-interactions');
+    try {
+      run(dir, 'begin');
+      const xbox = open(
+        dir,
+        '/a',
+        'id-a',
+        observation({
+          title: 'Deal',
+          controls: [{ label: 'See Xbox games', tag: 'button', role: '' }],
+        }),
+      );
+      expect(xbox.closeControl).toBeNull();
+      expect(xbox.dismissPlan).not.toContain('close-control');
+
+      const card = open(
+        dir,
+        '/b',
+        'id-b',
+        observation({
+          title: 'Etui',
+          controls: [{ label: 'Luksusowe etui Huawei Pura XMax', tag: 'a', role: '' }],
+        }),
+      );
+      expect(card.closeControl).toBeNull();
+      expect(card.labelRequest).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a "close" answer on a label its own list says commits to something', () => {
+    const dir = setupProject('safe-interactions');
+    try {
+      run(dir, 'begin');
+      const opened = open(
+        dir,
+        '/a',
+        'id-a',
+        observation({
+          title: 'Hinweis',
+          controls: [
+            { label: 'Einstellungen', tag: 'button', role: '' },
+            { label: 'OK', tag: 'button', role: '' },
+          ],
+        }),
+      );
+      writeFileSync(join(dir, 'labels.json'), JSON.stringify({ 0: 'other', 1: 'close' }), 'utf8');
+      const labelled = run(dir, 'label', '--overlay=' + opened.overlayId, '--answers=labels.json');
+      expect(labelled.closeControl).toBeNull();
+      expect(labelled.dismissPlan).not.toContain('close-control');
+      expect(labelled.warnings.join(' ')).toContain('OK');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('under a read-only boundary an answer only makes the human question possible, never a press', () => {
+    const dir = setupProject('read-only');
+    try {
+      run(dir, 'begin');
+      const opened = open(
+        dir,
+        '/a',
+        'id-a',
+        observation({
+          title: 'Cookies',
+          controls: [
+            { label: 'Принять все', tag: 'button', role: '' },
+            { label: 'Закрыть', tag: 'button', role: '' },
+          ],
+        }),
+      );
+      writeFileSync(join(dir, 'labels.json'), JSON.stringify({ 0: 'consent', 1: 'close' }), 'utf8');
+      const labelled = run(dir, 'label', '--overlay=' + opened.overlayId, '--answers=labels.json');
+      expect(labelled.dismissPlan).toEqual(['reload']);
+      const exhausted = run(
+        dir,
+        'attempt',
+        '--overlay=' + opened.overlayId,
+        '--method=reload',
+        '--cleared=false',
+      );
+      expect(exhausted.escalate).toBe('ask-human');
+      expect(exhausted.question).toContain('Закрыть');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // A script nothing invokes is worse than no script: it ships, it is documented, and it never runs.
@@ -412,9 +603,26 @@ describe('overlay handling is actually wired into what gets generated', () => {
 
   it('/map-site drives every command the ledger exposes', () => {
     const text = mapSiteSkill();
-    for (const action of ['begin', 'probe', 'open', 'attempt', 'pending', 'entries', 'report']) {
+    for (const action of [
+      'begin',
+      'probe',
+      'open',
+      'label',
+      'attempt',
+      'pending',
+      'entries',
+      'report',
+    ]) {
       expect(text).toContain('overlay-ledger.mjs ' + action);
     }
+  });
+
+  it('/map-site passes the page verdict to the crawl budget and stops on a halt', () => {
+    const text = mapSiteSkill();
+    expect(text).toContain('--access=<access.state from record>');
+    expect(text).toContain('--mitigated=');
+    expect(text).toContain('A `halt` in any answer ends the pass');
+    expect(text).toContain('page-inventory.mjs classify');
   });
 
   it('/map-site registers the dialog handler that keeps a native dialog from stalling the crawl', () => {

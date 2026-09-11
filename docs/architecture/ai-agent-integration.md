@@ -28,8 +28,8 @@ Generated Test Repository
 │   │                             /design-test-cases + /automate-test end-to-end, one command from
 │   │                             nothing to verified working tests, with a human sign-off gate per
 │   │                             stage (or auto-pilot for local review; code synthesis always gated)
-│   ├── /map-site             -- Route graph crawler, site topology, shared widget mining &
-│   │                             overlay recording (ADR 0012 Stage 1 crawl half)
+│   ├── /map-site             -- Route graph crawler, site topology, per-page control inventory,
+│   │                             shared widgets & overlay recording (ADR 0012 Stage 1 crawl half)
 │   ├── /define-test-conditions -- Read-only form-parameter extraction + deterministic 2-way
 │   │                             combinatorial/boundary-value condition generation (ADR 0012 Stage 2)
 │   └── /design-test-cases    -- Deterministic test-level classification + drafted test case per
@@ -120,7 +120,13 @@ script (`scripts/render-review-artifact.mjs`) rather than each skill re-specifyi
 prose: it builds the artifact from the stored JSON, so the text a human approves cannot drift from
 what was actually written, and it decides by entry count whether the artifact belongs inline or in
 `artifacts/review/<kind>-review.md` - a large run previously scrolled past the top of the terminal
-and got abbreviated by the model, which asks a human to approve entries they never saw. When more
+and got abbreviated by the model, which asks a human to approve entries they never saw. For the
+site map, feature map and test conditions the file is always written and never deleted: a person
+may tick, answer and correct right in it, and `scripts/apply-review.mjs` reads the edits back
+against the exact rendering they were made on (ADR 0015). Before the site-map and feature-map
+gates, `scripts/corroboration.mjs` checks what the stage concluded against the independent records
+about each page - status, markup, screenshot, traffic, per-role access - and journals every
+disagreement and how it was settled (ADR 0016). When more
 than one role session exists, `/map-site` can also crawl once per role, recording `crawledAsRoles`
 and a per-route `access` map in the site map; the resulting access differences are the only
 observed evidence of a permission boundary anywhere in the pipeline, and `/define-test-conditions`
@@ -156,7 +162,32 @@ boundary. Immediately after that gate, an optional, never-blocking Coverage Cros
 (`scripts/check-sitemap-coverage.mjs`) looks for the target site's own `sitemap.xml` (via
 `robots.txt`'s `Sitemap:` directive or the conventional default path) and flags any route it lists
 that the crawl didn't reach - most sites publish no sitemap.xml at all, so a `SKIPPED` result is the
-normal outcome, not an error. See
+normal outcome, not an error.
+
+What is on each page is collected by a script rather than read off by the crawling model:
+`scripts/page-inventory.mjs` hands the crawl browser-side source for `page.evaluate` (`probe`), then
+stores every landmark and every control - role, accessible name, type, HTML5 constraints, options,
+and whether it sends a result elsewhere - in `artifacts/site-map/inventory/<routeId>.json` and
+answers with the route entry's `regions`, `components` and `contentHash` (`record`). The hash covers
+structure only (title with digits normalized, regions, each control's region, role and type), so a
+pagination chain still repeats it and the crawl budget still stops the chain; names go into
+per-region fingerprints instead, which `shared` compares across routes to name the header,
+navigation, footer and sidebar regions that recur as shared widgets.
+
+The probe walks open shadow roots and same-origin frames as well as the document, and lists what it
+cannot read into (cross-origin frames, drawing surfaces) instead of leaving it silently out. A page
+that marks up no header or footer is split into its top-level blocks; `shared` recognises a block
+that recurs, with at least 80% of its labelled controls in common, on a large share of the routes
+as the site frame by that repetition alone, and matches marked-up regions the same way, so a
+header carrying breadcrumbs is still one header. `record` also says whether the page is the application at all (`access`: a bot
+check, a refusal status on a near-empty page, or one identical page served at two addresses), and
+`scripts/crawl-budget.mjs` stops the pass on it rather than mapping the refusal. What deterministic
+code cannot place in every language and markup - elements that react to the pointer but are marked
+up as no control, labels outside the English output words, overlay buttons in the visitor's
+language - goes to the crawling assistant as a numbered question (`classify`, and the overlay
+ledger's `label`); the script checks every answer against the list it asked, takes control names
+from the page rather than the answer, remembers each decision for the rest of the crawl, and counts
+them in the run summary. See
 [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)
 for the design decision this implements and what remains out of scope for this first stage
 (transport choice, cross-route journey synthesis).
@@ -165,6 +196,23 @@ for the design decision this implements and what remains out of scope for this f
 
 Stage 2 and Stage 3 below take their names (test analysis defines test conditions, test design
 designs test cases from them) from the ISTQB Foundation Level syllabus's fundamental test process.
+
+The stage works feature by feature, riskiest first, and starts every feature from an analysis
+rather than from its fields (ADR 0014). The analysis records what the feature does and how it
+serves the application's confirmed purpose, what each field means and should obey, where each
+constraint comes from and what the page enforces today, the feature's dependencies, and the
+questions only a person can settle. `scripts/test-analysis-plan.mjs` decides the test basis and
+computes the step each feature is at: a crawled application, or one with requirements, tickets or
+code as evidence. `scripts/field-probe.mjs` types values into fields to see what they accept,
+within the crawl boundary and never submitting on production. `scripts/test-research.mjs` keeps
+research per kind of feature: at least five sources from four sites, and no query naming the
+application.
+
+Every condition carries its feature, its layer (field, rule, behaviour, frame), the source of its
+expected result - which separates checks of correctness from regression checks - its anchors
+(checked to exist, one matching that source), and a likelihood. The generator ranks all of them as
+likelihood times the feature's impact, and removes nothing. What follows describes the mechanical
+half of the stage.
 
 A second, explicit-request-only, strictly read-only skill consumes the feature map's
 `reviewed: true` routes plus `site-map.json` and derives typed test conditions per route into
@@ -185,6 +233,15 @@ is genuinely impossible, never merely because an earlier, unrelated greedy attem
 Invalid values follow the single-fault rule PICT uses for its negative values: two never share a
 vector, each is paired with every valid value of the other parameters, and valid pairs count as
 covered only in all-valid vectors, since a rejected input never exercised the values beside it.
+Extraction starts from the route's page inventory rather than a fresh reading of the page: every
+field the crawl recorded outside the site frame must end up a parameter (citing the field's
+inventory id) or an exclusion with a reason from a closed list, and the gate checks the rest of the
+extraction against the same record - offered options, HTML5 attributes, field types. For a page
+that turns input into output, the agent also writes `property` and `metamorphic` conditions from
+closed relation lists (count, uniqueness, format, pair coverage, round-trip, idempotence and so on),
+since such a page has no example answer to state in advance; every copy, export or download
+control needs one of them, or a stated exclusion; and the site frame's own fields are tested once,
+on the route the file names in `frameRouteId`.
 The same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
 deterministic redaction backstop - independent of what the LLM step already did - masking
 digit-run and majority-digit PII shapes in every evidence excerpt, sample value and option label

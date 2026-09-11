@@ -97,6 +97,42 @@ function siteMapWithPhantom(overrides: Record<string, unknown>) {
   return map;
 }
 
+describe('validate-site-map.mjs inventory reference', () => {
+  function siteMapWithInventory(inventory: string) {
+    const map = minimalSiteMap() as unknown as { routes: Record<string, Record<string, unknown>> };
+    map.routes['/'].inventory = inventory;
+    return map;
+  }
+
+  function errorsFor(data: unknown): string[] {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, data);
+      return JSON.parse(run(dir).stdout).errors;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('accepts the path page-inventory.mjs record returns for the route', () => {
+    expect(errorsFor(siteMapWithInventory('artifacts/site-map/inventory/route-home.json'))).toEqual(
+      [],
+    );
+  });
+
+  // prune matches files to routes by id, so a path naming another id - or anything else - would
+  // either lose the file or keep a leftover forever.
+  it('rejects a path that is not keyed by the route own id', () => {
+    for (const bad of [
+      'artifacts/site-map/inventory/route-other.json',
+      'artifacts/site-map/route-home.json',
+      '../inventory/route-home.json',
+    ]) {
+      expect(errorsFor(siteMapWithInventory(bad)).some((e) => e.includes('.inventory'))).toBe(true);
+    }
+  });
+});
+
 describe('validate-site-map.mjs phantom-route evidence invariant', () => {
   it('rejects a phantom flag on a navigation-discovered route with no recorded httpStatus', () => {
     const dir = setupProject();

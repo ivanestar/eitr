@@ -32,6 +32,7 @@ const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
 const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
+const REVIEW_DIR = path.join(CWD, 'artifacts', 'review');
 
 function loadJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -261,34 +262,34 @@ const COST_WARNING =
 const HUMAN_GATES_DISCLOSURE =
   "By default there is a pause after every stage, where that stage's own review artifact is presented and you must approve before the next stage runs.";
 
-// Rendered as a short vertical block rather than one long concatenated line: the previous
-// single-line form wrapped unpredictably and buried the one fact a first-time user actually needs
-// (what these four stages are) inside the same paragraph as the cost warning.
+// Rendered in the same block shape as every skill briefing it follows: a heading on its own line,
+// its text below, one blank line between blocks, and [WARNING] / [NOTE] on the two facts a
+// first-time user must not miss. The current stage carries the same brackets as the roadmap, and
+// the descriptions share one column wide enough for the bracketed name, whichever stage that is.
 function computePreFlightNotice(stage, coverage) {
   const position = positionFor(stage);
-  const widest = ROADMAP_STEPS.reduce(function (max, step) {
-    return Math.max(max, step.short.length);
-  }, 0);
-  const lines = [ROADMAP_STEPS.length + ' stages, each one ending with your review:', ''];
-  ROADMAP_STEPS.forEach(function (step, i) {
-    // A leading marker rather than a trailing "<- you are here": it keeps the stage names in one
-    // aligned column and does not grow the line past the terminal's width.
-    const marker = i === position.index ? '> ' : '  ';
-    const padded = step.short + ' '.repeat(widest - step.short.length);
-    lines.push(marker + (i + 1) + '. ' + padded + '  ' + step.blurb);
+  const names = ROADMAP_STEPS.map(function (step, i) {
+    return i === position.index ? '[' + step.short + ']' : step.short;
   });
-  lines.push('');
-  lines.push('Time and cost: ' + COST_WARNING);
-  lines.push('Your control:  ' + HUMAN_GATES_DISCLOSURE);
+  const widest = names.reduce(function (max, name) {
+    return Math.max(max, name.length);
+  }, 0);
+  const stageLines = ROADMAP_STEPS.map(function (step, i) {
+    return '  ' + (i + 1) + '. ' + names[i] + ' '.repeat(widest - names[i].length) + '  ' + step.blurb;
+  });
+  const blocks = [
+    ROADMAP_STEPS.length + ' stages, each one ending with your review:\\n\\n' + stageLines.join('\\n'),
+    '[WARNING] Time and cost:\\n' + COST_WARNING,
+    '[NOTE] Your control:\\n' + HUMAN_GATES_DISCLOSURE,
+  ];
   if (coverage.likelyPhantomRoutes > 0) {
-    lines.push('');
-    lines.push(
-      'Heads up: ' +
+    blocks.push(
+      '[NOTE] Routes that look like crawler artifacts:\\n' +
         coverage.likelyPhantomRoutes +
-        " route(s) already on record look like crawler artifacts (found only via a hidden DOM link, resolving to an empty/error-shell page) - they'll be called out separately at the next review, not treated as equal active routes.",
+        " route(s) already on record were found only via a hidden link and open an empty or error page. They'll be called out separately at the next review, not treated as equal active routes.",
     );
   }
-  return lines.join('\\n');
+  return blocks.join('\\n\\n');
 }
 
 function computeStatus(siteMap, featureMap, testConditions, journeysData) {
@@ -362,6 +363,37 @@ function computeStatus(siteMap, featureMap, testConditions, journeysData) {
   };
 }
 
+// A review file a person edited that nobody has applied yet: their approvals and corrections are on
+// disk, but not in the JSON the next stage reads. Compared with the rendering the file was made from,
+// which render-review-artifact.mjs keeps beside it.
+function pendingReviewEdits() {
+  const pending = [];
+  const tidy = function (text) {
+    return String(text)
+      .replace(/\\r\\n/g, '\\n')
+      .split('\\n')
+      .map(function (line) {
+        return line.replace(/\\s+$/, '');
+      })
+      .join('\\n')
+      .trim();
+  };
+  for (const kind of ['site-map', 'feature-map', 'test-conditions']) {
+    const view = path.join(REVIEW_DIR, kind + '-review.md');
+    const base = path.join(REVIEW_DIR, '.base', kind + '-review.json');
+    if (!fs.existsSync(view) || !fs.existsSync(base)) continue;
+    const rendered = loadJson(base);
+    if (!rendered || typeof rendered.text !== 'string') continue;
+    if (tidy(fs.readFileSync(view, 'utf8')) === tidy(rendered.text)) continue;
+    pending.push({
+      kind: kind,
+      filePath: 'artifacts/review/' + kind + '-review.md',
+      apply: 'node scripts/apply-review.mjs --kind=' + kind,
+    });
+  }
+  return pending;
+}
+
 function main() {
   const siteMap = loadJson(SITE_MAP_PATH);
   const featureMap = loadJson(FEATURE_MAP_PATH);
@@ -382,7 +414,13 @@ function main() {
   process.stdout.write(
     JSON.stringify(
       Object.assign(
-        { roadmap: roadmap, routeCoverage: routeCoverage, stageTimings: stageTimings, preFlightNotice: preFlightNotice },
+        {
+          roadmap: roadmap,
+          routeCoverage: routeCoverage,
+          stageTimings: stageTimings,
+          preFlightNotice: preFlightNotice,
+          pendingReviewEdits: pendingReviewEdits(),
+        },
         status,
       ),
       null,

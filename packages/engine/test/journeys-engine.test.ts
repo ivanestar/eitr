@@ -362,6 +362,28 @@ describe('scripts/compose-journeys.mjs (real execution)', () => {
       }
     });
 
+    it('drives a property or metamorphic condition through the UI - it is checked on what the page shows', () => {
+      const dir = setupProject();
+      try {
+        const routes = routeAFixture();
+        routes['route-checkout'].conditions.push(
+          condition('property0000001', {}, 'property'),
+          condition('metamorph000001', {}, 'metamorphic'),
+        );
+        writeTestConditions(dir, testConditionsFixture(routes));
+        expect(run(dir).status).toBe(0);
+        for (const id of ['property0000001', 'metamorph000001']) {
+          const journey = journeyCarrying(dir, id);
+          expect(journey?.testInterface).toBe('ui');
+          expect(journey?.conditionAssignments.find((a) => a.conditionId === id)?.reason).toBe(
+            'output-property',
+          );
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it('splits one route into a UI journey and an API journey rather than one journey absorbing both', () => {
       const dir = setupProject();
       try {

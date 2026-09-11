@@ -11,6 +11,7 @@ type Status = {
   ciProvider?: string | null;
   rolesMissingSession?: string[];
   recordedLogin?: 'none' | 'present' | null;
+  sessionHealth?: Array<{ file: string; verdict: string; reason: string }>;
 };
 
 type Result = {
@@ -76,6 +77,53 @@ function walk(
 const NO_CI: Status = { hasSession: false, ciProvider: null };
 const WITH_CI: Status = { hasSession: false, ciProvider: 'github' };
 const HAS_SESSION: Status = { hasSession: true, ciProvider: null };
+
+// A session file that exists is not a session that works: when its own expiry dates say it ran
+// out, the question says so and recommends capturing a fresh one, with the same answers as ever.
+describe('scripts/auth-questions.mjs - an expired session', () => {
+  it('says the saved session looks expired and puts a fresh capture first', () => {
+    const dir = setupProject();
+    try {
+      const result = ask(
+        dir,
+        { 'has-login': 'yes', proceed: 'continue' },
+        {
+          hasSession: true,
+          ciProvider: null,
+          sessionHealth: [
+            { file: 'user.json', verdict: 'expired', reason: 'every token in it expired' },
+          ],
+        },
+      );
+      expect(result.question!.id).toBe('existing-session');
+      expect(result.question!.text).toContain(
+        'looks expired (.auth/user.json: every token in it expired)',
+      );
+      expect(result.question!.options[0]).toEqual({
+        id: 'capture-fresh',
+        label: 'Capture a fresh one, replacing it',
+        recommended: true,
+      });
+      expect(result.question!.options.map((o) => o.id).sort()).toEqual([
+        'add-role',
+        'capture-fresh',
+        'reuse',
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('asks the usual question when nothing says the session expired', () => {
+    const dir = setupProject();
+    try {
+      const result = ask(dir, { 'has-login': 'yes', proceed: 'continue' }, HAS_SESSION);
+      expect(result.question!.text).toContain('A saved login session already exists');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 // A structured choice tool needs at least two options and rejects a call carrying one - live
 // observed as "each question requires at least 2 options, got 1", which killed a question before

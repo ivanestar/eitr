@@ -81,6 +81,68 @@ describe('scripts/skill-briefing.mjs (real execution)', () => {
     }
   });
 
+  it('prints the pipeline entry point in the agreed block shape, word for word', () => {
+    const dir = setupProject();
+    try {
+      expect(run(dir, '--skill=ground-zero-setup').briefing).toBe(
+        [
+          'What happens:',
+          'Takes a brand-new project all the way to running, verified tests: it crawls your app, works out what it is made of, decides what to test, writes readable test cases, then writes and runs the actual test code.',
+          '',
+          'How:',
+          'It runs the existing stage commands in order and adds no analysis of its own, pausing after each one so you approve what it found before it goes further. It always resumes from wherever the project actually is, so stopping is free and re-running it never starts over.',
+          '',
+          'Why:',
+          'Done by hand, this means remembering which command follows which and working out where you left off after every pause.',
+          '',
+          'Before you decide:',
+          '',
+          '  • It signs in to your application and crawls it live, under limits you set at the crawl stage.',
+          '  • No test code is ever written without your explicit approval of the proposal - in guided mode and in auto-pilot alike.',
+          '  • The stage list, how long this takes, and where the pauses are come next, from the pipeline itself.',
+        ].join('\n'),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('gives every briefing the same shape: headings on their own line, one blank line between blocks', () => {
+    const dir = setupProject();
+    try {
+      for (const skill of run(dir, 'list').skills) {
+        const briefing: string = run(dir, '--skill=' + skill).briefing;
+        for (const heading of ['What happens:', 'How:', 'Why:']) {
+          expect(briefing, skill).toMatch(new RegExp('(^|\\n)' + heading + '\\n\\S'));
+        }
+        expect(briefing, skill).not.toMatch(/\n{3}/);
+        expect(briefing, skill).not.toMatch(/\s$/);
+        for (const line of briefing.split('\n')) {
+          if (line.startsWith('  ')) expect(line, skill).toMatch(/^ {2}• \S/);
+          if (line.startsWith('[')) expect(line, skill).toMatch(/^\[(WARNING|NOTE)\] [^:]+:$/);
+        }
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('puts the facts that must not be missed under their own label rather than in the list', () => {
+    const dir = setupProject();
+    try {
+      const crawl: string = run(dir, '--skill=map-site').briefing;
+      expect(crawl).toContain('[WARNING] Time and cost:\nThis is the long one');
+      expect(crawl).toContain('[WARNING] Live application:\nIt touches your live application.');
+
+      const automate: string = run(dir, '--skill=automate-test').briefing;
+      expect(automate).toContain(
+        '[NOTE] Your control:\nNothing is written until you approve the proposal',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('offers options that name their own outcome rather than yes and no', () => {
     const dir = setupProject();
     try {

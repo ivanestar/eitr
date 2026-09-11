@@ -16,6 +16,7 @@ type Status = {
   readableContractCount?: number;
   storedCrawlBoundary?: string | null;
   storedOffLimits?: string[] | null;
+  storedApplicationKind?: string | null;
 };
 
 type Option = { id: string; label: string; recommended?: boolean };
@@ -30,9 +31,11 @@ type Result = {
   exitCode: number | null;
 };
 
-// Every field the script reads, at its "nothing has happened yet" value. A test names only what it
-// is actually about, so a question that starts applying for an unrelated reason shows up as a
-// failure rather than passing unnoticed.
+// Every field the script reads, at its "nothing has happened yet" value - except the kind of
+// application, which these tests take as already recorded (by an earlier run, or by /map-features)
+// so each one exercises only the question it is about. The tests about that question clear it.
+// A test names only what it is actually about, so a question that starts applying for an
+// unrelated reason shows up as a failure rather than passing unnoticed.
 const FRESH: Required<Status> = {
   siteMapExists: false,
   routeCount: 0,
@@ -44,6 +47,7 @@ const FRESH: Required<Status> = {
   readableContractCount: 0,
   storedCrawlBoundary: null,
   storedOffLimits: null,
+  storedApplicationKind: 'sandbox-demo',
 };
 
 function setupProject(): string {
@@ -91,19 +95,59 @@ function walk(
 }
 
 describe('scripts/map-site-questions.mjs - preflight', () => {
-  it('asks nothing but the boundary on a first crawl of a fresh project', () => {
+  it('asks what kind of application it is, then the boundary, on a first crawl of a fresh project', () => {
     const dir = setupProject();
     try {
       const { asked, final } = walk(
         dir,
         'preflight',
-        { 'crawl-boundary': 'safe-interactions' },
-        {},
+        { 'application-kind': 'staging', 'crawl-boundary': 'safe-interactions' },
+        { storedApplicationKind: null },
       );
-      expect(asked).toEqual(['crawl-boundary']);
+      expect(asked).toEqual(['application-kind', 'crawl-boundary']);
       expect(final.status).toBe('DONE');
       expect(final.plan!.mode).toBe('create');
       expect(final.plan!.crawlBoundary).toBe('safe-interactions');
+      // Recorded in app-profile's own vocabulary, not as the option id.
+      expect(final.plan!.applicationKind).toBe('staging-of-production');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Anything that submits, creates or deletes is never offered on the real production application.
+  it('offers only read-only and safe interactions on production, and narrows a wider boundary recorded before', () => {
+    const dir = setupProject();
+    try {
+      const asking = ask(
+        dir,
+        'preflight',
+        { 'application-kind': 'production' },
+        { storedApplicationKind: null },
+      );
+      expect(asking.question!.id).toBe('crawl-boundary');
+      expect(asking.question!.options.map((o) => o.id)).toEqual(['read-only', 'safe-interactions']);
+
+      const refused = ask(
+        dir,
+        'preflight',
+        { 'application-kind': 'production', 'crawl-boundary': 'full' },
+        { storedApplicationKind: null },
+      );
+      expect(refused.status).toBe('FAILED');
+
+      const stored = walk(
+        dir,
+        'preflight',
+        { 'crawl-boundary': 'safe-interactions' },
+        {
+          storedApplicationKind: 'production',
+          hasCrawlBoundary: true,
+          storedCrawlBoundary: 'full',
+        },
+      );
+      expect(stored.asked).toEqual(['crawl-boundary']);
+      expect(stored.final.plan!.crawlBoundary).toBe('safe-interactions');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -403,6 +447,7 @@ describe('scripts/map-site-questions.mjs - contract', () => {
         'existing-site-map',
         'orphaned-screenshots',
         'roles',
+        'application-kind',
         'crawl-boundary',
         'off-limits',
         'thin-result',

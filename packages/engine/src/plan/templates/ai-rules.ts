@@ -607,16 +607,22 @@ recorded. These files are written by the analysis workflows and are the project'
 |---|---|---|
 | \`artifacts/analysis/app-profile.json\` | Everything established about the application as a whole: what kind of application it is (production / sandbox-demo / internal tool), its confirmed core purpose, what each role is for, how it talks to its backend (\`apiStyle\`), the crawl boundary a human set, domain knowledge a person volunteered, which test types are in scope | \`node scripts/app-profile.mjs\` |
 | \`artifacts/site-map/site-map.json\` | Every known route, its structure, screenshot, HTTP status, per-role access, and the overlays met on it - each with what raised it, what it contains, its own screenshot, and how it was closed | \`node scripts/validate-site-map.mjs\` to check shape |
+| \`artifacts/site-map/inventory/<routeId>.json\` | Every control on one page, collected from the live DOM including open shadow roots and same-origin frames - role, accessible name, type, HTML5 constraints, options, whether it sends a result elsewhere (copy, export, download), and where it sits (\`inShadow\`, \`frame\`) - plus its headings, its landmark regions, the frames and drawing surfaces it could not read into, and whether the page was the application at all (\`access\`). Controls marked \`classifiedBy: "assistant"\` have their role only here, not in the markup, so \`getByRole\` cannot find them. \`shared.json\` beside them names the header, navigation, footer and sidebar regions that recur across routes, \`foundBy\` markup or by repetition | \`node scripts/page-inventory.mjs\` (\`record\` writes one, \`classify\` answers what only a reader can place, \`shared\` compares them) |
 | \`artifacts/site-map/api-contracts.json\` | Operations actually observed in traffic - method, path template, the operation name for a GraphQL or RPC call, and the response shape | \`node scripts/validate-api-contracts.mjs\` |
 | \`artifacts/analysis/feature-map.json\` | Features and the routes they span, the entities this application works with, what can happen to each one, its lifecycle, and the links between them | \`node scripts/derive-feature-map.mjs\` to draft, \`node scripts/validate-feature-map.mjs\` to check shape |
-| \`artifacts/analysis/test-conditions.json\` | Typed test conditions per route | \`node scripts/validate-test-conditions.mjs\` |
+| \`artifacts/analysis/test-conditions.json\` | Per reviewed feature: what it is for, what every field means and should obey (with where that comes from), the research behind it, and its ranked test conditions - each with its layer (field, rule, behaviour, frame), where its expected result comes from (so whether it checks correctness or guards against regression), what it rests on, and its risk and priority. \`artifacts/analysis/field-probes.json\` holds what fields did with typed values, \`artifacts/analysis/research/\` the research per kind of feature | \`node scripts/test-analysis-plan.mjs\` (where the stage is), \`node scripts/validate-test-conditions.mjs\`, \`node scripts/generate-test-conditions.mjs\` (builds and ranks) |
 | \`artifacts/test-cases/test-cases.json\` | Drafted test cases, and which are already automated | \`node scripts/validate-journeys.mjs\` |
+| \`artifacts/review/<kind>-review.md\` | The current view of the site map, feature map or test conditions, rendered from the JSON. A person may review right in it - tick \`[x]\` what they approve, answer on an \`Answer:\` line, correct text in place, delete a test condition's line to cut it. \`.base/\` beside it keeps the exact rendering each file was made from | \`node scripts/render-review-artifact.mjs --kind=<kind>\` to render, \`node scripts/apply-review.mjs --kind=<kind>\` to read a person's edits back |
+| \`artifacts/analysis/sensor-journal.jsonl\` | Every time the independent records about a page disagreed - the server's status, the page's markup, the screenshot, its traffic, what each role reached, the assistant's own judgment - and how it was settled | \`node scripts/corroboration.mjs --stage=<site-map\\|feature-map>\` to check, \`node scripts/corroboration.mjs report\` for how often each kind of record turned out right |
 
-Two rules govern all of them:
+Three rules govern all of them:
 
 - **Nothing is authoritative until a human reviewed it.** An entry with \`reviewed: false\` is a draft.
   Never treat one as an established fact, and never set \`reviewed: true\` yourself without a person
-  actually approving it in conversation.
+  actually approving it - in conversation, or by ticking it in the review file.
+- **Where independent records disagree, say so rather than pick one.** A conclusion drawn from one
+  reading - a screenshot, a label, your own judgment - is checked against what the project records
+  independently about the same thing, and a disagreement goes to the person with both sides named.
 - **Absence is normal, not an error.** Each file exists only once the workflow that writes it has
   run. A missing file or an empty field means "nobody established this yet" - ask, or proceed
   without it. Never infer that something is false because its record is absent.
@@ -637,11 +643,27 @@ a proposed URL still goes through the frontier gatekeeper, and "wait, it is stil
 out after two retakes), \`scripts/overlay-ledger.mjs\` (every modal, drawer, banner and native dialog
 the crawl meets: which dismissal the crawl boundary permits, how many attempts are left, and what is
 still open - an overlay left open makes every later click land on a backdrop with no error at all),
+\`scripts/page-inventory.mjs\` (what is on each page, collected in the browser rather than read off by
+eye - inside open shadow roots and same-origin frames too - whether the page is the application at
+all or a bot check or block page standing in for it, which elements only a reader can place
+(\`classify\` checks every answer against what it asked), and which frame regions recur across routes
+as shared widgets, marked up or not), \`scripts/test-analysis-plan.mjs\` (which test basis the
+condition stage works from, and which feature is at which of its steps - understand, research,
+extract, write the ideas, generate), \`scripts/field-probe.mjs\` (what a field does with a typed
+value, read back and recorded - only when the crawl boundary allows interaction, and a submit only
+where it allows any action on an application a person said is not production),
+\`scripts/test-research.mjs\` (research on how a kind of feature is tested, kept per kind of feature,
+with at least five sources from four sites and no query that names the application),
 \`scripts/skill-briefing.mjs\` (what a given skill is about to do,
 how, why, and what is worth knowing before agreeing to it - printed verbatim by every skill before
 it runs anything, and by the pipeline at each stage gate),
 \`scripts/render-review-artifact.mjs\` (renders any
-review artifact from its own stored JSON), \`scripts/env-role-stubs.mjs\` (per-role credential slots
+review artifact from its own stored JSON), \`scripts/apply-review.mjs\` (reads back what a person ticked,
+answered, cut or corrected in a review file - exactly, against the rendering they edited, refusing a
+file made from an older JSON and handing every edit it cannot apply itself back as a correction),
+\`scripts/corroboration.mjs\` (whether what a stage concluded about a page agrees with the independent
+records about it, and a journal of every disagreement and who turned out right),
+\`scripts/env-role-stubs.mjs\` (per-role credential slots
 in \`.env\`), and \`scripts/orchestrate-swarm.mjs\` (parallel work-unit planning).
 
 **A stage that produces many units of work commits them one at a time.** \`scripts/artifact-journal.mjs\`

@@ -899,7 +899,32 @@ making that route's drafted test conditions impossible to actually automate.
   \`artifacts/analysis/test-conditions.json\` (when it exists) - every name in its \`parameters[]\`
   array must have a corresponding named child on the Page Object, composed per the Component Reuse
   Order above. A parameter with no matching child is a real gap: go back and add it, not a
-  discrepancy to silently ignore.
+  discrepancy to silently ignore. The same file's \`features[<featureId>].fields[]\` says what each
+  field means in its feature (its role and unit) - name the child after that meaning, not after its
+  position or tag.
+- Cross-reference the route's inventory too, \`artifacts/site-map/inventory/<routeId>.json\`, written
+  by the crawl from the live DOM: every control in it outside the header, navigation, footer and
+  sidebar needs a child here. Controls inside a region that \`artifacts/site-map/inventory/shared.json\`
+  names as a widget belong to that widget - compose it, never redefine them on the page. A control
+  recorded with no accessible name cannot be reached by \`getByRole\` name or \`getByLabel\`; locate it
+  by its test id, or by the nearby text the inventory records, and say so in the report.
+- Read the inventory's placement fields before choosing a locator:
+  * \`inShadow: true\` - the control sits in an open shadow root. \`getByRole\`, \`getByTestId\` and CSS
+    locators reach it as they are; XPath does not pierce shadow roots, so never use one here.
+  * \`frame: <n>\` - the control sits inside embedded frame n (the inventory's \`frames[n]\`). Reach it
+    through \`page.frameLocator(...)\` scoped to that frame, never through the page itself. A frame
+    listed with \`readable: false\` belongs to another site: its contents are not in the inventory, and
+    whether this project tests it (a payment form) or leaves it alone (an ad, a map) is a question
+    for the report, not something to guess.
+  * \`classifiedBy: "assistant"\` - an element the page marks up as no control at all (a span drawn
+    as a calculator key); its role is what it does, not what the browser exposes, so \`getByRole\`
+    will NOT find it. Use its test id when it has one, otherwise \`getByText(name, { exact: true })\`
+    scoped to its region, and note the missing role as an accessibility finding in the report.
+  * \`role: "summary"\` - a \`<details>\` disclosure; locate it as \`locator('summary', { hasText })\`.
+  * \`frameBy: "repetition"\` - part of a header, footer or sidebar the site never marked up, found
+    by recurring across routes; it belongs to the widget \`shared.json\` names, exactly like a
+    marked-up one.
+  * \`canvases\` - drawing surfaces; nothing drawn on one is a control, and no locator reaches inside.
 - Even when no test-conditions.json entry exists yet for a route, scan for every real interactive
   element the live DOM actually contains (every form field, select, checkbox, radio, button,
   meaningful link) - never stop at a handful of generic landmark regions and call the page object
@@ -953,7 +978,9 @@ pass with a fixed stopping rule, not an open-ended refactor audit:
 ## Worker-Mode & Batch Generation from Site Map
 - When invoked in parallel worker mode or for mapped routes in \`artifacts/site-map/site-map.json\`:
   * Focus on the assigned route unit in isolation (Work-Unit Isolation).
-  * Reuse existing shared widgets in \`${sc.widgetPath('<name>')}\`.
+  * Reuse existing shared widgets in \`${sc.widgetPath('<name>')}\`. A Level 1 worker assigned a widget
+    name builds it from that name's entry in \`artifacts/site-map/inventory/shared.json\` - the routes
+    carrying it and every control inside it.
   * Synthesize dedicated Page Object in \`${sc.pagePath('<name>')}\`.
   * For EVERY Page Object, verify all locators directly against the live DOM before reporting it complete (1:1 strict parity, 0 unverified pages).
   * Run local verification and return structured JSON/Markdown results to the orchestrator.

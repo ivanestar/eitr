@@ -4,10 +4,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderReviewArtifactRenderer } from '../src/plan/templates/review-artifact-renderer.js';
+import { renderCorroboration } from '../src/plan/templates/corroboration.js';
 
 function setupProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'eitr-review-renderer-'));
   writeFileSync(join(dir, 'render-review-artifact.mjs'), renderReviewArtifactRenderer(), 'utf8');
+  writeFileSync(join(dir, 'corroboration.mjs'), renderCorroboration(), 'utf8');
   mkdirSync(join(dir, 'artifacts', 'site-map'), { recursive: true });
   mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
   mkdirSync(join(dir, 'artifacts', 'test-cases'), { recursive: true });
@@ -100,38 +102,182 @@ function run(dir: string, ...args: string[]) {
   return { result, output: result.stdout ? JSON.parse(result.stdout) : null };
 }
 
-// Approving a review changes the entries it describes, and nothing re-renders it - so the file
-// left behind states the pre-approval draft. Live-observed claiming "criticality (draft)" for 45
-// entries a human had confirmed, with the JSON written two minutes after the markdown.
-describe('scripts/render-review-artifact.mjs --discard', () => {
-  it('removes the rendered view and leaves the artifact untouched', () => {
+// A field left out of a page's conditions is a decision nothing downstream will test it, so the
+// review names each one; and the site frame's fields, left out of every page, get one line saying so.
+describe('scripts/render-review-artifact.mjs --kind=test-conditions field accounting', () => {
+  it('names each field left out with its reason, and the frame fields no page carries', () => {
     const dir = setupProject();
     try {
-      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(20));
-      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(20));
-      const rendered = run(dir, '--kind=feature-map').output;
-      expect(rendered.mode).toBe('file');
-      const reviewPath = join(dir, 'artifacts', 'review', 'feature-map-review.md');
-      expect(existsSync(reviewPath)).toBe(true);
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      mkdirSync(join(dir, 'artifacts', 'site-map', 'inventory'), { recursive: true });
+      writeJson(dir, 'artifacts/site-map/inventory/id-0.json', {
+        routeId: 'id-0',
+        controls: [
+          { id: 'c3', role: 'checkbox', name: 'Gift wrap', tag: 'input' },
+          { id: 'c4', role: 'textbox', name: '', hint: 'Result', tag: 'textarea' },
+        ],
+      });
+      writeJson(dir, 'artifacts/site-map/inventory/shared.json', {
+        widgets: [
+          {
+            name: 'Header',
+            controls: [
+              { role: 'link', name: 'Home', tag: 'a' },
+              { role: 'combobox', name: 'Select language', tag: 'select' },
+            ],
+          },
+        ],
+      });
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 2,
+        generatedAt: '2026-09-10T00:00:00.000Z',
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters: [],
+            excluded: [
+              { control: 'c3', reason: 'disabled', note: 'enabled only after checkout' },
+              { control: 'c4', reason: 'result-output' },
+            ],
+            constraints: [],
+            conditions: [],
+            unsatisfiedPairs: [],
+          },
+        },
+      });
+      const { output } = run(dir, '--kind=test-conditions');
+      expect(output.markdown).toContain(
+        'Site frame fields are not part of any page below: Header: combobox "Select language"',
+      );
+      expect(output.markdown).not.toContain('Header: link');
+      expect(output.markdown).toContain(
+        'Fields left out: checkbox "Gift wrap" - disabled (enabled only after checkout); textbox next to "Result" - result-output',
+      );
 
-      const discarded = run(dir, '--kind=feature-map', '--discard').output;
-      expect(discarded.discarded).toBe(true);
-      expect(existsSync(reviewPath)).toBe(false);
-      // The record survives; only the view was thrown away.
-      expect(existsSync(join(dir, 'artifacts', 'analysis', 'feature-map.json'))).toBe(true);
-      expect(discarded.note).toContain('Re-render');
+      // With a route named for the frame, the line says where the frame's fields are tested; and a
+      // property shows the relation it checks next to its technique.
+      const conditions = JSON.parse(
+        readFileSync(join(dir, 'artifacts', 'analysis', 'test-conditions.json'), 'utf8'),
+      );
+      conditions.frameRouteId = 'id-0';
+      conditions.features = {
+        'f-gen': {
+          featureId: 'f-gen',
+          purpose: 'Generates GUIDs.',
+          fitsApplication: 'One of the testing tools the application collects.',
+          archetype: 'id generator',
+          fields: [],
+          questions: [{ text: 'Is 1000 the real upper limit?', about: 'c9' }],
+          research: { status: 'skipped', archetype: 'id generator', reason: 'no web access' },
+        },
+      };
+      conditions.routes['id-0'].conditions = [
+        {
+          conditionId: 'p1',
+          technique: 'property',
+          relation: 'all-unique',
+          description: 'Verify no two generated values are the same',
+          featureId: 'f-gen',
+          layer: 'behavior',
+          oracle: 'domain',
+          priority: 'P1',
+          riskScore: 6,
+        },
+        {
+          conditionId: 'p2',
+          technique: 'boundary-value',
+          description: 'With count="1001": the count is refused',
+          featureId: 'f-gen',
+          layer: 'field',
+          oracle: 'markup',
+          priority: 'P2',
+          riskScore: 4,
+        },
+      ];
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', conditions);
+      const framed = run(dir, '--kind=test-conditions').output;
+      expect(framed.markdown).toContain('Site frame fields are tested once, on /route-00');
+      // Per feature: what it is, the research behind it, the open question, then the conditions in
+      // priority order, each saying whether it checks correctness or only guards against a change.
+      expect(framed.markdown).toContain('What it is: Generates GUIDs.');
+      expect(framed.markdown).toContain('Research: skipped - no web access');
+      expect(framed.markdown).toContain('1. Is 1000 the real upper limit?');
+      expect(framed.markdown).toContain(
+        '1. Verify no two generated values are the same  [P1 | behavior | property/all-unique | correct: domain]',
+      );
+      expect(framed.markdown).toContain(
+        '2. With count="1001": the count is refused  [P2 | field | boundary-value | regression: markup]',
+      );
+      expect(framed.summary).toContain('P1: 1, P2: 1, P3: 0');
+      expect(framed.summary).toContain('1 question(s) for you');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// A person may review by editing the file, so it is always written for the editable stages - with
+// the rendering kept beside it, what apply-review.mjs compares an edited file against - and it is
+// never deleted: rendering again after a change is what keeps it from showing an older state.
+describe('scripts/render-review-artifact.mjs editable review files', () => {
+  it('always writes the file for an editable stage, with the rendering and its labels beside it', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(2));
+      const output = run(dir, '--kind=feature-map').output;
+      expect(output.mode).toBe('inline');
+      expect(output.editable).toBe(true);
+      expect(output.filePath).toBe('artifacts/review/feature-map-review.md');
+
+      const written = readFileSync(
+        join(dir, 'artifacts', 'review', 'feature-map-review.md'),
+        'utf8',
+      );
+      expect(written.split('\n')[0]).toMatch(
+        /^<!-- review of artifacts\/analysis\/feature-map\.json @ [0-9a-f]{16} /,
+      );
+      expect(written).toContain('- [ ] ALL. Approve every entry I did not change');
+      expect(written).toContain('- [ ] F1. Feature 0 - **HIGH IMPACT**');
+      expect(written).toContain('   - [ ] P1. /route-00 - Page 0 - **HIGH**');
+
+      const base = JSON.parse(
+        readFileSync(join(dir, 'artifacts', 'review', '.base', 'feature-map-review.json'), 'utf8'),
+      );
+      expect(base.text).toBe(written);
+      expect(base.source).toBe('artifacts/analysis/feature-map.json');
+      expect(base.labels.F1).toEqual({ type: 'feature', id: 'f-0' });
+      expect(base.labels.P1).toEqual({ type: 'page', routeId: 'id-0' });
+      expect(base.owners.length).toBe(written.split('\n').length);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('is harmless when there is nothing rendered to discard', () => {
+  it('ticks the box of what is already approved, so a later rendering shows the current state', () => {
     const dir = setupProject();
     try {
+      const map = featureMapWith(2) as any;
+      map.features['f-0'].reviewed = true;
+      map.features['f-0'].reviewedBy = 'human';
       writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
-      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMapWith(2));
-      const output = run(dir, '--kind=feature-map', '--discard').output;
-      expect(output.discarded).toBe(false);
+      writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+      const { markdown } = run(dir, '--kind=feature-map').output;
+      expect(markdown).toContain('- [x] F1. Feature 0');
+      expect(markdown).toContain('- [ ] F2. Feature 1');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('writes the test-cases view only past the threshold - it is read, not edited, for now', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      writeJson(dir, 'artifacts/test-cases/test-cases.json', { schemaVersion: 2, journeys: {} });
+      const output = run(dir, '--kind=test-cases').output;
+      expect(output.editable).toBe(false);
+      expect(output.filePath).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -148,9 +294,8 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
 
       const { output } = run(dir, '--kind=feature-map');
       expect(output.mode).toBe('inline');
-      expect(output.filePath).toBeNull();
       expect(output.markdown).toContain('Confirmed core purpose: A test fixture application');
-      expect(output.markdown).toContain('1. Feature 0 - **HIGH IMPACT**');
+      expect(output.markdown).toContain('- [ ] F1. Feature 0 - **HIGH IMPACT**');
       // Renders the route's resolved path/title, never the raw routeId.
       expect(output.markdown).toContain('/route-00 - Page 0');
       expect(output.markdown).toContain('tier reason 0');
@@ -450,7 +595,7 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
         expect(output.summary).toBe(
           '1 feature(s) over 2 page(s) (1 high, 1 medium), 2 thing(s), 1 link(s) between them to confirm',
         );
-        expect(output.markdown).toContain('1. Ordering - **HIGH IMPACT**');
+        expect(output.markdown).toContain('- [ ] F1. Ordering - **HIGH IMPACT**');
         // Route ids are resolved to something a person can recognise, with the tier a reviewer is
         // actually being asked to check sitting next to the page it was given for.
         expect(output.markdown).toContain('/route-00 - Page 0 - **HIGH**');
@@ -462,6 +607,27 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
           'Needs a customers to already exist - via the field "customerId", guessed from that name alone.',
         );
         expect(output.markdown).toContain('Nothing links it to anything else.');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('separates every multi-line entry with a blank line: each page, feature and entity', () => {
+      const dir = setupProject();
+      try {
+        writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+        writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
+        const { markdown } = run(dir, '--kind=feature-map').output;
+        // A page's reasoning and evidence end before the next page starts.
+        expect(markdown).toMatch(/Evidences: "Place an order"\n\n {3}- \[ \] P2\. \/route-01/);
+        // The feature's last line ends before the entity section starts.
+        expect(markdown).toMatch(
+          /Impact comes from: [^\n]+\n\n\*\*Things this application works with\*\*/,
+        );
+        // One entity's block ends before the next one's heading.
+        expect(markdown).toMatch(/\n\n- \[ \] E2\. orders\n/);
+        expect(markdown).not.toMatch(/\n{3}/);
+        expect(markdown).not.toMatch(/\s$/);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

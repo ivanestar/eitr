@@ -128,12 +128,69 @@ function setupProject(): string {
   return dir;
 }
 
-function writeReport(dir: string, data: unknown) {
+const GENERATED_TECHNIQUES = new Set([
+  'combinatorial',
+  'boundary-value',
+  'equivalence-partition',
+  'checklist-based',
+  'state-transition',
+  'use-case',
+]);
+
+// The feature analysis every schema-3 report carries. These fixtures have no feature map, so no
+// route belongs to it by the map and no field meaning is demanded - the tests below that exercise
+// the analysis write their own.
+function checkoutAnalysis() {
+  return {
+    featureId: 'feature-checkout',
+    purpose: 'Takes an order: the email to confirm it to and how many items',
+    fitsApplication: 'The shop exists to sell, and this is where a sale is completed',
+    archetype: 'checkout',
+    confidence: 'high',
+    anchors: [{ kind: 'feature', ref: 'feature-checkout' }],
+    fields: [],
+    dependencies: [],
+    questions: [],
+    research: { status: 'skipped', archetype: 'checkout', reason: 'no web access in this test' },
+    analyzedAt: '2026-09-03T11:00:00.000Z',
+  };
+}
+
+// Fills what schema 3 adds - the basis, the feature analysis, and on every condition its feature,
+// layer, oracle, anchors, origin, risk and rank - wherever a fixture written for what it tests has
+// left them out. writeRawReport skips this, for the tests about exactly those fields.
+function upgrade(data: unknown): unknown {
+  if (!data || typeof data !== 'object' || !('routes' in (data as object))) return data;
+  const report = structuredClone(data) as Record<string, any>;
+  if (report.schemaVersion === 2) report.schemaVersion = 3;
+  if (!report.basis) report.basis = { mode: 'live-app', sources: ['https://example.com'] };
+  if (!report.features) report.features = { 'feature-checkout': checkoutAnalysis() };
+  for (const entry of Object.values(report.routes as Record<string, any>)) {
+    for (const condition of Array.isArray(entry?.conditions) ? entry.conditions : []) {
+      if (!condition || typeof condition !== 'object') continue;
+      condition.featureId ??= 'feature-checkout';
+      condition.layer ??= 'behavior';
+      condition.oracle ??= 'domain';
+      condition.anchors ??= [{ kind: 'feature', ref: 'feature-checkout' }];
+      condition.origin ??= GENERATED_TECHNIQUES.has(condition.technique) ? 'generated' : 'model';
+      condition.risk ??= { likelihood: 'medium', reason: 'a representative case for this fixture' };
+      condition.riskScore ??= 6;
+      condition.priority ??= 'P1';
+    }
+  }
+  return report;
+}
+
+function writeRawReport(dir: string, data: unknown) {
   writeFileSync(
     join(dir, 'artifacts', 'analysis', 'test-conditions.json'),
     JSON.stringify(data, null, 2),
     'utf8',
   );
+}
+
+function writeReport(dir: string, data: unknown) {
+  writeRawReport(dir, upgrade(data));
 }
 
 function run(dir: string, args: string[] = []) {
@@ -639,6 +696,425 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     });
   });
 
+  // Every field the crawl recorded outside the site frame is a parameter or an explicit exclusion,
+  // and what the inventory read off the page - options, HTML5 attributes, the field type - is what
+  // the parameters are checked against.
+  describe('field accounting against the route inventory', () => {
+    type Report = {
+      routes: Record<string, { parameters: Array<Record<string, any>>; excluded?: unknown[] }>;
+    };
+
+    function checkoutInventory(overrides: Record<string, unknown> = {}) {
+      return {
+        schemaVersion: 1,
+        routeId: 'route-checkout',
+        contentHash: 'abc123',
+        controls: [
+          {
+            id: 'c0',
+            region: 'header',
+            role: 'combobox',
+            name: 'Language',
+            tag: 'select',
+            options: ['English', 'Deutsch'],
+            optionCount: 2,
+          },
+          {
+            id: 'c1',
+            region: 'main',
+            role: 'textbox',
+            name: 'Email',
+            tag: 'input',
+            type: 'email',
+            constraints: { required: true },
+          },
+          {
+            id: 'c2',
+            region: 'main',
+            role: 'spinbutton',
+            name: 'Quantity',
+            tag: 'input',
+            type: 'number',
+            constraints: { max: '10' },
+          },
+          {
+            id: 'c3',
+            region: 'main',
+            role: 'checkbox',
+            name: 'Gift wrap',
+            tag: 'input',
+            type: 'checkbox',
+          },
+          {
+            id: 'c4',
+            region: 'main',
+            role: 'textbox',
+            name: '',
+            hint: 'Order summary',
+            tag: 'textarea',
+          },
+          { id: 'c5', region: 'main', role: 'button', name: 'Place order', tag: 'button' },
+          {
+            id: 'c6',
+            region: 'main',
+            role: 'combobox',
+            name: 'Shipping',
+            tag: 'select',
+            options: ['Standard', 'Express'],
+            optionCount: 2,
+          },
+        ],
+        ...overrides,
+      };
+    }
+
+    function accounted(): Report {
+      const report = structuredClone(wellFormedParametersOnly()) as unknown as Report;
+      const route = report.routes['route-checkout'];
+      route.parameters[0].control = 'c1';
+      route.parameters[1].control = 'c2';
+      route.parameters.push({
+        name: 'shipping',
+        kind: 'select',
+        control: 'c6',
+        partitions: [
+          {
+            id: 'standard',
+            kind: 'valid',
+            sampleValues: ['Standard'],
+            expectedOutcome: 'the summary shows a standard shipping line',
+          },
+        ],
+        boundaries: [],
+        evidence: [{ signal: 'select-option-text', excerpt: 'Standard' }],
+      });
+      route.excluded = [
+        { control: 'c3', reason: 'disabled' },
+        { control: 'c4', reason: 'result-output' },
+      ];
+      return report;
+    }
+
+    function validateWith(
+      report: unknown,
+      inventory: unknown = checkoutInventory(),
+      args: string[] = ['--stage=parameters'],
+    ) {
+      const dir = setupProject();
+      try {
+        writeReport(dir, report);
+        if (inventory) {
+          mkdirSync(join(dir, 'artifacts', 'site-map', 'inventory'), { recursive: true });
+          writeFileSync(
+            join(dir, 'artifacts', 'site-map', 'inventory', 'route-checkout.json'),
+            JSON.stringify(inventory),
+            'utf8',
+          );
+        }
+        return JSON.parse(run(dir, args).stdout) as {
+          errors: string[];
+          warnings: string[];
+        };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    it('passes when every field of the page is a parameter or excluded, with options read from the inventory', () => {
+      const output = validateWith(accounted());
+      expect(output.errors).toEqual([]);
+      expect(output.warnings.some((w) => w.includes('no inventory'))).toBe(false);
+    });
+
+    it('fails a field nobody accounted for', () => {
+      const report = accounted();
+      report.routes['route-checkout'].excluded = [{ control: 'c4', reason: 'result-output' }];
+      expect(
+        validateWith(report).errors.some((e) =>
+          e.includes('leaves c3 checkbox "Gift wrap" unaccounted'),
+        ),
+      ).toBe(true);
+    });
+
+    // Live-observed: the header's language switcher was a parameter on 13 of 28 routes.
+    it('fails a parameter citing a field of the site frame', () => {
+      const report = accounted();
+      report.routes['route-checkout'].parameters.push({
+        ...report.routes['route-checkout'].parameters[2],
+        name: 'language',
+        control: 'c0',
+        partitions: [
+          {
+            id: 'en',
+            kind: 'valid',
+            sampleValues: ['English'],
+            expectedOutcome: 'the page reads in English',
+          },
+        ],
+      });
+      expect(validateWith(report).errors.some((e) => e.includes('belongs to the site frame'))).toBe(
+        true,
+      );
+    });
+
+    // Without this, a parameter simply omitting control passed as "revealed by a probe" - live-observed
+    // on the home page, whose only parameter was the header's language switcher.
+    it('fails a parameter with no control unless it names the own field that revealed it', () => {
+      const orphan = accounted();
+      orphan.routes['route-checkout'].parameters.push({
+        ...orphan.routes['route-checkout'].parameters[2],
+        name: 'language',
+        control: undefined,
+        options: ['English'],
+        partitions: [
+          {
+            id: 'en',
+            kind: 'valid',
+            sampleValues: ['English'],
+            expectedOutcome: 'the page reads in English',
+          },
+        ],
+      });
+      expect(
+        validateWith(orphan).errors.some((e) => e.includes('has no control and no revealedBy')),
+      ).toBe(true);
+
+      const revealed = structuredClone(orphan);
+      revealed.routes['route-checkout'].parameters[3].revealedBy = 'c3';
+      expect(validateWith(revealed).errors).toEqual([]);
+
+      const byFrame = structuredClone(orphan);
+      byFrame.routes['route-checkout'].parameters[3].revealedBy = 'c0';
+      expect(
+        validateWith(byFrame).errors.some((e) => e.includes('has no control and no revealedBy')),
+      ).toBe(true);
+    });
+
+    it('fails an html5 rule the field does not carry', () => {
+      const wrongValue = validateWith(
+        accounted(),
+        checkoutInventory({
+          controls: checkoutInventory().controls.map((c) =>
+            c.id === 'c2' ? { ...c, constraints: { max: '1000' } } : c,
+          ),
+        }),
+      );
+      expect(wrongValue.errors.some((e) => e.includes('carries max=1000'))).toBe(true);
+
+      const report = accounted();
+      report.routes['route-checkout'].parameters[1].boundaries[0].rule = {
+        signal: 'html5-constraint',
+        excerpt: 'min=0',
+      };
+      expect(validateWith(report).errors.some((e) => e.includes('recorded no min'))).toBe(true);
+    });
+
+    it('fails a non-numeric sample on a number field, which the browser would empty', () => {
+      const report = accounted();
+      report.routes['route-checkout'].parameters[1].partitions[1].sampleValues = ['abc'];
+      expect(
+        validateWith(report).errors.some((e) =>
+          e.includes('cannot be the value of a number field'),
+        ),
+      ).toBe(true);
+    });
+
+    it('checks select samples against the options on the page, and the kind against the field', () => {
+      const offered = accounted();
+      offered.routes['route-checkout'].parameters[2].partitions.push({
+        id: 'express-as-invalid',
+        kind: 'invalid',
+        sampleValues: ['Express'],
+        expectedOutcome: 'no shipping line is shown',
+        rule: { signal: 'select-option-text', excerpt: 'Standard, Express' },
+        executionLevel: 'dom',
+      });
+      expect(
+        validateWith(offered).errors.some((e) =>
+          e.includes('sample "Express" is one of the options'),
+        ),
+      ).toBe(true);
+
+      const mislabelled = accounted();
+      mislabelled.routes['route-checkout'].parameters[2].kind = 'text';
+      expect(
+        validateWith(mislabelled).errors.some((e) => e.includes('is a select field on the page')),
+      ).toBe(true);
+    });
+
+    it('refuses control ids from an inventory recorded after the extraction', () => {
+      const output = validateWith(accounted(), checkoutInventory({ contentHash: 're-crawled' }));
+      expect(output.errors.some((e) => e.includes('does not match the inventory'))).toBe(true);
+    });
+
+    it('accepts no parameters at all on a page whose only fields belong to the frame', () => {
+      const report = structuredClone(wellFormedParametersOnly()) as unknown as Report;
+      report.routes['route-checkout'].parameters = [];
+      const inventory = checkoutInventory({
+        controls: checkoutInventory().controls.filter((c) => c.id === 'c0' || c.id === 'c5'),
+      });
+      expect(validateWith(report, inventory).errors).toEqual([]);
+    });
+
+    describe('output properties, output channels and the site frame', () => {
+      const copyControl = {
+        id: 'c7',
+        region: 'main',
+        role: 'button',
+        name: 'Copy summary',
+        tag: 'button',
+        output: true,
+      };
+
+      function withOutputs() {
+        return checkoutInventory({ controls: [...checkoutInventory().controls, copyControl] });
+      }
+
+      function property(overrides: Record<string, unknown> = {}) {
+        return {
+          conditionId: 'p1',
+          parameters: {},
+          technique: 'property',
+          relation: 'output-matches-display',
+          sourceInput: 'an order of 2 with standard shipping',
+          outputs: ['c7'],
+          description: 'Verify Copy summary copies exactly the summary the page shows',
+          expectedOutcome: 'the clipboard holds the same text as the summary box',
+          scenario: 'positive',
+          verification: {},
+          isSpeculative: true,
+          reviewed: false,
+          ...overrides,
+        };
+      }
+
+      function withConditions(conditions: unknown[]) {
+        const report = accounted() as unknown as Report & {
+          routes: Record<string, Record<string, unknown>>;
+        };
+        Object.assign(report.routes['route-checkout'], {
+          conditions,
+          unsatisfiedPairs: [],
+          sourceParamsHash: '',
+        });
+        return report;
+      }
+
+      const full: string[] = [];
+
+      it('passes a property that checks the page output channel', () => {
+        expect(validateWith(withConditions([property()]), withOutputs(), full).errors).toEqual([]);
+      });
+
+      it('fails an output control no condition checks, unless excluded with a reason', () => {
+        const uncovered = validateWith(withConditions([]), withOutputs(), full);
+        expect(
+          uncovered.errors.some((e) =>
+            e.includes('c7 button "Copy summary" sends the page\'s result elsewhere'),
+          ),
+        ).toBe(true);
+
+        const excluded = withConditions([]);
+        (excluded.routes['route-checkout'].excluded as unknown[]).push({
+          control: 'c7',
+          reason: 'off-limits',
+          note: 'the human left the clipboard out of scope',
+        });
+        expect(validateWith(excluded, withOutputs(), full).errors).toEqual([]);
+      });
+
+      it('fails a relation from the wrong list, a metamorphic relation with no follow-up run, and a negative property', () => {
+        const wrong = validateWith(
+          withConditions([property({ relation: 'round-trip' })]),
+          withOutputs(),
+          full,
+        );
+        expect(
+          wrong.errors.some((e) => e.includes('.relation must be one of count-matches-request')),
+        ).toBe(true);
+
+        const metamorphic = validateWith(
+          withConditions([
+            property(),
+            property({
+              conditionId: 'm1',
+              technique: 'metamorphic',
+              relation: 'round-trip',
+              outputs: undefined,
+            }),
+          ]),
+          withOutputs(),
+          full,
+        );
+        expect(metamorphic.errors.some((e) => e.includes('.followUpInput must say'))).toBe(true);
+
+        const negative = validateWith(
+          withConditions([property({ scenario: 'negative' })]),
+          withOutputs(),
+          full,
+        );
+        expect(negative.errors.some((e) => e.includes('.scenario must be "positive"'))).toBe(true);
+      });
+
+      it('fails outputs naming a control that is not an output', () => {
+        const output = validateWith(
+          withConditions([property({ outputs: ['c7', 'c5'] })]),
+          withOutputs(),
+          full,
+        );
+        expect(output.errors.some((e) => e.includes('outputs cites "c5"'))).toBe(true);
+      });
+
+      // The frame's fields are tested once: allowed, and required, on the route frameRouteId names.
+      it('takes the site frame fields on the frame route only, and warns when no route carries them', () => {
+        const unhomed = validateWith(accounted());
+        expect(unhomed.warnings.some((w) => w.includes('no route is named in frameRouteId'))).toBe(
+          true,
+        );
+
+        const framed = accounted() as unknown as Record<string, unknown> & Report;
+        framed.frameRouteId = 'route-checkout';
+        const missing = validateWith(framed);
+        expect(
+          missing.errors.some((e) => e.includes('leaves c0 combobox "Language" unaccounted')),
+        ).toBe(true);
+
+        framed.routes['route-checkout'].parameters.push({
+          name: 'language',
+          kind: 'select',
+          control: 'c0',
+          partitions: [
+            {
+              id: 'en',
+              kind: 'valid',
+              sampleValues: ['English'],
+              expectedOutcome: 'the page reads in English',
+            },
+          ],
+          boundaries: [],
+          evidence: [{ signal: 'form-label', excerpt: 'Language' }],
+        });
+        const homed = validateWith(framed);
+        expect(homed.errors).toEqual([]);
+        expect(homed.warnings.some((w) => w.includes('frameRouteId'))).toBe(false);
+
+        const dangling = accounted() as unknown as Record<string, unknown>;
+        dangling.frameRouteId = 'route-nowhere';
+        expect(
+          validateWith(dangling).errors.some((e) =>
+            e.includes('frameRouteId, when present, must name a route'),
+          ),
+        ).toBe(true);
+      });
+    });
+
+    it('warns, without failing, when the route has no inventory to check against', () => {
+      const output = validateWith(wellFormedParametersOnly(), null);
+      expect(output.errors).toEqual([]);
+      expect(output.warnings.some((w) => w.includes('no inventory'))).toBe(true);
+    });
+  });
+
   it('fails cleanly (not a crash) when the report file content is the literal JSON value null', () => {
     const dir = setupProject();
     try {
@@ -656,14 +1132,246 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
   });
 });
 
+// Schema 3: every condition derives from an analysis of its feature, and every claim in either
+// points at something that exists. These tests write the report as it is, without the upgrade.
+describe('scripts/validate-test-conditions.mjs - feature analysis, anchors and ranking', () => {
+  function withFeatureMap(dir: string) {
+    writeFileSync(
+      join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        features: {
+          'feature-checkout': {
+            featureId: 'feature-checkout',
+            name: 'Checkout',
+            memberRouteIds: ['route-checkout'],
+            entityIds: [],
+            impact: 'high',
+            evidence: [],
+            reviewed: true,
+          },
+        },
+        entities: {},
+        routes: { 'route-checkout': { routeId: 'route-checkout', featureId: 'feature-checkout' } },
+      }),
+      'utf8',
+    );
+  }
+
+  function meanings() {
+    return [
+      {
+        routeId: 'route-checkout',
+        parameter: 'email',
+        meaning: 'where the order confirmation is sent',
+        role: 'identifier',
+        confidence: 'medium',
+        constraints: [],
+      },
+      {
+        routeId: 'route-checkout',
+        parameter: 'quantity',
+        meaning: 'how many of the item are ordered',
+        role: 'quantity',
+        confidence: 'medium',
+        constraints: [
+          {
+            statement: 'at most 10',
+            source: 'markup',
+            confidence: 'high',
+            enforcement: 'markup',
+            anchors: [{ kind: 'control', ref: 'c1' }],
+          },
+        ],
+      },
+    ];
+  }
+
+  function report() {
+    const data = upgrade(wellFormedWithConditions()) as Record<string, any>;
+    data.features['feature-checkout'].fields = meanings();
+    return data;
+  }
+
+  function validateRaw(data: unknown, args: string[] = []) {
+    const dir = setupProject();
+    try {
+      withFeatureMap(dir);
+      writeRawReport(dir, data);
+      return JSON.parse(run(dir, args).stdout);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('passes a report whose every parameter stands on a field meaning', () => {
+    const output = validateRaw(report());
+    expect(output.errors).toEqual([]);
+    expect(output.status).toBe('PASSED');
+  });
+
+  it('refuses a schema-2 file rather than reading it as the new shape', () => {
+    const data = report();
+    data.schemaVersion = 2;
+    expect(validateRaw(data).errors.join(' ')).toContain('schemaVersion must be exactly 3');
+  });
+
+  it('refuses a parameter nobody explained', () => {
+    const data = report();
+    data.features['feature-checkout'].fields = meanings().slice(0, 1);
+    const errors = validateRaw(data, ['--stage=parameters']).errors.join(' ');
+    expect(errors).toContain('("quantity") has no meaning');
+  });
+
+  it('refuses an anchor that points at nothing: a research source never recorded, a probe never run', () => {
+    const data = report();
+    data.routes['route-checkout'].conditions.push({
+      conditionId: 'feed00000000beef',
+      parameters: {},
+      technique: 'error-guessing',
+      description: 'Ordering 10 items twice in a row keeps one order of 10, not two',
+      expectedOutcome: 'one order of 10 appears in the order list',
+      scenario: 'positive',
+      verification: {},
+      isSpeculative: true,
+      reviewed: false,
+      featureId: 'feature-checkout',
+      layer: 'behavior',
+      oracle: 'research',
+      anchors: [{ kind: 'research', ref: 's9' }],
+      origin: 'research',
+      risk: {
+        likelihood: 'medium',
+        reason: 'a repeated click is the classic duplicate-order defect',
+      },
+      riskScore: 6,
+      priority: 'P1',
+    });
+    data.features['feature-checkout'].fields[1].constraints[0] = {
+      statement: 'never below 1',
+      source: 'domain',
+      confidence: 'high',
+      enforcement: 'observed',
+      anchors: [{ kind: 'probe', ref: 'p1' }],
+    };
+    const errors = validateRaw(data).errors.join(' ');
+    expect(errors).toContain('cites research source "s9"');
+    expect(errors).toContain('cites probe "p1"');
+  });
+
+  it('refuses a constraint said to be enforced, or not, with no probe behind it', () => {
+    const data = report();
+    data.features['feature-checkout'].fields[1].constraints[0].enforcement = 'not-enforced';
+    expect(validateRaw(data).errors.join(' ')).toContain('which only a field probe can show');
+  });
+
+  // One source is one reading, however confidently it is written down.
+  it('caps how sure a field meaning may be by how many independent sources stand behind it', () => {
+    const data = report();
+    data.features['feature-checkout'].fields[0].confidence = 'high';
+    const errors = validateRaw(data).errors.join(' ');
+    expect(errors).toContain(
+      'fields[0].confidence is "high", but it rests on the page\'s markup only - "medium" at most',
+    );
+
+    // A person's own words are a second, independent source.
+    data.features['feature-checkout'].fields[0].constraints = [
+      {
+        statement: 'a real, deliverable address',
+        source: 'human',
+        confidence: 'high',
+        enforcement: 'unknown',
+        anchors: [
+          {
+            kind: 'human',
+            ref: 'domainNotes:0',
+            quote: 'confirmations bounce if the address is wrong',
+          },
+        ],
+      },
+    ];
+    expect(validateRaw(data).errors).toEqual([]);
+  });
+
+  it('caps a constraint reasoned from the meaning alone at medium', () => {
+    const data = report();
+    data.features['feature-checkout'].fields[1].constraints.push({
+      statement: 'never more than stock on hand',
+      source: 'domain',
+      confidence: 'high',
+      enforcement: 'unknown',
+      anchors: [{ kind: 'control', ref: 'c1' }],
+    });
+    expect(validateRaw(data).errors.join(' ')).toContain(
+      'constraints[1].confidence is "high", but it rests on reasoning only - "medium" at most',
+    );
+  });
+
+  it('refuses a condition that is cut and approved at once', () => {
+    const data = report();
+    Object.assign(data.routes['route-checkout'].conditions[0], {
+      cut: true,
+      reviewed: true,
+      reviewedBy: 'human',
+      isSpeculative: false,
+    });
+    expect(validateRaw(data).errors.join(' ')).toContain('is cut and approved at once');
+  });
+
+  it('keeps origin and technique honest, and the priority to the arithmetic', () => {
+    const data = report();
+    const condition = data.routes['route-checkout'].conditions[0];
+    condition.priority = 'P3';
+    data.routes['route-checkout'].conditions.push({
+      ...structuredClone(condition),
+      conditionId: 'feed00000000cafe',
+      technique: 'error-guessing',
+      origin: 'generated',
+      priority: 'P1',
+    });
+    const errors = validateRaw(data).errors.join(' ');
+    expect(errors).toContain('does not match riskScore 6');
+    expect(errors).toContain('the generator never builds a error-guessing condition');
+  });
+
+  it('refuses research that rests on fewer than five sources', () => {
+    const dir = setupProject();
+    try {
+      withFeatureMap(dir);
+      mkdirSync(join(dir, 'artifacts', 'analysis', 'research'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'analysis', 'research', 'checkout.json'),
+        JSON.stringify({ sources: [{ id: 's1' }, { id: 's2' }, { id: 's3' }] }),
+        'utf8',
+      );
+      const data = report();
+      data.features['feature-checkout'].research = {
+        status: 'done',
+        archetype: 'checkout',
+        file: 'artifacts/analysis/research/checkout.json',
+      };
+      writeRawReport(dir, data);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.errors.join(' ')).toContain('holds 3 source(s)');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('renderTestConditionsTypes (real standalone tsc check)', () => {
   // AC7 - "tsc-clean" verified by an actual isolated compile, not a substring match.
-  it('renders a schemaVersion-2 TestConditionsReport interface keyed by routeId, and the output is tsc --noEmit clean in isolation', () => {
+  it('renders a schemaVersion-3 TestConditionsReport interface with features and routes, and the output is tsc --noEmit clean in isolation', () => {
     const text = renderTestConditionsTypes();
     expect(text).toContain('TestConditionsReport');
     expect(text).toContain('TestConditionsEntry');
     expect(text).toContain('UnsatisfiedPair');
-    expect(text).toContain('schemaVersion: 2');
+    expect(text).toContain('schemaVersion: 3');
+    expect(text).toContain('features: Record<string, FeatureAnalysis>;');
+    expect(text).toContain(
+      "export type OracleSource = 'requirement' | 'human' | 'research' | 'domain' | 'observed' | 'markup';",
+    );
+    expect(text).toContain("export type ConditionLayer = 'field' | 'rule' | 'behavior' | 'frame';");
     expect(text).toContain('expectedOutcome: string;');
     expect(text).toContain("export type ExecutionLevel = 'ui' | 'dom' | 'api';");
     expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot';");

@@ -61,6 +61,69 @@ function listSessionFiles() {
     .sort();
 }
 
+// A session file on disk is one reading; whether it can still sign anyone in is another, and the
+// file says that too without being used: a token in it usually carries its own expiry, and cookies
+// carry theirs. A crawl started from an expired session maps the sign-in page at every address and
+// finds out pages later. Only the expiry is read - never a value, never printed.
+function tokenExpiry(value) {
+  if (typeof value !== 'string') return null;
+  const parts = value.split('.');
+  if (parts.length !== 3 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]+$/.test(parts[1])) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    return payload && typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+const SOON_MS = 24 * 60 * 60 * 1000;
+
+function sessionHealth(file) {
+  let state;
+  try {
+    state = JSON.parse(fs.readFileSync(path.join(AUTH_DIR, file), 'utf8').replace(/^\\uFEFF/, ''));
+  } catch {
+    return { file, verdict: 'unreadable', reason: 'not valid JSON' };
+  }
+  const now = Date.now();
+  const cookies = Array.isArray(state && state.cookies) ? state.cookies : [];
+  const tokens = [];
+  for (const cookie of cookies) {
+    const expiry = tokenExpiry(cookie && cookie.value);
+    if (expiry) tokens.push(expiry);
+  }
+  for (const origin of Array.isArray(state && state.origins) ? state.origins : []) {
+    for (const item of Array.isArray(origin && origin.localStorage) ? origin.localStorage : []) {
+      const expiry = tokenExpiry(item && item.value);
+      if (expiry) tokens.push(expiry);
+    }
+  }
+  if (tokens.length > 0) {
+    const live = tokens.filter((expiry) => expiry > now).sort((a, b) => a - b);
+    if (live.length === 0) {
+      return { file, verdict: 'expired', expiredAt: new Date(Math.max(...tokens)).toISOString(), reason: 'every token in it expired' };
+    }
+    if (live[0] - now < SOON_MS) {
+      return { file, verdict: 'expires-soon', expiresAt: new Date(live[0]).toISOString(), reason: 'a token in it expires within a day' };
+    }
+    return { file, verdict: 'not-expired', expiresAt: new Date(live[0]).toISOString(), reason: 'its tokens have not expired' };
+  }
+  // Without a token, only "every cookie that has a date is past it, and none lives for the browser
+  // session" says anything: a cookie that has not expired may well not be the one that signs in.
+  const dated = cookies.filter((cookie) => cookie && typeof cookie.expires === 'number' && cookie.expires > 0);
+  const sessionOnly = cookies.some((cookie) => cookie && (typeof cookie.expires !== 'number' || cookie.expires <= 0));
+  if (dated.length > 0 && !sessionOnly && dated.every((cookie) => cookie.expires * 1000 <= now)) {
+    return {
+      file,
+      verdict: 'expired',
+      expiredAt: new Date(Math.max(...dated.map((cookie) => cookie.expires * 1000))).toISOString(),
+      reason: 'every cookie in it expired',
+    };
+  }
+  return { file, verdict: 'unknown', reason: 'nothing in it says when it expires' };
+}
+
 // Each provider's generated pipeline file, checked in this exact order (the file that actually
 // exists on disk, not a record of what the questionnaire once said). \`.scaffold/init.json\` is
 // gitignored by the generated project's own .gitignore - a fresh clone, a CI runner's checkout, or
@@ -127,20 +190,26 @@ function main() {
     filledEnvKeys.includes(k),
   );
 
+  const health = sessionFiles.map(sessionHealth);
+  const expired = health.filter((entry) => entry.verdict === 'expired');
+
   const result = {
     sessionFiles,
     hasSession,
     capturedRoles,
     declaredRoles,
     rolesMissingSession,
+    sessionHealth: health,
     filledEnvKeys,
     authEnvFilled,
     ciProvider,
     recordedLogin: readRecordedLogin(),
     nextStep: hasSession
-      ? rolesMissingSession.length > 0
-        ? 'roles-incomplete'
-        : 'session-exists'
+      ? expired.length > 0
+        ? 'session-expired'
+        : rolesMissingSession.length > 0
+          ? 'roles-incomplete'
+          : 'session-exists'
       : 'capture-needed',
   };
 

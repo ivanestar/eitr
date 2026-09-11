@@ -1111,3 +1111,126 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
     }
   });
 });
+
+// Live-observed on 11 of 50 public sites: a Cloudflare check, a block page, a country picker or an
+// untrusted certificate stood where the application should have been, and each was recorded as if
+// it were the site.
+describe('scripts/crawl-budget.mjs stops when the site is not letting the crawler in', () => {
+  function visited(dir: string, url: string, extra: string[]) {
+    check(dir, url);
+    return run(dir, ['visited', `--url=${url}`, '--content-type=text/html', ...extra]);
+  }
+
+  it('stops on a bot check wherever it appears, and refuses every navigation after it', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      expect(visited(dir, `${BASE}/`, ['--status=200', '--access=ok']).keep).toBe(true);
+      const halted = visited(dir, `${BASE}/pricing`, ['--status=403', '--access=challenge']);
+      expect(halted.keep).toBe(false);
+      expect(halted.halt.reason).toBe('bot-check');
+      expect(halted.warning).toContain('staging or test instance');
+      const after = check(dir, `${BASE}/about`);
+      expect(after).toMatchObject({ decision: 'skip', reason: 'halted' });
+      expect(run(dir, ['report']).halted.reason).toBe('bot-check');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('stops when the first page is a refusal, but keeps a protected route met later', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      const first = visited(dir, `${BASE}/`, ['--status=403', '--access=refused']);
+      expect(first.halt.reason).toBe('refused');
+      expect(first.halt.message).toContain('/auth-setup');
+
+      const other = setupProject();
+      try {
+        start(other);
+        visited(other, `${BASE}/`, ['--status=200', '--access=ok']);
+        const admin = visited(other, `${BASE}/admin`, ['--status=403', '--access=refused']);
+        expect(admin.halt).toBeUndefined();
+        expect(admin.keep).toBe(true);
+      } finally {
+        rmSync(other, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Two addresses of one real page look alike too - live-observed on a translator whose start page
+  // and its query-string variant rendered identically - so a copy alone only warns.
+  it('warns when the first two addresses serve one page, and stops only when the second was refused', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      visited(dir, `${BASE}/`, ['--status=200', '--access=ok']);
+      const second = visited(dir, `${BASE}/search`, ['--status=200', '--access=stub']);
+      expect(second.halt).toBeUndefined();
+      expect(second.keep).toBe(true);
+      expect(second.warning).toContain('stop the crawl here');
+
+      const other = setupProject();
+      try {
+        start(other);
+        visited(other, `${BASE}/`, ['--status=200', '--access=ok']);
+        const refused = visited(other, `${BASE}/help`, ['--status=403', '--access=stub']);
+        expect(refused.halt.reason).toBe('refused');
+        expect(refused.halt.message).toContain('one refusal or block page for every address');
+      } finally {
+        rmSync(other, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('names an untrusted certificate on the first page, and does not act on it alone', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      check(dir, `${BASE}/`);
+      const failed = run(dir, [
+        'visited',
+        `--url=${BASE}/`,
+        '--error=net::ERR_CERT_AUTHORITY_INVALID at https://app.example.com/',
+      ]);
+      expect(failed.halt.reason).toBe('untrusted-certificate');
+      expect(failed.halt.message).toContain('ignoreHTTPSErrors');
+      expect(failed.halt.message).toContain('only with your go-ahead');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('stops after three refusals in a row that say the site is limiting the crawl', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      visited(dir, `${BASE}/`, ['--status=200', '--access=ok']);
+      expect(visited(dir, `${BASE}/a`, ['--status=429', '--access=refused']).halt).toBeUndefined();
+      expect(visited(dir, `${BASE}/b`, ['--status=429', '--access=refused']).halt).toBeUndefined();
+      const third = visited(dir, `${BASE}/c`, ['--status=429', '--access=refused']);
+      expect(third.halt.reason).toBe('rate-limited');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a page that loads between refusals resets the count', () => {
+    const dir = setupProject();
+    try {
+      start(dir);
+      visited(dir, `${BASE}/`, ['--status=200', '--access=ok']);
+      visited(dir, `${BASE}/a`, ['--status=503', '--access=refused']);
+      visited(dir, `${BASE}/b`, ['--status=503', '--access=refused']);
+      visited(dir, `${BASE}/c`, ['--status=200', '--access=ok']);
+      expect(visited(dir, `${BASE}/d`, ['--status=503', '--access=refused']).halt).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

@@ -49,6 +49,24 @@ const CONTRACTS_PATH = path.join(CWD, 'artifacts', 'site-map', 'api-contracts.js
 const PHASES = ['preflight', 'postcrawl'];
 const THIN_RESULT_ROUTES = 2;
 
+// The same four answers /map-features offers, so whichever flow asks first records the one value
+// both read. 'staging' is recorded as the app-profile kind 'staging-of-production'.
+const APPLICATION_KIND_OPTIONS = [
+  { id: 'production', label: 'The real production application' },
+  { id: 'sandbox-demo', label: 'A sandbox, demo or practice application' },
+  { id: 'internal-tool', label: 'An internal tool' },
+  { id: 'staging', label: 'A staging copy of production' },
+];
+const RECORDED_KIND = { staging: 'staging-of-production' };
+
+// Boundaries that let the crawler submit, create or delete. Never offered on production.
+const WIDE_BOUNDARIES = ['full', 'full-except'];
+
+function isProduction(answers, status) {
+  const kind = answers['application-kind'] || status.storedApplicationKind || null;
+  return kind === 'production';
+}
+
 function argValue(name) {
   const prefix = '--' + name + '=';
   for (const raw of process.argv.slice(2)) {
@@ -121,6 +139,7 @@ function loadStatus(errors) {
     orphanedScreenshotCount: orphanedScreenshotCount,
     capturedRoles: capturedRoles,
     hasCrawlBoundary: Boolean(profile.crawlBoundary),
+    storedApplicationKind: profile.applicationKind ? profile.applicationKind.value : null,
     // The stored answers themselves, not only whether they exist. A question that is skipped
     // because it was already answered has to hand that answer forward, or the run proceeds with
     // neither - live-observed leaving a second crawl with no boundary at all, which is worse than
@@ -188,24 +207,46 @@ const QUESTIONS = [
     },
   },
   {
+    id: 'application-kind',
+    phase: 'preflight',
+    // Asked before the boundary, because it decides what the boundary may be at all: on the real
+    // production application nothing that submits, creates or deletes is ever on offer, whatever a
+    // later answer says. Recorded once in app-profile.json and shared with /map-features, which asks
+    // it only when this flow has not.
+    text: 'Is this the real production application, or a sandbox or demo, an internal tool, or a staging copy?',
+    options: APPLICATION_KIND_OPTIONS,
+    allowsFreeText: false,
+    applies: function (answers, status) {
+      return !status.storedApplicationKind;
+    },
+  },
+  {
     id: 'crawl-boundary',
     phase: 'preflight',
     // Asked before any page is loaded, deliberately: a wrong guess either wastes the run on
     // excessive caution or performs an action on a live application that nobody sanctioned.
     text: 'What is the crawler allowed to do while exploring this app?',
-    options: [
-      { id: 'read-only', label: 'Read only - navigate and read, never interact' },
-      {
-        id: 'safe-interactions',
-        label: 'Read plus safe interactions - checkboxes, dropdowns, tabs, expanders; nothing that creates, submits, deletes or sends',
-        recommended: true,
-      },
-      { id: 'full', label: 'Any in-app action is fine' },
-      { id: 'full-except', label: 'Any in-app action except areas I will name' },
-    ],
+    dynamicOptions: function (status, answers) {
+      const options = [
+        { id: 'read-only', label: 'Read only - navigate and read, never interact' },
+        {
+          id: 'safe-interactions',
+          label: 'Read plus safe interactions - checkboxes, dropdowns, fields, tabs, expanders; nothing that creates, submits, deletes or sends',
+          recommended: true,
+        },
+      ];
+      if (isProduction(answers, status)) return options;
+      return options.concat([
+        { id: 'full', label: 'Any in-app action is fine, submitting forms included' },
+        { id: 'full-except', label: 'Any in-app action except areas I will name' },
+      ]);
+    },
     allowsFreeText: false,
     applies: function (answers, status) {
-      return status.hasCrawlBoundary !== true;
+      if (status.hasCrawlBoundary !== true) return true;
+      // A wider boundary recorded before anyone said this is production does not survive learning
+      // that it is: the question comes back with only the options production allows.
+      return isProduction(answers, status) && WIDE_BOUNDARIES.indexOf(status.storedCrawlBoundary) !== -1;
     },
   },
   {
@@ -263,8 +304,8 @@ const QUESTIONS = [
   },
 ];
 
-function optionsFor(question, status) {
-  return question.dynamicOptions ? question.dynamicOptions(status) : question.options;
+function optionsFor(question, status, answers) {
+  return question.dynamicOptions ? question.dynamicOptions(status, answers || {}) : question.options;
 }
 
 function questionsForPhase(phase) {
@@ -290,7 +331,9 @@ function outcomeFor(answers) {
 function planFor(answers, status) {
   // This run's answer first, then whatever was recorded on an earlier one. A question skipped
   // because it is already answered must still deliver that answer.
-  const boundary = answers['crawl-boundary'] || status.storedCrawlBoundary || null;
+  let boundary = answers['crawl-boundary'] || status.storedCrawlBoundary || null;
+  if (isProduction(answers, status) && WIDE_BOUNDARIES.indexOf(boundary) !== -1) boundary = 'safe-interactions';
+  const kindAnswer = answers['application-kind'] || null;
   const rolesAnswer = answers.roles;
   let roles = [];
   if (rolesAnswer === 'all') roles = status.capturedRoles.slice();
@@ -314,7 +357,9 @@ function planFor(answers, status) {
     // "I don't know" records nothing rather than recording uncertainty as a value: an absent field
     // already means "nobody established this", which is exactly what happened.
     apiStyle: answers['api-style'] && answers['api-style'] !== 'unknown' ? answers['api-style'] : null,
-    applicationKind: answers['application-kind'] || null,
+    // The value to record in app-profile.json, already in its own vocabulary. Null when this run did
+    // not ask, because the profile already holds it.
+    applicationKind: kindAnswer ? RECORDED_KIND[kindAnswer] || kindAnswer : null,
     corePurpose: answers['core-purpose'] || null,
   };
 }
@@ -330,7 +375,7 @@ function checkAnswers(answers, status) {
       errors.push('"' + id + '" is not a question this flow asks.');
       continue;
     }
-    const options = optionsFor(question, status);
+    const options = optionsFor(question, status, answers);
     if (options.length === 0) continue;
     const ids = options.map(function (option) {
       return option.id;
@@ -421,7 +466,7 @@ function main() {
       question: {
         id: question.id,
         text: question.text,
-        options: optionsFor(question, status),
+        options: optionsFor(question, status, answers),
         allowsFreeText: question.allowsFreeText === true,
         freeTextHint: question.freeTextHint || null,
       },
