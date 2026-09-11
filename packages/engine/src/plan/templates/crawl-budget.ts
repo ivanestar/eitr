@@ -59,6 +59,7 @@ import { debugLog } from './debug-log.mjs';
 const CWD = process.cwd();
 const STATE_DIR = path.join(CWD, 'artifacts', 'site-map');
 const STATE_PATH = path.join(STATE_DIR, '.crawl-budget.json');
+const APP_PROFILE_PATH = path.join(CWD, 'artifacts', 'analysis', 'app-profile.json');
 
 const DEFAULT_MAX_PAGES = 500;
 const DEFAULT_MAX_DEPTH = 6;
@@ -448,6 +449,23 @@ function matchesExclusion(state, canonicalPath) {
   return null;
 }
 
+// Pages a person left out at review, read from app-profile.json when a pass starts. Read here rather
+// than passed in by the crawling assistant, so a fresh crawl cannot map one of them again because
+// nobody remembered to mention it.
+function leftOutPaths() {
+  try {
+    const profile = JSON.parse(fs.readFileSync(APP_PROFILE_PATH, 'utf8').replace(/^\\uFEFF/, ''));
+    if (!profile || !Array.isArray(profile.leftOutRoutes)) return [];
+    return profile.leftOutRoutes
+      .map(function (entry) {
+        return entry && typeof entry.path === 'string' ? entry.path : null;
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function parentPath(canonicalPath) {
   const cut = canonicalPath.lastIndexOf('/');
   if (cut <= 0) return '/';
@@ -606,6 +624,7 @@ function cmdStart(args) {
     // invisible link is not a page a user can reach.
     allowInvisible: args['allow-invisible'] === true || String(args['allow-invisible']) === 'true',
   };
+  state.leftOut = leftOutPaths();
   saveState(state);
 
   return {
@@ -669,6 +688,9 @@ function cmdCheck(args) {
   const excluded = matchesExclusion(state, canonical.canonicalPath);
   if (excluded !== null) {
     return deny('off-limits', { canonicalPath: canonical.canonicalPath, pattern: excluded });
+  }
+  if (Array.isArray(state.leftOut) && state.leftOut.indexOf(canonical.canonicalPath) !== -1) {
+    return deny('left-out', { canonicalPath: canonical.canonicalPath });
   }
 
   // Checked here rather than only counted, so a wedged crawl cannot turn a bounded stage into an

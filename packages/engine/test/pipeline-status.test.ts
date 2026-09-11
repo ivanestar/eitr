@@ -388,6 +388,72 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
+  function writeRoutes(dir: string, routes: Record<string, unknown>) {
+    writeFileSync(
+      join(dir, 'artifacts', 'site-map', 'site-map.json'),
+      JSON.stringify({ schemaVersion: 2, generatedAt: '2026-09-03T10:00:00.000Z', routes }),
+      'utf8',
+    );
+  }
+
+  // Reviewed like every other stage: until each route is approved or left out, the person is at
+  // stage 1, and the roadmap brackets stage 1 rather than the one after it.
+  it('holds at site-map-pending-review while a route is neither approved nor left out', () => {
+    const dir = setupProject();
+    writeRoutes(dir, {
+      '/a': { routeId: 'r-a', status: 'active', reviewed: true, reviewedBy: 'human' },
+      '/b': { routeId: 'r-b', status: 'active' },
+      '/gone': { routeId: 'r-gone', status: 'removed', removedBy: 'human' },
+    });
+    try {
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.stage).toBe('site-map-pending-review');
+      expect(output.nextCommand).toBeNull();
+      expect(output.nextCommandDescription).toContain('1 route(s)');
+      expect(output.roadmap.startsWith('[S1 Site map] -> S2 Feature map')).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('moves on to /map-features once every remaining route is approved', () => {
+    const dir = setupProject();
+    writeRoutes(dir, {
+      '/a': { routeId: 'r-a', status: 'active', reviewed: true, reviewedBy: 'human' },
+      '/gone': { routeId: 'r-gone', status: 'removed', removedBy: 'human' },
+    });
+    try {
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.stage).toBe('site-map-reviewed');
+      expect(output.roadmap).toContain('[S2 Feature map]');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('lists corrections read from a review file and not yet confirmed applied', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    mkdirSync(join(dir, 'artifacts', 'review', '.pending'), { recursive: true });
+    writeFileSync(
+      join(dir, 'artifacts', 'review', '.pending', 'site-map.json'),
+      JSON.stringify({ kind: 'site-map', freeEdits: [{ label: 'R1', added: ['x'], removed: [] }] }),
+      'utf8',
+    );
+    try {
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.pendingReviewEdits).toEqual([
+        expect.objectContaining({
+          kind: 'site-map',
+          waiting: 'corrections read from the file and not applied yet',
+        }),
+      ]);
+      expect(output.pendingReviewEdits[0].apply).toContain('--done');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('holds at feature-map-pending-review while a page criticality is unreviewed', () => {
     const dir = setupProject();
     writeSiteMap(dir);

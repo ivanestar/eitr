@@ -168,7 +168,28 @@ export function renderSiteMapSchema(): string {
           "status": {
             "type": "string",
             "enum": ["active", "removed"],
-            "description": "\\"removed\\" means /map-site update could no longer resolve this route (404, vanished from nav) - the entry is kept, not silently deleted, so a consumer can see route-removal history. A full /map-site create pass prunes \\"removed\\" entries when it regenerates fresh."
+            "description": "\\"removed\\" means /map-site update could no longer resolve this route (404, vanished from nav), or a person left it out at review (removedBy). The entry is kept, not silently deleted, so a consumer can see route-removal history. A full /map-site create pass prunes \\"removed\\" entries when it regenerates fresh; a page a person left out stays out, because the crawl refuses it."
+          },
+          "removedBy": {
+            "type": "string",
+            "enum": ["human"],
+            "description": "Present only when a person left this route out of every later stage by deleting it from the site map review. The decision itself lives in app-profile.json leftOutRoutes."
+          },
+          "removedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "removedNote": {
+            "type": "string",
+            "description": "What the person said about the route when leaving it out, if anything."
+          },
+          "reviewed": {
+            "type": "boolean",
+            "description": "Whether a person (or auto-pilot, on the person's say-so) approved this route at the site map review. Absent or false is a draft."
+          },
+          "reviewedBy": {
+            "type": "string",
+            "enum": ["human", "auto-pilot"]
           },
           "redirectedFrom": {
             "type": "array",

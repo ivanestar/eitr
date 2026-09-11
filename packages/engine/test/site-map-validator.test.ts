@@ -523,6 +523,27 @@ describe('scripts/validate-site-map.mjs (real execution)', () => {
     }
   });
 
+  it('holds a route a person approved or left out to what that has to say', () => {
+    const dir = setupProject();
+    try {
+      const map = structuredClone(wellFormedSiteMap());
+      const route = map.routes['/checkout'] as Record<string, unknown>;
+      route.reviewed = true;
+      route.reviewedBy = 'human';
+      writeSiteMap(dir, map);
+      expect(JSON.parse(run(dir).stdout).status).toBe('PASSED');
+
+      delete route.reviewedBy;
+      route.removedBy = 'human';
+      writeSiteMap(dir, map);
+      const errors = JSON.parse(run(dir).stdout).errors.join(' ');
+      expect(errors).toContain('reviewedBy must name who approved it');
+      expect(errors).toContain('its status is not "removed"');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('fails on an invalid coverage.boundedBy enum value', () => {
     const dir = setupProject();
     try {

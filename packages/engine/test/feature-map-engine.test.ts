@@ -146,6 +146,30 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     }
   });
 
+  // A page left out at review, or one that stopped resolving, is not part of the application this map
+  // describes - its old intent must not turn it into a feature again.
+  it('gives a removed page no feature, even with an intent drafted for it earlier', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [
+        { path: '/orders', routeId: 'route-orders' },
+        { path: '/defects/D-001', routeId: 'route-defect', status: 'removed' },
+      ]);
+      writeRouteIntent(dir, [
+        { routeId: 'route-orders', feature: 'Orders' },
+        { routeId: 'route-defect', feature: 'Defects', tier: 'low' },
+      ]);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.routesWithoutIntent).toBe(0);
+      const map = readFeatureMap(dir);
+      const names = Object.values(map.features).map((f: any) => f.name);
+      expect(names).toEqual(['Orders']);
+      expect(map.routes['route-defect']).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reports no such warning when the intent was there', () => {
     const dir = setupProject();
     try {

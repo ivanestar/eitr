@@ -294,6 +294,36 @@ describe('scripts/app-profile.mjs (real execution)', () => {
     }
   });
 
+  it('accepts a page a person left out, and refuses one nobody can be named for', () => {
+    const dir = setupProject();
+    try {
+      const profile = validProfile() as Record<string, any>;
+      profile.leftOutRoutes = [
+        {
+          path: '/defects/D-001',
+          routeId: 'r1',
+          by: 'human',
+          at: '2026-09-11T10:00:00.000Z',
+          note: 'not needed',
+        },
+      ];
+      writeProfile(dir, profile);
+      expect(run(dir, '--validate').output.status).toBe('PASSED');
+
+      profile.leftOutRoutes.push({
+        path: '/defects/D-001',
+        by: 'auto-pilot',
+        at: '2026-09-11T10:00:00.000Z',
+      });
+      writeProfile(dir, profile);
+      const errors = run(dir, '--validate').output.errors.join(' ');
+      expect(errors).toContain('appears more than once');
+      expect(errors).toContain('only a person leaves a page out');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('accepts a test-type id it has never heard of - the registry is open by design', () => {
     const dir = setupProject();
     try {

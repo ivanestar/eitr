@@ -829,6 +829,21 @@ function derive() {
   // failure it replaced. Caught by a test asserting the map is non-empty, not by reading the code.
   const existing = loadJson(FEATURE_MAP_PATH);
   const routeIntents = resolveIntentLabels(existing);
+  // A route that no longer resolves, or that a person left out at review, is not part of the
+  // application this map describes: it joins no feature, and an intent drafted for it earlier is
+  // dropped rather than grouped into one.
+  const activeRoutes = {};
+  for (const [routePath, route] of Object.entries(siteMap.routes)) {
+    if (route && route.status !== 'removed') activeRoutes[routePath] = route;
+  }
+  const activeRouteIds = new Set(
+    Object.values(activeRoutes).map(function (route) {
+      return route.routeId;
+    }),
+  );
+  for (const routeId of Object.keys(routeIntents)) {
+    if (!activeRouteIds.has(routeId)) delete routeIntents[routeId];
+  }
   const warnings = [];
   if (Object.keys(routeIntents).length === 0) {
     warnings.push(
@@ -883,7 +898,7 @@ function derive() {
     entity.lifecycle = deriveLifecycle(entity);
   }
 
-  const features = deriveFeatures(routeIntents, siteMap.routes);
+  const features = deriveFeatures(routeIntents, activeRoutes);
   attachEntitiesToFeatures(features, entities);
 
   preserveReview(entities, byId(existing && existing.entities, 'entityId'));
@@ -893,7 +908,7 @@ function derive() {
   for (const feature of Object.values(features)) featuresById[feature.featureId] = feature;
   const entitiesById = {};
   for (const entity of Object.values(entities)) entitiesById[entity.entityId] = entity;
-  const routesById = bindRoutesToFeatures(featuresById, routeIntents, siteMap.routes);
+  const routesById = bindRoutesToFeatures(featuresById, routeIntents, activeRoutes);
 
   const report = {
     schemaVersion: 2,
@@ -937,7 +952,7 @@ function derive() {
     // A route the site map has and this file does not - it was mapped but never given an intent, so
     // no feature claims it and nothing downstream will ever test it. Reported by count rather than
     // silently: a shrinking feature map with a growing site map is exactly the drift worth seeing.
-    routesWithoutIntent: Object.values(siteMap.routes).filter(function (route) {
+    routesWithoutIntent: Object.values(activeRoutes).filter(function (route) {
       return route && typeof route.routeId === 'string' && !routesById[route.routeId];
     }).length,
     unreviewedRelations: unreviewedRelations,

@@ -211,6 +211,19 @@ function validate() {
     if (!STATUS_VALUES.has(entry.status)) {
       errors.push(label + '.status must be one of active|removed.');
     }
+    if ('removedBy' in entry) {
+      if (entry.removedBy !== 'human') {
+        errors.push(label + '.removedBy, when present, must be "human".');
+      } else if (entry.status !== 'removed') {
+        errors.push(label + '.removedBy says a person left this route out, but its status is not "removed".');
+      }
+    }
+    if ('reviewed' in entry && typeof entry.reviewed !== 'boolean') {
+      errors.push(label + '.reviewed, when present, must be a boolean.');
+    }
+    if (entry.reviewed === true && entry.reviewedBy !== 'human' && entry.reviewedBy !== 'auto-pilot') {
+      errors.push(label + '.reviewed is true, so reviewedBy must name who approved it: human or auto-pilot.');
+    }
     if ('redirectedFrom' in entry) {
       if (!isStringArray(entry.redirectedFrom) || entry.redirectedFrom.length === 0) {
         errors.push(
