@@ -98,7 +98,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
     ...planMcpConfigs(opts.taskTracker, opts.tmsProviders, true, opts.aiAssistants),
     ...planAiAgents(opts.aiAssistants, opts.automationTool, opts.language),
     ...planAiOperationalSkills(opts.aiAssistants, opts.automationTool, opts.language),
-    // в”Ђв”Ђ Project meta в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Project meta --------------------------------------------------------
     {
       path: '.gitignore',
       writePolicy: 'create-if-absent',
@@ -528,7 +528,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
         ] as FileDescriptor[])
       : []),
 
-    // в”Ђв”Ђ VS Code в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- VS Code -------------------------------------------------------------
     {
       path: '.vscode/extensions.json',
       writePolicy: 'create-if-absent',
@@ -543,7 +543,7 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
     },
   ];
 
-  // в”Ђв”Ђ CI/CD (conditional, language-aware) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // -- CI/CD (conditional, language-aware) -----------------------------------
   if (ciCd === 'github') {
     files.push({
       path: '.github/workflows/playwright.yml',

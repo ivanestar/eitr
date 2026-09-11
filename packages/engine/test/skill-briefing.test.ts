@@ -180,8 +180,33 @@ describe('scripts/skill-briefing.mjs (real execution)', () => {
       const inChain = run(dir, '--skill=map-features', '--context=chain');
       expect(inChain.askConfirmation).toBe(false);
       expect(inChain.question).toBeNull();
-      expect(inChain.briefing).toBe(direct.briefing);
+      // The same briefing, opened with where the stage sits in the pipeline.
+      expect(inChain.briefing).toBe(
+        'Where this is:\n' + inChain.roadmap + '\n\n' + direct.briefing,
+      );
       expect(inChain.skipReason).toContain('chain gate');
+      expect(direct.roadmap).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The first stage started with no roadmap at all: the only other place it is printed is the gate
+  // after a stage.
+  it('opens every stage of the chain with its place in the roadmap, the first one included', () => {
+    const dir = setupProject();
+    try {
+      expect(run(dir, '--skill=map-site', '--context=chain').roadmap).toBe(
+        '[S1 Site map] -> S2 Feature map -> S3 Test conditions -> S4 Test cases -> S5 Automated tests -> S6 Test closure',
+      );
+      expect(run(dir, '--skill=define-test-conditions', '--context=chain').roadmap).toContain(
+        '[S3 Test conditions]',
+      );
+      expect(run(dir, '--skill=automate-test', '--context=chain').roadmap).toContain(
+        '[S5 Automated tests]',
+      );
+      // Not a stage of the roadmap, so nothing to bracket.
+      expect(run(dir, '--skill=auth-setup', '--context=chain').roadmap).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

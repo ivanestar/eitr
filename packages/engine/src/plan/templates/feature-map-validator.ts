@@ -463,14 +463,30 @@ function validate() {
 
   const siteMap = loadJson(SITE_MAP_PATH);
   let knownRouteIds = null;
+  const removedRouteIds = new Set();
   if (siteMap && siteMap.routes && typeof siteMap.routes === 'object') {
     knownRouteIds = new Set();
     for (const route of Object.values(siteMap.routes)) {
-      if (route && typeof route.routeId === 'string') knownRouteIds.add(route.routeId);
+      if (!route || typeof route.routeId !== 'string') continue;
+      knownRouteIds.add(route.routeId);
+      if (route.status === 'removed') removedRouteIds.add(route.routeId);
     }
   }
   for (const [key, feature] of Object.entries(data.features)) {
     checkFeature(key, feature, errors, entityIds, knownRouteIds);
+    // A page that no longer resolves, or that a person left out at review, belongs to no feature -
+    // otherwise every later stage would go on testing it. Re-running derive-feature-map drops it.
+    for (const routeId of Array.isArray(feature && feature.memberRouteIds) ? feature.memberRouteIds : []) {
+      if (removedRouteIds.has(routeId)) {
+        errors.push(
+          'features.' +
+            key +
+            '.memberRouteIds names "' +
+            routeId +
+            '", which the site map marks removed - run node scripts/derive-feature-map.mjs to drop it.',
+        );
+      }
+    }
   }
 
   if (!data.routes || typeof data.routes !== 'object' || Array.isArray(data.routes)) {

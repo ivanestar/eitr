@@ -13,8 +13,8 @@ Options:
   --output-dir <dir>     Project folder (default: 'PlaywrightTests')
   --language <id>        Programming language: typescript
   --automation-tool <id> E2E automation tool: playwright
-  --framework <id>       Framework hint: react|vue|angular|svelte|other
-  --ui-library <id>      UI library hint: mui|antd|radix|chakra|tailwind|none|other
+  --framework <id>       Framework hint: react|vue|angular|svelte|unknown (unknown: let recon decide)
+  --ui-library <id>      UI library hint: mui|antd|radix|chakra|tailwind|unknown (unknown: let recon decide)
   --ci-cd <id>           CI/CD pipeline template: github|gitlab|jenkins|teamcity|none
   --ai-assistants <ids>  AI assistants (comma-separated): antigravity,cursor,claude,devin,codex,copilot
   --task-tracker <id>    Task/issue tracker: jira|azure-devops|none

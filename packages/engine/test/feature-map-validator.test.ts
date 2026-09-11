@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderFeatureMapValidator } from '../src/plan/templates/feature-map-validator.js';
@@ -238,6 +238,26 @@ describe('scripts/validate-feature-map.mjs (real execution)', () => {
     const data = wellFormed() as any;
     data.entities.e0000000000000aa.evidence = [{ signal: 'heading-text', excerpt }];
     failsWith(data, 'contains an unmasked');
+  });
+
+  it('fails when a feature still claims a page the site map marks removed', () => {
+    const dir = setupProject();
+    try {
+      const siteMapPath = join(dir, 'artifacts', 'site-map', 'site-map.json');
+      const siteMap = JSON.parse(readFileSync(siteMapPath, 'utf8'));
+      const firstPath = Object.keys(siteMap.routes)[0];
+      siteMap.routes[firstPath].status = 'removed';
+      siteMap.routes[firstPath].removedBy = 'human';
+      writeFileSync(siteMapPath, JSON.stringify(siteMap), 'utf8');
+      write(dir, wellFormed());
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('which the site map marks removed')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('fails when a record key and its own id disagree', () => {

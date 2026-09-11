@@ -150,8 +150,10 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
         'Site frame fields are not part of any page below: Header: combobox "Select language"',
       );
       expect(output.markdown).not.toContain('Header: link');
+      // A page no feature covers still shows the fields it leaves out.
+      expect(output.markdown).toContain('**Other pages**');
       expect(output.markdown).toContain(
-        'Fields left out: checkbox "Gift wrap" - disabled (enabled only after checkout); textbox next to "Result" - result-output',
+        'Not tested here: checkbox "Gift wrap" (disabled - enabled only after checkout); textbox next to "Result" (result-output)',
       );
 
       // With a route named for the frame, the line says where the frame's fields are tested; and a
@@ -197,19 +199,122 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
       writeJson(dir, 'artifacts/analysis/test-conditions.json', conditions);
       const framed = run(dir, '--kind=test-conditions').output;
       expect(framed.markdown).toContain('Site frame fields are tested once, on /route-00');
-      // Per feature: what it is, the research behind it, the open question, then the conditions in
-      // priority order, each saying whether it checks correctness or only guards against a change.
-      expect(framed.markdown).toContain('What it is: Generates GUIDs.');
-      expect(framed.markdown).toContain('Research: skipped - no web access');
-      expect(framed.markdown).toContain('1. Is 1000 the real upper limit?');
+      // Per feature: the open question, then each page with the fields it leaves out and its
+      // conditions as "Verify ..." lines in priority order. What the analysis understood stays in the
+      // JSON; the stage report carries the research.
+      expect(framed.markdown).not.toContain('What it is');
+      expect(framed.markdown).toContain('Q1. Is 1000 the real upper limit?');
+      expect(framed.markdown).toContain('   Page: /route-00 - Page 0');
+      expect(framed.markdown).toContain('C1. Verify no two generated values are the same (P1)');
       expect(framed.markdown).toContain(
-        '1. Verify no two generated values are the same  [P1 | behavior | property/all-unique | correct: domain]',
-      );
-      expect(framed.markdown).toContain(
-        '2. With count="1001": the count is refused  [P2 | field | boundary-value | regression: markup]',
+        'C2. Verify with count="1001": the count is refused (P2, regression only)',
       );
       expect(framed.summary).toContain('P1: 1, P2: 1, P3: 0');
       expect(framed.summary).toContain('1 question(s) for you');
+      expect(framed.report).toContain(
+        'Research: 0 feature(s) researched, 1 skipped (no web access)',
+      );
+      expect(framed.report).toContain('Questions for you: 1');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A live review printed every value of every vector, a 1000-character probe in full, on each of
+  // 117 lines. A generated condition now names what it is about, and a page says once what all of its
+  // combinations share.
+  it('writes each generated condition as one short Verify line, with shared values said once', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      const parameters = [
+        {
+          name: 'size',
+          partitions: [
+            {
+              id: 'p_s',
+              kind: 'valid',
+              sampleValues: ['S'],
+              expectedOutcome: 'Size S is selected',
+            },
+            {
+              id: 'p_l',
+              kind: 'valid',
+              sampleValues: ['L'],
+              expectedOutcome: 'Size L is selected',
+            },
+          ],
+        },
+        {
+          name: 'note',
+          partitions: [
+            {
+              id: 'p_n',
+              kind: 'valid',
+              sampleValues: ['gift'],
+              expectedOutcome: 'The note is shown',
+            },
+          ],
+        },
+      ];
+      const generated = (
+        id: string,
+        vector: Record<string, string>,
+        scenario: string,
+        outcome: string,
+      ) => ({
+        conditionId: id,
+        technique: 'combinatorial',
+        parameters: vector,
+        description: 'With ...: ' + outcome + ' (' + scenario + ')',
+        expectedOutcome: outcome,
+        scenario,
+        origin: 'generated',
+        featureId: 'f1',
+        oracle: 'domain',
+        priority: 'P2',
+      });
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 3,
+        generatedAt: '2026-09-10T00:00:00.000Z',
+        features: {
+          f1: { featureId: 'f1', fields: [], questions: [], research: { status: 'done' } },
+        },
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters,
+            conditions: [
+              generated(
+                'c1',
+                { size: 'p_s', note: 'p_n' },
+                'positive',
+                'Size S is selected; The note is shown',
+              ),
+              generated(
+                'c2',
+                { size: 'p_l', note: 'p_n' },
+                'positive',
+                'Size L is selected; The note is shown',
+              ),
+              generated(
+                'c3',
+                { size: 'p_s', note: 'A'.repeat(1000) },
+                'negative',
+                'the value is rejected',
+              ),
+            ],
+          },
+        },
+      });
+      const { markdown } = run(dir, '--kind=test-conditions').output;
+      expect(markdown).toContain('   Same in every combination below: note = "gift"');
+      expect(markdown).toContain('Verify size = "S": Size S is selected (P2)');
+      expect(markdown).toContain('Verify size = "L": Size L is selected (P2)');
+      expect(markdown).toContain(
+        'Verify note = "AAAAAAAAAAAAAAAAAAAAAAAA…" (1000 characters): the value is rejected (P2)',
+      );
+      expect(markdown).not.toContain('A'.repeat(100));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -395,6 +500,27 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
       expect(output.markdown).toContain('**Pages no feature claims**');
       expect(output.markdown).toContain('/route-02 - Page 2');
       expect(output.summary).toContain('1 page(s) no feature claims');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A page the person left out belongs to no feature on purpose - it is listed in the site map
+  // review under "Left out by you", not here as something missed.
+  it('does not count a left-out page among the pages no feature claims', () => {
+    const dir = setupProject();
+    try {
+      const sites = siteMapWith(3) as Record<string, any>;
+      Object.assign(sites.routes['/route-02'], { status: 'removed', removedBy: 'human' });
+      writeJson(dir, 'artifacts/site-map/site-map.json', sites);
+      const map = featureMapWith(3) as Record<string, any>;
+      delete map.features['f-2'];
+      delete map.routes['id-2'];
+      writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+
+      const { output } = run(dir, '--kind=feature-map');
+      expect(output.markdown).not.toContain('**Pages no feature claims**');
+      expect(output.markdown).not.toContain('/route-02');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

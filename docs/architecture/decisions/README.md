@@ -42,3 +42,4 @@ sequentially, zero-padded to 4 digits, kebab-case slug after the number.
 | 0014 | [Test analysis starts from what a feature means, and every condition says where its expected result comes from](0014-context-driven-test-analysis.md) | Accepted |
 | 0015 | [A person reviews in the file, and the JSON stays the only record](0015-editable-review-files.md)                                                     | Accepted |
 | 0016 | [Analysis conclusions are checked against independent records, and every disagreement is journaled](0016-corroboration-of-analysis-conclusions.md)    | Accepted |
+| 0017 | [What a person decides in a review reaches every later stage, and a page left out stays out](0017-review-decisions-reach-every-stage.md)              | Accepted |

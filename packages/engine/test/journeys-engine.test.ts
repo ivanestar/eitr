@@ -619,6 +619,33 @@ describe('scripts/compose-journeys.mjs (real execution)', () => {
     }
   });
 
+  it('composes nothing for a page the site map marks removed, whatever conditions it still has', () => {
+    const dir = setupProject();
+    try {
+      writeTestConditions(
+        dir,
+        testConditionsFixture({ ...routeAFixture(), ...routeBFixtureNoAnchor() }),
+      );
+      writeFileSync(
+        join(dir, 'artifacts', 'site-map', 'site-map.json'),
+        JSON.stringify({
+          schemaVersion: 2,
+          routes: {
+            '/checkout': { routeId: 'route-checkout', status: 'removed', removedBy: 'human' },
+            '/other': { routeId: 'route-no-anchor', status: 'active' },
+          },
+        }),
+        'utf8',
+      );
+      expect(run(dir).status).toBe(0);
+      const journeys = allJourneys(dir);
+      expect(journeys.length).toBeGreaterThan(0);
+      for (const journey of journeys) expect(journey.routeIds).toEqual(['route-no-anchor']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('produces no e2e journey for a route with no all-valid vector, without crashing', () => {
     const dir = setupProject();
     try {

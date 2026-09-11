@@ -120,6 +120,19 @@ export interface DomainNote {
   recordedAt: string;
 }
 
+// A page a person left out of every later stage by deleting it from a review file. Kept here, with
+// the other decisions about the application as a whole, so it outlives the site map: a fresh crawl
+// refuses the page instead of mapping it again, and ticking it in the site map review brings it back.
+export interface LeftOutRoute {
+  // The canonical path template, as the site map keys it.
+  path: string;
+  routeId?: string;
+  by: 'human';
+  at: string;
+  // What the person said about it, when they said anything - a verdict note, a line under the route.
+  note?: string;
+}
+
 // Which test types this project actually tests for. Functional is the only one in scope by
 // default, and that default is stated here rather than left implicit: "we only wrote functional
 // tests" is a scope decision, and an unstated scope decision is indistinguishable from an
@@ -159,6 +172,7 @@ export interface AppProfile {
   apiStyle?: Fact<ApiStyle>;
   crawlBoundary?: CrawlBoundaryFact;
   domainNotes?: DomainNote[];
+  leftOutRoutes?: LeftOutRoute[];
   // Absent means the default: functional only. Present means somebody decided, and what they
   // decided is on the record.
   testTypes?: TestTypeScope[];

@@ -146,6 +146,30 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     }
   });
 
+  // A page left out at review, or one that stopped resolving, is not part of the application this map
+  // describes - its old intent must not turn it into a feature again.
+  it('gives a removed page no feature, even with an intent drafted for it earlier', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [
+        { path: '/orders', routeId: 'route-orders' },
+        { path: '/defects/D-001', routeId: 'route-defect', status: 'removed' },
+      ]);
+      writeRouteIntent(dir, [
+        { routeId: 'route-orders', feature: 'Orders' },
+        { routeId: 'route-defect', feature: 'Defects', tier: 'low' },
+      ]);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.routesWithoutIntent).toBe(0);
+      const map = readFeatureMap(dir);
+      const names = Object.values(map.features).map((f: any) => f.name);
+      expect(names).toEqual(['Orders']);
+      expect(map.routes['route-defect']).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reports no such warning when the intent was there', () => {
     const dir = setupProject();
     try {
@@ -475,6 +499,44 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
       const map = readFeatureMap(dir);
       expect(Object.keys(map.features)).toEqual(firstFeatures);
       expect(map.routes['route-pay'].featureId).toBe(firstFeatures[0]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Seen live: a first draft read the pages in the order of the per-page pass, a re-derivation in
+  // the order the feature map stores them, and four features nobody touched lost their approval.
+  it('keeps an approval when a re-derivation reads the same pages in another order', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [
+        { path: '/tools/b', routeId: 'route-b' },
+        { path: '/tools/a', routeId: 'route-a' },
+        { path: '/tools/c', routeId: 'route-c' },
+      ]);
+      writeRouteIntent(dir, [
+        { routeId: 'route-c', feature: 'Tools', tier: 'high' },
+        { routeId: 'route-a', feature: 'Tools', tier: 'high' },
+        { routeId: 'route-b', feature: 'Tools', tier: 'medium' },
+      ]);
+      run(dir);
+      const first = readFeatureMap(dir);
+      const feature = (Object.values(first.features) as Record<string, any>[])[0];
+      expect(feature.memberRouteIds).toEqual(['route-a', 'route-b', 'route-c']);
+      expect(feature.impactSourceRouteId).toBe('route-a');
+      feature.reviewed = true;
+      feature.reviewedBy = 'human';
+      // Stored the other way round, as a later pass may have written them.
+      first.routes = Object.fromEntries(Object.entries(first.routes).reverse());
+      writeFileSync(
+        join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+        JSON.stringify(first, null, 2),
+        'utf8',
+      );
+      run(dir, ['--force']);
+      const again = readFeatureMap(dir).features[feature.featureId];
+      expect(again.memberRouteIds).toEqual(['route-a', 'route-b', 'route-c']);
+      expect(again.reviewed).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -81,9 +81,9 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
     expect(existsSync(cliPath)).toBe(true);
   });
 
-  // в”Ђв”Ђ Scenario 1: TypeScript Playwright Full Lifecycle в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // -- Scenario 1: TypeScript Playwright Full Lifecycle -------------------------
   it(
-    '1. Real CLI Scaffolding вЂ” TypeScript Playwright + CPOM Linter & Typecheck',
+    '1. Real CLI Scaffolding - TypeScript Playwright + CPOM Linter & Typecheck',
     { timeout: 60000 },
     async () => {
       const cwd = makeTempCwd();
@@ -158,8 +158,8 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
     },
   );
 
-  // в”Ђв”Ђ Scenario 2: Modular Pipeline Execution в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-  it('2. Modular Pipeline вЂ” init -> generate -> doctor', { timeout: 60000 }, async () => {
+  // -- Scenario 2: Modular Pipeline Execution ----------------------------------
+  it('2. Modular Pipeline - init -> generate -> doctor', { timeout: 60000 }, async () => {
     const cwd = makeTempCwd();
 
     // Step A: eitr init
@@ -202,8 +202,8 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
     expect(doctorRes.stdout).toContain('Node.js');
   });
 
-  // в”Ђв”Ђ Scenario 3: Negative CPOM Contract Linter Tests в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-  it('3. CPOM Contract Linter Negative Tests вЂ” catches violations with exit code 1', async () => {
+  // -- Scenario 3: Negative CPOM Contract Linter Tests -------------------------
+  it('3. CPOM Contract Linter Negative Tests - catches violations with exit code 1', async () => {
     const cwd = makeTempCwd();
 
     // Scaffold project
@@ -273,9 +273,9 @@ describe('Real Terminal CLI E2E Suite (Production Verification)', () => {
     expect(rClean.stdout).toContain('[PASS]');
   });
 
-  // в”Ђв”Ђ Scenario 4: Polyglot Matrix Verification (Python, C#, Java) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  // -- Scenario 4: Polyglot Matrix Verification (Python, C#, Java) -------------
   frozenIt(
-    '4. Polyglot Matrix вЂ” Python, C#, and Java scaffolds verify successfully',
+    '4. Polyglot Matrix - Python, C#, and Java scaffolds verify successfully',
     { timeout: 60000 },
     async () => {
       // Python Playwright

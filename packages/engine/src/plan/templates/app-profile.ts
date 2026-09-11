@@ -264,6 +264,37 @@ function validate(data, parseError) {
     }
   }
 
+  if ('leftOutRoutes' in data) {
+    if (!Array.isArray(data.leftOutRoutes)) {
+      errors.push('leftOutRoutes, when present, must be an array.');
+    } else {
+      const seenPaths = new Set();
+      data.leftOutRoutes.forEach((entry, i) => {
+        const label = 'leftOutRoutes[' + i + ']';
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          errors.push(label + ' must be an object.');
+          return;
+        }
+        if (typeof entry.path !== 'string' || !entry.path.startsWith('/')) {
+          errors.push(label + '.path must be a canonical path starting with /.');
+        } else if (seenPaths.has(entry.path)) {
+          errors.push(label + '.path "' + entry.path + '" appears more than once.');
+        } else {
+          seenPaths.add(entry.path);
+        }
+        if (entry.by !== 'human') {
+          errors.push(label + '.by must be "human" - only a person leaves a page out.');
+        }
+        if (typeof entry.at !== 'string' || entry.at.length === 0) {
+          errors.push(label + '.at must be a non-empty string.');
+        }
+        if ('note' in entry && typeof entry.note !== 'string') {
+          errors.push(label + '.note, when present, must be a string.');
+        }
+      });
+    }
+  }
+
   return errors;
 }
 

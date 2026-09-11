@@ -1,4 +1,5 @@
 import { resolveStackConventions } from '../stack-conventions.js';
+import { PIPELINE_ROADMAP_SOURCE } from './pipeline-roadmap.js';
 
 // Template for scripts/skill-briefing.mjs. create-if-absent.
 //
@@ -310,6 +311,11 @@ const BRIEFINGS = {
   },
 };
 
+// Inside /ground-zero-setup's chain every stage opens with where it sits in the pipeline, the first
+// one included - that one used to start with no roadmap at all, since the only other place it is
+// printed is the gate after a stage.
+${PIPELINE_ROADMAP_SOURCE}
+
 function parseArgs(argv) {
   const args = {};
   for (const raw of argv) {
@@ -330,12 +336,13 @@ function renderCallout(callout) {
   return ['[' + callout.label + '] ' + callout.title + ':', callout.text].join('\\n');
 }
 
-function renderBriefing(entry) {
+function renderBriefing(entry, roadmap) {
   const blocks = [
     'What happens:\\n' + entry.what,
     'How:\\n' + entry.how,
     'Why:\\n' + entry.why,
   ];
+  if (roadmap) blocks.unshift('Where this is:\\n' + roadmap);
   if (entry.notes.length > 0) {
     const bullets = entry.notes.map(function (note) {
       return '  \\u2022 ' + note;
@@ -377,6 +384,8 @@ function main() {
 
   const context = args.context === 'chain' ? 'chain' : 'direct';
   const askConfirmation = context === 'direct' && entry.question !== null;
+  const step = ROADMAP_STEP_OF_SKILL[skill];
+  const roadmap = context === 'chain' && step !== undefined ? roadmapAt(step) : null;
 
   process.stdout.write(
     JSON.stringify(
@@ -385,7 +394,8 @@ function main() {
         skill: skill,
         command: entry.command,
         context: context,
-        briefing: renderBriefing(entry),
+        roadmap: roadmap,
+        briefing: renderBriefing(entry, roadmap),
         produces: entry.produces,
         askConfirmation: askConfirmation,
         question: askConfirmation ? entry.question : null,

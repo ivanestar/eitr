@@ -12,6 +12,8 @@
 // skip or shorten a cost-warning it was supposed to compose itself; printing a script-authored field
 // verbatim removes that degree of freedom instead of relying on the model remembering.
 
+import { PIPELINE_ROADMAP_SOURCE } from './pipeline-roadmap.js';
+
 export function renderPipelineStatus(): string {
   return `#!/usr/bin/env node
 
@@ -23,6 +25,7 @@ export function renderPipelineStatus(): string {
  *   node scripts/pipeline-status.mjs
  */
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -136,23 +139,13 @@ function everyReviewedRouteHasDraftedTestCase(testConditionRoutes, journeys) {
 // Fixed, deterministic roadmap of the whole greenfield pipeline - one string, printed by every
 // skill at every human-facing stop, so the human always sees where they are without re-deriving it
 // themselves. Position is computed from the stage value below, never guessed by the model.
-// Only the four real stages. An earlier version interleaved a literal 'Review' step between each
-// pair, which rendered as one long line repeating the same context-free word four times and wrapped
-// into an illegible block in any real terminal - the review pause is a property of every stage, so
-// it is stated once in the pre-flight notice instead of being fake-staged four times here.
-const ROADMAP_STEPS = [
-  { short: 'Site map', blurb: 'crawl the app, and work out what each page is for' },
-  { short: 'Feature map', blurb: 'group those pages into features, and work out what the app is made of' },
-  { short: 'Test conditions', blurb: 'decide what should be tested' },
-  { short: 'Test cases', blurb: 'turn those into concrete, readable test cases' },
-  { short: 'Automated tests', blurb: 'write the real test code and run it' },
-  { short: 'Test closure', blurb: 'check what is covered, and decide whether that is enough' },
-];
+${PIPELINE_ROADMAP_SOURCE}
 
 // Each stage has two distinguishable positions - being worked on, and waiting for the human's
 // review - so a stage index alone cannot say which of the two the human is looking at.
 const STAGE_POSITION = {
   'not-started': { index: 0, phase: 'run' },
+  'site-map-pending-review': { index: 0, phase: 'review' },
   'site-map-reviewed': { index: 1, phase: 'run' },
   'feature-map-pending-review': { index: 1, phase: 'review' },
   'feature-map-reviewed': { index: 2, phase: 'run' },
@@ -169,16 +162,9 @@ function positionFor(stage) {
   return STAGE_POSITION[stage] || { index: 0, phase: 'run' };
 }
 
-// The current stage is marked by brackets alone - the same convention the test-case artifacts use
-// for a value under discussion. An earlier version appended "<- you are here", which restated in
-// four words what the brackets already say and pushed the line past the terminal's width.
 function formatRoadmap(stage) {
   const position = STAGE_POSITION[stage];
-  return ROADMAP_STEPS.map(function (step, i) {
-    const label = 'S' + (i + 1) + ' ' + step.short;
-    if (!position || i !== position.index) return label;
-    return '[' + label + ']';
-  }).join(' -> ');
+  return roadmapAt(position ? position.index : -1);
 }
 
 // Route-level counters a human-facing report can print without re-deriving them from raw artifacts
@@ -301,6 +287,22 @@ function computeStatus(siteMap, featureMap, testConditions, journeysData) {
     };
   }
 
+  // The site map is reviewed like every other stage: a route is approved, or left out - which takes
+  // it out of the map altogether. Until then the person is looking at stage 1, not stage 2, and the
+  // roadmap has to say so.
+  const unapprovedRoutes = Object.values(siteMap.routes || {}).filter(function (route) {
+    return route && route.status === 'active' && route.reviewed !== true;
+  }).length;
+  if (unapprovedRoutes > 0) {
+    return {
+      stage: 'site-map-pending-review',
+      nextCommand: null,
+      nextCommandDescription:
+        unapprovedRoutes +
+        ' route(s) in the site map are not approved yet. Review artifacts/review/site-map-review.md: tick the routes that are right (ALL approves every one not changed), delete the ones to leave out, then run /map-features.',
+    };
+  }
+
   if (!featureMap) {
     return {
       stage: 'site-map-reviewed',
@@ -379,12 +381,31 @@ function pendingReviewEdits() {
       .trim();
   };
   for (const kind of ['site-map', 'feature-map', 'test-conditions']) {
+    // Corrections apply-review.mjs handed to the assistant and the assistant has not confirmed yet.
+    const waiting = loadJson(path.join(REVIEW_DIR, '.pending', kind + '.json'));
+    if (waiting) {
+      pending.push({
+        kind: kind,
+        filePath: 'artifacts/review/' + kind + '-review.md',
+        waiting: 'corrections read from the file and not applied yet',
+        apply:
+          'apply the corrections in artifacts/review/.pending/' +
+          kind +
+          '.json, then node scripts/apply-review.mjs --kind=' +
+          kind +
+          ' --done',
+      });
+      continue;
+    }
     const view = path.join(REVIEW_DIR, kind + '-review.md');
     const base = path.join(REVIEW_DIR, '.base', kind + '-review.json');
     if (!fs.existsSync(view) || !fs.existsSync(base)) continue;
     const rendered = loadJson(base);
     if (!rendered || typeof rendered.text !== 'string') continue;
-    if (tidy(fs.readFileSync(view, 'utf8')) === tidy(rendered.text)) continue;
+    const current = tidy(fs.readFileSync(view, 'utf8').replace(/^\\uFEFF/, ''));
+    if (current === tidy(rendered.text)) continue;
+    // Already read back and nothing left waiting: the file only needs redrawing.
+    if (rendered.readBack && rendered.readBack === crypto.createHash('sha256').update(current).digest('hex')) continue;
     pending.push({
       kind: kind,
       filePath: 'artifacts/review/' + kind + '-review.md',

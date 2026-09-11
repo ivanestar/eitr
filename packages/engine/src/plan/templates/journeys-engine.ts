@@ -52,6 +52,7 @@ const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-condi
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const API_CONTRACTS_PATH = path.join(CWD, 'artifacts', 'site-map', 'api-contracts.json');
 const JOURNEYS_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
+const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 
 function loadJson(filePath, label) {
   if (!fs.existsSync(filePath)) {
@@ -260,6 +261,19 @@ function loadReviewedFeatures() {
   });
 }
 
+// A page the site map marks removed - left out by a person, or gone from the application - is
+// tested nowhere, whatever test conditions it still has.
+function loadRemovedRouteIds() {
+  const loaded = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
+  const data = loaded.value;
+  const routeIds = new Set();
+  if (!data || typeof data.routes !== 'object' || data.routes === null) return routeIds;
+  for (const route of Object.values(data.routes)) {
+    if (route && route.status === 'removed' && typeof route.routeId === 'string') routeIds.add(route.routeId);
+  }
+  return routeIds;
+}
+
 function loadRoutesWithApiContracts() {
   const loaded = loadJson(API_CONTRACTS_PATH, 'artifacts/site-map/api-contracts.json');
   const data = loaded.value;
@@ -296,6 +310,7 @@ function compose() {
 
   const features = loadReviewedFeatures();
   const routesWithApiContracts = loadRoutesWithApiContracts();
+  const removedRouteIds = loadRemovedRouteIds();
 
   // A route's impact comes from whichever reviewed feature claims it. A route in no feature has no
   // impact signal at all, which is treated as "not low" - never as low.
@@ -310,7 +325,7 @@ function compose() {
 
   const perRoute = new Map();
   for (const [routeId, entry] of Object.entries(data.routes)) {
-    if (!entry) continue;
+    if (!entry || removedRouteIds.has(routeId)) continue;
     const reviewedConditions = (entry.conditions || []).filter(function (c) {
       return c && c.reviewed === true;
     });

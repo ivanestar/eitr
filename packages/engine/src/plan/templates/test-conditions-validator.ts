@@ -1415,11 +1415,13 @@ function validate() {
 
   const siteMap = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
   const knownRouteIds = new Set();
+  const removedRoutes = new Map();
   const inventoryPathById = new Map();
   if (!siteMap.error && siteMap.value && typeof siteMap.value.routes === 'object') {
     for (const route of Object.values(siteMap.value.routes)) {
       if (!route || typeof route.routeId !== 'string') continue;
       knownRouteIds.add(route.routeId);
+      if (route.status === 'removed') removedRoutes.set(route.routeId, route);
       inventoryPathById.set(
         route.routeId,
         typeof route.inventory === 'string' ? route.inventory : INVENTORY_DIR + '/' + route.routeId + '.json',
@@ -1556,6 +1558,13 @@ function validate() {
       errors.push(
         label +
           ' has no matching routeId in artifacts/site-map/site-map.json - dangling reference. Re-run /map-site or remove this entry.',
+      );
+    } else if (removedRoutes.has(key)) {
+      errors.push(
+        label +
+          (removedRoutes.get(key).removedBy === 'human'
+            ? ' is a page the person left out of every stage - remove this entry.'
+            : ' is a page the site map marks removed - remove this entry, or re-run /map-site if the page is back.'),
       );
     }
 

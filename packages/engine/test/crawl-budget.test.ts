@@ -540,6 +540,31 @@ describe('scripts/crawl-budget.mjs (real execution)', () => {
     }
   });
 
+  // A page a person left out at review stays out of every later crawl, whether or not the crawling
+  // assistant remembers to say so: the script reads the decision itself.
+  it('refuses a page a person left out, read from app-profile.json', () => {
+    const dir = setupProject();
+    try {
+      mkdirSync(join(dir, 'artifacts', 'analysis'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'analysis', 'app-profile.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: '2026-09-11T10:00:00.000Z',
+          leftOutRoutes: [{ path: '/defects/D-001', by: 'human', at: '2026-09-11T10:00:00.000Z' }],
+        }),
+        'utf8',
+      );
+      start(dir);
+      const refused = check(dir, `${BASE}/defects/D-001`);
+      expect(refused.decision).toBe('skip');
+      expect(refused.reason).toBe('left-out');
+      expect(check(dir, `${BASE}/defects/D-002`).decision).toBe('visit');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // The clock measures the gap since the last new route, never the time since the start: cutting a
   // large application off half way produces an incomplete map someone then has to notice and
   // re-run, which costs more than the crawl it saved.

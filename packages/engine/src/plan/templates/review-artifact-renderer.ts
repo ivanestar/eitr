@@ -89,6 +89,7 @@ function buildRouteLabels(siteMap) {
       label: title ? routePath + ' - ' + title : routePath,
       flags:
         entry.visualTriage && Array.isArray(entry.visualTriage.flags) ? entry.visualTriage.flags : [],
+      removed: entry.status === 'removed',
     });
   }
   return labels;
@@ -117,23 +118,6 @@ function dedupedEvidence(fields) {
     }
   }
   return excerpts;
-}
-
-// A constraint stores partition ids, which are internal identifiers - a human reads the partition's
-// own first sample value instead ('shippingMethod="Express"', not 'shippingMethod=part_3').
-function sampleFor(entry, paramName, partitionId) {
-  const parameters = Array.isArray(entry.parameters) ? entry.parameters : [];
-  for (const parameter of parameters) {
-    if (!parameter || parameter.name !== paramName) continue;
-    const partitions = Array.isArray(parameter.partitions) ? parameter.partitions : [];
-    for (const partition of partitions) {
-      if (!partition || partition.id !== partitionId) continue;
-      const samples = Array.isArray(partition.sampleValues) ? partition.sampleValues : [];
-      if (samples.length > 0) return '"' + samples[0] + '"';
-      return partitionId;
-    }
-  }
-  return partitionId;
 }
 
 // How a person recognises a control the analysis cites by id: its role and label, or where it sits
@@ -199,20 +183,27 @@ function ownersOf(lines) {
   return owners;
 }
 
+// Every editable review works the same way: a box to approve, deleting an entry to take it out, text
+// changed in place or a line under an entry to correct it, and "Your notes" at the end for anything
+// the file does not show. Only what an entry can be differs from one stage to the next.
 const EDIT_HELP = {
   'site-map': [
     'You can review this file right here: edit it, save it, then tell the assistant you are done.',
     '',
-    '- Correct anything by changing the text itself, or add a line under a route saying what is wrong.',
-    '- Settle a disagreement by writing works or broken after Verdict:.',
-    '- Add a page the crawl missed under "Pages the crawl did not find".',
+    '- Approve a route by putting an x in its box: [x]. Tick ALL to approve every route you did not change.',
+    '- Leave a route out of every later stage by deleting its lines. It moves to "Left out by you", where ticking it brings it back.',
+    '- Settle a disagreement by writing works or broken after Verdict: - anything you add after that word is kept as your note.',
+    '- Correct anything else by changing the text itself, or add a line under a route saying what is wrong.',
+    '- Add a page the crawl missed under "Pages the crawl did not find", and anything else under "Your notes".',
     '- Leave the labels (R1, D1) as they are - they are how the assistant finds each entry.',
   ],
   'feature-map': [
     'You can review this file right here: edit it, save it, then tell the assistant you are done.',
     '',
     '- Approve an entry by putting an x in its box: [x]. Tick ALL to approve every entry you did not change.',
+    '- Leave a page out of every later stage by deleting its lines (P). The features are regrouped without it, and the site map review lists it under "Left out by you", where ticking it brings it back.',
     '- Correct anything by changing the text itself, or add a line under the entry saying what is wrong. The assistant applies it and re-checks whatever depends on it.',
+    '- Write anything else the assistant should know under "Your notes".',
     '- Leave the labels (F1, P3, E2) as they are - they are how the assistant finds each entry.',
   ],
   'test-conditions': [
@@ -222,9 +213,67 @@ const EDIT_HELP = {
     '- Answer a question on its Answer: line.',
     '- Cut a condition by deleting its line. It moves to "Cut by you", where ticking it brings it back.',
     '- Correct anything else by changing the text itself, or add a line saying what is wrong. The assistant applies it and re-checks whatever depends on it.',
+    '- "Regression only" marks a condition whose expected result was read off the page as it is today: it catches a change, not a defect already there.',
+    '- Write anything else the assistant should know under "Your notes".',
     '- Leave the labels (F1, C12, Q3) as they are - they are how the assistant finds each entry.',
   ],
 };
+
+const NOTES_HEADING = '**Your notes**';
+const PENDING_DIR = path.join(CWD, 'artifacts', 'review', '.pending');
+
+// The last section of every editable review. Notes a person wrote in this review before are shown
+// back, so a redrawn file never looks as if they vanished; the empty line below them takes a new one.
+function notesSection(kind) {
+  const profile = loadJson(APP_PROFILE_PATH);
+  const kept = profile && Array.isArray(profile.domainNotes)
+    ? profile.domainNotes.filter(function (entry) {
+        return entry && entry.statedDuring === kind + ' review' && typeof entry.note === 'string';
+      })
+    : [];
+  const lines = [
+    NOTES_HEADING,
+    '',
+    'Anything the assistant should know that this file does not show - context, a rule of the business, a page to handle with care. One thought per line; it is kept with what this project knows about the application.',
+    '',
+  ];
+  for (const entry of kept) lines.push('- ' + entry.note);
+  lines.push('- ');
+  return lines;
+}
+
+// Corrections from an earlier edit of this file that the assistant has not confirmed yet. Shown at
+// the top of the redrawn file, so the person can see their words are still on their way.
+function pendingSection(kind) {
+  const waiting = loadJson(path.join(PENDING_DIR, kind + '.json'));
+  if (!waiting) return [];
+  const items = [];
+  for (const edit of Array.isArray(waiting.freeEdits) ? waiting.freeEdits : []) {
+    const where = edit.label ? edit.label + ': ' : '';
+    for (const line of edit.added || []) items.push('- ' + where + 'you wrote "' + String(line).trim() + '"');
+    if ((edit.added || []).length === 0) {
+      for (const line of edit.removed || []) items.push('- ' + where + 'you removed "' + String(line).trim() + '"');
+    }
+  }
+  for (const page of Array.isArray(waiting.missingPages) ? waiting.missingPages : []) items.push('- a page to crawl: ' + page);
+  for (const verdict of Array.isArray(waiting.unreadVerdicts) ? waiting.unreadVerdicts : []) {
+    items.push('- ' + verdict.label + ': a verdict the assistant could not read, "' + verdict.text + '"');
+  }
+  if (items.length === 0) return [];
+  return ['**Waiting for the assistant**', '', 'From your last edit, not applied yet:', ''].concat(items, ['']);
+}
+
+function tidyText(text) {
+  return String(text)
+    .replace(/^\\uFEFF/, '')
+    .replace(/\\r\\n/g, '\\n')
+    .split('\\n')
+    .map(function (line) {
+      return line.replace(/\\s+$/, '');
+    })
+    .join('\\n')
+    .trim();
+}
 
 function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
@@ -238,30 +287,118 @@ const PRIORITY_ORDER = { P1: 0, P2: 1, P3: 2 };
 const LAYER_ORDER = { behavior: 0, rule: 1, field: 2, frame: 3 };
 const IMPACT_RANK = { high: 0, medium: 1, low: 2 };
 
-function oracleTag(condition) {
-  if (!condition.oracle) return '';
-  return (REGRESSION_ORACLES.indexOf(condition.oracle) !== -1 ? 'regression: ' : 'correct: ') + condition.oracle;
+// A value short enough to read in a list. A 1000-character probe printed in full once took a whole
+// screen of a review nobody could scroll through.
+function shortValue(value) {
+  const text = String(value);
+  if (text.length <= 40) return JSON.stringify(text);
+  return JSON.stringify(text.slice(0, 24) + '\\u2026') + ' (' + text.length + ' characters)';
 }
 
-function researchLine(research) {
-  if (!research || typeof research !== 'object') return 'Research: not recorded';
-  if (research.status === 'skipped') return 'Research: skipped - ' + (research.reason || 'no reason given');
-  const record = typeof research.file === 'string' ? loadJson(path.join(CWD, research.file)) : null;
-  const count = record && Array.isArray(record.sources) ? record.sources.length : 0;
+function lowerFirst(text) {
+  if (text.length > 1 && /[A-Z]/.test(text[0]) && /[a-z]/.test(text[1])) return text[0].toLowerCase() + text.slice(1);
+  return text;
+}
+
+// What one vector sets each parameter to, as the page would show it, and which of those values the
+// condition is actually about: a probe or an invalid partition. The rest only keep the form valid.
+function vectorOf(condition, entry) {
+  const params = entry && Array.isArray(entry.parameters) ? entry.parameters : [];
+  const vector = condition.parameters && typeof condition.parameters === 'object' ? condition.parameters : {};
+  const values = [];
+  for (const name of Object.keys(vector)) {
+    const param = params.find(function (p) {
+      return p && p.name === name;
+    });
+    const partition =
+      param && Array.isArray(param.partitions)
+        ? param.partitions.find(function (p) {
+            return p && p.id === vector[name];
+          })
+        : null;
+    const value =
+      partition && Array.isArray(partition.sampleValues) && partition.sampleValues[0] !== undefined
+        ? partition.sampleValues[0]
+        : partition
+          ? partition.id
+          : vector[name];
+    values.push({
+      name: name,
+      value: value,
+      focus: !partition || partition.kind === 'invalid',
+      outcome: partition && typeof partition.expectedOutcome === 'string' ? partition.expectedOutcome.replace(/\\.$/, '') : null,
+    });
+  }
+  return values;
+}
+
+// Every condition reads as one "Verify ..." line. A condition the analysis wrote says it in its own
+// words. A generated one names the values it is about and what should happen: for a probe or an
+// invalid value, that value alone; for a valid combination, the values that differ from the page's
+// other combinations - the ones they all share are said once, above them.
+function verifyLine(condition, entry, shared) {
+  if (condition.origin !== 'generated') {
+    const text = String(condition.description || '(no description)').trim();
+    return /^verify\\b/i.test(text) ? text : 'Verify ' + lowerFirst(text);
+  }
+  const values = vectorOf(condition, entry);
+  const focus = values.filter(function (v) {
+    return v.focus;
+  });
+  const outcome = String(condition.expectedOutcome || '').replace(/\\.$/, '');
+  if (focus.length > 0) {
+    return 'Verify ' + focus.map(function (v) {
+      return v.name + ' = ' + shortValue(v.value);
+    }).join(', ') + (outcome ? ': ' + outcome : '');
+  }
+  const own = values.filter(function (v) {
+    return !shared.has(v.name);
+  });
+  const shown = own.length > 0 ? own : values;
+  const outcomes = [];
+  for (const v of shown) if (v.outcome && outcomes.indexOf(v.outcome) === -1) outcomes.push(v.outcome);
   return (
-    'Research: ' +
-    (research.status === 'cached' ? 'reused, ' : '') +
-    count +
-    ' source(s) on "' +
-    (research.archetype || '?') +
-    '"' +
-    (research.file ? ' (' + research.file + ')' : '')
+    'Verify ' +
+    shown.map(function (v) {
+      return v.name + ' = ' + shortValue(v.value);
+    }).join(', ') +
+    ': ' +
+    (outcomes.length > 0 ? outcomes.join('; ') : outcome)
   );
 }
 
-// One feature's block: what the analysis understood, what is still a question for the reader, and
-// every condition in priority order - the list a person approves, cuts or reorders.
-function renderFeatureBlock(lines, labels, feature, analysis, items, controlsByRoute, registry, counters) {
+// The values every valid generated combination on a page shares - said once for the page.
+function sharedValues(items, entry) {
+  const combos = items
+    .filter(function (item) {
+      return item.condition.origin === 'generated' && item.condition.scenario === 'positive';
+    })
+    .map(function (item) {
+      return vectorOf(item.condition, entry);
+    })
+    .filter(function (values) {
+      return values.length > 0 && values.every(function (v) {
+        return !v.focus;
+      });
+    });
+  const shared = new Map();
+  if (combos.length < 2) return shared;
+  for (const v of combos[0]) {
+    const same = combos.every(function (values) {
+      const match = values.find(function (w) {
+        return w.name === v.name;
+      });
+      return match && String(match.value) === String(v.value);
+    });
+    if (same) shared.set(v.name, v.value);
+  }
+  return shared;
+}
+
+// One feature: its questions, then each of its pages with the conditions exercised there, in
+// priority order - the list a person approves, cuts or answers. What the analysis understood about
+// the feature and its fields stays in the JSON; the review is for deciding what gets tested.
+function renderFeatureBlock(lines, labels, feature, analysis, items, pageIds, entriesById, controlsByRoute, registry, counters) {
   counters.feature += 1;
   const allApproved =
     items.length > 0 &&
@@ -271,74 +408,96 @@ function renderFeatureBlock(lines, labels, feature, analysis, items, controlsByR
   // The feature's box stands for its conditions, so its label carries their labels.
   const featureRef = { type: 'feature', id: feature.featureId || null, conditions: [] };
   registry.add('F' + counters.feature, featureRef);
-  lines.push('- ' + box(allApproved) + ' F' + counters.feature + '. **' + feature.name + '** (impact ' + feature.impact + ')');
-  if (analysis) {
-    lines.push('What it is: ' + analysis.purpose + ' ' + (analysis.fitsApplication || ''));
-    lines.push('Kind: ' + analysis.archetype + ' - ' + researchLine(analysis.research));
-    const fields = Array.isArray(analysis.fields) ? analysis.fields : [];
-    if (fields.length > 0) {
-      lines.push('Fields:');
-      fields.forEach(function (field) {
-        const control = field.control && controlsByRoute[field.routeId] ? controlsByRoute[field.routeId][field.control] : null;
-        const constraints = (Array.isArray(field.constraints) ? field.constraints : [])
-          .map(function (constraint) {
-            return constraint.statement + ' [' + constraint.source + (constraint.enforcement === 'not-enforced' ? ', NOT ENFORCED' : '') + ']';
-          })
-          .join('; ');
-        lines.push(
-          '- ' +
-            (controlLabel(control) || field.parameter || field.control) +
-            ': ' +
-            field.meaning +
-            (field.unit ? ' (' + field.unit + ')' : '') +
-            (constraints ? ' - ' + constraints : ''),
-        );
-      });
-    }
-    // Every question, answered or not, each with the line its answer goes on - so an answer can be
-    // written, or corrected, right here.
-    const questions = Array.isArray(analysis.questions) ? analysis.questions : [];
-    if (questions.length > 0) {
-      lines.push('Questions for you:');
-      questions.forEach(function (question, index) {
-        if (!question) return;
-        counters.question += 1;
-        registry.add('Q' + counters.question, { type: 'question', featureId: analysis.featureId, index: index });
-        lines.push('Q' + counters.question + '. ' + question.text);
-        lines.push('    Answer: ' + (typeof question.answer === 'string' ? question.answer : ''));
-      });
-    }
-  } else {
-    lines.push('(no analysis recorded for this feature)');
-  }
   const tiers = { P1: 0, P2: 0, P3: 0 };
   items.forEach(function (item) {
     if (tiers[item.condition.priority] !== undefined) tiers[item.condition.priority]++;
   });
-  lines.push('Conditions - P1: ' + tiers.P1 + ', P2: ' + tiers.P2 + ', P3: ' + tiers.P3);
-  items.forEach(function (item) {
-    const condition = item.condition;
-    const tags = [condition.priority || '?', condition.layer || '?', (condition.technique || '?') + (condition.relation ? '/' + condition.relation : '')];
-    const oracle = oracleTag(condition);
-    if (oracle) tags.push(oracle);
-    counters.condition += 1;
-    registry.add('C' + counters.condition, { type: 'condition', routeId: item.routeId, conditionId: condition.conditionId, cut: false });
-    featureRef.conditions.push('C' + counters.condition);
-    lines.push(
-      '- ' +
-        box(condition.reviewed) +
-        ' C' +
-        counters.condition +
-        '. ' +
-        (condition.description || '(no description)') +
-        '  [' +
-        tags.join(' | ') +
-        ']' +
-        (item.routeCount > 1 ? ' on ' + labelFor(labels, item.routeId) : '') +
-        (condition.risk && condition.risk.reason && condition.origin !== 'generated' ? ' - why: ' + condition.risk.reason : '') +
-        (condition.valueNote ? ' - note: ' + condition.valueNote : ''),
-    );
-  });
+  lines.push(
+    '- ' +
+      box(allApproved) +
+      ' F' +
+      counters.feature +
+      '. **' +
+      feature.name +
+      '** - ' +
+      feature.impact +
+      ' impact, ' +
+      items.length +
+      ' condition(s): P1 ' +
+      tiers.P1 +
+      ', P2 ' +
+      tiers.P2 +
+      ', P3 ' +
+      tiers.P3,
+  );
+  // Every question, answered or not, each with the line its answer goes on - so an answer can be
+  // written, or corrected, right here.
+  const questions = analysis && Array.isArray(analysis.questions) ? analysis.questions : [];
+  if (questions.length > 0) {
+    lines.push('   Questions for you:');
+    questions.forEach(function (question, index) {
+      if (!question) return;
+      counters.question += 1;
+      registry.add('Q' + counters.question, { type: 'question', featureId: analysis.featureId, index: index });
+      lines.push('   Q' + counters.question + '. ' + question.text);
+      lines.push('       Answer: ' + (typeof question.answer === 'string' ? question.answer : ''));
+    });
+  }
+  for (const routeId of pageIds) {
+    const pageItems = items.filter(function (item) {
+      return item.routeId === routeId;
+    });
+    const entry = entriesById[routeId] || null;
+    lines.push('');
+    lines.push('   Page: ' + labelFor(labels, routeId));
+    const excluded = entry && Array.isArray(entry.excluded) ? entry.excluded : [];
+    if (excluded.length > 0) {
+      const byId = controlsByRoute[routeId] || {};
+      lines.push(
+        '   Not tested here: ' +
+          excluded
+            .map(function (item) {
+              return (controlLabel(byId[item.control]) || item.control) + ' (' + item.reason + (item.note ? ' - ' + item.note : '') + ')';
+            })
+            .join('; '),
+      );
+    }
+    if (pageItems.length === 0) {
+      lines.push('   No conditions on this page.');
+      continue;
+    }
+    const shared = sharedValues(pageItems, entry);
+    if (shared.size > 0) {
+      lines.push(
+        '   Same in every combination below: ' +
+          Array.from(shared.entries())
+            .map(function (pair) {
+              return pair[0] + ' = ' + shortValue(pair[1]);
+            })
+            .join(', '),
+      );
+    }
+    for (const item of pageItems) {
+      const condition = item.condition;
+      counters.condition += 1;
+      registry.add('C' + counters.condition, { type: 'condition', routeId: item.routeId, conditionId: condition.conditionId, cut: false });
+      featureRef.conditions.push('C' + counters.condition);
+      const regression = REGRESSION_ORACLES.indexOf(condition.oracle) !== -1;
+      lines.push(
+        '   - ' +
+          box(condition.reviewed) +
+          ' C' +
+          counters.condition +
+          '. ' +
+          verifyLine(condition, entry, shared) +
+          ' (' +
+          (condition.priority || '?') +
+          (regression ? ', regression only' : '') +
+          ')' +
+          (condition.valueNote ? ' - note: ' + condition.valueNote : ''),
+      );
+    }
+  }
 }
 
 function renderTestConditions(labels, data, registry) {
@@ -352,10 +511,6 @@ function renderTestConditions(labels, data, registry) {
   const mapped = featureMap && featureMap.features && typeof featureMap.features === 'object' ? featureMap.features : {};
 
   const lines = [];
-  lines.push(
-    'Each condition says where its expected result comes from: "correct" (a requirement, a person, research, the meaning of the feature) can catch a defect that is already there; "regression" (what the page states or was seen doing) only catches a change.',
-  );
-  lines.push('');
   // The site frame's own fields are tested once, on the route named in frameRouteId, and left out of
   // every other page on purpose - so say where they went rather than let a reader conclude the
   // language switcher is simply untested, or tested nowhere without anyone having decided that.
@@ -378,7 +533,6 @@ function renderTestConditions(labels, data, registry) {
     lines.push('');
   }
   let conditionCount = 0;
-  const techniqueCounts = {};
   const tierCounts = { P1: 0, P2: 0, P3: 0 };
   let unsatisfiedTotal = 0;
 
@@ -388,7 +542,9 @@ function renderTestConditions(labels, data, registry) {
   const byFeature = new Map();
   const cutItems = [];
   const controlsByRoute = {};
+  const entriesById = {};
   for (const entry of entries) {
+    entriesById[entry.routeId] = entry;
     const inventory = loadJson(path.join(INVENTORY_DIR, entry.routeId + '.json'));
     const byId = {};
     for (const control of inventory && Array.isArray(inventory.controls) ? inventory.controls : []) byId[control.id] = control;
@@ -402,8 +558,6 @@ function renderTestConditions(labels, data, registry) {
       if (!byFeature.has(featureId)) byFeature.set(featureId, []);
       byFeature.get(featureId).push({ condition: condition, routeId: entry.routeId });
       conditionCount += 1;
-      const technique = condition.technique || 'unspecified';
-      techniqueCounts[technique] = (techniqueCounts[technique] || 0) + 1;
       if (tierCounts[condition.priority] !== undefined) tierCounts[condition.priority]++;
     }
   }
@@ -414,16 +568,9 @@ function renderTestConditions(labels, data, registry) {
     return (IMPACT_RANK[fa.impact] ?? 3) - (IMPACT_RANK[fb.impact] ?? 3) || String(fa.name || a).localeCompare(String(fb.name || b));
   });
   const counters = { feature: 0, condition: 0, question: 0 };
+  const shownPages = new Set();
   for (const featureId of featureIds) {
     const items = byFeature.get(featureId);
-    const routeSet = new Set(
-      items.map(function (item) {
-        return item.routeId;
-      }),
-    );
-    items.forEach(function (item) {
-      item.routeCount = routeSet.size;
-    });
     items.sort(function (a, b) {
       return (
         (PRIORITY_ORDER[a.condition.priority] ?? 3) - (PRIORITY_ORDER[b.condition.priority] ?? 3) ||
@@ -437,51 +584,43 @@ function renderTestConditions(labels, data, registry) {
       name: featureId === '(none)' ? 'Conditions with no feature' : featureId,
       impact: '?',
     };
-    renderFeatureBlock(lines, labels, feature, analyses[featureId], items, controlsByRoute, registry, counters);
+    // A feature's pages: those its conditions are exercised on, and every other page of the feature
+    // this stage analysed - a page with nothing to test is a decision worth seeing too.
+    const pageIds = new Set(
+      items.map(function (item) {
+        return item.routeId;
+      }),
+    );
+    for (const routeId of Array.isArray(feature.memberRouteIds) ? feature.memberRouteIds : []) {
+      if (entriesById[routeId]) pageIds.add(routeId);
+    }
+    const orderedPages = Array.from(pageIds).sort(function (a, b) {
+      return labelFor(labels, a).localeCompare(labelFor(labels, b));
+    });
+    for (const routeId of orderedPages) shownPages.add(routeId);
+    renderFeatureBlock(lines, labels, feature, analyses[featureId], items, orderedPages, entriesById, controlsByRoute, registry, counters);
     lines.push('');
   }
 
-  // What stays per route: the constraints a route's fields carry, pairs it could not cover, and the
-  // fields it left out - each a decision a person should see.
   for (const entry of entries) {
-    const constraints = Array.isArray(entry.constraints) ? entry.constraints : [];
-    const unsatisfied = Array.isArray(entry.unsatisfiedPairs) ? entry.unsatisfiedPairs.length : 0;
-    const excluded = Array.isArray(entry.excluded) ? entry.excluded : [];
-    unsatisfiedTotal += unsatisfied;
-    if (constraints.length === 0 && unsatisfied === 0 && excluded.length === 0) continue;
-    lines.push('**' + labelFor(labels, entry.routeId) + '**');
-    if (constraints.length > 0) {
-      lines.push(
-        'Constraints: ' +
-          constraints
-            .map(function (rule) {
-              return (
-                rule.ifParam +
-                '=' +
-                sampleFor(entry, rule.ifParam, rule.ifPartition) +
-                ' excludes ' +
-                rule.thenParam +
-                '=' +
-                sampleFor(entry, rule.thenParam, rule.thenExcludesPartition)
-              );
-            })
-            .join('; '),
-      );
-    }
-    if (unsatisfied > 0) lines.push('Unsatisfied pairs: ' + unsatisfied);
-    // A field left out is a decision a person should see and be able to overturn.
-    if (excluded.length > 0) {
+    unsatisfiedTotal += Array.isArray(entry.unsatisfiedPairs) ? entry.unsatisfiedPairs.length : 0;
+  }
+  // A field left out is a decision a person should see and be able to overturn, even on a page no
+  // feature above covers.
+  const unshown = entries.filter(function (entry) {
+    return !shownPages.has(entry.routeId) && Array.isArray(entry.excluded) && entry.excluded.length > 0;
+  });
+  if (unshown.length > 0) {
+    lines.push('**Other pages**');
+    for (const entry of unshown) {
       const byId = controlsByRoute[entry.routeId] || {};
+      lines.push('');
+      lines.push('   Page: ' + labelFor(labels, entry.routeId));
       lines.push(
-        'Fields left out: ' +
-          excluded
+        '   Not tested here: ' +
+          entry.excluded
             .map(function (item) {
-              return (
-                (controlLabel(byId[item.control]) || item.control) +
-                ' - ' +
-                item.reason +
-                (item.note ? ' (' + item.note + ')' : '')
-              );
+              return (controlLabel(byId[item.control]) || item.control) + ' (' + item.reason + (item.note ? ' - ' + item.note : '') + ')';
             })
             .join('; '),
       );
@@ -502,17 +641,10 @@ function renderTestConditions(labels, data, registry) {
         conditionId: item.condition.conditionId,
         cut: true,
       });
-      lines.push('- [ ] C' + counters.condition + '. ' + (item.condition.description || '(no description)'));
+      lines.push('- [ ] C' + counters.condition + '. ' + verifyLine(item.condition, entriesById[item.routeId], new Map()));
     }
     lines.push('');
   }
-
-  const techniqueSummary = Object.keys(techniqueCounts)
-    .sort()
-    .map(function (technique) {
-      return techniqueCounts[technique] + ' ' + technique;
-    })
-    .join(', ');
 
   let openQuestions = 0;
   for (const analysis of Object.values(analyses)) {
@@ -521,23 +653,61 @@ function renderTestConditions(labels, data, registry) {
     }
   }
 
+  // The stage's own report, printed before the review: what it produced and what is worth a look,
+  // counted from the file rather than recalled.
+  let written = 0;
+  let regressionOnly = 0;
+  let notTested = 0;
+  let researched = 0;
+  const skipped = [];
+  let candidateDefects = 0;
+  for (const list of byFeature.values()) {
+    for (const item of list) {
+      if (item.condition.origin !== 'generated') written += 1;
+      if (REGRESSION_ORACLES.indexOf(item.condition.oracle) !== -1) regressionOnly += 1;
+    }
+  }
+  for (const entry of entries) notTested += Array.isArray(entry.excluded) ? entry.excluded.length : 0;
+  for (const analysis of Object.values(analyses)) {
+    if (!analysis) continue;
+    const research = analysis.research;
+    if (research && research.status === 'skipped') skipped.push(research.reason || 'no reason given');
+    else if (research) researched += 1;
+    for (const field of Array.isArray(analysis.fields) ? analysis.fields : []) {
+      for (const constraint of Array.isArray(field.constraints) ? field.constraints : []) {
+        if (constraint && constraint.enforcement === 'not-enforced') candidateDefects += 1;
+      }
+    }
+  }
+  const report = [
+    'Stage report - test conditions',
+    '- ' + conditionCount + ' condition(s) for ' + featureIds.length + ' feature(s) on ' + entries.length + ' page(s): P1 ' + tierCounts.P1 + ', P2 ' + tierCounts.P2 + ', P3 ' + tierCounts.P3,
+    '- ' + written + ' written from what each feature is for, ' + (conditionCount - written) + ' built by the generator (combinations, limits, malformed values)',
+    '- ' + regressionOnly + ' only guard against a change: their expected result was read off the page as it is today',
+    '- Questions for you: ' + openQuestions,
+    '- Fields not tested, with the reason on their page: ' + notTested,
+    '- Research: ' + researched + ' feature(s) researched' + (skipped.length > 0 ? ', ' + skipped.length + ' skipped (' + Array.from(new Set(skipped)).join('; ') + ')' : ''),
+    '- Candidate defects - a rule the field should obey that the page does not enforce: ' + candidateDefects,
+  ];
+  if (unsatisfiedTotal > 0) report.push('- Value pairs the page rules out, so no test combines them: ' + unsatisfiedTotal);
+  if (cutItems.length > 0) report.push('- Cut by you: ' + cutItems.length);
+
   return {
     entryCount: featureIds.length,
     markdown: lines.join('\\n').trimEnd(),
+    report: report.join('\\n'),
     summary:
       conditionCount +
       ' condition(s) across ' +
       featureIds.length +
       ' feature(s) and ' +
       entries.length +
-      ' route(s) - P1: ' +
+      ' page(s) - P1: ' +
       tierCounts.P1 +
       ', P2: ' +
       tierCounts.P2 +
       ', P3: ' +
       tierCounts.P3 +
-      (techniqueSummary ? ' (' + techniqueSummary + ')' : '') +
-      (unsatisfiedTotal > 0 ? ', ' + unsatisfiedTotal + ' uncoverable parameter pair(s)' : '') +
       (openQuestions > 0 ? ', ' + openQuestions + ' question(s) for you' : '') +
       (cutItems.length > 0 ? ', ' + cutItems.length + ' cut by you' : ''),
   };
@@ -780,8 +950,9 @@ function renderFeatureMap(labels, data, registry) {
       claimed.add(routeId);
     }
   }
+  // A page that no longer resolves, or that a person left out, is meant to belong to no feature.
   const unclaimed = Array.from(labels.keys()).filter(function (routeId) {
-    return !claimed.has(routeId);
+    return !claimed.has(routeId) && !labels.get(routeId).removed;
   });
   if (unclaimed.length > 0) {
     lines.push('**Pages no feature claims**');
@@ -911,9 +1082,19 @@ function renderFeatureMap(labels, data, registry) {
       return sum + count;
     }, 0);
 
+  const report = [
+    'Stage report - feature map',
+    '- ' + features.length + ' feature(s) over ' + intents.length + ' page(s)' + (tierSummary ? '; criticality ' + tierSummary : ''),
+    '- ' + entities.length + ' thing(s) the application works with, ' + unreviewedRelations + ' link(s) between them to confirm',
+    '- Pages no feature claims: ' + unclaimed.length,
+    '- Records disagree about: ' + conflictCount(conflictsByRoute) + ' - each is shown where it applies',
+  ];
+  if (routesSharingReasoning > 0) report.push('- Pages sharing one reasoning sentence with another: ' + routesSharingReasoning);
+
   return {
     entryCount: features.length + entities.length + intents.length,
     markdown: lines.join('\\n').trimEnd(),
+    report: report.join('\\n'),
     summary:
       features.length +
       ' feature(s) over ' +
@@ -954,19 +1135,34 @@ function renderSiteMap(labels, data, registry) {
     return !entry[1] || entry[1].status !== 'removed';
   });
 
+  // One label per route, fixed before anything is written, so a disagreement and its route can name
+  // each other. The same page used to appear twice with nothing linking the two: a person settled
+  // the disagreement, and the route went on to the next stage untouched.
+  const routeLabel = new Map();
+  active.forEach(function (entry, i) {
+    if (entry[1] && entry[1].routeId) routeLabel.set(entry[1].routeId, 'R' + (i + 1));
+  });
+
   // The records about a page that do not agree - the server's status, the page's own markup, the
   // screenshot, the page's calls - come first: each is either a real problem with the page or a
   // wrong reading, and only a person who knows the application can say which.
   const conflicts = conflictsOf('site-map');
   const verdicts = conflicts.length > 0 ? recordedVerdicts('site-map') : new Map();
+  const disagreementLabel = new Map();
   if (conflicts.length > 0) {
     lines.push('**The records disagree about these pages (' + conflicts.length + ')**');
     lines.push('');
-    lines.push('Write what is true after Verdict: works, or broken.');
+    lines.push(
+      'Write what is true after Verdict: works, or broken. A verdict says what the page is; to stop ' +
+        'testing a page, delete its route below.',
+    );
     lines.push('');
     conflicts.forEach(function (conflict, i) {
-      registry.add('D' + (i + 1), { type: 'disagreement', id: conflict.id, routeId: conflict.subject.routeId, path: conflict.subject.path });
-      lines.push('- D' + (i + 1) + '. \`' + conflict.subject.path + '\`');
+      const label = 'D' + (i + 1);
+      disagreementLabel.set(conflict.subject.routeId, label);
+      registry.add(label, { type: 'disagreement', id: conflict.id, routeId: conflict.subject.routeId, path: conflict.subject.path });
+      const own = routeLabel.get(conflict.subject.routeId);
+      lines.push('- ' + label + '. \`' + conflict.subject.path + '\`' + (own ? ' - route ' + own + ' below' : ''));
       for (const reading of conflict.readings) {
         lines.push('  ' + sensorLabel(reading.sensor) + ': ' + reading.detail + ' (' + reading.says + ')');
       }
@@ -982,7 +1178,11 @@ function renderSiteMap(labels, data, registry) {
     const route = entry[1] || {};
     const status = route.httpStatus ? ' [' + route.httpStatus + ']' : '';
     registry.add('R' + (i + 1), { type: 'route', routeId: route.routeId, path: routePath });
-    lines.push('R' + (i + 1) + '. \`' + routePath + '\`' + status + (route.title ? ' - ' + route.title : ''));
+    lines.push(
+      '- ' + box(route.reviewed) + ' R' + (i + 1) + '. \`' + routePath + '\`' + status + (route.title ? ' - ' + route.title : ''),
+    );
+    const disputed = disagreementLabel.get(route.routeId);
+    if (disputed) lines.push('   The records disagree about this page - see ' + disputed + ' above.');
     if (route.screenshot) {
       // A relative link, so it opens straight from the artifact in any editor or file browser.
       lines.push('   Screenshot: [' + route.screenshot + '](../../' + route.screenshot + ')');
@@ -1002,8 +1202,37 @@ function renderSiteMap(labels, data, registry) {
     lines.push('');
   });
 
+  // Pages a person took out: from the site map while it still holds them, and from app-profile.json
+  // once a fresh crawl no longer does - the decision outlives the map either way.
+  const profile = loadJson(APP_PROFILE_PATH);
+  const leftOut = new Map();
+  for (const entry of routes) {
+    const route = entry[1];
+    if (route && route.status === 'removed' && route.removedBy === 'human') {
+      leftOut.set(entry[0], { path: entry[0], routeId: route.routeId, note: route.removedNote });
+    }
+  }
+  for (const entry of profile && Array.isArray(profile.leftOutRoutes) ? profile.leftOutRoutes : []) {
+    if (entry && typeof entry.path === 'string' && !leftOut.has(entry.path)) {
+      leftOut.set(entry.path, { path: entry.path, routeId: entry.routeId, note: entry.note });
+    }
+  }
+  if (leftOut.size > 0) {
+    lines.push('**Left out by you (' + leftOut.size + ')**');
+    lines.push('');
+    lines.push('No later stage tests these, and a new crawl will not map them again. Tick one to bring it back.');
+    lines.push('');
+    let n = 0;
+    for (const item of leftOut.values()) {
+      n += 1;
+      registry.add('L' + n, { type: 'left-out', routeId: item.routeId, path: item.path });
+      lines.push('- [ ] L' + n + '. \`' + item.path + '\`' + (item.note ? ' - ' + item.note : ''));
+    }
+    lines.push('');
+  }
+
   const removed = routes.filter(function (entry) {
-    return entry[1] && entry[1].status === 'removed';
+    return entry[1] && entry[1].status === 'removed' && entry[1].removedBy !== 'human';
   });
   if (removed.length > 0) {
     lines.push('**No longer resolving (' + removed.length + ')** - kept so the removal is visible');
@@ -1066,12 +1295,31 @@ function renderSiteMap(labels, data, registry) {
   lines.push('');
   lines.push('- ');
 
+  const approvedCount = active.filter(function (entry) {
+    return entry[1] && entry[1].reviewed === true;
+  }).length;
+  const refusedCount = worthReading.reduce(function (sum, group) {
+    return sum + group.count;
+  }, 0);
+  const report = [
+    'Stage report - site map',
+    '- Routes found: ' + active.length + ' (' + approvedCount + ' approved)' + (leftOut.size > 0 ? '; left out by you: ' + leftOut.size : ''),
+    '- Records disagree about: ' + conflicts.length + ' page(s) - settle them at the top of the file',
+    '- Refused links worth a look: ' + refusedCount,
+    '- The crawl: ' +
+      (data && data.coverage
+        ? 'stopped early - bounded by ' + data.coverage.boundedBy + ' after ' + data.coverage.pagesVisited + ' pages'
+        : 'reached everything it was allowed to'),
+  ];
   return {
     markdown: lines.join('\\n').trimEnd(),
     entryCount: active.length,
+    report: report.join('\\n'),
     summary:
       active.length +
       ' route(s) found' +
+      (approvedCount > 0 ? ' (' + approvedCount + ' approved)' : '') +
+      (leftOut.size > 0 ? ', ' + leftOut.size + ' left out by you' : '') +
       (worthReading.length > 0
         ? ', ' +
           worthReading.reduce(function (sum, group) {
@@ -1154,8 +1402,30 @@ function relative(filePath) {
 // The file a person edits, and beside it the rendering exactly as written, the hash of the JSON it
 // was rendered from, and what each label stood for - everything apply-review.mjs compares an edited
 // file against.
-function writeEditable(kind, config, rendered, registry) {
+// A file the person edited is redrawn only once apply-review.mjs has read those edits: it marks the
+// exact text it read as readBack. Redrawing earlier erases their approvals, verdicts and corrections
+// without anything having applied them - live-observed as a verdict and a deleted route vanishing
+// between one stage and the next. --discard-edits redraws anyway and keeps their file beside it.
+function unreadEdits(kind, target, basePath) {
+  if (!fs.existsSync(target)) return false;
+  const previous = loadJson(basePath);
+  if (!previous || typeof previous.text !== 'string') return false;
+  const current = tidyText(fs.readFileSync(target, 'utf8'));
+  if (current === tidyText(previous.text)) return false;
+  return previous.readBack !== sha256(current);
+}
+
+function writeEditable(kind, config, rendered, registry, discardEdits) {
   const sourceHash = sha256(fs.readFileSync(config.source, 'utf8')).slice(0, 16);
+  const target = path.join(REVIEW_DIR, kind + '-review.md');
+  const baseDir = path.join(REVIEW_DIR, '.base');
+  const basePath = path.join(baseDir, kind + '-review.json');
+  let keptEdits = null;
+  if (unreadEdits(kind, target, basePath)) {
+    if (!discardEdits) return { refused: true, filePath: relative(target) };
+    keptEdits = path.join(REVIEW_DIR, kind + '-review.unapplied.md');
+    fs.copyFileSync(target, keptEdits);
+  }
   const head = [
     '<!-- review of ' + relative(config.source) + ' @ ' + sourceHash + ' - leave this line as it is -->',
     '# Review: ' + kind,
@@ -1164,9 +1434,9 @@ function writeEditable(kind, config, rendered, registry) {
     '',
   ].concat(EDIT_HELP[kind]);
   if (registry.labels.ALL) head.push('', '- [ ] ALL. Approve every entry I did not change');
-  const text = head.concat(['', rendered.markdown, '']).join('\\n');
-  const target = path.join(REVIEW_DIR, kind + '-review.md');
-  const baseDir = path.join(REVIEW_DIR, '.base');
+  const text = head
+    .concat([''], pendingSection(kind), [rendered.markdown, ''], notesSection(kind), [''])
+    .join('\\n');
   fs.mkdirSync(baseDir, { recursive: true });
   fs.writeFileSync(
     path.join(baseDir, kind + '-review.json'),
@@ -1186,7 +1456,7 @@ function writeEditable(kind, config, rendered, registry) {
     'utf8',
   );
   fs.writeFileSync(target, text, 'utf8');
-  return relative(target);
+  return { filePath: relative(target), keptEdits: keptEdits ? relative(keptEdits) : null };
 }
 
 function main() {
@@ -1209,14 +1479,37 @@ function main() {
 
   const labels = buildRouteLabels(loadJson(SITE_MAP_PATH));
   const registry = newRegistry();
-  if (kind === 'feature-map' || kind === 'test-conditions') registry.add('ALL', { type: 'all' });
+  if (config.editable) registry.add('ALL', { type: 'all' });
   const rendered = config.render(labels, data, registry);
   const useFile = rendered.entryCount > threshold;
 
   let filePath = null;
   let journal = null;
+  let keptEdits = null;
   if (config.editable) {
-    filePath = writeEditable(kind, config, rendered, registry);
+    const written = writeEditable(kind, config, rendered, registry, process.argv.slice(2).indexOf('--discard-edits') !== -1);
+    if (written.refused) {
+      process.stdout.write(
+        JSON.stringify(
+          {
+            kind,
+            status: 'EDITS_UNREAD',
+            filePath: written.filePath,
+            next:
+              'The person edited ' +
+              written.filePath +
+              ' and nothing has read it back yet - redrawing it now would erase their edits. Run node scripts/apply-review.mjs --kind=' +
+              kind +
+              ' first, and act on what it returns.',
+          },
+          null,
+          2,
+        ) + '\\n',
+      );
+      process.exit(1);
+    }
+    filePath = written.filePath;
+    keptEdits = written.keptEdits;
     // Every rendering brings the disagreement journal up to date, so it reflects what the person was
     // actually shown. It never stops the rendering.
     if (config.journal) journal = syncJournal(kind);
@@ -1236,8 +1529,10 @@ function main() {
     filePath,
     editable: config.editable,
     summary: rendered.summary,
+    report: rendered.report || null,
     markdown: useFile ? '' : rendered.markdown,
   };
+  if (keptEdits) output.keptEdits = keptEdits;
   if (journal && journal.warning) output.warning = journal.warning;
   process.stdout.write(JSON.stringify(output, null, 2) + '\\n');
 }
