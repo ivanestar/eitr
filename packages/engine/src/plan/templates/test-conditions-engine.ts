@@ -114,18 +114,33 @@ function loadJson(filePath, label) {
 ${PII_MASK_SOURCE}
 
 // Excerpts and option labels are read off the page, so the whole rule applies to them. Sample values
-// are test data the extraction wrote itself, and an email field needs an email address among them:
-// masking one would leave its valid partition with nothing to type. Digit shapes are still masked
-// there, in case a real account or card number was copied instead of made up.
-function redactEntry(entry) {
+// are test data the extraction wrote itself, and masking one leaves its partition with nothing to
+// type. So an email address stays, and so does a phone or card number reserved for testing; a plain
+// number in a number field and a date in a date field stay too, where the analysis says the field
+// holds a quantity, an amount, a date or a setting. Every other digit shape is still masked, in case
+// a real account or card number was copied instead of made up.
+const PLAIN_NUMBER = /^-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][-+]?\\d+)?$/;
+const PLAIN_DATE = /^\\d{4}-\\d{2}(?:-\\d{2})?(?:[T ]\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})?)?$|^\\d{2}:\\d{2}(?::\\d{2})?$/;
+const MEASURING_ROLES = ['quantity', 'money', 'date-time', 'setting', 'search-filter', 'choice'];
+
+function redactSample(param, role, value) {
+  if (typeof value !== 'string') return value;
+  const text = value.trim();
+  const plain = (param.kind === 'number' && PLAIN_NUMBER.test(text)) || (param.kind === 'date' && PLAIN_DATE.test(text));
+  if (plain && MEASURING_ROLES.indexOf(role) !== -1) return value;
+  return maskPii(value, { keepEmails: true, keepTestData: true });
+}
+
+function redactEntry(entry, fieldRoles) {
   for (const param of entry.parameters || []) {
     for (const ev of param.evidence || []) {
       if (ev && typeof ev.excerpt === 'string') ev.excerpt = maskPii(ev.excerpt);
     }
+    const role = fieldRoles && param.control ? fieldRoles[param.control] : undefined;
     for (const partition of param.partitions || []) {
       if (Array.isArray(partition.sampleValues)) {
         partition.sampleValues = partition.sampleValues.map(function (value) {
-          return maskPii(value, { keepEmails: true });
+          return redactSample(param, role, value);
         });
       }
     }
@@ -912,8 +927,8 @@ function buildChecklistConditions(routeId, parameters, criticalityTier) {
   return conditions;
 }
 
-function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle) {
-  redactEntry(entry);
+function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle, fieldRoles) {
+  redactEntry(entry, fieldRoles);
   const currentHash = hashParams(entry, lifecycleBundle);
   if (entry.conditions && entry.conditions.length > 0 && entry.sourceParamsHash === currentHash) {
     return;
@@ -1285,8 +1300,18 @@ function generate() {
   }
   const criticalityByRoute = loadCriticalityMap();
   const lifecyclesByRoute = loadFeatureLifecycles();
+  // What each field holds, by the feature analysis: it decides whether a long number in a sample is
+  // the value under test or data that must not be stored.
+  const rolesByRoute = {};
+  for (const analysis of Object.values(data.features || {})) {
+    for (const field of analysis && Array.isArray(analysis.fields) ? analysis.fields : []) {
+      if (!field || typeof field.routeId !== 'string' || typeof field.control !== 'string') continue;
+      if (!rolesByRoute[field.routeId]) rolesByRoute[field.routeId] = {};
+      rolesByRoute[field.routeId][field.control] = field.role;
+    }
+  }
   for (const [routeId, entry] of Object.entries(data.routes)) {
-    generateForRoute(routeId, entry, criticalityByRoute[routeId], lifecyclesByRoute[routeId]);
+    generateForRoute(routeId, entry, criticalityByRoute[routeId], lifecyclesByRoute[routeId], rolesByRoute[routeId]);
   }
   annotateAndRank(data, loadRankingContext());
   fs.writeFileSync(REPORT_PATH, JSON.stringify(data, null, 2) + '\\n', 'utf8');

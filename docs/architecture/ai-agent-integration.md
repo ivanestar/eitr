@@ -249,7 +249,13 @@ on the route the file names in `frameRouteId`.
 The same mechanical shape gate pattern applies (`scripts/validate-test-conditions.mjs`), plus a
 deterministic redaction backstop - independent of what the LLM step already did - masking
 digit-run and majority-digit PII shapes in every evidence excerpt, sample value and option label
-before the artifact is ever written. The gate also holds the extraction to what the page states:
+before the artifact is ever written. Sample values are test data, so the backstop keeps what can
+never be anyone's (ADR 0018): phone numbers reserved for fiction, published test cards, and a
+plain number or date in a field the analysis says holds a quantity, an amount or a date. A limit
+the markup declares (`min`, `max`, `step`, the lengths) is recorded as written. The gate also
+refuses a parameter filled in from a template instead of read from its field: a name or a meaning
+built from the control id, a kind that does not match the field, free text on a control that only
+offers values, and an outcome true of every field. It also holds the extraction to what the page states:
 an invalid partition and a boundary each quote the rule they rest on (a placeholder is refused as
 one), a select or radio records its offered options so none of them can be marked invalid, and an
 invalid value such a control cannot produce carries an `executionLevel` (`dom` or `api`) that

@@ -198,6 +198,45 @@ describe('scripts/page-inventory.mjs record', () => {
     }
   });
 
+  // A limit the markup declares is what the test conditions check their boundaries against: masked,
+  // max="1000000" is a limit nobody can test. A pattern is text like any other.
+  it('records a number or date in a limit exactly as written, and masks a pattern like any text', () => {
+    const dir = setupProject();
+    try {
+      const observation = guidObservation();
+      observation.controls[4].constraints = {
+        min: '100000',
+        max: '1000000',
+        step: '0.5',
+        maxlength: '1000000',
+        pattern: 'ACC-1234567',
+      };
+      observation.controls.push({
+        landmark: 1,
+        role: 'textbox',
+        name: 'Start date',
+        tag: 'input',
+        type: 'date',
+        constraints: { min: '2024-01-01', max: '2026-12-31T23:59' },
+      });
+      const { output } = record(dir, 'route-guid', observation);
+      const controls = readJson(join(dir, output.inventory)).controls;
+      expect(controls[4].constraints).toEqual({
+        min: '100000',
+        max: '1000000',
+        step: '0.5',
+        maxlength: '1000000',
+        pattern: 'ACC-[REDACTED]',
+      });
+      expect(controls.find((c: { name: string }) => c.name === 'Start date').constraints).toEqual({
+        min: '2024-01-01',
+        max: '2026-12-31T23:59',
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // The crawl budget stops a template after three pages that hash alike - how a pagination chain is
   // caught. Page two of a listing names different items than page one, so names must stay out.
   it('hashes structure only: renamed items and changed digits keep the hash, a new control changes it', () => {

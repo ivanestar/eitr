@@ -946,6 +946,134 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
       ).toBe(true);
     });
 
+    // Live-observed: a run filled 248 of 268 parameters from one template - "param_c50_bar_width_2",
+    // a slider recorded as text holding "Sample Test Data", "accepts entered string" - and all of it
+    // passed this gate.
+    it('fails a parameter filled in from a template rather than from its field', () => {
+      const inventory = checkoutInventory({
+        controls: checkoutInventory().controls.concat([
+          {
+            id: 'c7',
+            region: 'main',
+            role: 'slider',
+            name: '',
+            hint: 'Bar Width: 2',
+            tag: 'input',
+            type: 'range',
+            constraints: { min: '1', max: '5', step: '0.5' },
+          },
+        ]),
+      });
+      const report = accounted();
+      report.routes['route-checkout'].parameters.push({
+        name: 'param_c7_bar_width_2',
+        kind: 'text',
+        control: 'c7',
+        partitions: [
+          {
+            id: 'p_c7_txt',
+            kind: 'valid',
+            sampleValues: ['Sample Test Data'],
+            expectedOutcome: 'Field Bar Width: 2 accepts entered string',
+          },
+        ],
+        boundaries: [],
+        evidence: [{ signal: 'form-label', excerpt: 'Bar Width: 2' }],
+      });
+      const errors = validateWith(report, inventory).errors;
+      expect(errors.some((e) => e.includes('is built from the control id c7'))).toBe(true);
+      expect(errors.some((e) => e.includes('.kind is text, but c7 slider'))).toBe(true);
+      expect(
+        errors.some((e) =>
+          e.includes('sample "Sample Test Data" cannot be the value of a number field'),
+        ),
+      ).toBe(true);
+      expect(errors.some((e) => e.includes('says "accepts entered string"'))).toBe(true);
+
+      // The same field, read: named after what it holds, a number within its range.
+      const read = accounted();
+      read.routes['route-checkout'].parameters.push({
+        name: 'bar width',
+        kind: 'number',
+        control: 'c7',
+        partitions: [
+          {
+            id: 'default',
+            kind: 'valid',
+            sampleValues: ['2'],
+            expectedOutcome: 'the bars of the barcode preview are 2 units wide',
+          },
+        ],
+        boundaries: [],
+        evidence: [{ signal: 'form-label', excerpt: 'Bar Width: 2' }],
+      });
+      expect(validateWith(read, inventory).errors).toEqual([]);
+
+      // A slider stops at the ends of its range, so a value past them is set by script or not at all.
+      const past = structuredClone(read);
+      past.routes['route-checkout'].parameters[3].partitions.push({
+        id: 'too-wide',
+        kind: 'invalid',
+        sampleValues: ['6'],
+        expectedOutcome: 'the slider stays at 5',
+        rule: { signal: 'html5-constraint', excerpt: 'max=5' },
+      });
+      expect(
+        validateWith(past, inventory).errors.some((e) =>
+          e.includes('outside the range of a slider'),
+        ),
+      ).toBe(true);
+      past.routes['route-checkout'].parameters[3].partitions[1].executionLevel = 'dom';
+      expect(validateWith(past, inventory).errors).toEqual([]);
+    });
+
+    it('fails a field meaning built from its control id, and free text on a control that offers values', () => {
+      const report = accounted() as Report & { features?: Record<string, any> };
+      report.features = {
+        'feature-checkout': {
+          featureId: 'feature-checkout',
+          purpose: 'Takes an order: the email to confirm it to and how many items',
+          fitsApplication: 'The shop exists to sell, and this is where a sale is completed',
+          archetype: 'checkout',
+          confidence: 'high',
+          anchors: [{ kind: 'feature', ref: 'feature-checkout' }],
+          fields: [
+            {
+              routeId: 'route-checkout',
+              control: 'c3',
+              meaning: 'Input control c3 representing Gift wrap on Checkout',
+              role: 'free-text',
+              confidence: 'medium',
+              constraints: [],
+            },
+          ],
+          dependencies: [],
+          questions: [],
+          research: {
+            status: 'skipped',
+            archetype: 'checkout',
+            reason: 'no web access in this test',
+          },
+          analyzedAt: '2026-09-03T11:00:00.000Z',
+        },
+      };
+      const errors = validateWith(report).errors;
+      expect(errors.some((e) => e.includes('.meaning names the control id c3'))).toBe(true);
+      expect(
+        errors.some((e) => e.includes('.role is free-text, but c3 checkbox "Gift wrap"')),
+      ).toBe(true);
+    });
+
+    it('fails a sample the personal-data masking hid, since no test can type it', () => {
+      const report = accounted();
+      report.routes['route-checkout'].parameters[0].partitions[0].sampleValues = ['[REDACTED]'];
+      expect(
+        validateWith(report).errors.some((e) =>
+          e.includes('hold a value the personal-data masking hid'),
+        ),
+      ).toBe(true);
+    });
+
     it('checks select samples against the options on the page, and the kind against the field', () => {
       const offered = accounted();
       offered.routes['route-checkout'].parameters[2].partitions.push({

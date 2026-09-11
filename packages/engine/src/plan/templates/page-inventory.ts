@@ -185,6 +185,21 @@ function redact(value, maxLength) {
   return maskPii(value.replace(/\\s+/g, ' ').trim()).slice(0, maxLength || 80);
 }
 
+// A limit is what the test conditions check their boundaries against, so a number or a date in
+// min, max, step, minlength or maxlength is kept exactly as the markup writes it: max="1000000"
+// masked is a limit nobody can test. A pattern or an accept list is text like any other.
+const LIMIT_ATTRIBUTES = ['min', 'max', 'step', 'minlength', 'maxlength'];
+const MARKUP_NUMBER = /^-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][-+]?\\d+)?$/;
+const MARKUP_DATE = /^\\d{4}-\\d{2}(?:-\\d{2})?(?:T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?)?$|^\\d{4}-W\\d{2}$|^\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?$/;
+
+function constraintValue(key, value) {
+  const text = value.trim();
+  if (LIMIT_ATTRIBUTES.indexOf(key) !== -1 && (MARKUP_NUMBER.test(text) || MARKUP_DATE.test(text) || text === 'any')) {
+    return text.slice(0, 60);
+  }
+  return redact(text, 60);
+}
+
 function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
@@ -1367,7 +1382,7 @@ function cmdRecord(args) {
       const constraints = {};
       for (const key of CONSTRAINT_ATTRIBUTES) {
         if (!(key in raw.constraints)) continue;
-        constraints[key] = raw.constraints[key] === true ? true : redact(String(raw.constraints[key]), 60);
+        constraints[key] = raw.constraints[key] === true ? true : constraintValue(key, String(raw.constraints[key]));
       }
       if (Object.keys(constraints).length > 0) control.constraints = constraints;
     }

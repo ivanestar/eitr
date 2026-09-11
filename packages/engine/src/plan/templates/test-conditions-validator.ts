@@ -176,6 +176,8 @@ const PLACEHOLDER_PATTERNS = [
   /\\bhandled (?:correctly|properly|appropriately|gracefully)\\b/i,
   /\\b(?:works?|behaves?|functions?|responds?) (?:as expected|correctly|properly|appropriately)\\b/i,
   /\\bas expected\\b/i,
+  // "Field X accepts entered string": true of every field, so it names nothing a test could check.
+  /\\baccepts? (?:the |an? )?(?:entered|typed|given|input) (?:string|value|text|data|input)\\b/i,
 ];
 
 // A placeholder shows an example of what to type, never a limit: "e.g. 20" invites 20, it does not
@@ -283,8 +285,30 @@ function expectedKind(control) {
   if (control.tag === 'select') return 'select';
   if (control.type === 'checkbox' || control.role === 'checkbox') return 'checkbox';
   if (control.type === 'radio' || control.role === 'radio') return 'radio';
-  if (control.type === 'number') return 'number';
+  if (control.type === 'number' || control.type === 'range' || control.role === 'spinbutton' || control.role === 'slider') {
+    return 'number';
+  }
+  if (control.type === 'email') return 'email';
+  if (control.type === 'password') return 'password';
+  if (control.type === 'date') return 'date';
   return null;
+}
+
+// A field a person types free text into. Anything else - a box, an option, a slider, a date - holds
+// one of the values it offers, so it can never be free text.
+function takesFreeText(control) {
+  if (control.tag === 'select') return false;
+  if (control.tag === 'textarea' || control.role === 'textbox' || control.role === 'searchbox') return true;
+  if (control.tag !== 'input') return control.role === 'combobox';
+  return ['', 'text', 'search', 'email', 'url', 'tel', 'password'].indexOf(control.type || '') !== -1;
+}
+
+// An inventory id ("c43") inside a name or a meaning: the words were built from the control's place
+// in one recording, not from what the field is for. Live-observed across a whole run: every parameter
+// named "param_c43_enter_data_for_barco" and every meaning "Input control c50 representing ...".
+function citesControlId(text, controlId) {
+  if (typeof text !== 'string' || typeof controlId !== 'string' || !/^c\\d+$/.test(controlId)) return false;
+  return new RegExp('(?:^|[^a-z0-9])' + controlId + '(?:[^0-9]|$)', 'i').test(text);
 }
 
 // An html5-constraint rule has to be an attribute the crawl actually saw on this field. Live-observed:
@@ -404,6 +428,16 @@ function isParameter(value, label, context, errors) {
         label + '.kind is ' + value.kind + ', but ' + describeControl(control) + ' is a ' + kind + ' field on the page.',
       );
     }
+    if (citesControlId(value.name, control.id)) {
+      errors.push(
+        label +
+          '.name "' +
+          value.name +
+          '" is built from the control id ' +
+          control.id +
+          ' - name the parameter after what the field holds, the way the page or a person would say it.',
+      );
+    }
   }
 
   // What the page offers, read off the live page when there is an inventory - it wins over anything
@@ -466,17 +500,30 @@ function isParameter(value, label, context, errors) {
         });
       if (!samplesOk) {
         errors.push(pLabel + '.sampleValues must be an array of strings.');
-      } else if (control && control.type === 'number') {
-        p.sampleValues.forEach(function (sample) {
-          if (sample !== '' && !VALID_FLOAT.test(sample.trim())) {
-            errors.push(
-              pLabel +
-                ' sample "' +
-                sample +
-                '" cannot be the value of a number field - the browser replaces anything that is not a number with an empty value. Use "" for an empty entry, or a number.',
-            );
-          }
-        });
+      } else {
+        if (control && expectedKind(control) === 'number') {
+          p.sampleValues.forEach(function (sample) {
+            if (sample !== '' && !VALID_FLOAT.test(sample.trim())) {
+              errors.push(
+                pLabel +
+                  ' sample "' +
+                  sample +
+                  '" cannot be the value of a number field - the browser does not keep anything that is not a number in a number or range field. Use "" for an empty entry, or a number.',
+              );
+            }
+          });
+        }
+        // Masked by the personal-data rule, so a test would type "[REDACTED]".
+        if (
+          p.sampleValues.some(function (sample) {
+            return sample.indexOf('[REDACTED]') !== -1;
+          })
+        ) {
+          errors.push(
+            pLabel +
+              '.sampleValues hold a value the personal-data masking hid, so no test can type it. Make one up instead: a phone number reserved for fiction (+1 202-555-0143, +44 7700 900123), a test card (4242 4242 4242 4242), an address at example.com, a shorter number in free text. A long number that is itself the value under test - an amount, a timestamp - is kept when its parameter is of kind number and its field\\'s role says quantity, money, date-time or setting.',
+          );
+        }
       }
       checkOutcome(p.expectedOutcome, pLabel + '.expectedOutcome', errors);
 
@@ -499,6 +546,12 @@ function isParameter(value, label, context, errors) {
               ' is an invalid value for a ' +
               value.kind +
               ', which the control itself can never produce - set executionLevel to dom (set by script, past the control) or api.',
+          );
+        } else if (control && (control.type === 'range' || control.role === 'slider') && !offLevel) {
+          // A slider only ever holds a value inside its range: dragged or typed, it stops at the ends.
+          errors.push(
+            pLabel +
+              ' is a value outside the range of a slider, which no person can set - set executionLevel to dom (set by script: the browser clamps it, which is what to check) or api.',
           );
         }
         if (p.executionLevel === 'api' && !context.routesWithObservedCalls.has(context.routeId)) {
@@ -1185,7 +1238,18 @@ function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
         errors.push(where + '.control "' + field.control + '" is not in the inventory of ' + field.routeId + '.');
       }
       checkText(field.meaning, where + '.meaning', errors, 300);
+      if (hasControl && citesControlId(field.meaning, field.control)) {
+        errors.push(
+          where + '.meaning names the control id ' + field.control + ' - say what the field means to the person using it: what they put in and what it changes.',
+        );
+      }
       if (!FIELD_ROLE_VALUES.has(field.role)) errors.push(where + '.role must be one of ' + Array.from(FIELD_ROLE_VALUES).join('|') + '.');
+      const fieldControl = hasControl && ctx.controlsByRoute.has(field.routeId) ? ctx.controlsByRoute.get(field.routeId).get(field.control) : null;
+      if (fieldControl && field.role === 'free-text' && !takesFreeText(fieldControl)) {
+        errors.push(
+          where + '.role is free-text, but ' + describeControl(fieldControl) + ' only takes the values it offers - say what it holds: a quantity, a choice, a toggle, a setting.',
+        );
+      }
       if ('unit' in field && typeof field.unit !== 'string') errors.push(where + '.unit, when present, must be a string.');
       checkLevel(field.confidence, where + '.confidence', errors);
       if (!Array.isArray(field.constraints)) {
