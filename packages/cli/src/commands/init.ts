@@ -8,15 +8,15 @@ import type { InitAnswers, QuestionId } from '../questionnaire/schema.js';
 const INIT_USAGE = `Usage: eitr init [options]
 
 Runs the interactive questionnaire (start URL, output directory, optional stack hints) and
-writes .scaffold/init.json вЂ” the input for generation. Never asks for login or credentials.
+writes .scaffold/init.json - the input for generation. Never asks for login or credentials.
 (Use "eitr new" to also generate the framework in one go.)
 
 Options:
   --cwd <dir>          Project root to write .scaffold/init.json into (default: cwd)
   --start-url <url>    Start-page URL (required in non-interactive mode)
   --output-dir <dir>   Output directory (default: '.')
-  --framework <id>     Framework hint: react|vue|angular|svelte|other
-  --ui-library <id>    UI library hint: mui|antd|radix|chakra|tailwind|none|other
+  --framework <id>     Framework hint: react|vue|angular|svelte|unknown (unknown: let recon decide)
+  --ui-library <id>    UI library hint: mui|antd|radix|chakra|tailwind|unknown (unknown: let recon decide)
   --yes                Non-interactive: take flags as-is, ask nothing
   --language <id>      Programming language: typescript
   --automation-tool <id> E2E automation tool: playwright

@@ -505,6 +505,27 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
     }
   });
 
+  // A page the person left out belongs to no feature on purpose - it is listed in the site map
+  // review under "Left out by you", not here as something missed.
+  it('does not count a left-out page among the pages no feature claims', () => {
+    const dir = setupProject();
+    try {
+      const sites = siteMapWith(3) as Record<string, any>;
+      Object.assign(sites.routes['/route-02'], { status: 'removed', removedBy: 'human' });
+      writeJson(dir, 'artifacts/site-map/site-map.json', sites);
+      const map = featureMapWith(3) as Record<string, any>;
+      delete map.features['f-2'];
+      delete map.routes['id-2'];
+      writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+
+      const { output } = run(dir, '--kind=feature-map');
+      expect(output.markdown).not.toContain('**Pages no feature claims**');
+      expect(output.markdown).not.toContain('/route-02');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('flags a reasoning sentence reused across pages rather than rejecting it', () => {
     const dir = setupProject();
     try {

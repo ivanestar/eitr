@@ -638,6 +638,19 @@ function deriveFeatures(routeIntents, siteMapRoutes) {
   for (const [routePath, route] of Object.entries(siteMapRoutes)) {
     if (route && typeof route.routeId === 'string') routeIdToPath[route.routeId] = routePath;
   }
+  // Walked in path order, never in the order the records happen to be stored in: a first draft reads
+  // the per-page pass and a re-derivation reads the feature map, and a feature whose pages came out
+  // in a different order would lose its approval without a thing about it having changed.
+  const pathOf = function (routeId) {
+    return routeIdToPath[routeId] || routeId;
+  };
+  const byPath = function (a, b) {
+    return pathOf(a[0]) < pathOf(b[0]) ? -1 : pathOf(a[0]) > pathOf(b[0]) ? 1 : a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
+  };
+  const orderedIntents = Object.entries(routeIntents).sort(byPath);
+  const orderedRoutes = Object.entries(siteMapRoutes).sort(function (a, b) {
+    return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
+  });
 
   const features = {};
 
@@ -648,11 +661,11 @@ function deriveFeatures(routeIntents, siteMapRoutes) {
   // produces a coarser map rather than an empty one. Returning zero features would be the worst of
   // both: a stage that appears to have succeeded while having silently dropped every route.
   const labelledRouteIds = new Set();
-  for (const [routeId, entry] of Object.entries(routeIntents)) {
+  for (const [routeId, entry] of orderedIntents) {
     const value = entry ? entry.featureLabel : null;
     if (typeof value === 'string' && value.trim().length > 0) labelledRouteIds.add(routeId);
   }
-  for (const [routePath, route] of Object.entries(siteMapRoutes)) {
+  for (const [routePath, route] of orderedRoutes) {
     if (!route || typeof route.routeId !== 'string') continue;
     if (labelledRouteIds.has(route.routeId)) continue;
     const segment = routePath.split('/').filter(Boolean)[0];
@@ -666,7 +679,7 @@ function deriveFeatures(routeIntents, siteMapRoutes) {
     addEvidenceOnce(feature, evidence('route-path', routePath));
   }
 
-  for (const [routeId, entry] of Object.entries(routeIntents)) {
+  for (const [routeId, entry] of orderedIntents) {
     if (!entry) continue;
     const label = typeof entry.featureLabel === 'string' ? entry.featureLabel.trim() : '';
     if (label.length === 0) continue;
@@ -674,10 +687,7 @@ function deriveFeatures(routeIntents, siteMapRoutes) {
     if (!features[key]) features[key] = featureRecord(label);
     const feature = features[key];
     if (feature.memberRouteIds.indexOf(routeId) === -1) feature.memberRouteIds.push(routeId);
-    addEvidenceOnce(
-      feature,
-      evidence('route-convention', (routeIdToPath[routeId] || routeId) + ' -> "' + label + '"'),
-    );
+    addEvidenceOnce(feature, evidence('route-convention', pathOf(routeId) + ' -> "' + label + '"'));
 
     // Impact is the worst criticality among the routes inside the feature. Every route here is
     // drafted and reviewed in the SAME gateway as the feature that contains it, so waiting for a

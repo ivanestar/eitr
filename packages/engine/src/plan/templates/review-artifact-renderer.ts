@@ -89,6 +89,7 @@ function buildRouteLabels(siteMap) {
       label: title ? routePath + ' - ' + title : routePath,
       flags:
         entry.visualTriage && Array.isArray(entry.visualTriage.flags) ? entry.visualTriage.flags : [],
+      removed: entry.status === 'removed',
     });
   }
   return labels;
@@ -200,7 +201,7 @@ const EDIT_HELP = {
     'You can review this file right here: edit it, save it, then tell the assistant you are done.',
     '',
     '- Approve an entry by putting an x in its box: [x]. Tick ALL to approve every entry you did not change.',
-    '- Leave a page out of every later stage by deleting its lines (P). The features are regrouped without it.',
+    '- Leave a page out of every later stage by deleting its lines (P). The features are regrouped without it, and the site map review lists it under "Left out by you", where ticking it brings it back.',
     '- Correct anything by changing the text itself, or add a line under the entry saying what is wrong. The assistant applies it and re-checks whatever depends on it.',
     '- Write anything else the assistant should know under "Your notes".',
     '- Leave the labels (F1, P3, E2) as they are - they are how the assistant finds each entry.',
@@ -949,8 +950,9 @@ function renderFeatureMap(labels, data, registry) {
       claimed.add(routeId);
     }
   }
+  // A page that no longer resolves, or that a person left out, is meant to belong to no feature.
   const unclaimed = Array.from(labels.keys()).filter(function (routeId) {
-    return !claimed.has(routeId);
+    return !claimed.has(routeId) && !labels.get(routeId).removed;
   });
   if (unclaimed.length > 0) {
     lines.push('**Pages no feature claims**');

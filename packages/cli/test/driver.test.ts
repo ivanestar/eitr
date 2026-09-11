@@ -10,7 +10,7 @@ const noDetect = async () => ({});
 const textIds = (io: ReturnType<typeof createFakeIo>): string[] =>
   io.calls.filter((c) => c.type === 'text').map((c) => c.id);
 
-describe('runQuestionnaire вЂ” interactive', () => {
+describe('runQuestionnaire - interactive', () => {
   it('happy path collects and reduces every answer, asking in order', async () => {
     const fake = createFakeIo({
       text: { startUrl: ['https://app.example.com/login'] },
@@ -266,7 +266,7 @@ describe('runQuestionnaire вЂ” interactive', () => {
   });
 });
 
-describe('runQuestionnaire вЂ” non-interactive', () => {
+describe('runQuestionnaire - non-interactive', () => {
   it('takes valid flags with ZERO io calls', async () => {
     const fake = createFakeIo({});
     const result = await runQuestionnaire(fake.io, {
@@ -368,7 +368,7 @@ describe('runQuestionnaire вЂ” non-interactive', () => {
   });
 });
 
-describe('runQuestionnaire вЂ” language and automation tool interactive filtering', () => {
+describe('runQuestionnaire - language and automation tool interactive filtering', () => {
   it('offers only the runner this release generates', async () => {
     const fake = createFakeIo({
       text: { startUrl: ['https://app.com'] },

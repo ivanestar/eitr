@@ -32,6 +32,8 @@ export function renderReviewApply(): string {
  * ticked or cleared box, ALL, an answer, a deleted test-condition line (a cut), a ticked cut condition
  * (restored), a verdict on a disagreement, a deleted route or page (left out of every later stage), a
  * ticked left-out page (brought back), and the lines under "Your notes" (kept in app-profile.json).
+ * Leaving a page out redraws the feature map and takes the page's test conditions and test cases
+ * with it (followedLeftOut).
  * Everything else the person changed comes back in freeEdits, by the entry it belongs to, for the
  * assistant to apply as a correction; they wait in artifacts/review/.pending/<kind>.json until the
  * assistant confirms them with --done, and every rendering shows them until then.
@@ -61,6 +63,8 @@ const PENDING_DIR = path.join(REVIEW_DIR, '.pending');
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const APP_PROFILE_PATH = path.join(CWD, 'artifacts', 'analysis', 'app-profile.json');
+const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const TEST_CASES_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 const VALIDATORS = {
   'site-map': 'validate-site-map.mjs',
   'feature-map': 'validate-feature-map.mjs',
@@ -385,6 +389,72 @@ function bringBack(siteMap, profile, ref) {
   return true;
 }
 
+// What a left-out page leaves in the later stages goes with it: its test conditions, its fields in
+// the analysis of its feature, the analysis of a feature left with no page at all, and the test cases
+// that walk no page still in. A test case that walks one still in is unticked instead - only a
+// redraw can say what it becomes. None of it returns with the page; /define-test-conditions analyses
+// a page brought back again.
+function followLeftOut(routeIds, featureIds, outIds) {
+  const result = { routes: [], features: [], frame: null, testCasesDropped: [], testCasesUnticked: [] };
+  const conditionsDoc = readJsonFile(TEST_CONDITIONS_PATH);
+  if (conditionsDoc && conditionsDoc.routes && typeof conditionsDoc.routes === 'object') {
+    let changed = false;
+    for (const routeId of routeIds) {
+      if (!(routeId in conditionsDoc.routes)) continue;
+      delete conditionsDoc.routes[routeId];
+      result.routes.push(routeId);
+      changed = true;
+    }
+    const analyses = conditionsDoc.features && typeof conditionsDoc.features === 'object' ? conditionsDoc.features : {};
+    for (const featureId of featureIds) {
+      if (!(featureId in analyses)) continue;
+      delete analyses[featureId];
+      result.features.push(featureId);
+      changed = true;
+    }
+    for (const analysis of Object.values(analyses)) {
+      if (!analysis || !Array.isArray(analysis.fields)) continue;
+      const kept = analysis.fields.filter(function (field) {
+        return !(field && routeIds.has(field.routeId));
+      });
+      if (kept.length === analysis.fields.length) continue;
+      analysis.fields = kept;
+      changed = true;
+    }
+    if (routeIds.has(conditionsDoc.frameRouteId)) {
+      result.frame = conditionsDoc.frameRouteId;
+      delete conditionsDoc.frameRouteId;
+      changed = true;
+    }
+    if (changed) writeJsonFile(TEST_CONDITIONS_PATH, conditionsDoc);
+  }
+  const testCasesDoc = readJsonFile(TEST_CASES_PATH);
+  if (testCasesDoc && testCasesDoc.journeys && typeof testCasesDoc.journeys === 'object') {
+    let changed = false;
+    for (const [journeyId, journey] of Object.entries(testCasesDoc.journeys)) {
+      const walks = journey && Array.isArray(journey.routeIds) ? journey.routeIds : [];
+      const through = walks.some(function (routeId) {
+        return routeIds.has(routeId);
+      });
+      if (!through) continue;
+      const onlyOut = walks.every(function (routeId) {
+        return outIds.has(routeId);
+      });
+      if (onlyOut) {
+        delete testCasesDoc.journeys[journeyId];
+        result.testCasesDropped.push(journeyId);
+      } else {
+        journey.reviewed = false;
+        delete journey.reviewedBy;
+        result.testCasesUnticked.push(journeyId);
+      }
+      changed = true;
+    }
+    if (changed) writeJsonFile(TEST_CASES_PATH, testCasesDoc);
+  }
+  return result;
+}
+
 // ---------------------------------------------------------------------------------------------
 
 function findRecord(kind, data, ref) {
@@ -645,14 +715,24 @@ function main() {
   for (const [label, ref] of Object.entries(base.labels)) {
     if (ref.type === 'condition' && ref.cut && !userLabels.has(label) && baseLabels.has(label)) droppedLines.add(baseLabels.get(label).index);
   }
-  // A route or page takes several lines; leaving it out removes all of them.
+  // A route or page takes several lines; leaving it out removes its own block - the label line to the
+  // blank line that closes it. Lines past that blank line can still count it as their owner (a
+  // feature's own lines follow its last page) and are not the entry's to take with it: a live review
+  // deleted one page and had its feature's lines handed back as corrections to the page before it.
   const leftOutLabels = new Set(
     leftOut.map(function (item) {
       return item.label;
     }),
   );
-  for (let i = 0; i < baseOwners.length; i++) {
-    if (leftOutLabels.has(baseOwners[i])) droppedLines.add(i);
+  for (const item of leftOut) {
+    const at = baseLabels.get(item.label);
+    if (!at) continue;
+    droppedLines.add(at.index);
+    for (let i = at.index + 1; i < baseLines.length; i++) {
+      if (LABEL_LINE.test(baseLines[i]) || /^\\*\\*/.test(baseLines[i])) break;
+      droppedLines.add(i);
+      if (baseLines[i].trim() === '') break;
+    }
   }
   for (let i = 0; i < baseLines.length; i++) {
     if (missingBase && missingUser && i === missingBase.start) {
@@ -907,15 +987,101 @@ function main() {
   }
   if (kind !== 'site-map' && siteMapTouched && siteMapDoc) writeJsonFile(SITE_MAP_PATH, siteMapDoc);
 
+  const leftOutIds = new Set();
+  for (const item of leftOut) {
+    if (item.ref.routeId && applied.leftOut.indexOf(item.label) !== -1) leftOutIds.add(item.ref.routeId);
+  }
+  // A feature with no page left in the site map now that these are out. Matched by its pages rather
+  // than by its id going missing: a feature a person renamed also gets a new id from the derivation.
+  const emptiedFeatures = [];
+  const mapBefore = leftOutIds.size > 0 ? readJsonFile(FEATURE_MAP_PATH) : null;
+  const outIds = new Set();
+  for (const route of Object.values((siteMapDoc && siteMapDoc.routes) || {})) {
+    if (route && route.status === 'removed' && typeof route.routeId === 'string') outIds.add(route.routeId);
+  }
+  for (const [id, feature] of Object.entries((mapBefore && mapBefore.features) || {})) {
+    const members = feature && Array.isArray(feature.memberRouteIds) ? feature.memberRouteIds : [];
+    const emptied =
+      members.some(function (routeId) {
+        return leftOutIds.has(routeId);
+      }) &&
+      members.every(function (routeId) {
+        return outIds.has(routeId);
+      });
+    if (emptied) emptiedFeatures.push({ id: id, name: feature.name });
+  }
+
   // The feature map follows the site map: a page left out or brought back is regrouped at once, so
   // the next stage never reads a feature built on a page the person just removed.
   let featureMap = null;
+  const approvalWithdrawn = [];
+  let pagesWithoutIntent = 0;
   if (siteMapTouched && fs.existsSync(FEATURE_MAP_PATH) && fs.existsSync(path.join(CWD, 'scripts', 'derive-feature-map.mjs'))) {
+    // What was approved going in. A feature whose pages change is not the feature a person approved,
+    // so the derivation withdraws the approval - which the person has to hear, not discover.
+    const before = readJsonFile(FEATURE_MAP_PATH) || {};
     const derived = spawnSync('node', [path.join('scripts', 'derive-feature-map.mjs')], { cwd: CWD, encoding: 'utf8' });
     try {
-      featureMap = JSON.parse(derived.stdout).status;
+      const report = JSON.parse(derived.stdout);
+      featureMap = report.status;
+      pagesWithoutIntent = report.routesWithoutIntent || 0;
     } catch {
       featureMap = 'FAILED';
+    }
+    const after = readJsonFile(FEATURE_MAP_PATH) || {};
+    for (const [id, feature] of Object.entries(before.features || {})) {
+      if (!feature || feature.reviewed !== true) continue;
+      const now = (after.features || {})[id];
+      const emptied = emptiedFeatures.some(function (item) {
+        return item.id === id;
+      });
+      if (!emptied && (!now || now.reviewed !== true)) approvalWithdrawn.push('feature "' + feature.name + '"');
+    }
+    for (const [id, entity] of Object.entries(before.entities || {})) {
+      if (!entity || entity.reviewed !== true) continue;
+      const now = (after.entities || {})[id];
+      if (!now || now.reviewed !== true) approvalWithdrawn.push('entity "' + entity.name + '"');
+    }
+  }
+
+  const followed =
+    leftOutIds.size > 0
+      ? followLeftOut(
+          leftOutIds,
+          new Set(
+            emptiedFeatures.map(function (feature) {
+              return feature.id;
+            }),
+          ),
+          outIds,
+        )
+      : null;
+  const followedAny =
+    followed !== null &&
+    (followed.frame !== null || followed.routes.length + followed.features.length + followed.testCasesDropped.length + followed.testCasesUnticked.length > 0);
+  const pathOf = function (routeId) {
+    const found = siteMapDoc ? routeEntry(siteMapDoc, routeId) : null;
+    return found ? found.path : routeId;
+  };
+  // A page brought back that the test conditions no longer hold has to be analysed again.
+  const conditionsNow = broughtBack.length > 0 ? readJsonFile(TEST_CONDITIONS_PATH) : null;
+  const toAnalyse =
+    conditionsNow && conditionsNow.routes
+      ? broughtBack
+          .filter(function (item) {
+            return item.ref.routeId && needsCrawl.indexOf(item.ref.path) === -1 && !(item.ref.routeId in conditionsNow.routes);
+          })
+          .map(function (item) {
+            return item.ref.path;
+          })
+      : [];
+  // The other review files show what changed too. One holding edits nobody has read yet is left as
+  // it is - the renderer refuses to draw over them, and reading them back later reports it stale.
+  const redrawn = [];
+  if (siteMapTouched) {
+    for (const other of ['feature-map', 'test-conditions']) {
+      if (other === kind || !fs.existsSync(path.join(REVIEW_DIR, other + '-review.md'))) continue;
+      if (render(other)) redrawn.push(other);
     }
   }
 
@@ -943,11 +1109,56 @@ function main() {
   if (applied.leftOut.length > 0) {
     next.push(
       'Left out ' +
-        applied.leftOut.join(', ') +
-        ': marked removed in the site map and kept in app-profile.json leftOutRoutes, so no later stage tests it and a fresh crawl will not map it again.',
+        Array.from(leftOutIds).map(pathOf).join(', ') +
+        ': marked removed in the site map and kept in app-profile.json leftOutRoutes, so no later stage tests it and a fresh crawl will not map it again.' +
+        (featureMap && emptiedFeatures.length > 0
+          ? ' ' +
+            emptiedFeatures
+              .map(function (feature) {
+                return 'Feature "' + feature.name + '"';
+              })
+              .join(', ') +
+            ' had no other page, so the redrawn feature map no longer holds it.'
+          : ''),
     );
   }
+  if (followedAny) {
+    const gone = followed.routes.map(pathOf).map(function (routePath) {
+      return 'the test conditions of ' + routePath;
+    });
+    for (const id of followed.features) {
+      const feature = emptiedFeatures.find(function (item) {
+        return item.id === id;
+      });
+      gone.push('the analysis of feature "' + (feature ? feature.name : id) + '", which has no page left');
+    }
+    if (followed.testCasesDropped.length > 0) gone.push(followed.testCasesDropped.length + ' test case(s) that walk no page still in');
+    const said = [];
+    if (gone.length > 0) said.push('Dropped ' + gone.join(', ') + ', so no later stage tests them.');
+    if (followed.frame) said.push(pathOf(followed.frame) + ' carried the fields of the site frame: name another page in frameRouteId of test-conditions.json.');
+    if (followed.testCasesUnticked.length > 0) {
+      said.push('Unticked test case(s) ' + followed.testCasesUnticked.join(', ') + ', which walk other pages as well: run /design-test-cases so they are redrawn without the page left out.');
+    }
+    next.push(said.join(' '));
+  }
   if (needsCrawl.length > 0) next.push('Brought back ' + needsCrawl.join(', ') + ', which the site map no longer holds: run /map-site update to crawl it again.');
+  if (applied.broughtBack.length > needsCrawl.length && pagesWithoutIntent > 0) {
+    next.push(
+      'The feature map now has ' +
+        pagesWithoutIntent +
+        ' page(s) with no intent - a page loses its own when it is left out: run /map-features so the per-page pass covers them before anything is grouped.',
+    );
+  }
+  if (toAnalyse.length > 0) {
+    next.push('Brought back ' + toAnalyse.join(', ') + ', whose test conditions went when it was left out: run /define-test-conditions so it is analysed again.');
+  }
+  if (approvalWithdrawn.length > 0) {
+    next.push(
+      'Leaving a page out or bringing one back changed ' +
+        approvalWithdrawn.join(', ') +
+        ', so the approval on each no longer holds and the redrawn feature map shows it unticked: tell the person, and ask them to look again.',
+    );
+  }
   if (stillUnread.length > 0) {
     next.push(
       stillUnread
@@ -997,6 +1208,9 @@ function main() {
     next: next.join(' '),
   };
   if (featureMap) result.featureMap = featureMap;
+  if (approvalWithdrawn.length > 0) result.approvalWithdrawn = approvalWithdrawn;
+  if (followedAny) result.followedLeftOut = followed;
+  if (redrawn.length > 0) result.redrawn = redrawn;
   if (missing.length > 0) result.notFound = missing;
   if (journal && journal.warning) result.warning = journal.warning;
   print(result);

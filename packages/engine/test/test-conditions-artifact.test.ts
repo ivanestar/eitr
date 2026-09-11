@@ -373,6 +373,33 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
     }
   });
 
+  it('fails an entry for a page the person left out of every stage', () => {
+    const dir = setupProject();
+    try {
+      const siteMap = structuredClone(SITE_MAP) as {
+        routes: Record<string, Record<string, unknown>>;
+      };
+      Object.assign(siteMap.routes['/checkout'], {
+        status: 'removed',
+        removedBy: 'human',
+        removedAt: '2026-09-11T10:00:00.000Z',
+      });
+      writeFileSync(
+        join(dir, 'artifacts', 'site-map', 'site-map.json'),
+        JSON.stringify(siteMap, null, 2),
+        'utf8',
+      );
+      writeReport(dir, wellFormedParametersOnly());
+      const output = JSON.parse(run(dir, ['--stage=parameters']).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(output.errors).toContain(
+        'routes["route-checkout"] is a page the person left out of every stage - remove this entry.',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // AC5, case 2/2 - the "legitimately zero routes" regression Stage 1 already has.
   it('fails a dangling routeId even when site-map.json legitimately has zero routes', () => {
     const dir = setupProject();

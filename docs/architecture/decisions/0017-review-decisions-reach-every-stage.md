@@ -33,8 +33,12 @@ reads it, and never erased by redrawing the file.**
   of every later stage. `apply-review.mjs` marks the route `removed` with `removedBy: "human"` in the
   site map - every later stage already skips a route that is not active - and records the decision in
   `app-profile.json` `leftOutRoutes`, which outlives a fresh crawl: `crawl-budget.mjs` reads it when a
-  pass starts and refuses those pages. The feature map is re-derived at once. Ticking the page under
-  "Left out by you" brings it back.
+  pass starts and refuses those pages. The feature map is re-derived at once, and what the later
+  stages built on the page goes with it: its test conditions, its fields in its feature's analysis,
+  the analysis of a feature left with no page, and every test case that walks no page still in. A test
+  case that also walks a page still in is unticked, for `/design-test-cases` to redraw.
+  `compose-journeys.mjs` skips a removed page and `validate-test-conditions.mjs` refuses one, whatever
+  the files still hold. Ticking the page under "Left out by you" brings it back.
 - A verdict is read from its first words, in English or Russian, and the rest is kept as the person's
   note. One the script cannot read goes back to the assistant to ask about, and is recorded through
   `apply-review.mjs --verdict`, with the same checks as one read from the file.
@@ -69,3 +73,6 @@ convention, and refusing to overwrite unapplied edits is what `kubectl edit` doe
   it, keeps their file beside it, and exists for the person to choose, not the assistant.
 - A page left out stays out until someone ticks it back, on every later crawl. The review keeps
   listing it, so the decision stays visible rather than becoming a gap nobody remembers making.
+- Bringing a page back does not bring back what went with it: the per-page pass and the test
+  conditions analyse it again, and `apply-review.mjs` says so. Leaving a page out costs the test
+  cases that walked it, including ones a person had already drafted.

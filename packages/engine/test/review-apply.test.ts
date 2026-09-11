@@ -227,6 +227,67 @@ describe('scripts/apply-review.mjs - feature map', () => {
     }
   });
 
+  // From a live review: everything approved, then the last page of one feature deleted. The redrawn
+  // map no longer carries that feature's approval, which the person has to hear; and the lines
+  // after the page - the next feature - are not a correction.
+  it('names the approvals a left-out page withdrew, and reads nothing more into the deletion', () => {
+    const dir = setupProject();
+    try {
+      writeFileSync(
+        join(dir, 'scripts', 'derive-feature-map.mjs'),
+        renderFeatureMapEngine(),
+        'utf8',
+      );
+      const sites = siteMap() as Record<string, any>;
+      sites.routes['/terms'] = {
+        routeId: 'id-2',
+        title: 'Terms',
+        visualTriage: { state: 'ready', flags: [] },
+      };
+      const map = featureMap() as Record<string, any>;
+      map.routes['id-2'] = {
+        ...intent('id-2', 'low', 'Legal text only.', 'Terms'),
+        featureId: 'f2',
+      };
+      map.features.f2 = {
+        ...map.features.f1,
+        featureId: 'f2',
+        name: 'Legal',
+        memberRouteIds: ['id-2'],
+        entityIds: [],
+        impact: 'low',
+        impactSourceRouteId: 'id-2',
+      };
+      writeJson(dir, 'artifacts/site-map/site-map.json', sites);
+      writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+      node(dir, 'derive-feature-map.mjs', '--force');
+      const derived = readJson(dir, 'artifacts/analysis/feature-map.json');
+      for (const table of ['features', 'routes', 'entities']) {
+        for (const record of Object.values(derived[table] || {}) as Record<string, unknown>[]) {
+          record.reviewed = true;
+          record.reviewedBy = 'human';
+        }
+      }
+      writeJson(dir, 'artifacts/analysis/feature-map.json', derived);
+      node(dir, 'render-review-artifact.mjs', '--kind=feature-map');
+
+      const page = readView(dir).match(/ {3}- \[x\] (P\d+)\. \/orders\/list[\s\S]*?\n\n/)!;
+      editView(dir, (text) => text.replace(page[0], ''));
+      const result = node(dir, 'apply-review.mjs', '--kind=feature-map');
+      expect(result.applied.leftOut).toEqual([page[1]]);
+      expect(result.freeEdits).toEqual([]);
+      expect(result.approvalWithdrawn).toEqual(['feature "Ordering"']);
+      expect(result.next).toContain('the approval on each no longer holds');
+      const after = readJson(dir, 'artifacts/analysis/feature-map.json');
+      const legal = Object.values(after.features).find(
+        (f) => (f as { name: string }).name === 'Legal',
+      ) as { reviewed: boolean };
+      expect(legal.reviewed).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('approves everything untouched with ALL, and holds back an entry the person also corrected', () => {
     const dir = setupProject();
     try {
@@ -630,6 +691,85 @@ describe('scripts/apply-review.mjs - site map', () => {
       expect(route.status).toBe('active');
       expect(route.removedBy).toBeUndefined();
       expect(readJson(dir, 'artifacts/analysis/app-profile.json').leftOutRoutes).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A page left out after the later stages ran: what they built on it has to go too, or its test
+  // conditions still become test cases.
+  it('takes the test conditions and test cases of a left-out page with it', () => {
+    const dir = setupProject();
+    try {
+      const conditions = conditionsFixture() as Record<string, any>;
+      conditions.routes['id-1'] = { ...conditions.routes['id-0'], routeId: 'id-1', conditions: [] };
+      conditions.features.f1.fields = [
+        { routeId: 'id-0', control: 'qty', meaning: 'How many to order', role: 'input' },
+        { routeId: 'id-1', control: 'search', meaning: 'Finds an order', role: 'input' },
+      ];
+      conditions.frameRouteId = 'id-1';
+      const journey = (routeIds: string[], reviewed: boolean) => ({
+        routeIds,
+        conditionAssignments: [],
+        reviewed,
+        ...(reviewed ? { reviewedBy: 'human' } : {}),
+      });
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMap());
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', conditions);
+      writeJson(dir, 'artifacts/test-cases/test-cases.json', {
+        journeys: {
+          'j-list': journey(['id-1'], true),
+          'j-walk': journey(['id-0', 'id-1'], true),
+          'j-orders': journey(['id-0'], true),
+        },
+      });
+      node(dir, 'render-review-artifact.mjs', '--kind=test-conditions');
+      node(dir, 'render-review-artifact.mjs', '--kind=site-map');
+
+      editView(
+        dir,
+        (text) => text.replace(/- \[ \] R2\. `\/orders\/list`[\s\S]*?\n\n/, ''),
+        'site-map',
+      );
+      const first = node(dir, 'apply-review.mjs', '--kind=site-map');
+      expect(first.applied.leftOut).toEqual(['R2']);
+      expect(first.followedLeftOut).toEqual({
+        routes: ['id-1'],
+        features: [],
+        frame: 'id-1',
+        testCasesDropped: ['j-list'],
+        testCasesUnticked: ['j-walk'],
+      });
+      expect(first.next).toContain(
+        'Dropped the test conditions of /orders/list, 1 test case(s) that walk no page still in',
+      );
+      expect(first.next).toContain('/orders/list carried the fields of the site frame');
+      expect(first.next).toContain('run /design-test-cases');
+      let saved = readJson(dir, 'artifacts/analysis/test-conditions.json');
+      expect(Object.keys(saved.routes)).toEqual(['id-0']);
+      expect(saved.features.f1.fields.map((f: { routeId: string }) => f.routeId)).toEqual(['id-0']);
+      expect(saved.frameRouteId).toBeUndefined();
+      let cases = readJson(dir, 'artifacts/test-cases/test-cases.json').journeys;
+      expect(Object.keys(cases).sort()).toEqual(['j-orders', 'j-walk']);
+      expect(cases['j-walk'].reviewed).toBe(false);
+      expect(cases['j-walk'].reviewedBy).toBeUndefined();
+      expect(cases['j-orders'].reviewed).toBe(true);
+      // The test conditions review is redrawn without the page.
+      expect(first.redrawn).toEqual(['test-conditions']);
+      expect(readView(dir, 'test-conditions')).not.toContain('/orders/list');
+
+      // The last page of the feature goes too: its analysis has nothing left to stand on.
+      editView(dir, (text) => text.replace(/- \[ \] R1\. `\/orders`[\s\S]*?\n\n/, ''), 'site-map');
+      const second = node(dir, 'apply-review.mjs', '--kind=site-map');
+      expect(second.followedLeftOut).toMatchObject({ routes: ['id-0'], features: ['f1'] });
+      expect(second.followedLeftOut.testCasesDropped.sort()).toEqual(['j-orders', 'j-walk']);
+      expect(second.next).toContain('the analysis of feature "Ordering", which has no page left');
+      saved = readJson(dir, 'artifacts/analysis/test-conditions.json');
+      expect(saved.routes).toEqual({});
+      expect(saved.features).toEqual({});
+      cases = readJson(dir, 'artifacts/test-cases/test-cases.json').journeys;
+      expect(cases).toEqual({});
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

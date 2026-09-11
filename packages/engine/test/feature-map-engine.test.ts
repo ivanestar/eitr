@@ -504,6 +504,44 @@ describe('scripts/derive-feature-map.mjs (real execution)', () => {
     }
   });
 
+  // Seen live: a first draft read the pages in the order of the per-page pass, a re-derivation in
+  // the order the feature map stores them, and four features nobody touched lost their approval.
+  it('keeps an approval when a re-derivation reads the same pages in another order', () => {
+    const dir = setupProject();
+    try {
+      writeSiteMap(dir, [
+        { path: '/tools/b', routeId: 'route-b' },
+        { path: '/tools/a', routeId: 'route-a' },
+        { path: '/tools/c', routeId: 'route-c' },
+      ]);
+      writeRouteIntent(dir, [
+        { routeId: 'route-c', feature: 'Tools', tier: 'high' },
+        { routeId: 'route-a', feature: 'Tools', tier: 'high' },
+        { routeId: 'route-b', feature: 'Tools', tier: 'medium' },
+      ]);
+      run(dir);
+      const first = readFeatureMap(dir);
+      const feature = (Object.values(first.features) as Record<string, any>[])[0];
+      expect(feature.memberRouteIds).toEqual(['route-a', 'route-b', 'route-c']);
+      expect(feature.impactSourceRouteId).toBe('route-a');
+      feature.reviewed = true;
+      feature.reviewedBy = 'human';
+      // Stored the other way round, as a later pass may have written them.
+      first.routes = Object.fromEntries(Object.entries(first.routes).reverse());
+      writeFileSync(
+        join(dir, 'artifacts', 'analysis', 'feature-map.json'),
+        JSON.stringify(first, null, 2),
+        'utf8',
+      );
+      run(dir, ['--force']);
+      const again = readFeatureMap(dir).features[feature.featureId];
+      expect(again.memberRouteIds).toEqual(['route-a', 'route-b', 'route-c']);
+      expect(again.reviewed).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('drops a route approval when the route moved to a different feature', () => {
     const dir = setupProject();
     try {

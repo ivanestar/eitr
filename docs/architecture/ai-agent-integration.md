@@ -126,7 +126,8 @@ may tick, answer and correct right in it, and `scripts/apply-review.mjs` reads t
 against the exact rendering they were made on (ADR 0015). The three files work the same way - a box
 to approve, deleting an entry to take it out, "Your notes" for everything else - and a route or page
 deleted there is left out of every later stage, recorded in `app-profile.json` so a new crawl
-refuses it; a file with edits nobody read back is never redrawn (ADR 0017). Before the site-map and feature-map
+refuses it, and its test conditions and test cases go with it; a file with edits nobody read back is
+never redrawn (ADR 0017). Before the site-map and feature-map
 gates, `scripts/corroboration.mjs` checks what the stage concluded against the independent records
 about each page - status, markup, screenshot, traffic, per-role access - and journals every
 disagreement and how it was settled (ADR 0016). When more
