@@ -20,10 +20,11 @@ export function renderTestAnalysisPlan(): string {
  *
  * Usage:
  *   node scripts/test-analysis-plan.mjs [--from=<file|ticket|url>[,...]] [--routes=<id,id>]
- *                                       [--answers='{"basis":"mixed"}']
+ *                                       [--answers='{"basis":"mixed","domain-notes":"nothing"}']
  *
  * Answers:
- *   { status: 'ASK',  question: {...} }  - which test basis to use; re-run with the answer added
+ *   { status: 'ASK',  question: {...} }  - which test basis to use, or what a person already knows
+ *                                          about the application; re-run with the answer added
  *   { status: 'STOP', reason, message }  - nothing to analyse, or a basis not built yet
  *   { status: 'PLAN', basis, permissions, features: [...], next }
  */
@@ -37,6 +38,7 @@ const CWD = process.cwd();
 const SITE_MAP_PATH = path.join(CWD, 'artifacts', 'site-map', 'site-map.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
 const REPORT_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-conditions.json');
+const PROFILE_PATH = path.join(CWD, 'artifacts', 'analysis', 'app-profile.json');
 const INVENTORY_DIR = 'artifacts/site-map/inventory';
 
 const FRAME_REGIONS = ['header', 'nav', 'footer', 'aside'];
@@ -177,6 +179,9 @@ function main() {
   if (answers.basis !== undefined && ['mixed', 'live-app', 'documents'].indexOf(answers.basis) === -1) {
     errors.push('basis was answered "' + answers.basis + '", which is not one of mixed, live-app, documents.');
   }
+  if (answers['domain-notes'] !== undefined && ['nothing', 'own-words'].indexOf(answers['domain-notes']) === -1) {
+    errors.push('domain-notes was answered "' + answers['domain-notes'] + '", which is not one of nothing, own-words.');
+  }
   const documents = classifyDocuments(argValue('from'));
   if (documents.unreadable.length > 0) {
     errors.push('--from names what cannot be read: ' + documents.unreadable.join(', ') + ' - a file path, a ticket key or an address.');
@@ -199,6 +204,42 @@ function main() {
   if (decided.stop) return emit(Object.assign({ status: 'STOP' }, decided.stop));
   if (decided.ask) return emit({ status: 'ASK', question: decided.ask });
 
+  // One optional question before anything is analysed: what a person already knows about where this
+  // application breaks. Asked once - not after the analysis has started, and not when this stage has
+  // already recorded what they said - and led by what the project already knows, never re-asking it.
+  const report = readJson(REPORT_PATH);
+  const profile = readJson(PROFILE_PATH) || {};
+  const known = (Array.isArray(profile.domainNotes) ? profile.domainNotes : [])
+    .filter(function (entry) {
+      return entry && typeof entry.note === 'string';
+    });
+  const analysedAny = Boolean(report && report.features && typeof report.features === 'object' && Object.keys(report.features).length > 0);
+  const toldThisStage = known.some(function (entry) {
+    return entry.statedDuring === '/define-test-conditions';
+  });
+  if (answers['domain-notes'] === undefined && !analysedAny && !toldThisStage) {
+    return emit({
+      status: 'ASK',
+      question: {
+        id: 'domain-notes',
+        text:
+          known.length > 0
+            ? 'Besides what you already told this project (known), any business rules, past incidents or edge cases the test conditions should cover?'
+            : 'Any business rules, past incidents or edge cases you already know about that the test conditions should cover?',
+        known: known.map(function (entry) {
+          return entry.note;
+        }),
+        options: [
+          { id: 'nothing', label: 'Nothing to add', recommended: true },
+          { id: 'own-words', label: 'Yes - I will describe it' },
+        ],
+        allowsFreeText: true,
+        freeTextHint:
+          "Append each thing they say to app-profile.json domainNotes as { note, statedDuring: '/define-test-conditions', recordedAt }, then run node scripts/app-profile.mjs --validate.",
+      },
+    });
+  }
+
   const onlyRoutes = argValue('routes');
   const wanted = onlyRoutes
     ? new Set(
@@ -210,7 +251,6 @@ function main() {
           .filter(Boolean),
       )
     : null;
-  const report = readJson(REPORT_PATH);
   const analyses = report && report.features && typeof report.features === 'object' ? report.features : {};
   const entries = report && report.routes && typeof report.routes === 'object' ? report.routes : {};
   const inventoryOf = {};

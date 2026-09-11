@@ -597,7 +597,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
   // AC12
   it('deterministically redacts a PII-shaped sample value and evidence excerpt regardless of what was written upstream', () => {
     const route = threeParamRoute();
-    route.routes['route-checkout'].parameters[0].partitions[0].sampleValues = ['4111111111111111'];
+    route.routes['route-checkout'].parameters[0].partitions[0].sampleValues = ['4000123456789010'];
     route.routes['route-checkout'].parameters[0].evidence[0].excerpt =
       'Card ending in 4111111111111111';
     const dir = setupProject(route);
@@ -619,7 +619,7 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
   it('redacts PII-shaped digit runs even when broken up by spaces, hyphens, or parentheses', () => {
     const route = threeParamRoute();
     route.routes['route-checkout'].parameters[0].partitions[0].sampleValues = [
-      '4111 1111 1111 1111',
+      '4000 1234 5678 9010',
       '123-45-6789',
     ];
     route.routes['route-checkout'].parameters[0].evidence[0].excerpt =
@@ -635,6 +635,57 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       expect(param.evidence[0].excerpt).not.toContain('555');
       expect(param.evidence[0].excerpt).not.toContain('1234567');
       expect(param.evidence[0].excerpt).not.toContain('123-4567');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Samples are test data: a masked one leaves its partition with nothing to type. Kept: a phone or
+  // card number reserved for testing, and a plain number in a number field the analysis says holds a
+  // quantity. Still masked: the same long number where the field holds an identifier.
+  it('keeps test data a partition needs, and masks a long number in a field that holds an identifier', () => {
+    const route = threeParamRoute() as Record<string, any>;
+    const entry = route.routes['route-checkout'];
+    const numberParam = (name: string, control: string, sample: string) => ({
+      name,
+      kind: 'number',
+      control,
+      partitions: [
+        {
+          id: 'valid',
+          kind: 'valid',
+          sampleValues: [sample],
+          expectedOutcome: 'the total shows the amount entered',
+        },
+      ],
+      boundaries: [],
+      evidence: [{ signal: 'form-label', excerpt: name }],
+    });
+    entry.parameters.push(
+      numberParam('amount', 'c7', '1500000'),
+      numberParam('accountNumber', 'c8', '99887766554433'),
+    );
+    entry.parameters[0].partitions[0].sampleValues = ['4242 4242 4242 4242', '+1 202-555-0143'];
+    route.features = {
+      f1: {
+        featureId: 'f1',
+        fields: [
+          { routeId: 'route-checkout', control: 'c7', role: 'money' },
+          { routeId: 'route-checkout', control: 'c8', role: 'identifier' },
+        ],
+      },
+    };
+    const dir = setupProject(route);
+    try {
+      expect(run(dir).status).toBe(0);
+      const params = readReport(dir).routes['route-checkout'].parameters;
+      expect(params[0].partitions[0].sampleValues).toEqual([
+        '4242 4242 4242 4242',
+        '+1 202-555-0143',
+      ]);
+      const byName = (name: string) => params.find((p: { name: string }) => p.name === name)!;
+      expect(byName('amount').partitions[0].sampleValues).toEqual(['1500000']);
+      expect(byName('accountNumber').partitions[0].sampleValues).toEqual(['[REDACTED]']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

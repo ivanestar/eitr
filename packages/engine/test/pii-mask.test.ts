@@ -8,7 +8,10 @@ import { renderApiContractsValidator } from '../src/plan/templates/api-contracts
 import { renderFeatureMapEngine } from '../src/plan/templates/feature-map-engine.js';
 import { renderFeatureMapValidator } from '../src/plan/templates/feature-map-validator.js';
 
-type MaskPii = (text: unknown, options?: { keepEmails?: boolean }) => unknown;
+type MaskPii = (
+  text: unknown,
+  options?: { keepEmails?: boolean; keepTestData?: boolean },
+) => unknown;
 type HasPii = (text: unknown, options?: { keepEmails?: boolean }) => boolean;
 
 // The fragment as the generated scripts run it: plain JavaScript, no imports.
@@ -62,6 +65,29 @@ describe('PII masking rule shared by the generated scripts', () => {
   it('keeps a made-up email address when asked, and still masks digit shapes', () => {
     expect(maskPii('qa.user@example.test', { keepEmails: true })).toBe('qa.user@example.test');
     expect(maskPii('4111 1111 1111 1111', { keepEmails: true })).toBe('[REDACTED]');
+  });
+
+  // Test data needs a phone or a card number a test can type. The ones reserved for fiction and the
+  // ones payment providers publish for testing can never be anyone's, and a negative case built from
+  // one - a digit added, a card cut short or given a wrong check digit - is still not anyone's.
+  it.each([
+    ['a NANP number reserved for fiction', '+1 (202) 555-0143'],
+    ['an Ofcom drama mobile number', '+44 7700 900123'],
+    ['an Ofcom drama London number', '020 7946 0321'],
+    ['a published test card in groups', '4242 4242 4242 4242'],
+    ['a published test card unbroken', '4111111111111111'],
+    ['a test card with a wrong check digit', '4242 4242 4242 4241'],
+    ['a test card cut short', '4242 4242 4242'],
+    ['a reserved number with a digit too many', '+1 202-555-01439'],
+  ])('keeps %s as test data when asked', (_label, input) => {
+    expect(maskPii(input, { keepTestData: true })).toBe(input);
+    expect(maskPii(input)).toContain('[REDACTED]');
+  });
+
+  it('still masks a real-looking phone or card number in test data', () => {
+    expect(maskPii('+1 (415) 555-1234', { keepTestData: true })).toBe('+[REDACTED]');
+    expect(maskPii('5500 0055 5555 5559', { keepTestData: true })).toBe('[REDACTED]');
+    expect(maskPii('Order 998877665544', { keepTestData: true })).toBe('Order [REDACTED]');
   });
 
   it('is idempotent, and answers the same on every call despite its global regexes', () => {

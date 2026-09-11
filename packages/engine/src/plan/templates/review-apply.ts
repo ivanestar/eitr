@@ -25,6 +25,8 @@ export function renderReviewApply(): string {
  *   node scripts/apply-review.mjs --kind=feature-map
  *   node scripts/apply-review.mjs --kind=test-conditions
  *   node scripts/apply-review.mjs --kind=site-map --verdict=D1:broken [--note=<what the person said>]
+ *   node scripts/apply-review.mjs --kind=site-map|feature-map --leave-out=R3 [--note=<why>]
+ *   node scripts/apply-review.mjs --kind=site-map --bring-back=L1
  *   node scripts/apply-review.mjs --kind=<kind> --done
  *
  * Compares artifacts/review/<kind>-review.md with the rendering it was made from
@@ -39,7 +41,9 @@ export function renderReviewApply(): string {
  * assistant confirms them with --done, and every rendering shows them until then.
  *
  * --verdict records a verdict the assistant got from the person in conversation, after this script
- * could not read the one written in the file (unreadVerdicts).
+ * could not read the one written in the file (unreadVerdicts). --leave-out and --bring-back do what
+ * a person asked for in conversation to the file itself - the entry's lines deleted, its box ticked -
+ * and then read it back like any other edit.
  *
  * status:
  *   APPLIED     - see applied, freeEdits, unreadVerdicts, approveAfterChange and next
@@ -455,6 +459,29 @@ function followLeftOut(routeIds, featureIds, outIds) {
   return result;
 }
 
+// A page left out or brought back in conversation is done to the file, exactly as the person would
+// have done it - its lines deleted, or its box ticked - so it goes through the one path that takes
+// everything built on it along.
+function editEntry(text, label, action) {
+  const lines = text.split('\\n');
+  const at = lines.findIndex(function (line) {
+    const match = line.match(LABEL_LINE);
+    return Boolean(match && match[3] === label);
+  });
+  if (at === -1) return null;
+  if (action === 'tick') {
+    lines[at] = lines[at].replace('[ ]', '[x]');
+    return lines.join('\\n');
+  }
+  let end = at + 1;
+  while (end < lines.length && !LABEL_LINE.test(lines[end]) && !/^\\*\\*/.test(lines[end])) {
+    end += 1;
+    if (lines[end - 1].trim() === '') break;
+  }
+  lines.splice(at, end - at);
+  return lines.join('\\n');
+}
+
 // ---------------------------------------------------------------------------------------------
 
 function findRecord(kind, data, ref) {
@@ -530,6 +557,32 @@ function main() {
     return;
   }
   const base = JSON.parse(readText(basePath));
+
+  // A page the person asked, in conversation, to leave out or bring back: the file is edited the way
+  // they would have edited it, and read back below like any other edit. Their own words become the
+  // note, as a verdict's would.
+  const leaveArg = argValue('leave-out');
+  const bringArg = argValue('bring-back');
+  if (leaveArg !== undefined || bringArg !== undefined) {
+    const label = leaveArg !== undefined ? leaveArg : bringArg;
+    const ref = base.labels[label];
+    const fits = leaveArg !== undefined ? ref && (ref.type === 'route' || ref.type === 'page') : ref && ref.type === 'left-out';
+    const edited = fits ? editEntry(readText(viewPath), label, leaveArg !== undefined ? 'delete' : 'tick') : null;
+    if (edited === null) {
+      print({
+        kind: kind,
+        status: 'INVALID',
+        errors: [
+          label +
+            (leaveArg !== undefined
+              ? ' is not a route or page in the current review file - pass the label of one (R3, P5).'
+              : ' is not a left-out page in the current review file - pass its L label.'),
+        ],
+      });
+      process.exit(1);
+    }
+    fs.writeFileSync(viewPath, edited, 'utf8');
+  }
 
   // A verdict the person gave in conversation, for a disagreement whose Verdict: line this script
   // could not read. Checked the same way as one read from the file: the label must be a
@@ -910,6 +963,8 @@ function main() {
   let siteMapTouched = false;
   const needsCrawl = [];
   const noteFor = function (routeId) {
+    const given = leaveArg !== undefined ? base.labels[leaveArg] : null;
+    if (given && given.routeId === routeId && argValue('note')) return argValue('note');
     const read = verdicts.find(function (item) {
       return item.ref.routeId === routeId && item.note;
     });

@@ -57,6 +57,7 @@ import { renderTestAnalysisPlan } from './templates/test-analysis-plan.js';
 import { renderSkillBriefing } from './templates/skill-briefing.js';
 import { renderMapSiteQuestions } from './templates/map-site-questions.js';
 import { renderMapFeaturesQuestions } from './templates/map-features-questions.js';
+import { renderGroundZeroQuestions } from './templates/ground-zero-questions.js';
 import { renderDebugLog } from './templates/debug-log.js';
 import { renderMapSiteStatus } from './templates/map-site-status.js';
 import { renderAutomateTestStatus } from './templates/automate-test-status.js';
@@ -228,6 +229,12 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
             source: { kind: 'inline', text: renderMapFeaturesQuestions() },
+          },
+          {
+            path: 'scripts/ground-zero-questions.mjs',
+            writePolicy: 'create-if-absent',
+            provenance: { origin: 'project' },
+            source: { kind: 'inline', text: renderGroundZeroQuestions() },
           },
 
           {

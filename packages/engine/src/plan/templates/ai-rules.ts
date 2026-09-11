@@ -636,6 +636,8 @@ only once a spec file carries its \`@journey:\` tag, so keep that tag through ev
 sessions, declared vs captured roles, configured CI provider), \`scripts/auth-questions.mjs\`
 (which question the auth flow asks next given the answers so far, and what those answers add up
 to - the questions are computed, not composed at the point of asking),
+\`scripts/ground-zero-questions.mjs\` (the same for the guided pipeline: the run mode, sessions still
+missing for declared roles, and the one question at each stage's gate),
 \`scripts/map-site-status.mjs\`
 (crawl mode resolution, screenshot pruning and start-of-pass reset), \`scripts/crawl-budget.mjs\`
 (whether a given URL may be crawled, what its canonical path template is, and the crawl's own
@@ -650,8 +652,8 @@ eye - inside open shadow roots and same-origin frames too - whether the page is 
 all or a bot check or block page standing in for it, which elements only a reader can place
 (\`classify\` checks every answer against what it asked), and which frame regions recur across routes
 as shared widgets, marked up or not), \`scripts/test-analysis-plan.mjs\` (which test basis the
-condition stage works from, and which feature is at which of its steps - understand, research,
-extract, write the ideas, generate), \`scripts/field-probe.mjs\` (what a field does with a typed
+condition stage works from, the one question about what a person already knows, and which feature
+is at which of its steps - understand, research, extract, write the ideas, generate), \`scripts/field-probe.mjs\` (what a field does with a typed
 value, read back and recorded - only when the crawl boundary allows interaction, and a submit only
 where it allows any action on an application a person said is not production),
 \`scripts/test-research.mjs\` (research on how a kind of feature is tested, kept per kind of feature,

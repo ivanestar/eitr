@@ -122,7 +122,7 @@ describe('scripts/field-probe.mjs', () => {
           'record',
           '--route=r1',
           '--control=c' + i,
-          '--value=' + (i === 2 ? 'call 4155550123456' : '-5'),
+          '--value=' + (i === 2 ? 'call 4155551234567' : '-5'),
           '--via=blur',
           '--observation=reading.json',
         ]);
@@ -141,7 +141,58 @@ describe('scripts/field-probe.mjs', () => {
         message: 'Value must be 1 or more',
         validity: ['rangeUnderflow'],
       });
-      expect(JSON.stringify(stored)).not.toContain('4155550123456');
+      expect(JSON.stringify(stored)).not.toContain('4155551234567');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A limit is what a probe of a number field is about: masking "1000001" or the browser's "at most
+  // 1000000" leaves a probe nobody can read. A phone number reserved for fiction is test data too.
+  it('keeps a number typed into a number field, the browser message about it, and a reserved phone number', () => {
+    const dir = setupProject();
+    try {
+      profile(dir, 'safe-interactions', 'sandbox-demo');
+      const record = (value: string, reading: Record<string, unknown>) => {
+        writeJson(dir, 'reading.json', {
+          ok: true,
+          validity: [],
+          validationMessage: '',
+          ariaInvalid: false,
+          described: '',
+          appeared: [],
+          rewritten: false,
+          ...reading,
+        });
+        return run(dir, 'field-probe.mjs', [
+          'record',
+          '--route=r1',
+          '--control=c1',
+          '--value=' + value,
+          '--via=blur',
+          '--observation=reading.json',
+        ]).output;
+      };
+      record('1000001', {
+        type: 'number',
+        validity: ['rangeOverflow'],
+        validationMessage: 'Value must be less than or equal to 1000000.',
+      });
+      record('+1 202-555-0143', { type: 'tel' });
+      record('1000001', { type: 'text', appeared: ['Too many: 1000001'] });
+      const stored = JSON.parse(
+        readFileSync(join(dir, 'artifacts', 'analysis', 'field-probes.json'), 'utf8'),
+      );
+      expect(stored.probes[0]).toMatchObject({
+        value: '1000001',
+        message: 'Value must be less than or equal to 1000000.',
+      });
+      expect(stored.probes[1].value).toBe('+1 202-555-0143');
+      // Not a number field, and the page's own text: masked as before.
+      expect(stored.probes[2]).toMatchObject({
+        value: '[REDACTED]',
+        message: 'Too many: [REDACTED]',
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -394,7 +445,7 @@ describe('scripts/test-analysis-plan.mjs', () => {
 
       const mixed = run(dir, 'test-analysis-plan.mjs', [
         '--from=requirements.md,PROJ-142',
-        '--answers={"basis":"mixed"}',
+        '--answers={"basis":"mixed","domain-notes":"nothing"}',
       ]);
       expect(mixed.output.basis).toEqual({
         mode: 'mixed',
@@ -417,11 +468,61 @@ describe('scripts/test-analysis-plan.mjs', () => {
     }
   });
 
+  // The one optional question of this stage, asked once and before anything is analysed - never
+  // again once the analysis has started, and led by what a person already told the project.
+  it('asks what a person already knows before analysing, once', () => {
+    const dir = setupProject();
+    try {
+      crawled(dir);
+      const asked = run(dir, 'test-analysis-plan.mjs').output;
+      expect(asked.status).toBe('ASK');
+      expect(asked.question.id).toBe('domain-notes');
+      expect(asked.question.options.map((o: { id: string }) => o.id)).toEqual([
+        'nothing',
+        'own-words',
+      ]);
+      expect(asked.question.allowsFreeText).toBe(true);
+      expect(asked.question.known).toEqual([]);
+
+      writeJson(dir, 'artifacts/analysis/app-profile.json', {
+        domainNotes: [{ note: 'Refunds run as a nightly batch', statedDuring: '/map-features' }],
+      });
+      const led = run(dir, 'test-analysis-plan.mjs').output;
+      expect(led.question.known).toEqual(['Refunds run as a nightly batch']);
+      expect(led.question.text).toContain('Besides what you already told this project');
+
+      expect(
+        run(dir, 'test-analysis-plan.mjs', ['--answers={"domain-notes":"maybe"}']).status,
+      ).toBe(1);
+      expect(
+        run(dir, 'test-analysis-plan.mjs', ['--answers={"domain-notes":"nothing"}']).output.status,
+      ).toBe('PLAN');
+
+      writeJson(dir, 'artifacts/analysis/app-profile.json', {
+        domainNotes: [
+          { note: 'Amounts over 10000 need approval', statedDuring: '/define-test-conditions' },
+        ],
+      });
+      expect(run(dir, 'test-analysis-plan.mjs').output.status).toBe('PLAN');
+
+      writeJson(dir, 'artifacts/analysis/app-profile.json', {});
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        features: { fguid: { featureId: 'fguid', fields: [] } },
+        routes: {},
+      });
+      expect(run(dir, 'test-analysis-plan.mjs').output.status).toBe('PLAN');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('walks each feature through its steps, riskiest first', () => {
     const dir = setupProject();
     try {
       crawled(dir);
-      const first = run(dir, 'test-analysis-plan.mjs').output;
+      const first = run(dir, 'test-analysis-plan.mjs', [
+        '--answers={"domain-notes":"nothing"}',
+      ]).output;
       expect(first.basis).toEqual({ mode: 'live-app', sources: ['http://localhost:3000/'] });
       expect(first.features.map((f: { featureId: string }) => f.featureId)).toEqual([
         'fguid',

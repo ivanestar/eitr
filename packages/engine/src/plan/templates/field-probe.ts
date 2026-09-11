@@ -87,6 +87,26 @@ function redact(value, max) {
   return maskPii(value.replace(/\\s+/g, ' ').trim()).slice(0, max || 160);
 }
 
+// The value typed is test data the probe chose. A number typed into a number or range field, or a
+// date into a date field, is the value under test - a limit, a step - and is kept as typed, and so
+// is the message the browser itself gives such a field, which only ever names its limits. Anything
+// else goes through the masking rule, which leaves a phone or card number reserved for testing alone.
+const PLAIN_NUMBER = /^-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][-+]?\\d+)?$/;
+const PLAIN_DATE = /^\\d{4}-\\d{2}(?:-\\d{2})?(?:T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?)?$|^\\d{4}-W\\d{2}$|^\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?$/;
+const NUMBER_TYPES = ['number', 'range'];
+const DATE_TYPES = ['date', 'datetime-local', 'month', 'week', 'time'];
+
+function measured(type) {
+  return NUMBER_TYPES.indexOf(type) !== -1 || DATE_TYPES.indexOf(type) !== -1;
+}
+
+function probedValue(value, type) {
+  const text = value.replace(/\\s+/g, ' ').trim();
+  if (NUMBER_TYPES.indexOf(type) !== -1 && PLAIN_NUMBER.test(text)) return text.slice(0, 80);
+  if (DATE_TYPES.indexOf(type) !== -1 && PLAIN_DATE.test(text)) return text.slice(0, 80);
+  return maskPii(text, { keepTestData: true }).slice(0, 80);
+}
+
 function permissions() {
   const profile = readJson(PROFILE_PATH) || {};
   const boundary = profile.crawlBoundary ? profile.crawlBoundary.value : null;
@@ -310,14 +330,16 @@ function record(args) {
   if (!Array.isArray(store.probes)) store.probes = [];
   if (store.probes.length >= MAX_PROBES) fail('record', 'the probe log is full (' + MAX_PROBES + ') - this is not a crawl-wide fuzzing tool');
   const id = 'p' + (store.probes.length + 1);
+  const type = typeof reading.type === 'string' ? reading.type.toLowerCase() : '';
+  const browserSaid = via === 'blur' && Boolean(reading.validationMessage) && judged.message === reading.validationMessage;
   const entry = {
     id: id,
     routeId: routeId,
     control: control,
-    value: redact(value, 80),
+    value: probedValue(value, type),
     via: via,
     verdict: judged.verdict,
-    message: redact(judged.message, 160),
+    message: browserSaid && measured(type) ? String(judged.message).replace(/\\s+/g, ' ').trim().slice(0, 160) : redact(judged.message, 160),
     recordedAt: new Date().toISOString(),
   };
   if (Array.isArray(reading.validity) && reading.validity.length > 0) entry.validity = reading.validity.slice(0, 9);

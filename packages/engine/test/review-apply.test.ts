@@ -775,6 +775,46 @@ describe('scripts/apply-review.mjs - site map', () => {
     }
   });
 
+  // Asked for in conversation rather than done in the file: the same edit, through the same path, so
+  // the note, the site map and everything later stages built on the page come out the same.
+  it('leaves a page out and brings it back when the person asks in conversation', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMap());
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', conditionsFixture());
+      node(dir, 'render-review-artifact.mjs', '--kind=site-map');
+      const out = node(
+        dir,
+        'apply-review.mjs',
+        '--kind=site-map',
+        '--leave-out=R1',
+        '--note=не нужна',
+      );
+      expect(out.status).toBe('APPLIED');
+      expect(out.applied.leftOut).toEqual(['R1']);
+      expect(out.freeEdits).toEqual([]);
+      expect(out.followedLeftOut.routes).toEqual(['id-0']);
+      expect(readJson(dir, 'artifacts/site-map/site-map.json').routes['/orders']).toMatchObject({
+        status: 'removed',
+        removedBy: 'human',
+        removedNote: 'не нужна',
+      });
+      expect(readView(dir, 'site-map')).toContain('- [ ] L1. `/orders` - не нужна');
+
+      const back = node(dir, 'apply-review.mjs', '--kind=site-map', '--bring-back=L1');
+      expect(back.applied.broughtBack).toEqual(['L1']);
+      expect(readJson(dir, 'artifacts/site-map/site-map.json').routes['/orders'].status).toBe(
+        'active',
+      );
+      expect(back.next).toContain('run /define-test-conditions so it is analysed again');
+
+      const wrong = node(dir, 'apply-review.mjs', '--kind=site-map', '--leave-out=L1');
+      expect(wrong.status).toBe('INVALID');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('approves routes by their boxes and by ALL, like every other review', () => {
     const dir = setupProject();
     try {

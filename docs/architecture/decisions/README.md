@@ -43,3 +43,4 @@ sequentially, zero-padded to 4 digits, kebab-case slug after the number.
 | 0015 | [A person reviews in the file, and the JSON stays the only record](0015-editable-review-files.md)                                                     | Accepted |
 | 0016 | [Analysis conclusions are checked against independent records, and every disagreement is journaled](0016-corroboration-of-analysis-conclusions.md)    | Accepted |
 | 0017 | [What a person decides in a review reaches every later stage, and a page left out stays out](0017-review-decisions-reach-every-stage.md)              | Accepted |
+| 0018 | [Test data keeps only the numbers that can never be anyone's](0018-test-data-that-can-never-be-anyones.md)                                            | Accepted |
