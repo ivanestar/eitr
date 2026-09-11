@@ -269,10 +269,11 @@ spec synthesis, combinatorial strength beyond 2-way, general boolean-predicate c
 
 Bridges `test-conditions.json`'s reviewed conditions to a drafted, TMS-shaped test case, keyed by
 `artifacts/test-cases/test-cases.json` (`.scaffold/schemas/test-cases.types.ts` documents its shape).
-`scripts/compose-journeys.mjs` deterministically classifies every condition onto a test level
-(`e2e`/`api`/`ui-only`) and groups them into one journey per route - zero model involvement, zero
-dependency on a route's criticality or any other LLM-derived signal, which is too unstable to gate a
-structural decision on. An LLM step then drafts each journey's `testCase` (title, preconditions,
+`scripts/compose-journeys.mjs` deterministically decides how every condition is driven (UI or API,
+targeted or end to end) and groups them into journeys: one walk across each reviewed feature's own
+routes for its happy path, and targeted journeys per route and interface for everything else - zero
+model involvement. A route's criticality never gates this; only a feature's impact does, and only
+once a person has approved the feature. An LLM step then drafts each journey's `testCase` (title, preconditions,
 ordered steps): every step is one atomic action with its own concrete expected result, never a
 step bundling several actions behind one blanket result - drawn directly from each condition's own
 `description`/`scenario` rather than invented prose, since `/automate-test` wraps each drafted
@@ -298,8 +299,8 @@ sequences print at each human-facing stop, plus a script-authored `preFlightNoti
 warning + human-gates disclosure, printed verbatim rather than composed fresh by the model each run),
 per-stage `stageTimings` (derived from each artifact's own timestamp, not a guess), and
 `routeCoverage` (routes mapped/reviewed/automated, and any flagged as likely crawler artifacts). It
-sequences `/map-site create` (with its automatic Step 6), `/define-test-conditions`,
-`/design-test-cases`, and `/automate-test` in order, pausing at each stage's own Human Sign-Off
+sequences `/map-site create`, `/map-features`, `/define-test-conditions`, `/design-test-cases`,
+and `/automate-test` in order, pausing at each stage's own Human Sign-Off
 Gateway by default (Guided mode) - except `/design-test-cases`, which has no blocking gate of its
 own and is simply run and moved past - or writing `reviewedBy: 'auto-pilot'` straight through on the
 user's own explicit pre-authorization for local artifact review (Auto-pilot mode). Guided mode merges

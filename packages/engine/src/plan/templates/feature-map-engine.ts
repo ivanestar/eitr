@@ -16,6 +16,8 @@
 // every derived claim carries confidence 'inferred' unless it was literally observed in traffic,
 // and why nothing here is usable downstream until /map-features' Human Sign-Off Gateway has run.
 
+import { PII_MASK_SOURCE } from './pii-mask.js';
+
 export function renderFeatureMapEngine(): string {
   return `#!/usr/bin/env node
 
@@ -47,10 +49,12 @@ const INTENT_SEGMENTS = /^(new|create|edit|update|delete|remove|add)$/i;
 // this floor every one-off static page ("/about", "/terms") would be promoted to a domain entity.
 const MIN_ROUTES_FOR_ENTITY = 2;
 
-const DIGIT_RUN = /\\d{6,}/;
+${PII_MASK_SOURCE}
+
+// Masked before it is cut to length, so a number is never split at the cut into two halves too
+// short to be recognized.
 function maskExcerpt(text) {
-  const trimmed = String(text).slice(0, 100);
-  return DIGIT_RUN.test(trimmed) ? trimmed.replace(new RegExp(DIGIT_RUN.source, 'g'), '[REDACTED]') : trimmed;
+  return maskPii(String(text)).slice(0, 100);
 }
 
 function loadJson(filePath) {

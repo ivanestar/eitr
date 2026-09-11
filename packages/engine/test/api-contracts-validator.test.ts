@@ -299,6 +299,44 @@ describe('scripts/validate-api-contracts.mjs (real execution)', () => {
     }
   });
 
+  // Only an unbroken run of six digits or a value that is mostly digits used to count, and an email
+  // address only under a sensitive key, so these reached the committed file under ordinary names.
+  it.each([
+    ['a phone number inside a sentence', { note: 'call me at +1 (555) 123-4567 after six' }],
+    [
+      'a card number inside a sentence',
+      { note: 'paid with 4111 1111 1111 1111 yesterday evening' },
+    ],
+    ['an email address under an ordinary key', { assignee: 'ann@corp.example' }],
+    ['an id sent as a JSON number', { accountId: 918273645 }],
+  ])('fails when sampleRequestPayload carries %s', (_label, payload) => {
+    const dir = setupProject();
+    try {
+      const bad = structuredClone(wellFormedContracts()) as Record<string, any>;
+      bad.contracts[0].sampleRequestPayload = payload;
+      writeContracts(dir, bad);
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.status).toBe('FAILED');
+      expect(
+        output.errors.some((e: string) => e.includes('unredacted PII/session-data value')),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('passes a payload whose values carry no personal data, small numbers included', () => {
+    const dir = setupProject();
+    try {
+      const data = structuredClone(wellFormedContracts()) as Record<string, any>;
+      data.contracts[0].sampleRequestPayload = { note: 'gift wrap', quantity: 3, range: '1-1000' };
+      writeContracts(dir, data);
+      expect(JSON.parse(run(dir).stdout).status).toBe('PASSED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   describe('observation-quality warnings (never fatal)', () => {
     it('warns, without failing, on a 2xx contract that recorded no responseShape', () => {
       const dir = setupProject();

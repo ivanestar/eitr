@@ -225,7 +225,19 @@ describe('scripts/validate-feature-map.mjs (real execution)', () => {
     data.entities.e0000000000000aa.evidence = [
       { signal: 'api-payload-field', excerpt: 'sessionId 918273645' },
     ];
-    failsWith(data, 'unredacted digit-shaped value');
+    failsWith(data, 'contains an unmasked');
+  });
+
+  // The guard used to count only an unbroken run of six digits, so a number written the way people
+  // write numbers passed straight into the committed map.
+  it.each([
+    ['a phone number with brackets and a dash', 'Call (555) 123-4567 for help'],
+    ['a card number in groups', 'Card 4111 1111 1111 1111'],
+    ['an email address', 'Signed in as ann@corp.example'],
+  ])('fails on an evidence excerpt carrying %s', (_label, excerpt) => {
+    const data = wellFormed() as any;
+    data.entities.e0000000000000aa.evidence = [{ signal: 'heading-text', excerpt }];
+    failsWith(data, 'contains an unmasked');
   });
 
   it('fails when a record key and its own id disagree', () => {

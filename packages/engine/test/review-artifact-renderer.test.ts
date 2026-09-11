@@ -607,6 +607,28 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
           'Needs a customers to already exist - via the field "customerId", guessed from that name alone.',
         );
         expect(output.markdown).toContain('Nothing links it to anything else.');
+        expect(output.markdown).not.toContain('None found:');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    // A client-only application yields no entities, and the review used to drop the section
+    // without a word - a person could not tell the map had lost its flow-based half.
+    it('says so when no entity was found, and what that costs the later stages', () => {
+      const dir = setupProject();
+      try {
+        const map = featureMap() as Record<string, any>;
+        map.entities = {};
+        map.features.f1.entityIds = [];
+        writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+        writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+        const { markdown } = run(dir, '--kind=feature-map').output;
+        expect(markdown).toMatch(/\*\*Things this application works with\*\*\n\nNone found: /);
+        expect(markdown).toContain(
+          'no state-transition or use-case test conditions will be drafted',
+        );
+        expect(markdown).not.toMatch(/\n{3}/);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

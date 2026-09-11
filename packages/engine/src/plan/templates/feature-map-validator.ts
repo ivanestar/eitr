@@ -8,6 +8,8 @@
 // state the entity does not have). Both would otherwise surface much later as a test case built on
 // a link that was never there.
 
+import { PII_MASK_SOURCE } from './pii-mask.js';
+
 export function renderFeatureMapValidator(): string {
   return `#!/usr/bin/env node
 
@@ -70,8 +72,8 @@ const REVIEWERS = new Set(['human', 'auto-pilot']);
 const MAX_EXCERPT = 100;
 const MAX_FEATURE_NAME = 40;
 
-// Same digit-shaped threshold as every other evidence guard in this pipeline.
-const DIGIT_RUN = /\\d{6,}/;
+// Quotes are held to the rule every other artifact of this project masks by.
+${PII_MASK_SOURCE}
 
 function loadJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -103,10 +105,10 @@ function checkEvidence(list, label, errors) {
     if (entry.excerpt.length > MAX_EXCERPT) {
       errors.push(entryLabel + '.excerpt must be at most ' + MAX_EXCERPT + ' characters.');
     }
-    if (DIGIT_RUN.test(entry.excerpt)) {
+    if (hasPii(entry.excerpt)) {
       errors.push(
         entryLabel +
-          '.excerpt contains an unredacted digit-shaped value (6+ consecutive digits) - mask it as [REDACTED].',
+          '.excerpt contains an unmasked email address, six or more digits (spaces, dashes, dots or brackets between them included) or a mostly-digit id - mask it as [REDACTED].',
       );
     }
   });

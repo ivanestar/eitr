@@ -10,6 +10,8 @@
 // contract across 62 routes, and nothing anywhere said whether that was the application or the
 // observer. A warning never fails the file - a static content site legitimately produces both.
 
+import { PII_MASK_SOURCE } from './pii-mask.js';
+
 export function renderApiContractsValidator(): string {
   return `#!/usr/bin/env node
 
@@ -47,30 +49,29 @@ const DOCUMENT_TYPES = new Set(['query', 'mutation', 'subscription']);
 // in the whole API collapses onto one contractId.
 const NAMED_STYLES = new Set(['graphql', 'rpc']);
 
-// Same digit-shaped thresholds as every other PII/session-data guard in this pipeline (map-site
-// Step 6, define-test-conditions Step 2): a run of 6+ consecutive digits, or an 8+-char token where
-// digits are the majority, gets masked - never left as a literal value in a checked artifact.
-const DIGIT_RUN = /\\d{6,}/;
-function isMajorityDigitToken(token) {
-  if (token.length < 8) return false;
-  const digits = (token.match(/\\d/g) || []).length;
-  return digits > token.length / 2;
-}
+// The payload is recorded traffic, so it carries real input: every value is held to the same masking
+// rule as every other artifact of this project.
+${PII_MASK_SOURCE}
+
+// A path is checked for ids only. Canonicalization should already have collapsed a concrete id into
+// a {template} segment, while a version or a date in a path is ordinary.
+const ID_IN_PATH = /\\d{6,}/;
 
 // A raw HTTP request/response body (what sampleRequestPayload actually is) can carry a plaintext
-// password, email, or token whose VALUE is not digit-shaped at all - the digit-run backstop above
-// would never catch "password": "hunter2". This checks the FIELD NAME instead, unconditionally
-// redacting the value regardless of its own shape - a broader net than the digit-shaped guard, and
-// deliberately so: over-redacting a field that merely mentions "token" in its name is a far safer
-// failure mode here than under-redacting a real credential.
+// password or token whose VALUE has no recognizable shape at all - the rule above would never catch
+// "password": "hunter2". This checks the FIELD NAME instead, unconditionally redacting the value
+// regardless of its own shape - a broader net than the shape rule, and deliberately so:
+// over-redacting a field that merely mentions "token" in its name is a far safer failure mode here
+// than under-redacting a real credential.
 const SENSITIVE_KEY = /password|secret|token|authorization|email|ssn|card.?number|cvv|pin\\b/i;
 
 function redactValue(value, key) {
   if (key !== undefined && SENSITIVE_KEY.test(key)) return '[REDACTED]';
-  if (typeof value === 'string') {
-    if (DIGIT_RUN.test(value) || isMajorityDigitToken(value)) return '[REDACTED]';
-    return value;
-  }
+  // A whole value is replaced rather than masked in place: a payload field is one datum, and a
+  // half-masked one still tells a reader what was there. A number is read as its digits - an account
+  // id or a phone number sent as a JSON number is the same datum as one sent as a string.
+  if (typeof value === 'string') return hasPii(value) ? '[REDACTED]' : value;
+  if (typeof value === 'number') return hasPii(String(value)) ? '[REDACTED]' : value;
   if (Array.isArray(value)) return value.map(function (v) { return redactValue(v); });
   if (value && typeof value === 'object') {
     const out = {};
@@ -128,7 +129,7 @@ function isApiContractEntry(value, label, errors, warnings, seenIds) {
         value.pathTemplate +
         '") - strip it during canonicalization; a call\\'s own input can be encoded there.',
     );
-  } else if (DIGIT_RUN.test(value.pathTemplate)) {
+  } else if (ID_IN_PATH.test(value.pathTemplate)) {
     // Only the digit-shaped check applies to a path. A resource genuinely called /password/reset or
     // /api/tokens is ordinary, so the sensitive-NAME check that guards payload fields would reject
     // correct paths here; a 6+ digit run, on the other hand, is a concrete id that canonicalization
@@ -184,7 +185,7 @@ function isApiContractEntry(value, label, errors, warnings, seenIds) {
     } else if (needsRedaction(value.sampleRequestPayload)) {
       errors.push(
         label +
-          '.sampleRequestPayload contains an unredacted PII/session-data value - either digit-shaped (6+ digit run, or an 8+-char majority-digit token) or a field whose name itself is sensitive (password/secret/token/authorization/email/ssn/card number/cvv/pin) - mask it as [REDACTED] before writing this file.',
+          '.sampleRequestPayload contains an unredacted PII/session-data value - an email address, six or more digits (spaces, dashes, dots or brackets between them included), an 8+-char token that is mostly digits, or a field whose name itself is sensitive (password/secret/token/authorization/email/ssn/card number/cvv/pin) - replace the value with [REDACTED] before writing this file.',
       );
     }
   }

@@ -331,6 +331,30 @@ describe('scripts/overlay-ledger.mjs (real execution)', () => {
     }
   });
 
+  // The ledger used to judge each space-separated word on its own, so a number written in groups
+  // never had six digits in any one word, and an address glued to a label was not a whole-word match.
+  it('masks numbers written in groups and addresses glued to a label', () => {
+    const dir = setupProject('safe-interactions');
+    try {
+      run(dir, 'begin');
+      const opened = open(
+        dir,
+        '/a',
+        'id-a',
+        observation({
+          title: 'Call +1 (555) 123-4567',
+          textExcerpt: 'Card 4111 1111 1111 1111 on file. Contact:ann@corp.example',
+        }),
+      );
+      run(dir, 'attempt', '--overlay=' + opened.overlayId, '--method=escape', '--cleared=true');
+      const overlay = run(dir, 'entries', '--route=/a').overlays[0];
+      expect(overlay.title).toBe('Call +[REDACTED]');
+      expect(overlay.textExcerpt).toBe('Card [REDACTED] on file. Contact:[REDACTED]');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('calls out site-wide furniture once instead of per route', () => {
     const dir = setupProject('safe-interactions');
     try {

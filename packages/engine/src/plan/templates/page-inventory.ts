@@ -12,6 +12,8 @@
 // Same division of labour as overlay-ledger.mjs and visual-copilot.mjs: 'probe' hands back
 // browser-side source for page.evaluate, 'record' grades and stores what came back.
 
+import { PII_MASK_SOURCE } from './pii-mask.js';
+
 export function renderPageInventory(): string {
   return `#!/usr/bin/env node
 
@@ -174,31 +176,13 @@ function emit(payload) {
   process.stdout.write(JSON.stringify(payload, null, 2) + '\\n');
 }
 
-// The same PII shapes scripts/generate-test-conditions.mjs masks, applied to every string the page
-// handed over, since an option list or a button label can carry the signed-in user's own data: a
-// run of six or more digits even when spaced or hyphenated ("4111 1111 1111 1111", "(555)
-// 123-4567"), an 8+-character alphanumeric run that is mostly digits, and an email address. Runs
-// are counted over letters and digits only, so a label stating a range - "(1-1000):" - survives.
-const DIGIT_RUN = /\\d(?:[\\s\\-().]*\\d){5,}/g;
-const MAJORITY_DIGIT_TOKEN = /[A-Za-z0-9]{8,}/g;
-const EMAIL = /[\\w.+-]+@[\\w-]+\\.[\\w.-]+/g;
+${PII_MASK_SOURCE}
 
-function isMajorityDigit(token) {
-  const digits = token.replace(/[^0-9]/g, '').length;
-  return digits > token.length / 2;
-}
-
+// Applied to every string the page handed over, since an option list or a button label can carry
+// the signed-in user's own data.
 function redact(value, maxLength) {
   if (typeof value !== 'string') return '';
-  const masked = value
-    .replace(/\\s+/g, ' ')
-    .trim()
-    .replace(EMAIL, '[REDACTED]')
-    .replace(DIGIT_RUN, '[REDACTED]')
-    .replace(MAJORITY_DIGIT_TOKEN, function (token) {
-      return isMajorityDigit(token) ? '[REDACTED]' : token;
-    });
-  return masked.slice(0, maxLength || 80);
+  return maskPii(value.replace(/\\s+/g, ' ').trim()).slice(0, maxLength || 80);
 }
 
 function sha256(text) {

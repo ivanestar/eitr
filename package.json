@@ -1,6 +1,6 @@
 {
   "name": "@onlytests/eitr",
-  "description": "Generates a complete, standalone Playwright test framework from your app URL across TypeScript, Python, C#, and Java.",
+  "description": "Generates a complete, standalone TypeScript + Playwright test framework from your app URL.",
   "bin": {
     "eitr": "./dist/bin/eitr.js"
   },
@@ -39,9 +39,6 @@
     "scaffold",
     "cli",
     "typescript",
-    "python",
-    "csharp",
-    "java",
     "ci-cd",
     "authentication-testing",
     "test-data",
