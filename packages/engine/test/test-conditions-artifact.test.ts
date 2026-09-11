@@ -246,7 +246,9 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
       const output = JSON.parse(result.stdout);
       expect(output.status).toBe('FAILED');
       expect(
-        output.errors.some((e: string) => e.includes('reviewedBy must be "human" or "auto-pilot"')),
+        output.errors.some((e: string) =>
+          e.includes('reviewedBy must be "human", "auto-pilot" or "assistant"'),
+        ),
       ).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -1670,7 +1672,7 @@ describe('renderTestConditionsTypes (real standalone tsc check)', () => {
     expect(text).toContain("export type ConditionLayer = 'field' | 'rule' | 'behavior' | 'frame';");
     expect(text).toContain('expectedOutcome: string;');
     expect(text).toContain("export type ExecutionLevel = 'ui' | 'dom' | 'api';");
-    expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot';");
+    expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot' | 'assistant';");
 
     const dir = mkdtempSync(join(tmpdir(), 'eitr-test-conditions-types-'));
     try {

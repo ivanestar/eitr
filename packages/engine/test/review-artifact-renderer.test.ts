@@ -215,17 +215,95 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
         'Research: 0 feature(s) researched, 1 skipped (no web access)',
       );
       expect(framed.report).toContain('Questions for you: 1');
-      // What the page should do apart from how its fields take malformed input, each with a box.
-      expect(framed.markdown).toMatch(
-        /- \[ \] G1\. Meaning - what the page should do \(1\)\n {5}- \[ \] C1\. Verify no two generated values/,
-      );
-      expect(framed.markdown).toMatch(
-        /- \[ \] G2\. Format - limits, malformed and hostile values \(1\)\n {5}- \[ \] C2\. Verify with count/,
-      );
       // The report names the file the review is in, so printing it shows where to go.
       expect(framed.report).toMatch(
         /\n- Review it in: artifacts\/review\/test-conditions-review\.md$/,
       );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A person reviews what only the domain can confirm. What the markup, the malformed-input checklist
+  // or the generator settles is checked by the assistant and shown as one line per page, with what
+  // it rests on - the fields and how many values each takes - and a box that is the person's veto.
+  it('lists only the conditions a person reviews, and sums up the assistant-checked ones per page', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      const base = { featureId: 'f1', oracle: 'markup', priority: 'P2', riskScore: 4 };
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 3,
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters: [
+              { name: 'count', kind: 'number', partitions: [{ id: 'v' }, { id: 'too-many' }] },
+              { name: 'uppercase', kind: 'checkbox', partitions: [{ id: 'on' }, { id: 'off' }] },
+            ],
+            constraints: [],
+            conditions: [
+              {
+                ...base,
+                conditionId: 'p1',
+                origin: 'model',
+                technique: 'property',
+                layer: 'behavior',
+                oracle: 'domain',
+                reviewer: 'person',
+                description: 'Verify every generated GUID is different',
+                priority: 'P1',
+              },
+              {
+                ...base,
+                conditionId: 'a1',
+                origin: 'generated',
+                technique: 'boundary-value',
+                layer: 'field',
+                reviewer: 'assistant',
+                reviewed: true,
+                reviewedBy: 'assistant',
+                description: 'count=1001',
+              },
+              {
+                ...base,
+                conditionId: 'a2',
+                origin: 'generated',
+                technique: 'checklist-based',
+                layer: 'field',
+                reviewer: 'assistant',
+                reviewed: true,
+                reviewedBy: 'assistant',
+                description: 'script',
+              },
+              {
+                ...base,
+                conditionId: 'a3',
+                origin: 'generated',
+                technique: 'checklist-based',
+                layer: 'field',
+                reviewer: 'assistant',
+                cut: true,
+                cutBy: 'assistant',
+                cutReason: 'SQL injection: the page sends nothing to a server',
+                description: 'sql',
+              },
+            ],
+          },
+        },
+        features: { f1: { featureId: 'f1', fields: [], questions: [] } },
+      });
+      const { output } = run(dir, '--kind=test-conditions');
+      expect(output.markdown).toContain('C1. Verify every generated GUID is different (P1)');
+      expect(output.markdown).not.toContain('count=1001');
+      expect(output.markdown).toContain(
+        '- [x] G1. Checked by the assistant, no review needed: 3 - limits, malformed and hostile values on count (2 values), uppercase (2 values). 2 kept; 1 cut as not applying here (SQL injection: the page sends nothing to a server).',
+      );
+      expect(output.entryCount).toBe(1);
+      expect(output.summary).toContain('1 condition(s) for you');
+      expect(output.summary).toContain('3 more checked by the assistant');
+      expect(output.report).toContain('- Checked by the assistant, no review needed: 3');
+      expect(output.report).toContain('2 kept, 1 cut as not applying here');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

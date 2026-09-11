@@ -653,7 +653,10 @@ all or a bot check or block page standing in for it, which elements only a reade
 (\`classify\` checks every answer against what it asked), and which frame regions recur across routes
 as shared widgets, marked up or not), \`scripts/test-analysis-plan.mjs\` (which test basis the
 condition stage works from, the one question about what a person already knows, and which feature
-is at which of its steps - understand, research, extract, write the ideas, generate), \`scripts/field-probe.mjs\` (what a field does with a typed
+is at which of its steps - understand, research, extract, write the ideas, generate),
+\`scripts/assistant-check.mjs\` (the test conditions that need no person - limits the markup
+declares, malformed and hostile values, combinations of valid values - listed for the assistant to
+keep or cut with a reason; it refuses a decision on a condition a person reviews), \`scripts/field-probe.mjs\` (what a field does with a typed
 value, read back and recorded - only when the crawl boundary allows interaction, and a submit only
 where it allows any action on an application a person said is not production),
 \`scripts/test-research.mjs\` (research on how a kind of feature is tested, kept per kind of feature,

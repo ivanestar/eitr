@@ -236,6 +236,10 @@ boundary-value conditions: it seeds one candidate vector per still-uncovered par
 greedily fills every other column around it, backtracking within that fill - a pair only lands in
 `unsatisfiedPairs` (with the exact constraint that blocks it) when completing a vector around it
 is genuinely impossible, never merely because an earlier, unrelated greedy attempt stalled.
+Every condition carries who reviews it (ADR 0021): a person, for what the analysis wrote and what
+rests on a rule stated in words or an entity's lifecycle; the assistant, for what the markup, the
+malformed-input checklist or the generator's combinations settle - kept or cut with a reason through
+`scripts/assistant-check.mjs` before the review, summed up as one line per page with the person's veto.
 Only valid values are paired. Each invalid value is tested once, beside the first valid value of
 every other parameter, and two never share a vector (ADR 0019): the application rejects the input
 on that one value, so pairing it with every value of the others only adds tests that fail the same

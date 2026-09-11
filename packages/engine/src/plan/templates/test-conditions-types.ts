@@ -445,12 +445,21 @@ export interface TestCondition {
   reviewed: boolean;
   // Who set reviewed:true - 'human' for an actual approval (in conversation or ticked in the review
   // file), 'auto-pilot' only when /ground-zero-setup's auto-pilot mode set it on the user's own
-  // explicit pre-authorization. Required once reviewed is true (mechanically enforced); expected but
+  // explicit pre-authorization, 'assistant' for a condition the assistant checks in place of a person
+  // (reviewer 'assistant' only). Required once reviewed is true (mechanically enforced); expected but
   // not mechanically enforced to be absent while reviewed is false.
-  reviewedBy?: 'human' | 'auto-pilot';
-  // A person cut it at the review. It stays in the file, so the cut is visible and can be undone, but
-  // it is never reviewed, nothing downstream uses it, and the generator does not bring it back.
+  reviewedBy?: 'human' | 'auto-pilot' | 'assistant';
+  // Who reviews it, set by the generator on every pass. 'person': the analysis wrote it, or its
+  // expected result rests on words - a label, a person, a requirement, research - or it walks an
+  // entity's lifecycle; only the domain can confirm it. 'assistant': the page's markup, the malformed-
+  // input checklist or the generator's own combinations settle it; the assistant keeps or cuts it.
+  reviewer?: 'person' | 'assistant';
+  // A person or the assistant cut it. It stays in the file, so the cut is visible and can be undone,
+  // but it is never reviewed, nothing downstream uses it, and the generator does not bring it back.
   cut?: boolean;
+  // Who cut it, and - for the assistant, always - why it does not apply to this application.
+  cutBy?: 'person' | 'assistant';
+  cutReason?: string;
   // The feature this condition belongs to - one of the route's features in the feature map. The
   // review lists conditions by feature, ordered by priority.
   featureId: string;

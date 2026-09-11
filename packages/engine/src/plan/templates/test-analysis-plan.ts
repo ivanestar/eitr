@@ -354,6 +354,14 @@ function main() {
   const pending = features.find(function (feature) {
     return feature.next !== 'done';
   });
+  // Once every feature is through, the conditions that need no person wait for the assistant's own
+  // check before the person sees the review.
+  let unchecked = 0;
+  for (const entry of Object.values(entries)) {
+    for (const condition of entry && Array.isArray(entry.conditions) ? entry.conditions : []) {
+      if (condition && condition.reviewer === 'assistant' && condition.cut !== true && condition.reviewed !== true) unchecked += 1;
+    }
+  }
   emit({
     status: 'PLAN',
     basis: decided.basis,
@@ -361,7 +369,14 @@ function main() {
     features: features,
     next: pending
       ? { featureId: pending.featureId, name: pending.name, step: pending.next, instruction: STEP_INSTRUCTIONS[pending.next] }
-      : { step: 'gates', instruction: 'Every feature is through its steps: run the validators, then the review.' },
+      : unchecked > 0
+        ? {
+            step: 'assistant-check',
+            instruction:
+              unchecked +
+              ' condition(s) need no person: run node scripts/validate-test-conditions.mjs, then check them - node scripts/assistant-check.mjs list, keep or cut each with a reason, record.',
+          }
+        : { step: 'gates', instruction: 'Every feature is through its steps and every condition that needs no person is checked: run the validators, then the review.' },
   });
 }
 

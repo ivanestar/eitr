@@ -931,11 +931,25 @@ function isCondition(value, label, errors) {
   }
   // Independent of the rule above: whenever reviewed is true (by whatever means it got there),
   // reviewedBy must say who/what actually set it.
-  if (value.reviewed === true && value.reviewedBy !== 'human' && value.reviewedBy !== 'auto-pilot') {
-    errors.push(label + '.reviewedBy must be "human" or "auto-pilot" when reviewed is true.');
+  if (value.reviewed === true && ['human', 'auto-pilot', 'assistant'].indexOf(value.reviewedBy) === -1) {
+    errors.push(label + '.reviewedBy must be "human", "auto-pilot" or "assistant" when reviewed is true.');
+  }
+  if ('reviewer' in value && value.reviewer !== 'person' && value.reviewer !== 'assistant') {
+    errors.push(label + '.reviewer, when present, must be person or assistant - the generator sets it.');
+  }
+  // The assistant approves only what needs no person: a condition resting on a business rule, or one
+  // the analysis wrote, is a person's to approve.
+  if (value.reviewedBy === 'assistant' && value.reviewer !== 'assistant') {
+    errors.push(label + ' was approved by the assistant, but it is a person\\'s to review - it rests on a business rule or was written by the analysis.');
   }
   if ('cut' in value && typeof value.cut !== 'boolean') {
     errors.push(label + '.cut, when present, must be a boolean.');
+  }
+  if ('cutBy' in value && value.cutBy !== 'person' && value.cutBy !== 'assistant') {
+    errors.push(label + '.cutBy, when present, must be person or assistant.');
+  }
+  if (value.cutBy === 'assistant' && (typeof value.cutReason !== 'string' || value.cutReason.trim().length === 0)) {
+    errors.push(label + ' was cut by the assistant without a reason - a person reads why it does not apply here.');
   }
   if (value.cut === true && value.reviewed === true) {
     errors.push(label + ' is cut and approved at once - a cut condition is one nobody wants tested.');

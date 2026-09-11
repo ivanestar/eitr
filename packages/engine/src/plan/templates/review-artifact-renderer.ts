@@ -211,8 +211,8 @@ const EDIT_HELP = {
   'test-conditions': [
     'You can review this file right here: edit it, save it, then tell the assistant you are done.',
     '',
-    '- Approve a condition by putting an x in its box: [x]. A feature\\'s box approves all of its conditions, a group\\'s box (G) all of that group\\'s; ALL approves every one you did not change.',
-    '- Each page lists what it should do (meaning) apart from how its fields take malformed and hostile input (format).',
+    '- Approve a condition by putting an x in its box: [x]. A feature\\'s box approves all of its conditions; ALL approves every one you did not change.',
+    '- You review what only you can confirm: what the page should do, its business rules, its flows. The checks the assistant keeps or cuts in your place - limits and required fields the markup declares, malformed and hostile values, combinations of valid values - are one line (G) per page: clear its box to leave all of them out of testing, tick it to bring them back.',
     '- Write what you want to say about a feature or page on its Notes: line, and about a condition after " // " at the end of its line.',
     '- Answer a question on its Answer: line.',
     '- Cut a condition by deleting its line. It moves to "Cut by you", where ticking it brings it back.',
@@ -491,7 +491,11 @@ function renderFeatureBlock(lines, labels, feature, analysis, items, pageIds, en
       );
     }
     if (pageItems.length === 0) {
-      lines.push('   No conditions on this page.');
+      const checked = entry && Array.isArray(entry.conditions) && entry.conditions.some(function (c) {
+        return c && c.reviewer === 'assistant';
+      });
+      lines.push(checked ? '   Nothing on this page needs your review.' : '   No conditions on this page.');
+      assistantLine(lines, entry, registry, counters);
       continue;
     }
     const shared = sharedValues(pageItems, entry);
@@ -505,57 +509,111 @@ function renderFeatureBlock(lines, labels, feature, analysis, items, pageIds, en
             .join(', '),
       );
     }
-    // What the page should do, apart from how its fields take malformed and hostile input: the first
-    // is the application's own logic, the second the same few checks on every field, and a person
-    // reviews them differently - the second group is often approved or cut as a whole.
-    const groups = [
-      [
-        'Meaning - what the page should do',
-        pageItems.filter(function (item) {
-          return item.condition.layer !== 'field';
-        }),
-      ],
-      [
-        'Format - limits, malformed and hostile values',
-        pageItems.filter(function (item) {
-          return item.condition.layer === 'field';
-        }),
-      ],
-    ];
-    for (const [title, groupItems] of groups) {
-      if (groupItems.length === 0) continue;
-      counters.group += 1;
-      const groupRef = { type: 'group', routeId: routeId, conditions: [] };
-      registry.add('G' + counters.group, groupRef);
-      const allOfGroup = groupItems.every(function (item) {
-        return item.condition.reviewed === true;
-      });
-      lines.push('   - ' + box(allOfGroup) + ' G' + counters.group + '. ' + title + ' (' + groupItems.length + ')');
-      for (const item of groupItems) {
-        const condition = item.condition;
-        counters.condition += 1;
-        registry.add('C' + counters.condition, { type: 'condition', routeId: item.routeId, conditionId: condition.conditionId, cut: false });
-        featureRef.conditions.push('C' + counters.condition);
-        groupRef.conditions.push('C' + counters.condition);
-        const regression = REGRESSION_ORACLES.indexOf(condition.oracle) !== -1;
-        const note = noteOn('test-conditions', 'condition', condition.conditionId);
-        lines.push(
-          '     - ' +
-            box(condition.reviewed) +
-            ' C' +
-            counters.condition +
-            '. ' +
-            verifyLine(condition, entry, shared) +
-            ' (' +
-            (condition.priority || '?') +
-            (regression ? ', regression only' : '') +
-            ')' +
-            (condition.valueNote ? ' - note: ' + condition.valueNote : '') +
-            (note ? ' // ' + note : ''),
-        );
-      }
+    for (const item of pageItems) {
+      const condition = item.condition;
+      counters.condition += 1;
+      registry.add('C' + counters.condition, { type: 'condition', routeId: item.routeId, conditionId: condition.conditionId, cut: false });
+      featureRef.conditions.push('C' + counters.condition);
+      const regression = REGRESSION_ORACLES.indexOf(condition.oracle) !== -1;
+      const note = noteOn('test-conditions', 'condition', condition.conditionId);
+      lines.push(
+        '   - ' +
+          box(condition.reviewed) +
+          ' C' +
+          counters.condition +
+          '. ' +
+          verifyLine(condition, entry, shared) +
+          ' (' +
+          (condition.priority || '?') +
+          (regression ? ', regression only' : '') +
+          ')' +
+          (condition.valueNote ? ' - note: ' + condition.valueNote : '') +
+          (note ? ' // ' + note : ''),
+      );
     }
+    assistantLine(lines, entry, registry, counters);
   }
+}
+
+// One line for the conditions the assistant checks on a page in a person's place: what they are, on
+// which fields and values, what the assistant kept and cut and why. Its box is the person's veto:
+// cleared, every one of them is left out of testing; ticked again, they come back. What a person
+// reviews for them is the model they come from - the fields and how many values each takes - not
+// each combination the generator built from it.
+const ASSISTANT_KINDS = {
+  'boundary-value': 'limits',
+  'checklist-based': 'malformed and hostile values',
+};
+
+function assistantLine(lines, entry, registry, counters) {
+  const conditions = (entry && Array.isArray(entry.conditions) ? entry.conditions : []).filter(function (c) {
+    return c && c.reviewer === 'assistant';
+  });
+  if (conditions.length === 0) return;
+  const kept = conditions.filter(function (c) {
+    return c.cut !== true && c.reviewed === true;
+  });
+  const undecided = conditions.filter(function (c) {
+    return c.cut !== true && c.reviewed !== true;
+  });
+  const cut = conditions.filter(function (c) {
+    return c.cut === true && c.cutBy === 'assistant';
+  });
+  const dropped = conditions.filter(function (c) {
+    return c.cut === true && c.cutBy !== 'assistant';
+  });
+  const kinds = [];
+  for (const condition of conditions) {
+    const kind =
+      ASSISTANT_KINDS[condition.technique] || (condition.scenario === 'negative' ? 'values the markup refuses' : 'combinations of valid values');
+    if (kinds.indexOf(kind) === -1) kinds.push(kind);
+  }
+  const params = Array.isArray(entry.parameters) ? entry.parameters : [];
+  const model = params
+    .map(function (p) {
+      const values = (Array.isArray(p.partitions) ? p.partitions : []).length;
+      return p.name + ' (' + values + ' value' + (values === 1 ? '' : 's') + ')';
+    })
+    .join(', ');
+  const reasons = Array.from(
+    new Set(
+      cut.map(function (c) {
+        return String(c.cutReason || '').trim();
+      }),
+    ),
+  ).filter(Boolean);
+  counters.group += 1;
+  registry.add('G' + counters.group, {
+    type: 'group',
+    routeId: entry.routeId,
+    conditionIds: conditions
+      .filter(function (c) {
+        return !(c.cut === true && c.cutBy === 'assistant');
+      })
+      .map(function (c) {
+        return c.conditionId;
+      }),
+  });
+  const parts = [];
+  if (kept.length > 0) parts.push(kept.length + ' kept');
+  if (undecided.length > 0) parts.push(undecided.length + ' not checked yet - tick to approve them yourself');
+  if (dropped.length > 0) parts.push(dropped.length + ' left out by you - tick to bring them back');
+  if (cut.length > 0) parts.push(cut.length + ' cut as not applying here (' + reasons.join('; ') + ')');
+  const inTesting = kept.length > 0 && undecided.length === 0 && dropped.length === 0;
+  lines.push(
+    '   - ' +
+      box(inTesting) +
+      ' G' +
+      counters.group +
+      '. Checked by the assistant, no review needed: ' +
+      conditions.length +
+      ' - ' +
+      kinds.join(', ') +
+      (model ? ' on ' + model : '') +
+      '. ' +
+      parts.join('; ') +
+      '.',
+  );
 }
 
 function renderTestConditions(labels, data, registry) {
@@ -601,6 +659,9 @@ function renderTestConditions(labels, data, registry) {
   const cutItems = [];
   const controlsByRoute = {};
   const entriesById = {};
+  // The conditions the assistant checks in a person's place are not listed one by one: each page
+  // gets one line saying what they are, what the assistant kept and cut, with a box for the person.
+  const assistantTotals = { kept: 0, cut: 0, dropped: 0, undecided: 0 };
   for (const entry of entries) {
     entriesById[entry.routeId] = entry;
     const inventory = loadJson(path.join(INVENTORY_DIR, entry.routeId + '.json'));
@@ -608,6 +669,12 @@ function renderTestConditions(labels, data, registry) {
     for (const control of inventory && Array.isArray(inventory.controls) ? inventory.controls : []) byId[control.id] = control;
     controlsByRoute[entry.routeId] = byId;
     for (const condition of Array.isArray(entry.conditions) ? entry.conditions : []) {
+      if (condition && condition.reviewer === 'assistant') {
+        if (condition.cut === true) assistantTotals[condition.cutBy === 'assistant' ? 'cut' : 'dropped'] += 1;
+        else if (condition.reviewed === true) assistantTotals.kept += 1;
+        else assistantTotals.undecided += 1;
+        continue;
+      }
       if (condition && condition.cut === true) {
         cutItems.push({ condition: condition, routeId: entry.routeId });
         continue;
@@ -682,6 +749,7 @@ function renderTestConditions(labels, data, registry) {
             })
             .join('; '),
       );
+      assistantLine(lines, entry, registry, counters);
     }
     lines.push('');
   }
@@ -737,11 +805,20 @@ function renderTestConditions(labels, data, registry) {
       }
     }
   }
+  const assistantAll = assistantTotals.kept + assistantTotals.cut + assistantTotals.dropped + assistantTotals.undecided;
   const report = [
     'Stage report - test conditions',
-    '- ' + conditionCount + ' condition(s) for ' + featureIds.length + ' feature(s) on ' + entries.length + ' page(s): P1 ' + tierCounts.P1 + ', P2 ' + tierCounts.P2 + ', P3 ' + tierCounts.P3,
-    '- ' + written + ' written from what each feature is for, ' + (conditionCount - written) + ' built by the generator (combinations, limits, malformed values)',
-    '- ' + regressionOnly + ' only guard against a change: their expected result was read off the page as it is today',
+    '- For you to review: ' + conditionCount + ' condition(s) for ' + featureIds.length + ' feature(s) on ' + entries.length + ' page(s): P1 ' + tierCounts.P1 + ', P2 ' + tierCounts.P2 + ', P3 ' + tierCounts.P3 + ' - ' + written + ' written from what each feature is for, ' + (conditionCount - written) + ' resting on a rule stated in words or an entity\\'s lifecycle',
+    '- Checked by the assistant, no review needed: ' +
+      assistantAll +
+      ' (limits and required fields the markup declares, malformed and hostile values, combinations of valid values) - ' +
+      assistantTotals.kept +
+      ' kept, ' +
+      assistantTotals.cut +
+      ' cut as not applying here' +
+      (assistantTotals.undecided > 0 ? ', ' + assistantTotals.undecided + ' not checked yet' : '') +
+      (assistantTotals.dropped > 0 ? ', ' + assistantTotals.dropped + ' left out by you' : ''),
+    '- ' + regressionOnly + ' of yours only guard against a change: their expected result was read off the page as it is today',
     '- Questions for you: ' + openQuestions,
     '- Fields not tested, with the reason on their page: ' + notTested,
     '- Research: ' + researched + ' feature(s) researched' + (skipped.length > 0 ? ', ' + skipped.length + ' skipped (' + Array.from(new Set(skipped)).join('; ') + ')' : ''),
@@ -758,7 +835,7 @@ function renderTestConditions(labels, data, registry) {
     report: report.join('\\n'),
     summary:
       conditionCount +
-      ' condition(s) across ' +
+      ' condition(s) for you across ' +
       featureIds.length +
       ' feature(s) and ' +
       entries.length +
@@ -769,7 +846,8 @@ function renderTestConditions(labels, data, registry) {
       ', P3: ' +
       tierCounts.P3 +
       (openQuestions > 0 ? ', ' + openQuestions + ' question(s) for you' : '') +
-      (cutItems.length > 0 ? ', ' + cutItems.length + ' cut by you' : ''),
+      (cutItems.length > 0 ? ', ' + cutItems.length + ' cut by you' : '') +
+      (assistantAll > 0 ? '; ' + assistantAll + ' more checked by the assistant' : ''),
   };
 }
 

@@ -71,17 +71,29 @@ function featureMapFullyReviewed(featureMap) {
     });
 }
 
+// The test conditions are reviewed once a person - or auto-pilot on their authority - has approved a
+// condition of theirs. What the assistant approved in a person's place never counts: it is checked
+// before the person's review, and counting it would carry the pipeline past that review. A run that
+// has nothing for a person at all is reviewed once the assistant has checked everything.
 function anyRouteHasReviewedCondition(routes) {
   if (!routes || typeof routes !== 'object') return false;
-  return Object.values(routes).some(function (entry) {
-    return (
-      entry &&
-      Array.isArray(entry.conditions) &&
-      entry.conditions.some(function (c) {
-        return c && c.reviewed === true;
-      })
-    );
-  });
+  let ofPerson = 0;
+  let approvedByPerson = 0;
+  let ofAssistant = 0;
+  let awaitingAssistant = 0;
+  for (const entry of Object.values(routes)) {
+    for (const c of entry && Array.isArray(entry.conditions) ? entry.conditions : []) {
+      if (!c || c.cut === true) continue;
+      if (c.reviewer === 'assistant') {
+        ofAssistant += 1;
+        if (c.reviewed !== true) awaitingAssistant += 1;
+        continue;
+      }
+      ofPerson += 1;
+      if (c.reviewed === true && c.reviewedBy !== 'assistant') approvedByPerson += 1;
+    }
+  }
+  return approvedByPerson > 0 || (ofPerson === 0 && ofAssistant > 0 && awaitingAssistant === 0);
 }
 
 function countRoutesWithReviewedCondition(routes) {

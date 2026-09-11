@@ -516,6 +516,66 @@ describe('scripts/test-analysis-plan.mjs', () => {
     }
   });
 
+  // Once every feature is through, the conditions that need no person wait for the assistant's
+  // check before the review - a step of the plan like any other, not a step to remember.
+  it('sends the assistant to check what needs no person before the review', () => {
+    const dir = setupProject();
+    try {
+      crawled(dir);
+      const done = (featureId: string, routeId: string, extra: Record<string, unknown>[]) => ({
+        routeId,
+        parameters: [],
+        sourceParamsHash: 'h',
+        conditions: [
+          { technique: 'property', origin: 'model', featureId, priority: 'P1' },
+          ...extra,
+        ],
+      });
+      const analysis = (featureId: string, routeId: string, control: string) => ({
+        featureId,
+        fields: [{ routeId, control }],
+        research: { status: 'skipped', archetype: 'x', reason: 'offline' },
+      });
+      const report = {
+        features: {
+          fguid: analysis('fguid', 'r2', 'c1'),
+          fconv: {
+            ...analysis('fconv', 'r1', 'c1'),
+            fields: [
+              { routeId: 'r1', control: 'c1' },
+              { routeId: 'r1', control: 'c2' },
+            ],
+          },
+        },
+        routes: {
+          r1: done('fconv', 'r1', []),
+          r2: done('fguid', 'r2', [
+            {
+              technique: 'checklist-based',
+              origin: 'generated',
+              featureId: 'fguid',
+              priority: 'P2',
+              reviewer: 'assistant',
+              reviewed: false,
+            },
+          ]),
+        },
+      };
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', report);
+      expect(run(dir, 'test-analysis-plan.mjs').output.next.step).toBe('assistant-check');
+
+      report.routes.r2.conditions[1] = {
+        ...report.routes.r2.conditions[1],
+        reviewed: true,
+        reviewedBy: 'assistant',
+      } as never;
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', report);
+      expect(run(dir, 'test-analysis-plan.mjs').output.next.step).toBe('gates');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('walks each feature through its steps, riskiest first', () => {
     const dir = setupProject();
     try {

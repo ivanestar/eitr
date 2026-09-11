@@ -614,23 +614,66 @@ describe('scripts/apply-review.mjs - test conditions', () => {
     }
   });
 
-  it("approves a page's group of conditions through the group's own box", () => {
+  // The box on a page's assistant-checked line is the person's veto: cleared, every one of those
+  // conditions leaves testing; ticked again, they come back as the person's approval. What the
+  // assistant cut as not applying stays cut either way.
+  it("leaves out and brings back a page's assistant-checked conditions through their one box", () => {
     const dir = setupProject();
     try {
-      prepareConditions(dir);
-      const group = readView(dir, 'test-conditions').match(
-        /- \[ \] (G\d+)\. Meaning - what the page should do \((\d+)\)/,
-      )!;
-      expect(Number(group[2])).toBe(3);
+      const fixture = conditionsFixture() as Record<string, any>;
+      const extra = (id: string, state: Record<string, unknown>) => ({
+        ...fixture.routes['id-0'].conditions[0],
+        conditionId: id,
+        technique: 'checklist-based',
+        origin: 'generated',
+        layer: 'field',
+        reviewer: 'assistant',
+        description: 'malformed ' + id,
+        isSpeculative: true,
+        ...state,
+      });
+      fixture.routes['id-0'].conditions.push(
+        extra('a-kept', { reviewed: true, reviewedBy: 'assistant', isSpeculative: false }),
+        extra('a-cut', {
+          cut: true,
+          cutBy: 'assistant',
+          cutReason: 'SQL injection: nothing reaches a server',
+        }),
+      );
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMap());
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', fixture);
+      node(dir, 'render-review-artifact.mjs', '--kind=test-conditions');
+      const view = readView(dir, 'test-conditions');
+      expect(view).not.toContain('malformed a-kept');
+      const line = view.split('\n').find((l) => /G\d+\. Checked by the assistant/.test(l))!;
+      expect(line).toMatch(/^ {3}- \[x\] G\d+\./);
+
+      editView(dir, (text) => text.replace(line, line.replace('[x]', '[ ]')), 'test-conditions');
+      const out = node(dir, 'apply-review.mjs', '--kind=test-conditions');
+      expect(out.applied.vetoes).toEqual([
+        expect.objectContaining({ inTesting: false, conditions: 1 }),
+      ]);
+      const cond = (id: string) =>
+        readJson(dir, 'artifacts/analysis/test-conditions.json').routes['id-0'].conditions.find(
+          (c: { conditionId: string }) => c.conditionId === id,
+        );
+      expect(cond('a-kept')).toMatchObject({ cut: true, cutBy: 'person', reviewed: false });
+      expect(cond('a-cut')).toMatchObject({ cut: true, cutBy: 'assistant' });
+      const cleared = readView(dir, 'test-conditions')
+        .split('\n')
+        .find((l) => /G\d+\. Checked by the assistant/.test(l))!;
+      expect(cleared).toContain('1 left out by you - tick to bring them back');
+
       editView(
         dir,
-        (text) => text.replace('- [ ] ' + group[1] + '.', '- [x] ' + group[1] + '.'),
+        (text) => text.replace(cleared, cleared.replace('[ ]', '[x]')),
         'test-conditions',
       );
-      const result = node(dir, 'apply-review.mjs', '--kind=test-conditions');
-      expect(result.applied.approved).toHaveLength(3);
-      for (const id of ['c-aaaa', 'c-bbbb', 'c-cccc'])
-        expect(condition(dir, id).reviewed).toBe(true);
+      node(dir, 'apply-review.mjs', '--kind=test-conditions');
+      expect(cond('a-kept')).toMatchObject({ reviewed: true, reviewedBy: 'human' });
+      expect(cond('a-kept').cut).toBeUndefined();
+      expect(cond('a-cut')).toMatchObject({ cut: true, cutBy: 'assistant' });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

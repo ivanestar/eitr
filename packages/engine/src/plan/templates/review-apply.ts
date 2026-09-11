@@ -892,12 +892,18 @@ function main() {
       return item.label;
     }),
   );
-  // A feature's box in the test conditions stands for its conditions, and a group's for the group's,
-  // so each is expanded below rather than applied to anything of its own.
+  // A feature's box in the test conditions stands for its conditions, so it is expanded below rather
+  // than applied to anything of its own. A page's box over the conditions the assistant checks is the
+  // person's veto over all of them, applied on its own further down.
   const bulkFeature = function (label) {
-    return kind === 'test-conditions' && (base.labels[label].type === 'feature' || base.labels[label].type === 'group');
+    return kind === 'test-conditions' && base.labels[label].type === 'feature';
   };
+  const vetoes = [];
   for (const [label, to] of toggles) {
+    if (base.labels[label].type === 'group') {
+      vetoes.push({ label: label, ref: base.labels[label], to: to });
+      continue;
+    }
     if (bulkFeature(label)) continue;
     if (!to) revoke.add(label);
     else if (edited.has(label)) approveAfterChange.push(label);
@@ -942,6 +948,7 @@ function main() {
     broughtBack: [],
     notes: 0,
     entryNotes: [],
+    vetoes: [],
   };
   const missing = [];
   const now = new Date().toISOString();
@@ -991,6 +998,7 @@ function main() {
       continue;
     }
     record.cut = true;
+    record.cutBy = 'person';
     setReviewed(record, false);
     applied.cut.push(item.label);
   }
@@ -1001,7 +1009,37 @@ function main() {
       continue;
     }
     delete record.cut;
+    delete record.cutBy;
+    delete record.cutReason;
     applied.restored.push(item.label);
+  }
+  // The person's veto over the conditions the assistant checks on a page: cleared, all of them leave
+  // testing; ticked, they come back and count as approved by the person. What the assistant itself
+  // cut as not applying stays cut either way.
+  for (const veto of vetoes) {
+    const entry = data.routes && data.routes[veto.ref.routeId];
+    const wanted = new Set(Array.isArray(veto.ref.conditionIds) ? veto.ref.conditionIds : []);
+    let changed = 0;
+    for (const condition of entry && Array.isArray(entry.conditions) ? entry.conditions : []) {
+      if (!condition || !wanted.has(condition.conditionId)) continue;
+      if (veto.to) {
+        if (condition.cut === true && condition.cutBy === 'assistant') continue;
+        if (condition.cut === true) {
+          delete condition.cut;
+          delete condition.cutBy;
+          delete condition.cutReason;
+        }
+        if (condition.reviewed !== true) setReviewed(condition, true);
+        changed += 1;
+      } else if (condition.cut !== true) {
+        condition.cut = true;
+        condition.cutBy = 'person';
+        condition.cutReason = 'left out at the review, with the other checks the assistant made on this page';
+        setReviewed(condition, false);
+        changed += 1;
+      }
+    }
+    applied.vetoes.push({ label: veto.label, routeId: veto.ref.routeId, inTesting: veto.to, conditions: changed });
   }
   for (const item of answers) {
     const analysis = data.features && data.features[item.ref.featureId];
@@ -1074,6 +1112,7 @@ function main() {
       applied.cut.length +
       applied.restored.length +
       applied.answered.length +
+      applied.vetoes.length +
       (kind === 'site-map' && siteMapTouched ? 1 : 0) >
     0;
   let validation = null;
@@ -1305,6 +1344,15 @@ function main() {
       'The person added ' +
         applied.notes +
         ' note(s), kept in app-profile.json domainNotes: read them in notes and apply whatever bears on this stage and the ones after it.',
+    );
+  }
+  for (const veto of applied.vetoes) {
+    next.push(
+      (veto.inTesting ? 'The person brought back ' : 'The person left out ') +
+        veto.conditions +
+        ' condition(s) the assistant checks on ' +
+        veto.routeId +
+        (veto.inTesting ? ', now approved by them.' : ': they stay in the file, cut, and no test case is drafted from them.'),
     );
   }
   const writtenNotes = applied.entryNotes.filter(function (item) {

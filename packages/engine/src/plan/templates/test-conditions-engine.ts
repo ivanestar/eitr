@@ -946,15 +946,15 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle, fiel
   if (entry.conditions && entry.conditions.length > 0 && entry.sourceParamsHash === currentHash) {
     return;
   }
-  // A condition a person cut stays cut when the route is regenerated: the same inputs rebuild the same
-  // id, and a cut undone by regenerating is a decision silently thrown away.
-  const cutIds = new Set(
+  // A condition a person or the assistant cut stays cut when the route is regenerated: the same inputs
+  // rebuild the same id, and a cut undone by regenerating is a decision silently thrown away.
+  const cutIds = new Map(
     (entry.conditions || [])
       .filter(function (c) {
         return c && c.cut === true && c.conditionId;
       })
       .map(function (c) {
-        return c.conditionId;
+        return [c.conditionId, c];
       }),
   );
   const { vectors, unsatisfied } = buildVectors(entry.parameters, entry.constraints || []);
@@ -1007,9 +1007,12 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle, fiel
     if (seen.has(c.conditionId)) continue;
     seen.add(c.conditionId);
     if (cutIds.has(c.conditionId)) {
+      const was = cutIds.get(c.conditionId);
       c.cut = true;
       c.reviewed = false;
       delete c.reviewedBy;
+      if (was.cutBy) c.cutBy = was.cutBy;
+      if (was.cutReason) c.cutReason = was.cutReason;
     }
     deduped.push(c);
   }
@@ -1247,6 +1250,21 @@ function describeGenerated(condition, entry) {
 // default risk on the generator's own conditions - then ranks every condition, authored ones
 // included: risk score = likelihood x the feature's impact, and the priority tier it lands in.
 // Runs on every pass, so a feature whose impact changed at review re-ranks without regenerating.
+// Who reviews a condition. A person, where its expected result is a judgment only the domain can
+// confirm: the analysis wrote it, it rests on words (a label, a person, a requirement, research), or
+// it walks an entity's lifecycle. The assistant, where the page's own markup, the malformed-input
+// checklist or this script's combinations settle it - checked against the markup by the gate, and
+// kept or cut by the assistant for whether it applies here. Set on every pass, so every reader of the
+// file splits the conditions the same way.
+const PERSON_ORACLES = ['human', 'requirement', 'research'];
+
+function reviewerOf(condition) {
+  if (isAuthored(condition)) return 'person';
+  if (condition.technique === 'state-transition' || condition.technique === 'use-case') return 'person';
+  if (condition.layer === 'rule' || PERSON_ORACLES.indexOf(condition.oracle) !== -1) return 'person';
+  return 'assistant';
+}
+
 function annotateAndRank(data, context) {
   for (const [routeId, entry] of Object.entries(data.routes)) {
     const frameControls = routeId === data.frameRouteId ? frameControlsOf(routeId) : new Set();
@@ -1275,6 +1293,7 @@ function annotateAndRank(data, context) {
           });
         if (allFrame) condition.layer = 'frame';
       }
+      condition.reviewer = reviewerOf(condition);
       const impact =
         context.impactByFeature[condition.featureId] || context.criticalityByRoute[routeId] || 'high';
       const likelihood = condition.risk && condition.risk.likelihood;
