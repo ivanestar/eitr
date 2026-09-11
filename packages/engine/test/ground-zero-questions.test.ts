@@ -172,6 +172,37 @@ describe('scripts/ground-zero-questions.mjs (real execution)', () => {
     }
   });
 
+  // Live-observed: after the test conditions, a person got a question and no report of what the
+  // stage made or where to review it. The gate hands the report over with the question.
+  it('hands over the stage report, ending with the review file, to print above the gate question', () => {
+    const dir = setupProject();
+    try {
+      mkdirSync(join(dir, 'artifacts', 'review', '.base'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'review', '.base', 'test-conditions-review.json'),
+        JSON.stringify({
+          report:
+            'Stage report - test conditions\n- 12 condition(s)\n- Review it in: artifacts/review/test-conditions-review.md',
+        }),
+        'utf8',
+      );
+      const gate = ask(
+        dir,
+        'gate',
+        {},
+        { ...READY, stage: 'test-conditions-pending-review' },
+      ) as Result & {
+        show: string | null;
+      };
+      expect(gate.show).toContain('- Review it in: artifacts/review/test-conditions-review.md');
+      expect(
+        (ask(dir, 'preflight', {}, READY) as Result & { show: string | null }).show,
+      ).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reads the real state from the status scripts when nothing is injected', () => {
     const dir = setupProject();
     try {

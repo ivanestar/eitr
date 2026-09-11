@@ -118,6 +118,21 @@ export interface DomainNote {
   // Which stage the person was talking to when they said it - context for reading it later.
   statedDuring: string;
   recordedAt: string;
+  // The entry it was written on in a review file, when it was written on one: the Notes: line of a
+  // route, feature, page or entity, or after " // " on a condition.
+  about?: NoteSubject;
+  // Replaced or cleared in the review file later. Kept rather than deleted, so a condition citing it
+  // as domainNotes:<index> still finds what the person said.
+  withdrawnAt?: string;
+}
+
+export interface NoteSubject {
+  review: 'site-map' | 'feature-map' | 'test-conditions';
+  type: 'route' | 'feature' | 'page' | 'entity' | 'condition';
+  // The routeId, featureId, entityId or conditionId every later stage knows the entry by.
+  id: string;
+  routeId?: string;
+  path?: string;
 }
 
 // A page a person left out of every later stage by deleting it from a review file. Kept here, with

@@ -204,7 +204,7 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
       // JSON; the stage report carries the research.
       expect(framed.markdown).not.toContain('What it is');
       expect(framed.markdown).toContain('Q1. Is 1000 the real upper limit?');
-      expect(framed.markdown).toContain('   Page: /route-00 - Page 0');
+      expect(framed.markdown).toContain('   P1. Page: /route-00 - Page 0\n   Notes:');
       expect(framed.markdown).toContain('C1. Verify no two generated values are the same (P1)');
       expect(framed.markdown).toContain(
         'C2. Verify with count="1001": the count is refused (P2, regression only)',
@@ -215,6 +215,54 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
         'Research: 0 feature(s) researched, 1 skipped (no web access)',
       );
       expect(framed.report).toContain('Questions for you: 1');
+      // What the page should do apart from how its fields take malformed input, each with a box.
+      expect(framed.markdown).toMatch(
+        /- \[ \] G1\. Meaning - what the page should do \(1\)\n {5}- \[ \] C1\. Verify no two generated values/,
+      );
+      expect(framed.markdown).toMatch(
+        /- \[ \] G2\. Format - limits, malformed and hostile values \(1\)\n {5}- \[ \] C2\. Verify with count/,
+      );
+      // The report names the file the review is in, so printing it shows where to go.
+      expect(framed.report).toMatch(
+        /\n- Review it in: artifacts\/review\/test-conditions-review\.md$/,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Counted by features, a run of 1050 conditions over seven features was handed over as fit to
+  // print in the chat. What a person approves one by one is a condition.
+  it('counts a test conditions review by its conditions when deciding inline or file', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      const condition = (i: number) => ({
+        conditionId: 'c' + i,
+        technique: 'error-guessing',
+        description: 'Verify case ' + i,
+        featureId: 'f1',
+        layer: 'rule',
+        oracle: 'domain',
+        priority: 'P2',
+        riskScore: 4,
+      });
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 3,
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters: [],
+            constraints: [],
+            conditions: Array.from({ length: 12 }, (_, i) => condition(i)),
+          },
+        },
+        features: { f1: { featureId: 'f1', fields: [], questions: [] } },
+      });
+      const { output } = run(dir, '--kind=test-conditions');
+      expect(output.entryCount).toBe(12);
+      expect(output.mode).toBe('file');
+      expect(output.markdown).toBe('');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -766,8 +814,10 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
         writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
         writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
         const { markdown } = run(dir, '--kind=feature-map').output;
-        // A page's reasoning and evidence end before the next page starts.
-        expect(markdown).toMatch(/Evidences: "Place an order"\n\n {3}- \[ \] P2\. \/route-01/);
+        // A page's reasoning, evidence and notes end before the next page starts.
+        expect(markdown).toMatch(
+          /Evidences: "Place an order"\n {5}Notes:\n\n {3}- \[ \] P2\. \/route-01/,
+        );
         // The feature's last line ends before the entity section starts.
         expect(markdown).toMatch(
           /Impact comes from: [^\n]+\n\n\*\*Things this application works with\*\*/,

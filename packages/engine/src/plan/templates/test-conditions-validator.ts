@@ -311,6 +311,88 @@ function citesControlId(text, controlId) {
   return new RegExp('(?:^|[^a-z0-9])' + controlId + '(?:[^0-9]|$)', 'i').test(text);
 }
 
+// The words a template wraps around a field's label: live-observed as "input_field_1", "Input value
+// representing enter data for barcode", "Configuration value for field on <page title>", "Free-text
+// string value adhering to field length and format requirements", "Empty text is rejected with
+// validation error" - each filled in for every field of a run, and none of them about any field. A
+// name, a meaning, a constraint or an outcome made of nothing but these and the field's own label
+// says nothing about the field. A number, a quoted value or any word of substance is enough to pass.
+const TEMPLATE_WORDS = new Set(
+  (
+    'a an the of for on in to by with from at as and or this that these it its is are be been was were ' +
+    'field fields input inputs value values entered enter entry text string data content information info ' +
+    'control controls element elements parameter param params option options select selected selection ' +
+    'choice dropdown checkbox check box radio button textbox textarea area item items representing ' +
+    'represents represent configuration setting settings used using use page test utility tool form user ' +
+    'provided specified given free accepted accepts accept rejected rejects reject validation valid invalid ' +
+    'error errors message messages empty unlisted unoffered state adhering adhere adheres requirements ' +
+    'requirement format length must should any appropriate proper properly correct correctly expected ' +
+    'successfully number numeric integer'
+  ).split(' '),
+);
+
+function wordsOf(text) {
+  return String(text || '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9а-яё]+/)
+    .filter(Boolean);
+}
+
+// True when the text, once the words it may borrow ("own": the field's label, its page, its values)
+// are taken out, has nothing left but template words.
+function saysNothingOwn(text, own) {
+  if (typeof text !== 'string' || text.trim().length === 0) return false;
+  const borrowed = new Set();
+  for (const item of own) for (const word of wordsOf(item)) borrowed.add(word);
+  return wordsOf(text).every(function (word) {
+    return borrowed.has(word) || TEMPLATE_WORDS.has(word);
+  });
+}
+
+function labelOf(control) {
+  return control ? [control.name, control.hint, control.placeholder].filter(Boolean) : [];
+}
+
+// A name is a template when, counters aside, it is made only of template words the page does not
+// use for this field: "input_field_1" is; "value" on a field the page labels "Value" is not.
+function isTemplateName(name, control) {
+  const words = wordsOf(name).filter(function (word) {
+    return !/^\\d+$/.test(word);
+  });
+  if (words.length === 0) return true;
+  const own = new Set(wordsOf(labelOf(control).join(' ')));
+  return words.every(function (word) {
+    return TEMPLATE_WORDS.has(word) && !own.has(word);
+  });
+}
+
+// An empty value is invalid only where something says the field must be filled in.
+const REQUIRED_WORDS = /required|mandatory|obligatory|must be (?:filled|provided|entered)|cannot be (?:empty|blank)|\\*|обязательн/i;
+
+function rulesRequiredness(rule) {
+  if (!rule || typeof rule !== 'object') return false;
+  if (rule.signal === 'field-probe' || rule.signal === 'manual') return true;
+  const excerpt = typeof rule.excerpt === 'string' ? rule.excerpt : '';
+  if (rule.signal === 'html5-constraint') return /\\brequired\\b/i.test(excerpt);
+  if (rule.signal === 'aria-relationship') return /aria-required/i.test(excerpt) || REQUIRED_WORDS.test(excerpt);
+  if (rule.signal === 'form-label') return REQUIRED_WORDS.test(excerpt);
+  return false;
+}
+
+// "Title:" quoted as the rule for a Title field: the label names the field and states no rule.
+function quotesOnlyLabel(rule, control) {
+  if (!rule || rule.signal !== 'form-label' || typeof rule.excerpt !== 'string' || !control) return false;
+  if (REQUIRED_WORDS.test(rule.excerpt)) return false;
+  const tidy = function (text) {
+    return String(text).trim().replace(/[:*\\s]+$/, '').toLowerCase();
+  };
+  const excerpt = tidy(rule.excerpt);
+  return excerpt.length > 0 && labelOf(control).some(function (text) {
+    return tidy(text) === excerpt;
+  });
+}
+
 // An html5-constraint rule has to be an attribute the crawl actually saw on this field. Live-observed:
 // a converter got a minimum of 0 its input never declared, and every condition built on it rejected
 // negative temperatures.
@@ -437,7 +519,20 @@ function isParameter(value, label, context, errors) {
           control.id +
           ' - name the parameter after what the field holds, the way the page or a person would say it.',
       );
+    } else if (typeof value.name === 'string' && isTemplateName(value.name, control)) {
+      errors.push(
+        label +
+          '.name "' +
+          value.name +
+          '" says what kind of control it is, not what it holds - name the parameter after the value, the way the page or a person would say it.',
+      );
     }
+  }
+  // What a parameter's text may borrow and still say something: its name, its field's label, its
+  // own sample values.
+  const own = [value.name].concat(labelOf(control));
+  for (const p of Array.isArray(value.partitions) ? value.partitions : []) {
+    if (p && Array.isArray(p.sampleValues)) own.push.apply(own, p.sampleValues.filter((v) => typeof v === 'string'));
   }
 
   // What the page offers, read off the live page when there is an inventory - it wins over anything
@@ -526,6 +621,14 @@ function isParameter(value, label, context, errors) {
         }
       }
       checkOutcome(p.expectedOutcome, pLabel + '.expectedOutcome', errors);
+      if (saysNothingOwn(p.expectedOutcome, own)) {
+        errors.push(
+          pLabel +
+            '.expectedOutcome "' +
+            p.expectedOutcome +
+            '" is true of any field - name what a person sees for this value: the message and where it appears, the result it produces, the state the page is left in.',
+        );
+      }
 
       if (p.executionLevel !== undefined && !EXECUTION_LEVEL_VALUES.has(p.executionLevel)) {
         errors.push(pLabel + '.executionLevel must be one of ui|dom|api.');
@@ -540,6 +643,24 @@ function isParameter(value, label, context, errors) {
       if (p.kind === 'invalid') {
         checkRule(p.rule, pLabel + '.rule', value.kind, errors);
         if (control) checkRuleAgainstControl(p.rule, pLabel + '.rule', control, errors, warnings);
+        const empty =
+          samplesOk &&
+          p.sampleValues.some(function (sample) {
+            return sample.trim() === '';
+          });
+        if (empty && !rulesRequiredness(p.rule)) {
+          errors.push(
+            pLabel +
+              ' calls an empty value invalid, but its rule does not say the field is required - quote the required attribute, aria-required or the page\\'s own words ("required", "*"), cite a probe that saw the page refuse it empty, or drop the partition: an optional field accepts empty.',
+          );
+        } else if (quotesOnlyLabel(p.rule, control)) {
+          errors.push(
+            pLabel +
+              '.rule quotes only the field\\'s label "' +
+              p.rule.excerpt +
+              '", which names the field and states no rule - quote where the page states what makes the value invalid.',
+          );
+        }
         if (CLOSED_CHOICE_KINDS.has(value.kind) && !offLevel) {
           errors.push(
             pLabel +
@@ -622,6 +743,12 @@ function isParameter(value, label, context, errors) {
       if (control) checkRuleAgainstControl(b.rule, bLabel + '.rule', control, errors, warnings);
       checkOutcome(b.acceptedOutcome, bLabel + '.acceptedOutcome', errors);
       checkOutcome(b.rejectedOutcome, bLabel + '.rejectedOutcome', errors);
+      const values = Array.isArray(b.values) ? b.values : [];
+      for (const which of ['acceptedOutcome', 'rejectedOutcome']) {
+        if (saysNothingOwn(b[which], own.concat(values))) {
+          errors.push(bLabel + '.' + which + ' "' + b[which] + '" is true of any field - name what a person sees at this limit.');
+        }
+      }
     });
   }
   isEvidenceArray(value.evidence, label + '.evidence', errors);
@@ -971,6 +1098,13 @@ function checkOutputs(entry, label, controlById, inventory, isFrameRoute, errors
 function loadContext(data) {
   const featureMapLoaded = loadJson(FEATURE_MAP_PATH, 'artifacts/analysis/feature-map.json');
   const featureMap = featureMapLoaded.error ? null : featureMapLoaded.value;
+  const siteMapLoaded = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
+  const titleOf = new Map();
+  if (!siteMapLoaded.error && siteMapLoaded.value && siteMapLoaded.value.routes && typeof siteMapLoaded.value.routes === 'object') {
+    for (const route of Object.values(siteMapLoaded.value.routes)) {
+      if (route && typeof route.routeId === 'string' && typeof route.title === 'string') titleOf.set(route.routeId, route.title);
+    }
+  }
   const probesLoaded = loadJson(PROBES_PATH, 'artifacts/analysis/field-probes.json');
   const probeIds = new Set();
   if (!probesLoaded.error && probesLoaded.value && Array.isArray(probesLoaded.value.probes)) {
@@ -1016,6 +1150,7 @@ function loadContext(data) {
     researchIds: researchIds,
     membersOf: membersOf,
     featureOfRoute: featureOfRoute,
+    titleOf: titleOf,
     // Filled per route by validate(): routeId -> Map(controlId -> control).
     controlsByRoute: new Map(),
   };
@@ -1238,13 +1373,23 @@ function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
         errors.push(where + '.control "' + field.control + '" is not in the inventory of ' + field.routeId + '.');
       }
       checkText(field.meaning, where + '.meaning', errors, 300);
+      const fieldControl = hasControl && ctx.controlsByRoute.has(field.routeId) ? ctx.controlsByRoute.get(field.routeId).get(field.control) : null;
+      // What a field's meaning and constraints may borrow and still say something: its label, and
+      // the title of its page.
+      const fieldOwn = labelOf(fieldControl).concat(ctx.titleOf.get(field.routeId) || [], field.parameter || []);
       if (hasControl && citesControlId(field.meaning, field.control)) {
         errors.push(
           where + '.meaning names the control id ' + field.control + ' - say what the field means to the person using it: what they put in and what it changes.',
         );
+      } else if (saysNothingOwn(field.meaning, fieldOwn)) {
+        errors.push(
+          where +
+            '.meaning "' +
+            field.meaning +
+            '" only restates the field\\'s label - say what the value means here: what a person puts in, what it changes, in the terms of what this application is for.',
+        );
       }
       if (!FIELD_ROLE_VALUES.has(field.role)) errors.push(where + '.role must be one of ' + Array.from(FIELD_ROLE_VALUES).join('|') + '.');
-      const fieldControl = hasControl && ctx.controlsByRoute.has(field.routeId) ? ctx.controlsByRoute.get(field.routeId).get(field.control) : null;
       if (fieldControl && field.role === 'free-text' && !takesFreeText(fieldControl)) {
         errors.push(
           where + '.role is free-text, but ' + describeControl(fieldControl) + ' only takes the values it offers - say what it holds: a quantity, a choice, a toggle, a setting.',
@@ -1263,6 +1408,14 @@ function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
           return;
         }
         checkText(constraint.statement, at + '.statement', errors, 200);
+        if (saysNothingOwn(constraint.statement, fieldOwn)) {
+          errors.push(
+            at +
+              '.statement "' +
+              constraint.statement +
+              '" states no rule - say the rule itself (a limit, a format, the values allowed), or leave constraints empty when nothing constrains the field.',
+          );
+        }
         if (!ORACLE_VALUES.has(constraint.source)) errors.push(at + '.source must be one of ' + Array.from(ORACLE_VALUES).join('|') + '.');
         checkLevel(constraint.confidence, at + '.confidence', errors);
         if (!ENFORCEMENT_VALUES.has(constraint.enforcement)) {

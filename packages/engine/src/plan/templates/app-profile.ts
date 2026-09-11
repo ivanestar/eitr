@@ -260,6 +260,17 @@ function validate(data, parseError) {
         if (typeof entry.recordedAt !== 'string' || entry.recordedAt.length === 0) {
           errors.push(label + '.recordedAt must be a non-empty string.');
         }
+        if ('about' in entry) {
+          const about = entry.about;
+          if (!about || typeof about !== 'object' || ['site-map', 'feature-map', 'test-conditions'].indexOf(about.review) === -1) {
+            errors.push(label + '.about.review must be site-map, feature-map or test-conditions - the review the note was written in.');
+          } else if (['route', 'feature', 'page', 'entity', 'condition'].indexOf(about.type) === -1 || typeof about.id !== 'string' || about.id.length === 0) {
+            errors.push(label + '.about must name the entry it was written on: type route|feature|page|entity|condition and its id.');
+          }
+        }
+        if ('withdrawnAt' in entry && typeof entry.withdrawnAt !== 'string') {
+          errors.push(label + '.withdrawnAt, when present, must be a string: when the note was replaced or cleared.');
+        }
       });
     }
   }

@@ -1027,6 +1027,147 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
       expect(validateWith(past, inventory).errors).toEqual([]);
     });
 
+    // The second live run, after the check above: the same template with the control ids taken out -
+    // "input_field_8", "Test Sample Text", an empty value called invalid on every optional field
+    // with the field's own label quoted as the rule, meanings and constraints that fit any field.
+    it('fails the template with its ids taken out, and passes the same field read', () => {
+      const withTitle = checkoutInventory({
+        controls: checkoutInventory().controls.concat([
+          { id: 'c8', region: 'main', role: 'textbox', name: 'Title:', tag: 'input', type: 'text' },
+        ]),
+      });
+      const analysisWith = (field: Record<string, unknown>) => ({
+        'feature-checkout': {
+          featureId: 'feature-checkout',
+          purpose: 'Takes an order: the email to confirm it to and how many items',
+          fitsApplication: 'The shop exists to sell, and this is where a sale is completed',
+          archetype: 'checkout',
+          confidence: 'high',
+          anchors: [{ kind: 'feature', ref: 'feature-checkout' }],
+          fields: [
+            {
+              routeId: 'route-checkout',
+              control: 'c8',
+              role: 'free-text',
+              confidence: 'medium',
+              ...field,
+            },
+          ],
+          dependencies: [],
+          questions: [],
+          research: {
+            status: 'skipped',
+            archetype: 'checkout',
+            reason: 'no web access in this test',
+          },
+          analyzedAt: '2026-09-03T11:00:00.000Z',
+        },
+      });
+      const template = accounted() as Report & { features?: unknown };
+      template.routes['route-checkout'].parameters.push({
+        name: 'input_field_8',
+        kind: 'text',
+        control: 'c8',
+        partitions: [
+          {
+            id: 'p_valid_text',
+            kind: 'valid',
+            sampleValues: ['Test Sample Text'],
+            expectedOutcome: 'Input text is accepted for input_field_8.',
+          },
+          {
+            id: 'p_empty_text',
+            kind: 'invalid',
+            sampleValues: [''],
+            expectedOutcome: 'Empty text is rejected with validation error.',
+            rule: { signal: 'form-label', excerpt: 'Title:' },
+          },
+        ],
+        boundaries: [],
+        evidence: [{ signal: 'form-label', excerpt: 'Title:' }],
+      });
+      template.features = analysisWith({
+        meaning: 'Input value representing title',
+        constraints: [
+          {
+            statement: 'Free-text string value adhering to field length and format requirements',
+            source: 'domain',
+            confidence: 'medium',
+            enforcement: 'unknown',
+            anchors: [{ kind: 'control', ref: 'c8' }],
+          },
+        ],
+      });
+      const errors = validateWith(template, withTitle).errors;
+      expect(
+        errors.some((e) => e.includes('"input_field_8" says what kind of control it is')),
+      ).toBe(true);
+      expect(
+        errors.some((e) =>
+          e.includes('"Input text is accepted for input_field_8." is true of any field'),
+        ),
+      ).toBe(true);
+      expect(
+        errors.some((e) =>
+          e.includes('"Empty text is rejected with validation error." is true of any field'),
+        ),
+      ).toBe(true);
+      expect(
+        errors.some((e) =>
+          e.includes(
+            'calls an empty value invalid, but its rule does not say the field is required',
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        errors.some((e) => e.includes('"Input value representing title" only restates the field')),
+      ).toBe(true);
+      expect(errors.some((e) => e.includes('states no rule'))).toBe(true);
+
+      const read = accounted() as Report & { features?: unknown };
+      read.routes['route-checkout'].parameters.push({
+        name: 'report title',
+        kind: 'text',
+        control: 'c8',
+        partitions: [
+          {
+            id: 'typical',
+            kind: 'valid',
+            sampleValues: ['Checkout crash on Safari'],
+            expectedOutcome: 'the preview heading reads "Checkout crash on Safari"',
+          },
+        ],
+        boundaries: [],
+        evidence: [{ signal: 'form-label', excerpt: 'Title:' }],
+      });
+      read.features = analysisWith({
+        meaning: 'The heading the exported bug report carries; people find reports by it',
+        confidence: 'low',
+        constraints: [],
+      });
+      expect(validateWith(read, withTitle).errors).toEqual([]);
+    });
+
+    it('takes an empty value as invalid where the page says the field is required, and a bare label as no rule', () => {
+      const required = accounted();
+      // The email field carries the required attribute: an empty value is invalid there.
+      expect(validateWith(required).errors).toEqual([]);
+
+      const labelOnly = accounted();
+      labelOnly.routes['route-checkout'].parameters[1].partitions[1] = {
+        id: 'too-high',
+        kind: 'invalid',
+        sampleValues: ['1000'],
+        expectedOutcome: 'a message under the field says at most 10 can be ordered',
+        rule: { signal: 'form-label', excerpt: 'Quantity' },
+      };
+      expect(
+        validateWith(labelOnly).errors.some((e) =>
+          e.includes('quotes only the field\'s label "Quantity"'),
+        ),
+      ).toBe(true);
+    });
+
     it('fails a field meaning built from its control id, and free text on a control that offers values', () => {
       const report = accounted() as Report & { features?: Record<string, any> };
       report.features = {
