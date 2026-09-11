@@ -522,8 +522,12 @@ function renderFeatureMap(labels, data) {
     lines.push('');
   }
   const roles = profile && profile.roles && typeof profile.roles === 'object' ? Object.values(profile.roles) : [];
+  // Every entry below that spans more than one line - a role, a feature, a page inside a feature, an
+  // entity - is followed by a blank line, so where one ends and the next begins is visible at a
+  // glance in the raw file and in any markdown preview alike.
   if (roles.length > 0) {
     lines.push('**Roles crawled**');
+    lines.push('');
     for (const role of roles) {
       const purpose = fieldValue(role.purpose);
       lines.push('- ' + role.name + ': ' + (purpose === undefined ? '(no purpose recorded)' : purpose));
@@ -532,11 +536,12 @@ function renderFeatureMap(labels, data) {
         '  Reaches on its own: ' +
           (exclusive.length > 0 ? exclusive.join(', ') : 'nothing the other crawled roles could not'),
       );
+      lines.push('');
     }
-    lines.push('');
   }
 
   lines.push('**Features**');
+  lines.push('');
   features.forEach(function (feature, i) {
     lines.push(
       i + 1 + '. ' + feature.name + ' - **' + String(feature.impact).toUpperCase() + ' IMPACT**',
@@ -549,6 +554,7 @@ function renderFeatureMap(labels, data) {
       // of paths: the tier is the thing a reviewer is actually being asked to check, and checking it
       // means reading it against the page it was given for.
       lines.push('   Pages:');
+      lines.push('');
       const sorted = routes.slice().sort(function (a, b) {
         return labelFor(labels, a).localeCompare(labelFor(labels, b));
       });
@@ -576,6 +582,7 @@ function renderFeatureMap(labels, data) {
                 .join(', '),
           );
         }
+        lines.push('');
       }
     }
     const names = (Array.isArray(feature.entityIds) ? feature.entityIds : [])
@@ -591,6 +598,7 @@ function renderFeatureMap(labels, data) {
         '   Impact comes from: no page carried a criticality to draw it from, so it is assumed important until you say otherwise.',
       );
     }
+    lines.push('');
   });
 
   // A page the site map has and no feature claims will never be tested by anything downstream, and
@@ -605,19 +613,20 @@ function renderFeatureMap(labels, data) {
     return !claimed.has(routeId);
   });
   if (unclaimed.length > 0) {
-    lines.push('');
     lines.push('**Pages no feature claims**');
+    lines.push('');
     lines.push('Nothing downstream will test these until they belong somewhere:');
     for (const routeId of unclaimed.sort(function (a, b) {
       return labelFor(labels, a).localeCompare(labelFor(labels, b));
     })) {
       lines.push('- ' + labelFor(labels, routeId));
     }
+    lines.push('');
   }
 
   if (entities.length > 0) {
-    lines.push('');
     lines.push('**Things this application works with**');
+    lines.push('');
     entities.forEach(function (entity, i) {
       lines.push('E' + (i + 1) + '. ' + entity.name);
       const operations = Array.isArray(entity.operations) ? entity.operations : [];
@@ -676,6 +685,7 @@ function renderFeatureMap(labels, data) {
       if (excerpts.length > 0) {
         lines.push('   Evidences: ' + excerpts.join('; '));
       }
+      lines.push('');
     });
   }
 
@@ -718,7 +728,7 @@ function renderFeatureMap(labels, data) {
 
   return {
     entryCount: features.length + entities.length + intents.length,
-    markdown: lines.join('\\n'),
+    markdown: lines.join('\\n').trimEnd(),
     summary:
       features.length +
       ' feature(s) over ' +
@@ -824,8 +834,8 @@ function renderSiteMap(labels, data) {
             '\`',
         );
       }
+      lines.push('');
     }
-    lines.push('');
   }
 
   if (data && data.coverage) {
@@ -839,7 +849,7 @@ function renderSiteMap(labels, data) {
   }
 
   return {
-    markdown: lines.join('\\n'),
+    markdown: lines.join('\\n').trimEnd(),
     entryCount: active.length,
     summary:
       active.length +

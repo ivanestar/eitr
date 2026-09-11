@@ -581,6 +581,27 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
       }
     });
 
+    it('separates every multi-line entry with a blank line: each page, feature and entity', () => {
+      const dir = setupProject();
+      try {
+        writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
+        writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
+        const { markdown } = run(dir, '--kind=feature-map').output;
+        // A page's reasoning and evidence end before the next page starts.
+        expect(markdown).toMatch(/Evidences: "Place an order"\n\n {3}- \/route-01/);
+        // The feature's last line ends before the entity section starts.
+        expect(markdown).toMatch(
+          /Impact comes from: [^\n]+\n\n\*\*Things this application works with\*\*/,
+        );
+        // One entity's block ends before the next one's heading.
+        expect(markdown).toMatch(/\n\nE2\. orders\n/);
+        expect(markdown).not.toMatch(/\n{3}/);
+        expect(markdown).not.toMatch(/\s$/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it('says plainly where a fallback impact came from instead of presenting it as a judgment', () => {
       const dir = setupProject();
       try {

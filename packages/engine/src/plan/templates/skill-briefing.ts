@@ -58,9 +58,18 @@ const BRIEFINGS = {
       'Captures a real, working login for your tests - ${sessionArtifact} - and, if you want it, wires the same credentials into CI.',
     how: 'Asks a short series of questions computed from what this project already has, then prints one command for you to run yourself. A real browser opens, you log in normally - SSO, MFA, whatever your app uses - and closing the window saves the session.',
     why: 'Without it every later step only ever sees the signed-out surface of the application, which on most apps is the login page and nothing else.',
-    notes: [
-      'You type your credentials into the browser, never into this chat. Nothing echoes them back, and no part of this flow needs to know them.',
-      'Nothing is pushed to CI without a separate yes to that specific question.',
+    notes: [],
+    callouts: [
+      {
+        label: 'NOTE',
+        title: 'Your credentials',
+        text: 'You type your credentials into the browser, never into this chat. Nothing echoes them back, and no part of this flow needs to know them.',
+      },
+      {
+        label: 'NOTE',
+        title: 'Your control',
+        text: 'Nothing is pushed to CI without a separate yes to that specific question.',
+      },
     ],
     produces: ['.auth/<role>.json'],
     question: {
@@ -79,8 +88,10 @@ const BRIEFINGS = {
     how: 'Opens the page live, reads its elements by test id, role and label, reuses the shared widgets this project already has, and checks every locator against the running application before saving anything.',
     why: 'Tests address your application through these objects. A locator nobody verified becomes a test that fails for a reason that has nothing to do with your product.',
     notes: [
-      'Reads the live page and never submits anything. Existing method signatures are preserved, so specs already using this page keep compiling.',
+      'Reads the live page and never submits anything.',
+      'Existing method signatures are preserved, so specs already using this page keep compiling.',
     ],
+    callouts: [],
     produces: ['${pageObjectPath}'],
     question: {
       text: 'Generate the Page Object now?',
@@ -98,9 +109,19 @@ const BRIEFINGS = {
     why: 'This is the step that produces the actual suite. Everything before it is a plan on disk.',
     notes: [
       'Writes files and runs tests against your live application.',
-      'How long it runs scales with how many cases are in the batch: one case is minutes, a full backlog is considerably more, and it writes and runs each one in turn.',
-      'Nothing is written until you approve the proposal - in guided mode and in auto-pilot alike. That gate is never skipped.',
       'Test data is generated fresh; it never reuses a real account or a value read off your app.',
+    ],
+    callouts: [
+      {
+        label: 'WARNING',
+        title: 'Time and cost',
+        text: 'How long it runs scales with how many cases are in the batch: one case is minutes, a full backlog is considerably more, and it writes and runs each one in turn.',
+      },
+      {
+        label: 'NOTE',
+        title: 'Your control',
+        text: 'Nothing is written until you approve the proposal - in guided mode and in auto-pilot alike. That gate is never skipped.',
+      },
     ],
     produces: ['a test spec file, and any missing Page Object it needed'],
     question: {
@@ -118,8 +139,15 @@ const BRIEFINGS = {
     how: "Reads the failing run's own evidence (network, console, DOM, screenshots), classifies the failure, fixes the locator, the wait or the test data, and re-runs that single test. Two attempts, then it rolls its own changes back.",
     why: 'A red test is either a defect worth reporting or drift worth fixing, and guessing which costs more than finding out.',
     notes: [
-      'Modifies Page Objects and re-runs one test. It never edits a test to make a real failure disappear - a product bug is reported as one.',
+      'Modifies Page Objects and re-runs one test.',
       'Runs \\\`${sc.testRunCmd}\\\` scoped to the failing test, not the whole suite.',
+    ],
+    callouts: [
+      {
+        label: 'NOTE',
+        title: 'Real bugs stay visible',
+        text: 'It never edits a test to make a real failure disappear - a product bug is reported as one.',
+      },
     ],
     produces: ['a fix in the affected Page Object, or a reported defect'],
     question: {
@@ -136,10 +164,18 @@ const BRIEFINGS = {
     what: 'Re-points every Page Object that a UI change broke, across the routes actually affected.',
     how: 'Runs the suite to find what is genuinely broken, tells you the exact routes before touching a single file, then rewrites those locators in parallel and re-verifies each one against the live application.',
     why: 'One design-system change breaks many tests for the same reason. Fixing them one at a time costs more and drifts further apart with every fix.',
-    notes: [
-      'It starts by running the whole suite to find out what is genuinely broken, so the first few minutes are your own tests executing against the app.',
-      'That first step only reports. You see the exact blast radius - which routes, how many - and approve it before a single file is rewritten.',
-      'Public method signatures are preserved, so your specs keep compiling.',
+    notes: ['Public method signatures are preserved, so your specs keep compiling.'],
+    callouts: [
+      {
+        label: 'WARNING',
+        title: 'Time',
+        text: 'It starts by running the whole suite to find out what is genuinely broken, so the first few minutes are your own tests executing against the app.',
+      },
+      {
+        label: 'NOTE',
+        title: 'Your control',
+        text: 'That first step only reports. You see the exact blast radius - which routes, how many - and approve it before a single file is rewritten.',
+      },
     ],
     produces: ['updated locators in the affected Page Objects'],
     question: {
@@ -157,10 +193,20 @@ const BRIEFINGS = {
     how: 'Signs in with your saved session, walks the app link by link inside limits you set before it starts, reads each page and looks at its own screenshot, and writes down what it finds as it goes.',
     why: 'Everything later is built on knowing which pages exist. No later stage can invent a page this one did not find.',
     notes: [
-      'This is the long one: tens of minutes on a small app, hours on a large one, and it uses a real share of this session\\'s budget.',
-      'It touches your live application. Before it starts you choose whether it may interact at all or only read - and if it may, it still never presses anything that commits (buy, delete, submit).',
       'It reports progress as it goes and picks up where it stopped if it is interrupted, so stopping costs you the current page and nothing more.',
       'If the site answers with a bot check, a block page or a certificate the browser does not trust, it stops and tells you what it needs rather than mapping the refusal - a test or staging instance that lets automated browsers in avoids that.',
+    ],
+    callouts: [
+      {
+        label: 'WARNING',
+        title: 'Time and cost',
+        text: 'This is the long one: tens of minutes on a small app, hours on a large one, and it uses a real share of this session\\'s budget.',
+      },
+      {
+        label: 'WARNING',
+        title: 'Live application',
+        text: 'It touches your live application. Before it starts you choose whether it may interact at all or only read - and if it may, it still never presses anything that commits (buy, delete, submit).',
+      },
     ],
     produces: ['artifacts/site-map/site-map.json', 'artifacts/site-map/inventory/'],
     question: {
@@ -180,7 +226,13 @@ const BRIEFINGS = {
     notes: [
       'It visits every page again, so on a large map this is minutes rather than seconds - but read-only: it reads markup and existing artifacts and never clicks, fills or submits anything.',
       'Everything it drafts is a hypothesis marked as one until you approve it. A resource-shaped path is not proof of a domain entity.',
-      'How critical each page is decides how much testing it gets later, so that column is the one worth reading closely.',
+    ],
+    callouts: [
+      {
+        label: 'NOTE',
+        title: 'What to read closely',
+        text: 'How critical each page is decides how much testing it gets later, so that column is the one worth reading closely.',
+      },
     ],
     produces: ['artifacts/analysis/feature-map.json'],
     question: {
@@ -198,10 +250,15 @@ const BRIEFINGS = {
     how: 'Works feature by feature, riskiest first: understands each one in the light of what the whole application is for, looks up how that kind of feature is tested and where it usually breaks (5-7 sources, reused for every feature of the same kind), tries values in fields whose limits the page does not state, then writes the checks only reasoning can find and generates the mechanical ones.',
     why: 'This is the one stage where a real defect can be found before any code exists, and the one place your own knowledge - a business rule, a past incident - changes what gets tested.',
     notes: [
-      'With your permission to interact it types values into fields to see what they accept, and puts them back. It presses submit only if you allowed any action and this is not production.',
       'Questions it cannot settle - what a field means, a limit nothing states - come to you together at the review, not one by one.',
       'Nothing is thrown away as "minor": everything is ranked, and you decide what to cut.',
-      'If your app saves on every keystroke, say so and it will stay with static markup only.',
+    ],
+    callouts: [
+      {
+        label: 'WARNING',
+        title: 'Live application',
+        text: 'With your permission to interact it types values into fields to see what they accept, and puts them back. It presses submit only if you allowed any action and this is not production. If your app saves on every keystroke, say so and it will stay with static markup only.',
+      },
     ],
     produces: ['artifacts/analysis/test-conditions.json'],
     question: {
@@ -221,6 +278,7 @@ const BRIEFINGS = {
     notes: [
       'Nothing runs against your application here, and nothing blocks: the draft is written and stays correctable at any point.',
     ],
+    callouts: [],
     produces: ['artifacts/test-cases/test-cases.json'],
     question: {
       text: 'Draft the test cases?',
@@ -241,6 +299,9 @@ const BRIEFINGS = {
       'No test code is ever written without your explicit approval of the proposal - in guided mode and in auto-pilot alike.',
       'The stage list, how long this takes, and where the pauses are come next, from the pipeline itself.',
     ],
+    // The time-and-cost warning and the review pauses are printed by the pipeline's own pre-flight
+    // notice straight after this briefing, so they are not repeated here.
+    callouts: [],
     produces: ['every artifact of the stages it runs, and the test files at the end'],
     // No question of its own: the very next thing this skill asks is the guided-versus-auto-pilot
     // choice, which is the same decision. Asking to continue and then immediately asking how to
@@ -260,21 +321,29 @@ function parseArgs(argv) {
   return args;
 }
 
-// Rendered as an aligned block rather than a paragraph: the three questions a person actually has
-// (what will this do, how, and why should I let it) stay readable at a glance, and the things worth
-// knowing before answering sit below them instead of being buried mid-sentence.
+// Each block is a heading on its own line with its text below it, and one blank line between blocks.
+// The three questions a person actually has (what will this do, how, and why should I let it) stay
+// readable at a glance; the things worth knowing sit below them as bullets; and the few that must
+// not be missed - time and cost, contact with the live application, where the person stays in
+// control - get a [WARNING] or [NOTE] label of their own instead of sitting in the list.
+function renderCallout(callout) {
+  return ['[' + callout.label + '] ' + callout.title + ':', callout.text].join('\\n');
+}
+
 function renderBriefing(entry) {
-  const lines = [
-    'What happens:  ' + entry.what,
-    'How:           ' + entry.how,
-    'Why:           ' + entry.why,
+  const blocks = [
+    'What happens:\\n' + entry.what,
+    'How:\\n' + entry.how,
+    'Why:\\n' + entry.why,
   ];
-  if (entry.notes && entry.notes.length > 0) {
-    lines.push('');
-    lines.push('Before you decide:');
-    for (const note of entry.notes) lines.push('  - ' + note);
+  if (entry.notes.length > 0) {
+    const bullets = entry.notes.map(function (note) {
+      return '  \\u2022 ' + note;
+    });
+    blocks.push('Before you decide:\\n\\n' + bullets.join('\\n'));
   }
-  return lines.join('\\n');
+  for (const callout of entry.callouts) blocks.push(renderCallout(callout));
+  return blocks.join('\\n\\n');
 }
 
 function main() {

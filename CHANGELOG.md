@@ -5,6 +5,8 @@ All notable changes to this project are documented here, newest release first, f
 
 ## [0.1.0] - 2026-09-06
 
+- **Changed**: skill briefings and the pipeline's pre-flight notice print each heading on its own line with one blank line between blocks, bullets for what is worth knowing, and `[WARNING]` / `[NOTE]` labels for time and cost, contact with the live application, and where the person stays in control. The stage list keeps its descriptions in one column whichever stage is bracketed. The feature map review separates every role, feature, page and entity with a blank line.
+
 - **Changed**: `/define-test-conditions` works per reviewed feature and starts from what the feature means. Before any condition, it records what the feature does, how it serves the application's confirmed purpose, what every field means and should obey (with where each constraint comes from and what the page enforces today), its dependencies, and the questions only a person can settle. Every parameter must stand on a field meaning. See ADR 0014.
 - **Added**: every test condition says what it exercises (field, rule, behaviour, frame) and where its expected result comes from: a requirement, a person, research or the meaning of the feature checks correctness, while what the page states or was seen doing only guards against regression. The review marks which is which. Anchors must point at something that exists.
 - **Added**: conditions are ranked as likelihood times the feature's impact (P1-P3) by the generator. Nothing is removed for ranking low; a condition that may be a check for its own sake carries a visible note, and the person decides. New techniques: `decision-table` and `error-guessing`.

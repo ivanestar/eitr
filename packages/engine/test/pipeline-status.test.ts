@@ -290,6 +290,60 @@ describe('scripts/pipeline-status.mjs (real execution)', () => {
     }
   });
 
+  it('prints the pre-flight notice in the agreed block shape, word for word', () => {
+    const dir = setupProject();
+    try {
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.preFlightNotice).toBe(
+        [
+          '6 stages, each one ending with your review:',
+          '',
+          '  1. [Site map]       crawl the app, and work out what each page is for',
+          '  2. Feature map      group those pages into features, and work out what the app is made of',
+          '  3. Test conditions  decide what should be tested',
+          '  4. Test cases       turn those into concrete, readable test cases',
+          '  5. Automated tests  write the real test code and run it',
+          '  6. Test closure     check what is covered, and decide whether that is enough',
+          '',
+          '[WARNING] Time and cost:',
+          "This can take anywhere from tens of minutes to multiple hours depending on application size, and consumes a meaningful share of the session's generation budget.",
+          '',
+          '[NOTE] Your control:',
+          "By default there is a pause after every stage, where that stage's own review artifact is presented and you must approve before the next stage runs.",
+        ].join('\n'),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps every stage description in one column when the bracketed stage is the widest name', () => {
+    const dir = setupProject();
+    writeSiteMap(dir);
+    writeFeatureMap(dir, { featureReviewed: true });
+    try {
+      const output = JSON.parse(run(dir).stdout);
+      expect(output.stage).toBe('feature-map-reviewed');
+      const stageLines = output.preFlightNotice
+        .split('\n')
+        .filter((line: string) => /^ {2}\d\. /.test(line));
+      expect(stageLines).toHaveLength(6);
+      expect(stageLines[2]).toContain('[Test conditions]');
+      const blurbs = [
+        'crawl the app',
+        'group those pages',
+        'decide what',
+        'turn those',
+        'write the real',
+        'check what',
+      ];
+      const columns = stageLines.map((line: string, i: number) => line.indexOf(blurbs[i]));
+      expect(new Set(columns).size).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('sends a project with a site map and nothing else to /map-features', () => {
     const dir = setupProject();
     writeSiteMap(dir);
