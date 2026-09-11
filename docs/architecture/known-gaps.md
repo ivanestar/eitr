@@ -54,34 +54,17 @@ is for gaps significant enough to shape future architecture, not routine finding
   `.scaffold/schemas/site-map.schema.json` are unaffected and remain the source of truth for every
   consumer (`pom-engineer`, `/scan-and-generate-pom`, `/automate-test`, `/map-features`). Re-open only on a new, explicit maintainer decision to build a human-facing view again -
   not on a future audit finding the gap again.
-- **Requirements → test-case generation:** an agent that derives test cases from live application
-  analysis or existing requirements documentation, rather than from an already-written TMS ticket,
-  is a considered future extension (see the README's Introduction). The shape a future
-  implementation must take - a staged, mechanically-gated pipeline in the assistant layer,
-  subsuming `/legacy-audit` and the Requirements-Diff Agent backlog items as entry points rather than
-  separate features - is settled in
-  [`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md).
-  Stage 1 (per-route business-intent/criticality analysis, `/map-site` Step 6 - see
-  [`ai-agent-integration.md`](ai-agent-integration.md)) is implemented. Stage 2 (test-condition
-  derivation - 2-way combinatorial coverage, 3-value boundary-value analysis, a mechanical
-  redaction backstop, human sign-off - the new `/define-test-conditions` skill) is implemented.
-  Stage 3 (test-level/journey placement - the deterministic `/design-test-cases` classifier,
-  ADR 0012 Track 5) is implemented, v0: journeys are single-route only, no cross-route flow
-  detection yet. Stage 4 (spec synthesis) is implemented as a bridge rather than a new gate:
-  `/automate-test` now reads `artifacts/test-cases/test-cases.json` directly when invoked with no TMS
-  ticket ID, so its own existing Human Sign-Off Gateway (unchanged) is the human sign-off before
-  code generation for a locally-drafted test case too - closing the greenfield "from nothing" flow
-  end-to-end without a hand-written TMS ticket.
-- **CI test sharding for Java/C# on GitHub Actions:** resolved (Track 8, maintainer-authorized
-  reversal of the original position below, 2026-09-02). Neither Maven Surefire/Gradle nor NUnit
-  ships a free, official automatic-balanced-split mechanism (only manual tag/category filtering
-  with no auto-balancing; the one real automatic option, Gradle Develocity Test Distribution, is a
-  paid product), so the original decision was to accept the gap rather than hand-roll a splitter.
-  The maintainer authorized reversing that decision on different grounds (CI execution time on
-  large projects, not tooling availability), so a deterministic FNV-1a hash-based class-count
-  partitioner now 4-way shards C# and Java the same way TS/JS (`--shard`) and Python
-  (`pytest-split`) already did - GitHub Actions only, matching Track 8's own acceptance criterion;
-  GitLab CI/Jenkins/TeamCity remain unsharded for these two languages. Partitions by test-class
-  **count**, not measured execution time (same class of limitation `pytest-split`/`--shard` accept
-  by default). Re-open only on a new, explicit maintainer decision (e.g. to extend sharding to the
-  other 3 CI providers) - not on a future audit finding this gap again.
+- **Test cases from requirements alone:** the pipeline that derives test cases without a
+  hand-written TMS ticket
+  ([`decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md`](decisions/0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md))
+  runs end to end from a crawled application: `/map-site` records the routes, `/map-features`
+  groups them into features with a criticality each, `/define-test-conditions` analyses every
+  reviewed feature in context
+  ([`decisions/0014-context-driven-test-analysis.md`](decisions/0014-context-driven-test-analysis.md)),
+  `/design-test-cases` composes journeys (a feature's happy path across its own routes, targeted
+  journeys per route for the rest), and `/automate-test` turns a drafted test case into a spec behind
+  its own Human Sign-Off Gateway. Requirements, tickets and code can back a condition as evidence
+  beside a crawled application; a documents-only basis, with no application to crawl, is not built.
+  `/design-test-cases` and `/automate-test` also still read conditions per route and do not yet use
+  a condition's layer, oracle or priority. `/legacy-audit` and a Requirements-Diff Agent, when they
+  are built, enter this pipeline as further sources rather than becoming separate features.

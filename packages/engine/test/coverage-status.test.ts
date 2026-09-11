@@ -18,6 +18,17 @@ function write(dir: string, relPath: string, data: unknown) {
   writeFileSync(join(dir, relPath), JSON.stringify(data, null, 2), 'utf8');
 }
 
+// What /automate-test writes for a journey: a spec tagged with the journey's id.
+function writeSpec(dir: string, journeyId: string, subdir = '') {
+  const specDir = join(dir, 'tests', subdir);
+  mkdirSync(specDir, { recursive: true });
+  writeFileSync(
+    join(specDir, 'TC-' + journeyId + '.spec.ts'),
+    "test('x', { tag: ['@smoke', '@journey:" + journeyId.slice(0, 12) + "'] }, async () => {});\n",
+    'utf8',
+  );
+}
+
 function run(dir: string) {
   const result = spawnSync('node', ['coverage-status.mjs'], { cwd: dir, encoding: 'utf8' });
   return { result, output: JSON.parse(result.stdout) };
@@ -145,9 +156,83 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
           },
         },
       });
+      writeSpec(dir, 'j1');
 
       const check = criterion(run(dir).output, 'important-routes-automated');
       expect(check.met).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The flag is written by the run it describes; the spec on disk is the second reading.
+  it('does not count a journey marked automated when no spec carries its tag', () => {
+    const dir = setupProject();
+    try {
+      write(dir, 'artifacts/site-map/site-map.json', siteMap());
+      write(
+        dir,
+        'artifacts/analysis/feature-map.json',
+        featureMapWithTiers({ 'r-checkout': 'high', 'r-help': 'low' }),
+      );
+      write(dir, 'artifacts/test-cases/test-cases.json', {
+        schemaVersion: 2,
+        generatedAt: '2026-09-08T10:00:00.000Z',
+        journeys: {
+          j1: {
+            journeyId: 'j1',
+            routeIds: ['r-checkout'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            reviewed: true,
+            testCase: { title: 'Pay' },
+          },
+        },
+      });
+      // Another journey's spec whose tag merely starts with this one's confirms nothing.
+      writeSpec(dir, 'j10');
+
+      const { output } = run(dir);
+      expect(criterion(output, 'important-routes-automated').gaps).toEqual([
+        '/checkout (high impact)',
+      ]);
+      expect(criterion(output, 'drafted-test-cases-automated').gaps).toEqual([
+        '/checkout: Pay (marked automated, but no spec under tests/ carries @journey:j1)',
+      ]);
+      expect(output.automatedRoutes).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('finds a tagged spec in a subdirectory of the spec folder', () => {
+    const dir = setupProject();
+    try {
+      write(dir, 'artifacts/site-map/site-map.json', siteMap());
+      write(
+        dir,
+        'artifacts/analysis/feature-map.json',
+        featureMapWithTiers({ 'r-checkout': 'high', 'r-help': 'low' }),
+      );
+      write(dir, 'artifacts/test-cases/test-cases.json', {
+        schemaVersion: 2,
+        generatedAt: '2026-09-08T10:00:00.000Z',
+        journeys: {
+          a1b2c3d4e5f6a7b8: {
+            journeyId: 'a1b2c3d4e5f6a7b8',
+            routeIds: ['r-checkout'],
+            testInterface: 'ui',
+            breadth: 'targeted',
+            reviewed: true,
+            testCase: { title: 'Pay' },
+          },
+        },
+      });
+      writeSpec(dir, 'a1b2c3d4e5f6a7b8', 'checkout');
+
+      const { output } = run(dir);
+      expect(criterion(output, 'important-routes-automated').met).toBe(true);
+      expect(output.automatedRoutes).toBe(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -179,6 +264,7 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
           },
         },
       });
+      writeSpec(dir, 'j1');
 
       const check = criterion(run(dir).output, 'drafted-test-cases-automated');
       expect(check.met).toBe(false);
@@ -290,6 +376,7 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
           },
         },
       });
+      writeSpec(dir, 'j1');
 
       const { output } = run(dir);
       // Every measurable criterion passes here, but test conditions and api contracts were never
@@ -418,6 +505,7 @@ describe('scripts/coverage-status.mjs (real execution)', () => {
             },
           },
         });
+        writeSpec(dir, 'j1');
         expect(criterion(run(dir).output, 'important-routes-automated').met).toBe(true);
       } finally {
         rmSync(dir, { recursive: true, force: true });

@@ -117,8 +117,10 @@ merge job/stage/build-type combines into one HTML + JUnit report via `playwright
 Python via the third-party `pytest-split` plugin (`--splits`/`--group`), which reports per shard
 independently (no merge step, since pytest has no equivalent mergeable report format). TeamCity's
 merge wiring for TS follows TeamCity's documented general dependency pattern but isn't verified
-against a live server (tracked in TODO.md). Java and C# do not shard, by design, not oversight -
-see `known-gaps.md` ("No CI test sharding for Java or C#").
+against a live server (tracked in TODO.md). Java and C# shard 4-way on GitHub Actions only, by
+test-class count through a hash-based partitioner, since neither Surefire/Gradle nor NUnit ships a
+free balanced split; both stacks are frozen
+([`decisions/0013-freeze-non-typescript-stacks.md`](decisions/0013-freeze-non-typescript-stacks.md)).
 
 ## API testing support
 

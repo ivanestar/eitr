@@ -67,6 +67,7 @@ import { renderCorroboration } from './templates/corroboration.js';
 import { renderAppProfile } from './templates/app-profile.js';
 import { renderAppProfileTypes } from './templates/app-profile-types.js';
 import { renderCoverageStatus } from './templates/coverage-status.js';
+import { resolveStackConventions } from './stack-conventions.js';
 import { renderJourneysTypes } from './templates/journeys-types.js';
 import { renderJourneysEngine } from './templates/journeys-engine.js';
 import { renderApiContractsTypes } from './templates/api-contracts-types.js';
@@ -83,6 +84,8 @@ import { renderJourneysValidator } from './templates/journeys-validator.js';
  */
 export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
   const ciCd = opts.ciCd ?? 'none';
+  // Where specs live, so coverage-status can confirm a journey's spec exists on disk.
+  const specs = resolveStackConventions(opts.automationTool, opts.language);
 
   const files: FileDescriptor[] = [
     ...planMcpServer(
@@ -336,7 +339,10 @@ export function planSharedScaffold(opts: PlanOptions): FileDescriptor[] {
             path: 'scripts/coverage-status.mjs',
             writePolicy: 'create-if-absent',
             provenance: { origin: 'project' },
-            source: { kind: 'inline', text: renderCoverageStatus() },
+            source: {
+              kind: 'inline',
+              text: renderCoverageStatus(specs.specDir, specs.specExtension),
+            },
           },
           {
             path: '.scaffold/schemas/test-cases.types.ts',

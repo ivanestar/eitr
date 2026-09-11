@@ -630,7 +630,9 @@ Three rules govern all of them:
 Other deterministic helpers worth knowing about, so you never re-derive by hand what a script
 already computes: \`scripts/pipeline-status.mjs\` (which analysis stage this project is at and what
 runs next), \`scripts/coverage-status.mjs\` (whether the suite meets its exit criteria, and exactly
-which routes, test cases or endpoints are still uncovered), \`scripts/auth-status.mjs\` (saved
+which routes, test cases or endpoints are still uncovered - a drafted test case counts as automated
+only once a spec file carries its \`@journey:\` tag, so keep that tag through every edit),
+\`scripts/auth-status.mjs\` (saved
 sessions, declared vs captured roles, configured CI provider), \`scripts/auth-questions.mjs\`
 (which question the auth flow asks next given the answers so far, and what those answers add up
 to - the questions are computed, not composed at the point of asking),

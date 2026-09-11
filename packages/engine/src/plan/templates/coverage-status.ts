@@ -9,7 +9,15 @@
 //
 // It deliberately reports rather than gates. A team can legitimately decide to ship with a route
 // uncovered; what they should not be able to do is not notice.
-export function renderCoverageStatus(): string {
+//
+// "Automated" needs two independent readings to agree: the reviewed flag /automate-test sets on a
+// journey, and a spec file on disk carrying that journey's @journey tag. The flag alone is a claim
+// written by the same run it describes, and it stays set after the spec is deleted or when the spec
+// was never written.
+export function renderCoverageStatus(
+  specDir: string = 'tests',
+  specExtension: string = '.spec.ts',
+): string {
   return `#!/usr/bin/env node
 
 /**
@@ -33,6 +41,8 @@ const TEST_CONDITIONS_PATH = path.join(CWD, 'artifacts', 'analysis', 'test-condi
 const TEST_CASES_PATH = path.join(CWD, 'artifacts', 'test-cases', 'test-cases.json');
 const API_CONTRACTS_PATH = path.join(CWD, 'artifacts', 'site-map', 'api-contracts.json');
 const FEATURE_MAP_PATH = path.join(CWD, 'artifacts', 'analysis', 'feature-map.json');
+const SPEC_DIR = ${JSON.stringify(specDir)};
+const SPEC_EXTENSION = ${JSON.stringify(specExtension)};
 
 function loadJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -41,6 +51,41 @@ function loadJson(filePath) {
   } catch {
     return null;
   }
+}
+
+// Every spec file's text, read once. /automate-test tags each spec it writes for a journey with
+// @journey:<first 12 characters of the journeyId>, and that tag is how a spec is matched to its
+// journey here.
+function readSpecTexts() {
+  const texts = [];
+  const pending = [path.join(CWD, SPEC_DIR)];
+  while (pending.length > 0) {
+    const dir = pending.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(full);
+      } else if (entry.isFile() && entry.name.endsWith(SPEC_EXTENSION)) {
+        try {
+          texts.push(fs.readFileSync(full, 'utf8'));
+        } catch {
+          // An unreadable file cannot confirm anything; it simply does not count.
+        }
+      }
+    }
+  }
+  return texts;
+}
+
+function journeyTag(journey) {
+  return 'journey:' + String(journey.journeyId || '').slice(0, 12);
 }
 
 function routeEntries(siteMap) {
@@ -93,7 +138,15 @@ function main() {
     }
     return covered;
   }
-  const automatedRouteIds = routeIdsCovered((j) => j.testCase && j.reviewed === true);
+  const specTexts = readSpecTexts();
+  function hasSpec(journey) {
+    if (!journey.journeyId) return false;
+    const tag = journeyTag(journey).replace(/[.*+?^$()|[\\]{}\\\\]/g, '\\\\$&');
+    const pattern = new RegExp(tag + '(?![0-9A-Za-z])');
+    return specTexts.some((text) => pattern.test(text));
+  }
+  const isAutomated = (j) => Boolean(j.testCase) && j.reviewed === true && hasSpec(j);
+  const automatedRouteIds = routeIdsCovered(isAutomated);
   const draftedRouteIds = routeIdsCovered((j) => Boolean(j.testCase));
 
   const featureMap = loadJson(FEATURE_MAP_PATH);
@@ -126,14 +179,18 @@ function main() {
     ),
   );
 
-  // 2. Work that was drafted and then quietly abandoned - the 12-of-92 failure mode.
+  // 2. Work that was drafted and then quietly abandoned - the 12-of-92 failure mode - and work
+  // marked automated whose spec cannot be found.
   const draftedNotAutomated = journeys
-    .filter((j) => j.testCase && j.reviewed !== true)
+    .filter((j) => j.testCase && !isAutomated(j))
     .map(
       (j) =>
         (j.routeIds || []).map((routeId) => pathByRouteId.get(routeId) || routeId).join(' -> ') +
         ': ' +
-        (j.testCase.title || 'untitled'),
+        (j.testCase.title || 'untitled') +
+        (j.reviewed === true
+          ? ' (marked automated, but no spec under ' + SPEC_DIR + '/ carries @' + journeyTag(j) + ')'
+          : ''),
     );
   criteria.push(
     criterion(

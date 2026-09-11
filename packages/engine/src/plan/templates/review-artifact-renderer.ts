@@ -859,6 +859,19 @@ function renderFeatureMap(labels, data, registry) {
       }
       lines.push('');
     });
+  } else {
+    // A missing section would read as nothing to review. What an empty one costs later stages is
+    // worth saying: without an entity there is no lifecycle, and the flow-based techniques need one.
+    lines.push('**Things this application works with**');
+    lines.push('');
+    lines.push(
+      'None found: the recorded traffic named no resource, and no name recurred across page addresses ' +
+        '(as /orders and /orders/{id} would). With nothing that is created, changed or deleted, no ' +
+        'state-transition or use-case test ' +
+        "conditions will be drafted; the conditions rest on each page's fields and behavior. If the " +
+        'application does keep records (orders, accounts, documents), write which ones under this line.',
+    );
+    lines.push('');
   }
 
   const unreviewedRelations = entities.reduce(function (total, entity) {

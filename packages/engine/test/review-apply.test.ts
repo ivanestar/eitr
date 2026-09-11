@@ -168,6 +168,33 @@ describe('scripts/apply-review.mjs - feature map', () => {
     }
   });
 
+  // The empty-entities notice invites a note. It sits under a section heading, so a note there
+  // belongs to no feature or page and comes back as a general correction.
+  it('hands back a note written under the no-entities notice without pinning it on an entry', () => {
+    const dir = setupProject();
+    try {
+      const map = featureMap() as Record<string, any>;
+      map.entities = {};
+      map.features.f1.entityIds = [];
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMap());
+      writeJson(dir, 'artifacts/analysis/feature-map.json', map);
+      node(dir, 'render-review-artifact.mjs', '--kind=feature-map');
+      editView(dir, (text) =>
+        text
+          .replace('- [ ] F1. Ordering', '- [x] F1. Ordering')
+          .replace(/(write which ones under this line\.)/, '$1\nIt keeps orders.'),
+      );
+      const result = node(dir, 'apply-review.mjs', '--kind=feature-map');
+      expect(result.status).toBe('APPLIED');
+      expect(result.applied.approved).toEqual(['F1']);
+      expect(result.freeEdits).toEqual([
+        { label: null, entry: null, removed: [], added: ['It keeps orders.'] },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('approves everything untouched with ALL, and holds back an entry the person also corrected', () => {
     const dir = setupProject();
     try {
