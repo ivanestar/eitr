@@ -32,6 +32,8 @@
 // expected outcome the extraction step recorded on the partition or boundary it draws on, so a
 // condition always names something a person can check.
 
+import { PII_MASK_SOURCE } from './pii-mask.js';
+
 export function renderTestConditionsEngine(): string {
   return `#!/usr/bin/env node
 
@@ -107,38 +109,31 @@ function loadJson(filePath, label) {
   }
 }
 
-// Deterministic redaction backstop - same PII classes as /map-site Step 6's guard, applied
-// mechanically here rather than trusted to prompt-following alone. Separators (space, hyphen,
-// parens, dot) between digits do not defeat the match - "4111 1111 1111 1111",
-// "123-45-6789", and "(555) 123-4567" must all redact fully, not just their first unbroken run.
-const DIGIT_RUN = /\\d(?:[\\s\\-().]*\\d){5,}/g;
-const MAJORITY_DIGIT_TOKEN = /[A-Za-z0-9]{8,}/g;
+// Deterministic redaction backstop, applied mechanically here rather than trusted to
+// prompt-following alone.
+${PII_MASK_SOURCE}
 
-function isMajorityDigit(token) {
-  const digits = token.replace(/[^0-9]/g, '').length;
-  return digits > token.length / 2;
-}
-
-function redact(text) {
-  if (typeof text !== 'string') return text;
-  let out = text.replace(DIGIT_RUN, '[REDACTED]');
-  out = out.replace(MAJORITY_DIGIT_TOKEN, function (token) {
-    return isMajorityDigit(token) ? '[REDACTED]' : token;
-  });
-  return out;
-}
-
+// Excerpts and option labels are read off the page, so the whole rule applies to them. Sample values
+// are test data the extraction wrote itself, and an email field needs an email address among them:
+// masking one would leave its valid partition with nothing to type. Digit shapes are still masked
+// there, in case a real account or card number was copied instead of made up.
 function redactEntry(entry) {
   for (const param of entry.parameters || []) {
     for (const ev of param.evidence || []) {
-      if (ev && typeof ev.excerpt === 'string') ev.excerpt = redact(ev.excerpt);
+      if (ev && typeof ev.excerpt === 'string') ev.excerpt = maskPii(ev.excerpt);
     }
     for (const partition of param.partitions || []) {
       if (Array.isArray(partition.sampleValues)) {
-        partition.sampleValues = partition.sampleValues.map(redact);
+        partition.sampleValues = partition.sampleValues.map(function (value) {
+          return maskPii(value, { keepEmails: true });
+        });
       }
     }
-    if (Array.isArray(param.options)) param.options = param.options.map(redact);
+    if (Array.isArray(param.options)) {
+      param.options = param.options.map(function (option) {
+        return maskPii(option);
+      });
+    }
   }
 }
 

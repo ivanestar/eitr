@@ -45,8 +45,8 @@ export type FeatureMapSource =
 
 export interface FeatureEvidence {
   signal: FeatureMapSource;
-  // <=100 chars, PII/session-data masked the same way every other evidence excerpt in this
-  // pipeline is: a 6+ digit run or an 8+-char majority-digit token becomes [REDACTED].
+  // <=100 chars. An email address, six or more digits (separators between them included) and a
+  // mostly-digit id are masked as [REDACTED], as in every other excerpt of this pipeline.
   excerpt: string;
 }
 

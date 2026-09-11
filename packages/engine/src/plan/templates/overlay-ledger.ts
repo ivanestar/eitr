@@ -21,6 +21,8 @@
 // boundary the human actually set, and refuses to let a route be finished with an overlay still open.
 // The model reads a page and reports; it never decides whether the page is clean.
 
+import { PII_MASK_SOURCE } from './pii-mask.js';
+
 export function renderOverlayLedger(): string {
   return `#!/usr/bin/env node
 
@@ -171,32 +173,14 @@ function toSlug(routePath) {
   return slug || 'root';
 }
 
-// Same digit-shaped thresholds as every other PII/session-data guard in this pipeline (a run of 6+
-// consecutive digits, or an 8+-char token where digits are the majority), applied here rather than
-// asked for: a modal is the single most likely place in an application to render the signed-in
-// user's own name, email or account number, and this text goes into a committed artifact.
-const DIGIT_RUN = /\\d{6,}/;
-const EMAIL = /^[\\w.+-]+@[\\w-]+\\.[\\w.-]+$/;
+${PII_MASK_SOURCE}
 
-function isMajorityDigitToken(token) {
-  if (token.length < 8) return false;
-  const digits = (token.match(/\\d/g) || []).length;
-  return digits > token.length / 2;
-}
-
+// Applied here rather than asked for: a modal is the single most likely place in an application to
+// render the signed-in user's own name, email or account number, and this text goes into a committed
+// artifact.
 function redact(value, maxLength) {
   if (typeof value !== 'string') return '';
-  const masked = value
-    .replace(/\\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .map(function (token) {
-      if (EMAIL.test(token)) return '[REDACTED]';
-      if (DIGIT_RUN.test(token) || isMajorityDigitToken(token)) return '[REDACTED]';
-      return token;
-    })
-    .join(' ');
-  return masked.slice(0, maxLength || 200);
+  return maskPii(value.replace(/\\s+/g, ' ').trim()).slice(0, maxLength || 200);
 }
 
 function readState() {

@@ -77,8 +77,9 @@ export interface ApiContractEntry {
   // route is "current" yet); an in-app call observed during /map-site's own crawl names the route
   // whose page triggered it.
   observedFromRouteIds: string[];
-  // A representative request payload, PII/session-data redacted the same way every other evidence
-  // field in this pipeline already is (6+ digit runs, 8+-char majority-digit tokens -> [REDACTED]).
+  // A representative request payload. A value holding an email address, six or more digits
+  // (separators between them included) or a mostly-digit id is replaced with [REDACTED], and so is
+  // any field whose name is sensitive (password, token, email...).
   // Absent for a method with no body (GET/DELETE with no payload).
   sampleRequestPayload?: Record<string, unknown>;
   // The status actually returned when this call was observed - not an assumption.

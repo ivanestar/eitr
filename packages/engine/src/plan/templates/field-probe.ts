@@ -12,6 +12,8 @@
 // Same division of labour as page-inventory.mjs and overlay-ledger.mjs: 'probe' hands back
 // browser-side source, 'record' judges what came back.
 
+import { PII_MASK_SOURCE } from './pii-mask.js';
+
 export function renderFieldProbe(): string {
   return `#!/usr/bin/env node
 
@@ -78,23 +80,11 @@ function readJson(file) {
   }
 }
 
-// The same shapes every artifact of this project masks: a run of six or more digits, an 8+
-// character token that is mostly digits, an email address.
-const DIGIT_RUN = /\\d(?:[\\s\\-().]*\\d){5,}/g;
-const MAJORITY_DIGIT_TOKEN = /[A-Za-z0-9]{8,}/g;
-const EMAIL = /[\\w.+-]+@[\\w-]+\\.[\\w.-]+/g;
+${PII_MASK_SOURCE}
 
 function redact(value, max) {
   if (typeof value !== 'string') return '';
-  return value
-    .replace(/\\s+/g, ' ')
-    .trim()
-    .replace(EMAIL, '[REDACTED]')
-    .replace(DIGIT_RUN, '[REDACTED]')
-    .replace(MAJORITY_DIGIT_TOKEN, function (token) {
-      return token.replace(/[^0-9]/g, '').length > token.length / 2 ? '[REDACTED]' : token;
-    })
-    .slice(0, max || 160);
+  return maskPii(value.replace(/\\s+/g, ' ').trim()).slice(0, max || 160);
 }
 
 function permissions() {
