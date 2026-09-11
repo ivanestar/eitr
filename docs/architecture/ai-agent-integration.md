@@ -274,7 +274,15 @@ generated condition carries a `description` (the vector's values followed by tha
 its own, and a `scenario` (`positive`/`negative`) - all synthesized deterministically, and all
 rejected by the gate when they fall back on a stock phrase such as "correctly handles". That is
 what a human reviews at sign-off, never a bare parameter/technique/count summary, and what
-`/design-test-cases` carries into each step's expected result. Every generated condition starts `isSpeculative: true`/`reviewed: false`
+`/design-test-cases` carries into each step's expected result. The full gate also checks coverage
+(ADR 0022). Every page that takes input has a condition the analysis wrote saying what the input
+produces, naming the result box or copy/export control it reads it from. Every markup limit has a
+boundary. Every research check is cited by a condition (`{ kind: 'research', ref: 'k2' }`) or listed in
+`research.declined` with a reason. Every field rule the markup does not state is cited by what tests
+it (`{ kind: 'constraint', ref: 'r1' }`) or carries an `untestedReason`. A feature with no condition
+says why. A condition the analysis wrote is refused when its text holds nothing beyond the page's
+title, address and feature name. The review opens each feature with a coverage line and a "Not
+tested, and why" line. Every generated condition starts `isSpeculative: true`/`reviewed: false`
 with an empty verification contract; a human fills in expected UI/state/network behavior at the
 same kind of Human Sign-Off Gateway Stage 1 already established, recording `reviewedBy` the same
 way (`'human'` or `'auto-pilot'`) once approved. See

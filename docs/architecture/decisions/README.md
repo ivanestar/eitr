@@ -47,3 +47,4 @@ sequentially, zero-padded to 4 digits, kebab-case slug after the number.
 | 0019 | [Each invalid value is tested once, and only valid values are paired](0019-each-invalid-value-once.md)                                                           | Accepted |
 | 0020 | [A note is written on the entry it is about, and kept with the project's knowledge](0020-notes-on-review-entries.md)                                             | Accepted |
 | 0021 | [A person reviews what only the domain can confirm; the assistant checks the rest under the person's veto](0021-person-reviews-what-only-the-domain-confirms.md) | Accepted |
+| 0022 | [What the analysis says to test is tested, or declined with a reason the person sees](0022-coverage-items-covered-or-declined.md)                                | Accepted |

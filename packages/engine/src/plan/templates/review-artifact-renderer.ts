@@ -422,6 +422,104 @@ function sharedValues(items, entry) {
 // One feature: its questions, then each of its pages with the conditions exercised there, in
 // priority order - the list a person approves, cuts or answers. What the analysis understood about
 // the feature and its fields stays in the JSON; the review is for deciding what gets tested.
+// Regions shared by every page; their fields are the site frame's, tested once and on no page here.
+const FRAME_REGIONS = ['header', 'nav', 'footer', 'aside'];
+
+function shortText(text) {
+  const value = String(text || '').trim();
+  return value.length <= 70 ? value : value.slice(0, 67) + '...';
+}
+
+// Whether a feature is covered at all, in one line a person reads before its conditions: the main
+// flow on every page that takes input, how many edge cases, how many research checks and field rules
+// became tests - and beside it everything left untested, with the reason given, to overturn in Notes.
+function coverageOf(featureId, analysis, pageIds, entriesById, controlsByRoute) {
+  const conditions = [];
+  const cited = { research: new Set(), constraint: new Set() };
+  function note(anchors) {
+    for (const anchor of Array.isArray(anchors) ? anchors : []) {
+      if (anchor && (anchor.kind === 'research' || anchor.kind === 'constraint')) cited[anchor.kind].add(anchor.ref);
+    }
+  }
+  let inputPages = 0;
+  let flowPages = 0;
+  for (const routeId of pageIds) {
+    const entry = entriesById[routeId];
+    if (!entry) continue;
+    const byId = controlsByRoute[routeId] || {};
+    const own = (Array.isArray(entry.conditions) ? entry.conditions : []).filter(function (c) {
+      return c && c.featureId === featureId;
+    });
+    own.forEach(function (c) {
+      conditions.push(c);
+      note(c.anchors);
+    });
+    const params = Array.isArray(entry.parameters) ? entry.parameters : [];
+    for (const param of params) {
+      for (const set of [].concat(param && param.partitions ? param.partitions : [], param && param.boundaries ? param.boundaries : [])) {
+        if (set) note(set.anchors);
+      }
+    }
+    const takesInput = params.some(function (p) {
+      const control = p && p.control ? byId[p.control] : null;
+      return !(control && FRAME_REGIONS.indexOf(control.region) !== -1);
+    });
+    if (!takesInput) continue;
+    inputPages += 1;
+    const hasFlow = own.some(function (c) {
+      return c.origin !== 'generated' && c.scenario === 'positive' && c.layer === 'behavior' && c.cut !== true;
+    });
+    if (hasFlow) flowPages += 1;
+  }
+  const edges = conditions.filter(function (c) {
+    return c.cut !== true && (c.scenario === 'negative' || c.technique === 'boundary-value');
+  }).length;
+  const parts = [];
+  const untested = [];
+  const totals = { inputPages: inputPages, flowPages: flowPages, checks: 0, checksUsed: 0, untested: 0 };
+  if (inputPages > 0) parts.push('main flow on ' + flowPages + ' of ' + inputPages + ' page(s) that take input');
+  parts.push(edges + ' edge case(s)');
+  const research = analysis && analysis.research;
+  if (research && research.status === 'skipped') {
+    parts.push('no research (' + (research.reason || 'no reason given') + ')');
+  } else if (research && typeof research.file === 'string') {
+    const record = loadJson(path.join(CWD, research.file));
+    const checks = record && Array.isArray(record.checks) ? record.checks : [];
+    const declined = Array.isArray(research.declined) ? research.declined : [];
+    if (checks.length > 0) {
+      const used = checks.filter(function (check) {
+        return check && cited.research.has(check.id);
+      }).length;
+      totals.checks = checks.length;
+      totals.checksUsed = used;
+      parts.push('research checks ' + used + ' of ' + checks.length + ' used' + (declined.length > 0 ? ', ' + declined.length + ' declined' : ''));
+    }
+    for (const item of declined) {
+      if (!item) continue;
+      const check = checks.find(function (candidate) {
+        return candidate && candidate.id === item.check;
+      });
+      untested.push('research ' + item.check + (check ? ' "' + shortText(check.statement) + '"' : '') + ' - ' + item.reason);
+    }
+  }
+  let rules = 0;
+  let rulesTested = 0;
+  for (const field of analysis && Array.isArray(analysis.fields) ? analysis.fields : []) {
+    for (const constraint of field && Array.isArray(field.constraints) ? field.constraints : []) {
+      if (!constraint || constraint.source === 'markup') continue;
+      rules += 1;
+      if (cited.constraint.has(constraint.id)) rulesTested += 1;
+      if (typeof constraint.untestedReason === 'string' && constraint.untestedReason.trim()) {
+        untested.push('rule "' + shortText(constraint.statement) + '" - ' + constraint.untestedReason);
+      }
+    }
+  }
+  if (rules > 0) parts.push('field rules ' + rulesTested + ' of ' + rules + ' tested');
+  if (analysis && typeof analysis.untestedReason === 'string' && analysis.untestedReason.trim()) untested.push(analysis.untestedReason);
+  totals.untested = untested.length;
+  return { line: parts.join('; '), untested: untested, totals: totals };
+}
+
 function renderFeatureBlock(lines, labels, feature, analysis, items, pageIds, entriesById, controlsByRoute, registry, counters) {
   counters.feature += 1;
   const allApproved =
@@ -455,6 +553,9 @@ function renderFeatureBlock(lines, labels, feature, analysis, items, pageIds, en
       tiers.P3,
   );
   lines.push(notesLine('   ', 'test-conditions', 'feature', feature.featureId));
+  const coverage = coverageOf(feature.featureId, analysis, pageIds, entriesById, controlsByRoute);
+  lines.push('   Coverage: ' + coverage.line);
+  if (coverage.untested.length > 0) lines.push('   Not tested, and why: ' + coverage.untested.join('; '));
   // Every question, answered or not, each with the line its answer goes on - so an answer can be
   // written, or corrected, right here.
   const questions = analysis && Array.isArray(analysis.questions) ? analysis.questions : [];
@@ -533,6 +634,7 @@ function renderFeatureBlock(lines, labels, feature, analysis, items, pageIds, en
     }
     assistantLine(lines, entry, registry, counters);
   }
+  return coverage.totals;
 }
 
 // One line for the conditions the assistant checks on a page in a person's place: what they are, on
@@ -694,6 +796,7 @@ function renderTestConditions(labels, data, registry) {
   });
   const counters = { feature: 0, condition: 0, question: 0, page: 0, group: 0 };
   const shownPages = new Set();
+  const covered = { inputPages: 0, flowPages: 0, checks: 0, checksUsed: 0, untested: 0 };
   for (const featureId of featureIds) {
     const items = byFeature.get(featureId);
     items.sort(function (a, b) {
@@ -723,7 +826,8 @@ function renderTestConditions(labels, data, registry) {
       return labelFor(labels, a).localeCompare(labelFor(labels, b));
     });
     for (const routeId of orderedPages) shownPages.add(routeId);
-    renderFeatureBlock(lines, labels, feature, analyses[featureId], items, orderedPages, entriesById, controlsByRoute, registry, counters);
+    const totals = renderFeatureBlock(lines, labels, feature, analyses[featureId], items, orderedPages, entriesById, controlsByRoute, registry, counters);
+    for (const key of Object.keys(covered)) covered[key] += totals[key];
     lines.push('');
   }
 
@@ -819,6 +923,9 @@ function renderTestConditions(labels, data, registry) {
       (assistantTotals.undecided > 0 ? ', ' + assistantTotals.undecided + ' not checked yet' : '') +
       (assistantTotals.dropped > 0 ? ', ' + assistantTotals.dropped + ' left out by you' : ''),
     '- ' + regressionOnly + ' of yours only guard against a change: their expected result was read off the page as it is today',
+    '- Main flow - what the input produces - on ' + covered.flowPages + ' of ' + covered.inputPages + ' page(s) that take input',
+    '- Research checks turned into conditions: ' + covered.checksUsed + ' of ' + covered.checks,
+    '- Left untested, with the reason under its feature: ' + covered.untested,
     '- Questions for you: ' + openQuestions,
     '- Fields not tested, with the reason on their page: ' + notTested,
     '- Research: ' + researched + ' feature(s) researched' + (skipped.length > 0 ? ', ' + skipped.length + ' skipped (' + Array.from(new Set(skipped)).join('; ') + ')' : ''),

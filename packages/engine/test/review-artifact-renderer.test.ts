@@ -309,6 +309,123 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
     }
   });
 
+  // Whether a feature is covered at all is one line before its conditions, and everything left
+  // untested is listed beside it with the reason given - for the person to overturn in Notes.
+  it('opens each feature with its coverage and what is left untested, and why', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      mkdirSync(join(dir, 'artifacts', 'analysis', 'research'), { recursive: true });
+      writeJson(dir, 'artifacts/analysis/research/id-generator.json', {
+        sources: [{ id: 's1' }],
+        checks: [
+          {
+            id: 'k1',
+            statement: 'every identifier matches the UUID version 4 shape',
+            sourceIds: ['s1'],
+          },
+          { id: 'k2', statement: 'identifiers stay unique across page reloads', sourceIds: ['s1'] },
+          { id: 'k3', statement: 'uppercase output keeps the version digit', sourceIds: ['s1'] },
+        ],
+      });
+      const base = { featureId: 'f1', priority: 'P2', riskScore: 4 };
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 3,
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters: [
+              {
+                name: 'count',
+                kind: 'number',
+                partitions: [{ id: 'v', anchors: [{ kind: 'constraint', ref: 'r1' }] }],
+              },
+            ],
+            constraints: [],
+            conditions: [
+              {
+                ...base,
+                conditionId: 'flow',
+                origin: 'model',
+                technique: 'property',
+                layer: 'behavior',
+                oracle: 'domain',
+                scenario: 'positive',
+                reviewer: 'person',
+                description: 'Verify 10 requested GUIDs are listed',
+                anchors: [{ kind: 'research', ref: 'k1' }],
+              },
+              {
+                ...base,
+                conditionId: 'b1',
+                origin: 'generated',
+                technique: 'boundary-value',
+                layer: 'field',
+                oracle: 'markup',
+                scenario: 'negative',
+                reviewer: 'assistant',
+                description: 'count=1001',
+              },
+              {
+                ...base,
+                conditionId: 'b2',
+                origin: 'generated',
+                technique: 'boundary-value',
+                layer: 'field',
+                oracle: 'markup',
+                scenario: 'positive',
+                reviewer: 'assistant',
+                description: 'count=1000',
+              },
+            ],
+          },
+        },
+        features: {
+          f1: {
+            featureId: 'f1',
+            fields: [
+              {
+                routeId: 'id-0',
+                parameter: 'count',
+                constraints: [
+                  { id: 'r1', statement: 'a whole number of identifiers', source: 'domain' },
+                  {
+                    id: 'r2',
+                    statement: 'the list fits on one screen',
+                    source: 'domain',
+                    untestedReason: 'nothing on the page says how long a list may be',
+                  },
+                  { statement: 'at most 1000', source: 'markup' },
+                ],
+              },
+            ],
+            questions: [],
+            research: {
+              status: 'done',
+              archetype: 'id generator',
+              file: 'artifacts/analysis/research/id-generator.json',
+              declined: [{ check: 'k2', reason: 'the page keeps nothing between reloads' }],
+            },
+          },
+        },
+      });
+      const { output } = run(dir, '--kind=test-conditions');
+      expect(output.markdown).toContain(
+        '   Coverage: main flow on 1 of 1 page(s) that take input; 2 edge case(s); research checks 1 of 3 used, 1 declined; field rules 1 of 2 tested',
+      );
+      expect(output.markdown).toContain(
+        '   Not tested, and why: research k2 "identifiers stay unique across page reloads" - the page keeps nothing between reloads; rule "the list fits on one screen" - nothing on the page says how long a list may be',
+      );
+      expect(output.report).toContain(
+        '- Main flow - what the input produces - on 1 of 1 page(s) that take input',
+      );
+      expect(output.report).toContain('- Research checks turned into conditions: 1 of 3');
+      expect(output.report).toContain('- Left untested, with the reason under its feature: 2');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // Counted by features, a run of 1050 conditions over seven features was handed over as fit to
   // print in the chat. What a person approves one by one is a condition.
   it('counts a test conditions review by its conditions when deciding inline or file', () => {

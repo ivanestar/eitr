@@ -57,7 +57,10 @@ export type ConditionLayer = 'field' | 'rule' | 'behavior' | 'frame';
 // source-code or document basis cites a quote from those in exactly the same way.
 //   control     - an inventory control id on the route ("c4")
 //   probe       - a probe id in artifacts/analysis/field-probes.json
-//   research    - a source id ("s3") in the feature's research record
+//   research    - a source id ("s3") or a check id ("k2") in the feature's research record; citing a
+//                 check is what counts it as used
+//   constraint  - the id of one of the feature's field constraints ("r1"), from the partition,
+//                 boundary or condition that tests it
 //   feature     - a featureId in artifacts/analysis/feature-map.json
 //   entity      - an entityId in artifacts/analysis/feature-map.json
 //   human       - "domainNotes:<index>" in app-profile.json, or "question:<index>" of this feature
@@ -67,6 +70,7 @@ export type AnchorKind =
   | 'control'
   | 'probe'
   | 'research'
+  | 'constraint'
   | 'feature'
   | 'entity'
   | 'human'
@@ -118,6 +122,10 @@ export type FieldRole =
 
 // One constraint a field should obey, and whether the page enforces it today.
 export interface ExpectedConstraint {
+  // Unique within the feature ("r1"). Required unless the source is markup: a rule the markup states
+  // is tested by the field's boundaries and partitions; any other rule needs a partition, boundary or
+  // condition that cites it with a constraint anchor, or an untestedReason.
+  id?: string;
   // One plain sentence: "between 1 and 1000 inclusive", "never negative - it is a device's speed",
   // "any real number - a converter reads a negative speed as a direction".
   statement: string;
@@ -130,6 +138,9 @@ export interface ExpectedConstraint {
   //   unknown      - nothing checked
   enforcement: 'markup' | 'observed' | 'not-enforced' | 'unknown';
   anchors: Anchor[];
+  // Why nothing tests this rule, in words a person reviewing accepts ("the page offers only the three
+  // valid values, so no test can enter another"). The review shows it.
+  untestedReason?: string;
 }
 
 export interface FieldMeaning {
@@ -176,6 +187,16 @@ export interface ResearchSummary {
   file?: string;
   // Why it was skipped, in a few words ("no web access in this assistant").
   reason?: string;
+  // The checks of the record that do not apply to this feature, each with why. Every other check is
+  // cited by a condition of the feature (a research anchor with the check id), and the review shows
+  // both.
+  declined?: DeclinedCheck[];
+}
+
+export interface DeclinedCheck {
+  // A check id of the research record ("k4").
+  check: string;
+  reason: string;
 }
 
 // What the analysis understood about one feature before a single condition was written: the model
@@ -196,6 +217,9 @@ export interface FeatureAnalysis {
   dependencies: FeatureDependency[];
   questions: FeatureQuestion[];
   research: ResearchSummary;
+  // Only on a feature none of whose pages carries a single condition: why there is nothing to test
+  // ("static legal text; the crawl already checks that the page loads"). The review shows it.
+  untestedReason?: string;
   analyzedAt: string;
 }
 
@@ -270,6 +294,8 @@ export interface Parameter {
   // combined with valid values of the others, and a parameter with no acceptable value is either
   // mislabelled or not an input. Enforced by scripts/validate-test-conditions.mjs.
   partitions: EquivalencePartition[];
+  // One per limit the field's markup declares (min, max, minlength, maxlength - enforced by the
+  // validator), plus any a label or a person states.
   boundaries: BoundarySet[];
   evidence: Evidence[];
   // The id of the field this parameter is, in the route's inventory
@@ -289,9 +315,12 @@ export interface Parameter {
 }
 
 // Why a field on the page is not a parameter. Closed list: anything else on the page is a parameter.
+// The same list excuses a copy, export or download control from its output-matches-display check,
+// except result-output: such a control delivers the result, it does not show it.
 //   result-output - shows the page's result rather than taking input (a read-only result box)
 //   duplicate     - the same field rendered twice (a mobile and a desktop copy, a repeated row);
-//                   note names the control id that stands for it
+//                   note names the control id that stands for it - for an output control, one a
+//                   condition checks
 //   disabled      - disabled, and nothing short of pressing a button enables it
 //   needs-button  - only takes a value after a button this stage may not press opens it
 //   off-limits    - inside an area the human put off-limits for this project
@@ -434,7 +463,10 @@ export interface TestCondition {
   sourceInput?: string;
   // 'metamorphic' only: how the second run's input is derived from the first run or its output.
   followUpInput?: string;
-  // Inventory ids of the output controls (copy, export, download) this condition checks.
+  // Inventory ids of what this condition reads its result from: a copy, export or download control,
+  // or a field the route excludes as result-output (the box a result is shown in). On every page
+  // that takes input, at least one positive behavior condition the analysis wrote says what that
+  // input produces - and names these whenever the page has any.
   outputs?: string[];
   scenario: TestConditionScenario;
   // Closed taxonomy category for negative scenarios. Applicable strictly when scenario === 'negative';
