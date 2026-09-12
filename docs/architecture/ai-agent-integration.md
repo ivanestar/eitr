@@ -124,7 +124,9 @@ and got abbreviated by the model, which asks a human to approve entries they nev
 site map, feature map and test conditions the file is always written and never deleted: a person
 may tick, answer and correct right in it, and `scripts/apply-review.mjs` reads the edits back
 against the exact rendering they were made on (ADR 0015). The three files work the same way - a box
-to approve, deleting an entry to take it out, "Your notes" for everything else - and a route or page
+to approve, deleting an entry to take it out, a `Notes:` line under every entry (after `//` on a
+condition) kept in `app-profile.json` with the entry it is about (ADR 0020), "Your notes" for
+everything else - and a route or page
 deleted there is left out of every later stage, recorded in `app-profile.json` so a new crawl
 refuses it, and its test conditions and test cases go with it; a file with edits nobody read back is
 never redrawn (ADR 0017). Before the site-map and feature-map
@@ -234,9 +236,14 @@ boundary-value conditions: it seeds one candidate vector per still-uncovered par
 greedily fills every other column around it, backtracking within that fill - a pair only lands in
 `unsatisfiedPairs` (with the exact constraint that blocks it) when completing a vector around it
 is genuinely impossible, never merely because an earlier, unrelated greedy attempt stalled.
-Invalid values follow the single-fault rule PICT uses for its negative values: two never share a
-vector, each is paired with every valid value of the other parameters, and valid pairs count as
-covered only in all-valid vectors, since a rejected input never exercised the values beside it.
+Every condition carries who reviews it (ADR 0021): a person, for what the analysis wrote and what
+rests on a rule stated in words or an entity's lifecycle; the assistant, for what the markup, the
+malformed-input checklist or the generator's combinations settle - kept or cut with a reason through
+`scripts/assistant-check.mjs` before the review, summed up as one line per page with the person's veto.
+Only valid values are paired. Each invalid value is tested once, beside the first valid value of
+every other parameter, and two never share a vector (ADR 0019): the application rejects the input
+on that one value, so pairing it with every value of the others only adds tests that fail the same
+way, and a rejection that depends on another field is a decision rule the analysis writes.
 Extraction starts from the route's page inventory rather than a fresh reading of the page: every
 field the crawl recorded outside the site frame must end up a parameter (citing the field's
 inventory id) or an exclusion with a reason from a closed list, and the gate checks the rest of the
@@ -267,7 +274,15 @@ generated condition carries a `description` (the vector's values followed by tha
 its own, and a `scenario` (`positive`/`negative`) - all synthesized deterministically, and all
 rejected by the gate when they fall back on a stock phrase such as "correctly handles". That is
 what a human reviews at sign-off, never a bare parameter/technique/count summary, and what
-`/design-test-cases` carries into each step's expected result. Every generated condition starts `isSpeculative: true`/`reviewed: false`
+`/design-test-cases` carries into each step's expected result. The full gate also checks coverage
+(ADR 0022). Every page that takes input has a condition the analysis wrote saying what the input
+produces, naming the result box or copy/export control it reads it from. Every markup limit has a
+boundary. Every research check is cited by a condition (`{ kind: 'research', ref: 'k2' }`) or listed in
+`research.declined` with a reason. Every field rule the markup does not state is cited by what tests
+it (`{ kind: 'constraint', ref: 'r1' }`) or carries an `untestedReason`. A feature with no condition
+says why. A condition the analysis wrote is refused when its text holds nothing beyond the page's
+title, address and feature name. The review opens each feature with a coverage line and a "Not
+tested, and why" line. Every generated condition starts `isSpeculative: true`/`reviewed: false`
 with an empty verification contract; a human fills in expected UI/state/network behavior at the
 same kind of Human Sign-Off Gateway Stage 1 already established, recording `reviewedBy` the same
 way (`'human'` or `'auto-pilot'`) once approved. See

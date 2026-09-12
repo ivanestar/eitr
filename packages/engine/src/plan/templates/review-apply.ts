@@ -77,6 +77,10 @@ const VALIDATORS = {
 const LABEL_LINE = /^(\\s*(?:[-*]\\s+)?)(?:\\[([ xX])\\]\\s+)?(ALL|[A-Z]\\d+)\\.((?:\\s.*)?)$/;
 const ANSWER_LINE = /^\\s*Answer:(.*)$/;
 const VERDICT_LINE = /^\\s*Verdict:(.*)$/;
+const NOTES_LINE = /^\\s*Notes:(.*)$/;
+// Entries with a Notes: line of their own; a condition takes its note after " // " on its line.
+const NOTED_TYPES = { route: 'route', feature: 'feature', page: 'page', entity: 'entity', 'tc-page': 'page' };
+const COMMENT = ' // ';
 const MISSING_PAGES_HEADING = '**Pages the crawl did not find**';
 const NOTES_HEADING = '**Your notes**';
 // Past this many cells the line comparison stops looking for the smallest change and reports the
@@ -459,6 +463,41 @@ function followLeftOut(routeIds, featureIds, outIds) {
   return result;
 }
 
+function commentOf(line) {
+  const at = String(line).indexOf(COMMENT);
+  return at === -1 ? '' : String(line).slice(at + COMMENT.length).trim();
+}
+
+function withoutComment(line) {
+  const at = String(line).indexOf(COMMENT);
+  return at === -1 ? line : String(line).slice(0, at);
+}
+
+// What an entry's note is about, in terms that outlive the review file: which review it was written
+// in, what kind of entry, and the id every later stage knows it by.
+function subjectOf(kind, ref) {
+  const type = ref.type === 'condition' ? 'condition' : NOTED_TYPES[ref.type];
+  const id = ref.type === 'condition' ? ref.conditionId : ref.type === 'feature' || ref.type === 'entity' ? ref.id : ref.routeId;
+  if (!type || typeof id !== 'string' || id.length === 0) return null;
+  const subject = { review: kind, type: type, id: id };
+  if (ref.type === 'condition' || ref.type === 'tc-page' || ref.type === 'page' || ref.type === 'route') subject.routeId = ref.routeId;
+  if (ref.path) subject.path = ref.path;
+  return subject;
+}
+
+// One current note per entry. A note replaced or cleared stays in domainNotes, marked withdrawn, so a
+// condition citing it as domainNotes:<index> still finds what the person said at the time.
+function keepEntryNote(profile, subject, text, now, kind) {
+  if (!Array.isArray(profile.domainNotes)) profile.domainNotes = [];
+  for (const entry of profile.domainNotes) {
+    if (!entry || !entry.about || entry.withdrawnAt) continue;
+    if (entry.about.review === subject.review && entry.about.type === subject.type && entry.about.id === subject.id) {
+      entry.withdrawnAt = now;
+    }
+  }
+  if (text) profile.domainNotes.push({ note: text, statedDuring: kind + ' review', recordedAt: now, about: subject });
+}
+
 // A page left out or brought back in conversation is done to the file, exactly as the person would
 // have done it - its lines deleted, or its box ticked - so it goes through the one path that takes
 // everything built on it along.
@@ -715,11 +754,29 @@ function main() {
   const notesBase = sectionRange(baseLines, NOTES_HEADING);
   const notesUser = sectionRange(userLines, NOTES_HEADING);
   const windows = new Map();
+  // Notes written on an entry: on its Notes: line, or after " // " on a condition's line. Read here,
+  // so neither counts as a change to the entry itself.
+  const noteChanges = [];
+  const commentFor = new Map();
 
   for (const [label, ref] of Object.entries(base.labels)) {
     const baseAt = baseLabels.get(label);
     const userAt = userLabels.get(label);
     if (!baseAt) continue;
+    if (NOTED_TYPES[ref.type] && userAt) {
+      const baseWindow = windowOf(baseLines, baseAt, NOTES_LINE);
+      const userWindow = windowOf(userLines, userAt, NOTES_LINE);
+      if (baseWindow && userWindow) {
+        windows.set(baseWindow.index, userLines[userWindow.index]);
+        if (baseWindow.value !== userWindow.value) noteChanges.push({ label: label, ref: ref, text: userWindow.value });
+      }
+    }
+    if (ref.type === 'condition' && userAt) {
+      const before = commentOf(baseLines[baseAt.index]);
+      const after = commentOf(userLines[userAt.index]);
+      commentFor.set(baseAt.index, after);
+      if (before !== after) noteChanges.push({ label: label, ref: ref, text: after });
+    }
     if (ref.type === 'question') {
       const baseWindow = windowOf(baseLines, baseAt, ANSWER_LINE);
       const userWindow = windowOf(userLines, userAt, ANSWER_LINE);
@@ -807,6 +864,7 @@ function main() {
     if (droppedLines.has(i)) continue;
     let line = baseLines[i];
     if (windows.has(i)) line = windows.get(i);
+    if (commentFor.has(i)) line = withoutComment(line).replace(/\\s+$/, '') + (commentFor.get(i) ? COMMENT + commentFor.get(i) : '');
     const match = LABEL_LINE.exec(line);
     if (match && match[2] !== undefined && userLabels.has(match[3])) {
       const userAt = userLabels.get(match[3]);
@@ -834,12 +892,18 @@ function main() {
       return item.label;
     }),
   );
-  // A feature's box in the test conditions stands for its conditions, so it is expanded below
-  // rather than applied to anything of its own.
+  // A feature's box in the test conditions stands for its conditions, so it is expanded below rather
+  // than applied to anything of its own. A page's box over the conditions the assistant checks is the
+  // person's veto over all of them, applied on its own further down.
   const bulkFeature = function (label) {
     return kind === 'test-conditions' && base.labels[label].type === 'feature';
   };
+  const vetoes = [];
   for (const [label, to] of toggles) {
+    if (base.labels[label].type === 'group') {
+      vetoes.push({ label: label, ref: base.labels[label], to: to });
+      continue;
+    }
     if (bulkFeature(label)) continue;
     if (!to) revoke.add(label);
     else if (edited.has(label)) approveAfterChange.push(label);
@@ -883,6 +947,8 @@ function main() {
     leftOut: [],
     broughtBack: [],
     notes: 0,
+    entryNotes: [],
+    vetoes: [],
   };
   const missing = [];
   const now = new Date().toISOString();
@@ -932,6 +998,7 @@ function main() {
       continue;
     }
     record.cut = true;
+    record.cutBy = 'person';
     setReviewed(record, false);
     applied.cut.push(item.label);
   }
@@ -942,7 +1009,37 @@ function main() {
       continue;
     }
     delete record.cut;
+    delete record.cutBy;
+    delete record.cutReason;
     applied.restored.push(item.label);
+  }
+  // The person's veto over the conditions the assistant checks on a page: cleared, all of them leave
+  // testing; ticked, they come back and count as approved by the person. What the assistant itself
+  // cut as not applying stays cut either way.
+  for (const veto of vetoes) {
+    const entry = data.routes && data.routes[veto.ref.routeId];
+    const wanted = new Set(Array.isArray(veto.ref.conditionIds) ? veto.ref.conditionIds : []);
+    let changed = 0;
+    for (const condition of entry && Array.isArray(entry.conditions) ? entry.conditions : []) {
+      if (!condition || !wanted.has(condition.conditionId)) continue;
+      if (veto.to) {
+        if (condition.cut === true && condition.cutBy === 'assistant') continue;
+        if (condition.cut === true) {
+          delete condition.cut;
+          delete condition.cutBy;
+          delete condition.cutReason;
+        }
+        if (condition.reviewed !== true) setReviewed(condition, true);
+        changed += 1;
+      } else if (condition.cut !== true) {
+        condition.cut = true;
+        condition.cutBy = 'person';
+        condition.cutReason = 'left out at the review, with the other checks the assistant made on this page';
+        setReviewed(condition, false);
+        changed += 1;
+      }
+    }
+    applied.vetoes.push({ label: veto.label, routeId: veto.ref.routeId, inTesting: veto.to, conditions: changed });
   }
   for (const item of answers) {
     const analysis = data.features && data.features[item.ref.featureId];
@@ -975,7 +1072,7 @@ function main() {
     });
     return unread ? unread.text : undefined;
   };
-  if (leftOut.length > 0 || broughtBack.length > 0 || notes.length > 0) profile = loadProfile();
+  if (leftOut.length > 0 || broughtBack.length > 0 || notes.length > 0 || noteChanges.length > 0) profile = loadProfile();
   for (const item of leftOut) {
     if (siteMapDoc && leaveOut(siteMapDoc, profile, item.ref, noteFor(item.ref.routeId), now)) {
       applied.leftOut.push(item.label);
@@ -991,6 +1088,12 @@ function main() {
     if (!Array.isArray(profile.domainNotes)) profile.domainNotes = [];
     profile.domainNotes.push({ note: text, statedDuring: kind + ' review', recordedAt: now });
     applied.notes += 1;
+  }
+  for (const change of noteChanges) {
+    const subject = subjectOf(kind, change.ref);
+    if (!subject) continue;
+    keepEntryNote(profile, subject, change.text, now, kind);
+    applied.entryNotes.push({ label: change.label, about: subject, note: change.text });
   }
   // A verdict on a page the person also left out needs no answer any more - leaving it out says more.
   const leftOutRouteIds = new Set(
@@ -1009,6 +1112,7 @@ function main() {
       applied.cut.length +
       applied.restored.length +
       applied.answered.length +
+      applied.vetoes.length +
       (kind === 'site-map' && siteMapTouched ? 1 : 0) >
     0;
   let validation = null;
@@ -1036,7 +1140,7 @@ function main() {
     validation = after ? (after.passed ? 'PASSED' : 'FAILED as before') : 'no validator';
   }
 
-  if (profile && (applied.leftOut.length + applied.broughtBack.length > 0 || applied.notes > 0)) {
+  if (profile && (applied.leftOut.length + applied.broughtBack.length > 0 || applied.notes > 0 || applied.entryNotes.length > 0)) {
     profile.lastUpdatedAt = now;
     writeJsonFile(APP_PROFILE_PATH, profile);
   }
@@ -1242,8 +1346,29 @@ function main() {
         ' note(s), kept in app-profile.json domainNotes: read them in notes and apply whatever bears on this stage and the ones after it.',
     );
   }
+  for (const veto of applied.vetoes) {
+    next.push(
+      (veto.inTesting ? 'The person brought back ' : 'The person left out ') +
+        veto.conditions +
+        ' condition(s) the assistant checks on ' +
+        veto.routeId +
+        (veto.inTesting ? ', now approved by them.' : ': they stay in the file, cut, and no test case is drafted from them.'),
+    );
+  }
+  const writtenNotes = applied.entryNotes.filter(function (item) {
+    return item.note;
+  });
+  if (writtenNotes.length > 0) {
+    next.push(
+      'The person wrote on ' +
+        writtenNotes.length +
+        ' entr' +
+        (writtenNotes.length === 1 ? 'y' : 'ies') +
+        ' (applied.entryNotes), kept in app-profile.json domainNotes with what each is about: read each against its entry and act on it as on a correction given in conversation - change what it asks to change, including the contradiction sweep, and answer what it asks - then tell the person what you did with each. A condition may cite one as a human anchor, domainNotes:<index>.',
+    );
+  }
   if (approveAfterChange.length > 0) next.push('Once those corrections are made, approve ' + approveAfterChange.join(', ') + ' (reviewed: true, reviewedBy: "human").');
-  const moreToDo = !settled || applied.answered.length > 0;
+  const moreToDo = !settled || applied.answered.length > 0 || writtenNotes.length > 0;
   if (applied.answered.length > 0) next.push('Answers were recorded: apply each to every field meaning, constraint and condition it affects, then re-run the gates.');
   if (missingPages.length > 0) next.push('The person named pages the crawl did not find: crawl them (/map-site update), or say why they cannot be reached.');
   if (moreToDo) next.push('Then run node scripts/render-review-artifact.mjs --kind=' + kind + ' so the file shows the result, and tell the person what changed.');

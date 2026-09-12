@@ -288,6 +288,33 @@ describe('scripts/apply-review.mjs - feature map', () => {
     }
   });
 
+  it('keeps notes written on a feature, a page and an entity with each of them', () => {
+    const dir = setupProject();
+    try {
+      prepare(dir);
+      editView(dir, (text) =>
+        text
+          .replace(/(F1\. Ordering[^\n]*\n {3}Notes:)/, '$1 главная фича')
+          .replace(/(P2\. [^\n]*\n(?: {5}[^\n]*\n)*? {5}Notes:)/, '$1 список видит только менеджер')
+          .replace(/(E1\. orders[\s\S]*?Notes:)/, '$1 заказ нельзя удалить'),
+      );
+      const result = node(dir, 'apply-review.mjs', '--kind=feature-map');
+      expect(result.status).toBe('APPLIED');
+      expect(result.freeEdits).toEqual([]);
+      const about = result.applied.entryNotes.map(
+        (n: { about: { type: string; id: string }; note: string }) =>
+          n.about.type + ':' + n.about.id + ':' + n.note,
+      );
+      expect(about.sort()).toEqual([
+        'entity:e1:заказ нельзя удалить',
+        'feature:f1:главная фича',
+        'page:id-1:список видит только менеджер',
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('approves everything untouched with ALL, and holds back an entry the person also corrected', () => {
     const dir = setupProject();
     try {
@@ -553,6 +580,105 @@ describe('scripts/apply-review.mjs - test conditions', () => {
     }
   });
 
+  it('keeps a note written after // on a condition, and on a page, without holding back the approval', () => {
+    const dir = setupProject();
+    try {
+      prepareConditions(dir);
+      const view = readView(dir, 'test-conditions');
+      const line = view.split('\n').find((l) => l.includes('A double submit places one order'))!;
+      editView(
+        dir,
+        (text) =>
+          text
+            .replace(line, line.replace('[ ]', '[x]') + ' // только при медленной сети')
+            .replace(/(P1\. Page: [^\n]*\n {3}Notes:)/, '$1 страница оформления'),
+        'test-conditions',
+      );
+      const result = node(dir, 'apply-review.mjs', '--kind=test-conditions');
+      expect(result.status).toBe('APPLIED');
+      expect(result.freeEdits).toEqual([]);
+      expect(result.applied.approved).toHaveLength(1);
+      expect(condition(dir, 'c-cccc')).toMatchObject({ reviewed: true, reviewedBy: 'human' });
+      const about = result.applied.entryNotes.map(
+        (n: { about: { type: string; id: string } }) => n.about.type + ':' + n.about.id,
+      );
+      expect(about.sort()).toEqual(['condition:c-cccc', 'page:id-0']);
+      const redrawn = readView(dir, 'test-conditions');
+      expect(redrawn).toContain('A double submit places one order');
+      expect(redrawn).toMatch(
+        /A double submit places one order[^\n]* \/\/ только при медленной сети/,
+      );
+      expect(redrawn).toMatch(/P1\. Page: [^\n]*\n {3}Notes: страница оформления/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The box on a page's assistant-checked line is the person's veto: cleared, every one of those
+  // conditions leaves testing; ticked again, they come back as the person's approval. What the
+  // assistant cut as not applying stays cut either way.
+  it("leaves out and brings back a page's assistant-checked conditions through their one box", () => {
+    const dir = setupProject();
+    try {
+      const fixture = conditionsFixture() as Record<string, any>;
+      const extra = (id: string, state: Record<string, unknown>) => ({
+        ...fixture.routes['id-0'].conditions[0],
+        conditionId: id,
+        technique: 'checklist-based',
+        origin: 'generated',
+        layer: 'field',
+        reviewer: 'assistant',
+        description: 'malformed ' + id,
+        isSpeculative: true,
+        ...state,
+      });
+      fixture.routes['id-0'].conditions.push(
+        extra('a-kept', { reviewed: true, reviewedBy: 'assistant', isSpeculative: false }),
+        extra('a-cut', {
+          cut: true,
+          cutBy: 'assistant',
+          cutReason: 'SQL injection: nothing reaches a server',
+        }),
+      );
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMap());
+      writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', fixture);
+      node(dir, 'render-review-artifact.mjs', '--kind=test-conditions');
+      const view = readView(dir, 'test-conditions');
+      expect(view).not.toContain('malformed a-kept');
+      const line = view.split('\n').find((l) => /G\d+\. Checked by the assistant/.test(l))!;
+      expect(line).toMatch(/^ {3}- \[x\] G\d+\./);
+
+      editView(dir, (text) => text.replace(line, line.replace('[x]', '[ ]')), 'test-conditions');
+      const out = node(dir, 'apply-review.mjs', '--kind=test-conditions');
+      expect(out.applied.vetoes).toEqual([
+        expect.objectContaining({ inTesting: false, conditions: 1 }),
+      ]);
+      const cond = (id: string) =>
+        readJson(dir, 'artifacts/analysis/test-conditions.json').routes['id-0'].conditions.find(
+          (c: { conditionId: string }) => c.conditionId === id,
+        );
+      expect(cond('a-kept')).toMatchObject({ cut: true, cutBy: 'person', reviewed: false });
+      expect(cond('a-cut')).toMatchObject({ cut: true, cutBy: 'assistant' });
+      const cleared = readView(dir, 'test-conditions')
+        .split('\n')
+        .find((l) => /G\d+\. Checked by the assistant/.test(l))!;
+      expect(cleared).toContain('1 left out by you - tick to bring them back');
+
+      editView(
+        dir,
+        (text) => text.replace(cleared, cleared.replace('[ ]', '[x]')),
+        'test-conditions',
+      );
+      node(dir, 'apply-review.mjs', '--kind=test-conditions');
+      expect(cond('a-kept')).toMatchObject({ reviewed: true, reviewedBy: 'human' });
+      expect(cond('a-kept').cut).toBeUndefined();
+      expect(cond('a-cut')).toMatchObject({ cut: true, cutBy: 'assistant' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("approves every condition of a feature through the feature's own box, no longer speculative", () => {
     const dir = setupProject();
     try {
@@ -810,6 +936,77 @@ describe('scripts/apply-review.mjs - site map', () => {
 
       const wrong = node(dir, 'apply-review.mjs', '--kind=site-map', '--leave-out=L1');
       expect(wrong.status).toBe('INVALID');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A note belongs where the person thinks of it - under the entry, not at the end of the file - and
+  // is kept with the entry it is about: shown there again, replaced in place, withdrawn when cleared.
+  it('keeps a note written on a route with that route, and never reads it as a correction', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMap());
+      node(dir, 'render-review-artifact.mjs', '--kind=site-map');
+      const view = readView(dir, 'site-map');
+      expect(view).toMatch(/- \[ \] R1\. `\/orders`[^\n]*\n(?: {3}[^\n]*\n)* {3}Notes:\n/);
+
+      editView(
+        dir,
+        (text) =>
+          text
+            .replace('- [ ] R1.', '- [x] R1.')
+            .replace(/(R1\. `\/orders`[\s\S]*?Notes:)/, '$1 заказы видит только менеджер'),
+        'site-map',
+      );
+      const first = node(dir, 'apply-review.mjs', '--kind=site-map');
+      expect(first.status).toBe('APPLIED');
+      expect(first.freeEdits).toEqual([]);
+      expect(first.applied.approved).toEqual(['R1']);
+      expect(first.applied.entryNotes).toEqual([
+        {
+          label: 'R1',
+          about: {
+            review: 'site-map',
+            type: 'route',
+            id: 'id-0',
+            routeId: 'id-0',
+            path: '/orders',
+          },
+          note: 'заказы видит только менеджер',
+        },
+      ]);
+      expect(first.next).toContain('act on it');
+      let notes = readJson(dir, 'artifacts/analysis/app-profile.json').domainNotes;
+      expect(notes).toHaveLength(1);
+      expect(notes[0]).toMatchObject({
+        note: 'заказы видит только менеджер',
+        statedDuring: 'site-map review',
+      });
+      // Shown under its route again, and not among the notes about the application as a whole.
+      const redrawn = readView(dir, 'site-map');
+      expect(redrawn).toContain('   Notes: заказы видит только менеджер');
+      expect(redrawn.slice(redrawn.indexOf('**Your notes**'))).not.toContain('заказы');
+
+      // Replaced in place: the old one stays, withdrawn, so a condition citing it still resolves.
+      editView(
+        dir,
+        (text) => text.replace('Notes: заказы видит только менеджер', 'Notes: и администратор'),
+        'site-map',
+      );
+      node(dir, 'apply-review.mjs', '--kind=site-map');
+      notes = readJson(dir, 'artifacts/analysis/app-profile.json').domainNotes;
+      expect(notes).toHaveLength(2);
+      expect(notes[0].withdrawnAt).toBeDefined();
+      expect(notes[1]).toMatchObject({ note: 'и администратор' });
+      expect(notes[1].withdrawnAt).toBeUndefined();
+
+      // Cleared: withdrawn, and the line is empty again.
+      editView(dir, (text) => text.replace('Notes: и администратор', 'Notes:'), 'site-map');
+      node(dir, 'apply-review.mjs', '--kind=site-map');
+      notes = readJson(dir, 'artifacts/analysis/app-profile.json').domainNotes;
+      expect(notes.every((n: { withdrawnAt?: string }) => n.withdrawnAt)).toBe(true);
+      expect(readView(dir, 'site-map')).not.toContain('и администратор');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

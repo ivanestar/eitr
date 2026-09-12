@@ -86,6 +86,7 @@ const ANCHOR_KINDS = new Set([
   'control',
   'probe',
   'research',
+  'constraint',
   'feature',
   'entity',
   'human',
@@ -311,6 +312,104 @@ function citesControlId(text, controlId) {
   return new RegExp('(?:^|[^a-z0-9])' + controlId + '(?:[^0-9]|$)', 'i').test(text);
 }
 
+// The words a template wraps around a field's label: live-observed as "input_field_1", "Input value
+// representing enter data for barcode", "Configuration value for field on <page title>", "Free-text
+// string value adhering to field length and format requirements", "Empty text is rejected with
+// validation error" - each filled in for every field of a run, and none of them about any field. A
+// name, a meaning, a constraint or an outcome made of nothing but these and the field's own label
+// says nothing about the field. A number, a quoted value or any word of substance is enough to pass.
+const TEMPLATE_WORDS = new Set(
+  (
+    'a an the of for on in to by with from at as and or this that these it its is are be been was were ' +
+    'field fields input inputs value values entered enter entry text string data content information info ' +
+    'control controls element elements parameter param params option options select selected selection ' +
+    'choice dropdown checkbox check box radio button textbox textarea area item items representing ' +
+    'represents represent configuration setting settings used using use page test utility tool form user ' +
+    'provided specified given free accepted accepts accept rejected rejects reject validation valid invalid ' +
+    'error errors message messages empty unlisted unoffered state adhering adhere adheres requirements ' +
+    'requirement format length must should any appropriate proper properly correct correctly expected ' +
+    'successfully number numeric integer'
+  ).split(' '),
+);
+
+function wordsOf(text) {
+  return String(text || '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9а-яё]+/)
+    .filter(Boolean);
+}
+
+// True when the text, once the words it may borrow ("own": the field's label, its page, its values)
+// are taken out, has nothing left but template words.
+function saysNothingOwn(text, own, extra) {
+  if (typeof text !== 'string' || text.trim().length === 0) return false;
+  const borrowed = new Set();
+  for (const item of own) for (const word of wordsOf(item)) borrowed.add(word);
+  return wordsOf(text).every(function (word) {
+    return borrowed.has(word) || TEMPLATE_WORDS.has(word) || Boolean(extra && extra.has(word));
+  });
+}
+
+// The words a condition written for any page wraps around the page's title: live-observed as "Verify
+// <page title> renders valid UI components and functional controls" with the outcome "Page renders
+// intended quality assurance utility layout with responsive controls", and the input "Navigate to /
+// and execute default operation" - the same three sentences on 26 pages, none of them about a page.
+const CONDITION_WORDS = new Set(
+  (
+    'verify verifies verified check checks checked ensure ensures confirm confirms test tests tested ' +
+    'render renders rendered rendering display displays displayed show shows shown appear appears visible ' +
+    'load loads loaded loading ui ux component components layout layouts responsive functional functionality ' +
+    'intended work works working operate operates operation operations default execute executes executed ' +
+    'navigate navigates navigating run runs perform performs performed behave behaves behavior behaviour ' +
+    'page pages screen screens view views interface interfaces feature features application app site website ' +
+    'web present presents presented available'
+  ).split(' '),
+);
+
+function labelOf(control) {
+  return control ? [control.name, control.hint, control.placeholder].filter(Boolean) : [];
+}
+
+// A name is a template when, counters aside, it is made only of template words the page does not
+// use for this field: "input_field_1" is; "value" on a field the page labels "Value" is not.
+function isTemplateName(name, control) {
+  const words = wordsOf(name).filter(function (word) {
+    return !/^\\d+$/.test(word);
+  });
+  if (words.length === 0) return true;
+  const own = new Set(wordsOf(labelOf(control).join(' ')));
+  return words.every(function (word) {
+    return TEMPLATE_WORDS.has(word) && !own.has(word);
+  });
+}
+
+// An empty value is invalid only where something says the field must be filled in.
+const REQUIRED_WORDS = /required|mandatory|obligatory|must be (?:filled|provided|entered)|cannot be (?:empty|blank)|\\*|обязательн/i;
+
+function rulesRequiredness(rule) {
+  if (!rule || typeof rule !== 'object') return false;
+  if (rule.signal === 'field-probe' || rule.signal === 'manual') return true;
+  const excerpt = typeof rule.excerpt === 'string' ? rule.excerpt : '';
+  if (rule.signal === 'html5-constraint') return /\\brequired\\b/i.test(excerpt);
+  if (rule.signal === 'aria-relationship') return /aria-required/i.test(excerpt) || REQUIRED_WORDS.test(excerpt);
+  if (rule.signal === 'form-label') return REQUIRED_WORDS.test(excerpt);
+  return false;
+}
+
+// "Title:" quoted as the rule for a Title field: the label names the field and states no rule.
+function quotesOnlyLabel(rule, control) {
+  if (!rule || rule.signal !== 'form-label' || typeof rule.excerpt !== 'string' || !control) return false;
+  if (REQUIRED_WORDS.test(rule.excerpt)) return false;
+  const tidy = function (text) {
+    return String(text).trim().replace(/[:*\\s]+$/, '').toLowerCase();
+  };
+  const excerpt = tidy(rule.excerpt);
+  return excerpt.length > 0 && labelOf(control).some(function (text) {
+    return tidy(text) === excerpt;
+  });
+}
+
 // An html5-constraint rule has to be an attribute the crawl actually saw on this field. Live-observed:
 // a converter got a minimum of 0 its input never declared, and every condition built on it rejected
 // negative temperatures.
@@ -437,7 +536,20 @@ function isParameter(value, label, context, errors) {
           control.id +
           ' - name the parameter after what the field holds, the way the page or a person would say it.',
       );
+    } else if (typeof value.name === 'string' && isTemplateName(value.name, control)) {
+      errors.push(
+        label +
+          '.name "' +
+          value.name +
+          '" says what kind of control it is, not what it holds - name the parameter after the value, the way the page or a person would say it.',
+      );
     }
+  }
+  // What a parameter's text may borrow and still say something: its name, its field's label, its
+  // own sample values.
+  const own = [value.name].concat(labelOf(control));
+  for (const p of Array.isArray(value.partitions) ? value.partitions : []) {
+    if (p && Array.isArray(p.sampleValues)) own.push.apply(own, p.sampleValues.filter((v) => typeof v === 'string'));
   }
 
   // What the page offers, read off the live page when there is an inventory - it wins over anything
@@ -526,6 +638,14 @@ function isParameter(value, label, context, errors) {
         }
       }
       checkOutcome(p.expectedOutcome, pLabel + '.expectedOutcome', errors);
+      if (saysNothingOwn(p.expectedOutcome, own)) {
+        errors.push(
+          pLabel +
+            '.expectedOutcome "' +
+            p.expectedOutcome +
+            '" is true of any field - name what a person sees for this value: the message and where it appears, the result it produces, the state the page is left in.',
+        );
+      }
 
       if (p.executionLevel !== undefined && !EXECUTION_LEVEL_VALUES.has(p.executionLevel)) {
         errors.push(pLabel + '.executionLevel must be one of ui|dom|api.');
@@ -540,6 +660,24 @@ function isParameter(value, label, context, errors) {
       if (p.kind === 'invalid') {
         checkRule(p.rule, pLabel + '.rule', value.kind, errors);
         if (control) checkRuleAgainstControl(p.rule, pLabel + '.rule', control, errors, warnings);
+        const empty =
+          samplesOk &&
+          p.sampleValues.some(function (sample) {
+            return sample.trim() === '';
+          });
+        if (empty && !rulesRequiredness(p.rule)) {
+          errors.push(
+            pLabel +
+              ' calls an empty value invalid, but its rule does not say the field is required - quote the required attribute, aria-required or the page\\'s own words ("required", "*"), cite a probe that saw the page refuse it empty, or drop the partition: an optional field accepts empty.',
+          );
+        } else if (quotesOnlyLabel(p.rule, control)) {
+          errors.push(
+            pLabel +
+              '.rule quotes only the field\\'s label "' +
+              p.rule.excerpt +
+              '", which names the field and states no rule - quote where the page states what makes the value invalid.',
+          );
+        }
         if (CLOSED_CHOICE_KINDS.has(value.kind) && !offLevel) {
           errors.push(
             pLabel +
@@ -622,7 +760,36 @@ function isParameter(value, label, context, errors) {
       if (control) checkRuleAgainstControl(b.rule, bLabel + '.rule', control, errors, warnings);
       checkOutcome(b.acceptedOutcome, bLabel + '.acceptedOutcome', errors);
       checkOutcome(b.rejectedOutcome, bLabel + '.rejectedOutcome', errors);
+      const values = Array.isArray(b.values) ? b.values : [];
+      for (const which of ['acceptedOutcome', 'rejectedOutcome']) {
+        if (saysNothingOwn(b[which], own.concat(values))) {
+          errors.push(bLabel + '.' + which + ' "' + b[which] + '" is true of any field - name what a person sees at this limit.');
+        }
+      }
     });
+    // A limit the markup declares is one a test can hit. Live-observed: 26 of them on 14 fields of a
+    // run, a GUID count of min=1 max=1000 among them, and not one boundary recorded.
+    const constraints = control && control.constraints && typeof control.constraints === 'object' ? control.constraints : {};
+    const SIDE_OF_LIMIT = { min: 'min', minlength: 'min', max: 'max', maxlength: 'max' };
+    for (const attr of Object.keys(SIDE_OF_LIMIT)) {
+      if (!(attr in constraints)) continue;
+      const side = SIDE_OF_LIMIT[attr];
+      const recorded = value.boundaries.some(function (b) {
+        return b && b.boundary === side;
+      });
+      if (!recorded) {
+        errors.push(
+          label +
+            ' is a field the page limits with ' +
+            attr +
+            '=' +
+            constraints[attr] +
+            ', and no ' +
+            side +
+            ' boundary records it - add one to boundaries: one step inside, the limit, one step past, and what a person sees at each. A probe that cannot apply here (a slider stops at its end) is cut in the assistant\\'s check, with the reason.',
+        );
+      }
+    }
   }
   isEvidenceArray(value.evidence, label + '.evidence', errors);
 }
@@ -804,11 +971,25 @@ function isCondition(value, label, errors) {
   }
   // Independent of the rule above: whenever reviewed is true (by whatever means it got there),
   // reviewedBy must say who/what actually set it.
-  if (value.reviewed === true && value.reviewedBy !== 'human' && value.reviewedBy !== 'auto-pilot') {
-    errors.push(label + '.reviewedBy must be "human" or "auto-pilot" when reviewed is true.');
+  if (value.reviewed === true && ['human', 'auto-pilot', 'assistant'].indexOf(value.reviewedBy) === -1) {
+    errors.push(label + '.reviewedBy must be "human", "auto-pilot" or "assistant" when reviewed is true.');
+  }
+  if ('reviewer' in value && value.reviewer !== 'person' && value.reviewer !== 'assistant') {
+    errors.push(label + '.reviewer, when present, must be person or assistant - the generator sets it.');
+  }
+  // The assistant approves only what needs no person: a condition resting on a business rule, or one
+  // the analysis wrote, is a person's to approve.
+  if (value.reviewedBy === 'assistant' && value.reviewer !== 'assistant') {
+    errors.push(label + ' was approved by the assistant, but it is a person\\'s to review - it rests on a business rule or was written by the analysis.');
   }
   if ('cut' in value && typeof value.cut !== 'boolean') {
     errors.push(label + '.cut, when present, must be a boolean.');
+  }
+  if ('cutBy' in value && value.cutBy !== 'person' && value.cutBy !== 'assistant') {
+    errors.push(label + '.cutBy, when present, must be person or assistant.');
+  }
+  if (value.cutBy === 'assistant' && (typeof value.cutReason !== 'string' || value.cutReason.trim().length === 0)) {
+    errors.push(label + ' was cut by the assistant without a reason - a person reads why it does not apply here.');
   }
   if (value.cut === true && value.reviewed === true) {
     errors.push(label + ' is cut and approved at once - a cut condition is one nobody wants tested.');
@@ -929,30 +1110,69 @@ function accountForFields(entry, label, inventory, controlById, isFrameRoute, er
 
 // A copy, export or download control hands the page's result to somewhere a test has to look at
 // separately - live-observed, not one condition on a whole toolkit checked an Excel export or a
-// "Copy to Clipboard". Each needs a condition naming it in outputs, or an exclusion with a reason.
+// "Copy to Clipboard". Each needs a condition naming it in outputs, or an exclusion with a reason
+// that fits a control: a second run excused 48 of 49 as "result-output", which is what a result box
+// is, not what a button delivering the result is. A field excluded as result-output is where the
+// page shows its result, so a condition may name it in outputs too.
 function checkOutputs(entry, label, controlById, inventory, isFrameRoute, errors) {
-  const covered = new Set();
+  const excluded = Array.isArray(entry.excluded) ? entry.excluded : [];
+  const resultFields = new Set(
+    excluded
+      .filter(function (item) {
+        return item && item.reason === 'result-output' && typeof item.control === 'string';
+      })
+      .map(function (item) {
+        return item.control;
+      }),
+  );
+  const checked = new Set();
   (Array.isArray(entry.conditions) ? entry.conditions : []).forEach(function (condition, i) {
     const outputs = condition && Array.isArray(condition.outputs) ? condition.outputs : [];
     outputs.forEach(function (id) {
       const control = controlById.get(id);
-      if (!control || control.output !== true) {
+      if (!control || (control.output !== true && !resultFields.has(id))) {
         errors.push(
           label +
             '.conditions[' +
             i +
             '].outputs cites "' +
             id +
-            '", which the inventory does not record as a copy, export or download control.',
+            '", which is neither a copy, export or download control in the inventory nor a field this route excludes as result-output.',
         );
         return;
       }
-      covered.add(id);
+      checked.add(id);
     });
   });
-  for (const item of Array.isArray(entry.excluded) ? entry.excluded : []) {
-    if (item && typeof item.control === 'string') covered.add(item.control);
-  }
+  const covered = new Set(checked);
+  excluded.forEach(function (item, i) {
+    if (!item || typeof item.control !== 'string') return;
+    const control = controlById.get(item.control);
+    if (control && control.output === true) {
+      const where = label + '.excluded[' + i + ']';
+      if (item.reason === 'result-output') {
+        errors.push(
+          where +
+            ' leaves out ' +
+            describeControl(control) +
+            ' as result-output, but it delivers the result rather than showing it - check what it delivers (an output-matches-display property naming it in outputs), or exclude it as a duplicate of one a condition checks, off-limits, disabled or needs-button.',
+        );
+      } else if (item.reason === 'duplicate') {
+        const standIn = (String(item.note || '').match(/\\bc\\d+\\b/g) || []).find(function (id) {
+          return id !== item.control && checked.has(id);
+        });
+        if (!standIn) {
+          errors.push(
+            where +
+              ' calls ' +
+              describeControl(control) +
+              ' a duplicate, but its note names no output control a condition checks - name the control id that stands for it, and check that one.',
+          );
+        }
+      }
+    }
+    covered.add(item.control);
+  });
   for (const control of inventory.controls) {
     if (control.output !== true || covered.has(control.id)) continue;
     if (FRAME_REGIONS.has(control.region) && !isFrameRoute) continue;
@@ -971,6 +1191,15 @@ function checkOutputs(entry, label, controlById, inventory, isFrameRoute, errors
 function loadContext(data) {
   const featureMapLoaded = loadJson(FEATURE_MAP_PATH, 'artifacts/analysis/feature-map.json');
   const featureMap = featureMapLoaded.error ? null : featureMapLoaded.value;
+  const siteMapLoaded = loadJson(SITE_MAP_PATH, 'artifacts/site-map/site-map.json');
+  const titleOf = new Map();
+  const pathOf = new Map();
+  if (!siteMapLoaded.error && siteMapLoaded.value && siteMapLoaded.value.routes && typeof siteMapLoaded.value.routes === 'object') {
+    for (const [routePath, route] of Object.entries(siteMapLoaded.value.routes)) {
+      if (route && typeof route.routeId === 'string' && typeof route.title === 'string') titleOf.set(route.routeId, route.title);
+      if (route && typeof route.routeId === 'string') pathOf.set(route.routeId, routePath);
+    }
+  }
   const probesLoaded = loadJson(PROBES_PATH, 'artifacts/analysis/field-probes.json');
   const probeIds = new Set();
   if (!probesLoaded.error && probesLoaded.value && Array.isArray(probesLoaded.value.probes)) {
@@ -979,10 +1208,16 @@ function loadContext(data) {
     }
   }
   const researchIds = new Map();
+  // The checks each feature's research record holds, by id: what the research says to test, each of
+  // which a condition of the feature cites or the analysis declines.
+  const researchChecks = new Map();
+  // The ids of each feature's field constraints, for the constraint anchors that say what tests them.
+  const constraintIds = new Map();
   const features = data.features && typeof data.features === 'object' ? data.features : {};
   for (const [featureId, analysis] of Object.entries(features)) {
     const research = analysis && analysis.research;
     const ids = new Set();
+    const checks = new Map();
     if (research && typeof research.file === 'string') {
       const loaded = loadJson(path.join(CWD, research.file), research.file);
       if (!loaded.error && loaded.value && Array.isArray(loaded.value.sources)) {
@@ -990,8 +1225,21 @@ function loadContext(data) {
           if (source && typeof source.id === 'string') ids.add(source.id);
         }
       }
+      if (!loaded.error && loaded.value && Array.isArray(loaded.value.checks)) {
+        for (const check of loaded.value.checks) {
+          if (check && typeof check.id === 'string') checks.set(check.id, typeof check.statement === 'string' ? check.statement : '');
+        }
+      }
     }
     researchIds.set(featureId, ids);
+    researchChecks.set(featureId, checks);
+    const constraints = new Set();
+    for (const field of analysis && Array.isArray(analysis.fields) ? analysis.fields : []) {
+      for (const constraint of field && Array.isArray(field.constraints) ? field.constraints : []) {
+        if (constraint && typeof constraint.id === 'string' && constraint.id.length > 0) constraints.add(constraint.id);
+      }
+    }
+    constraintIds.set(featureId, constraints);
   }
   // Which routes each feature owns, by the feature map; and the one feature each route belongs to.
   const membersOf = new Map();
@@ -1014,8 +1262,12 @@ function loadContext(data) {
     probesFileExists: !probesLoaded.error,
     probeIds: probeIds,
     researchIds: researchIds,
+    researchChecks: researchChecks,
+    constraintIds: constraintIds,
     membersOf: membersOf,
     featureOfRoute: featureOfRoute,
+    titleOf: titleOf,
+    pathOf: pathOf,
     // Filled per route by validate(): routeId -> Map(controlId -> control).
     controlsByRoute: new Map(),
   };
@@ -1077,8 +1329,14 @@ function checkAnchors(anchors, label, scope, ctx, errors, required) {
       }
     } else if (anchor.kind === 'research') {
       const ids = ctx.researchIds.get(scope.featureId);
+      const checks = ctx.researchChecks.get(scope.featureId);
+      if ((!ids || !ids.has(anchor.ref)) && (!checks || !checks.has(anchor.ref))) {
+        errors.push(where + ' cites research "' + anchor.ref + '", which the research record of this feature lists neither as a source nor as a check.');
+      }
+    } else if (anchor.kind === 'constraint') {
+      const ids = ctx.constraintIds.get(scope.featureId);
       if (!ids || !ids.has(anchor.ref)) {
-        errors.push(where + ' cites research source "' + anchor.ref + '", which the research record of this feature does not list.');
+        errors.push(where + ' cites constraint "' + anchor.ref + '", which no field of this feature\\'s analysis states.');
       }
     } else if (anchor.kind === 'feature' || anchor.kind === 'entity') {
       const table = ctx.featureMap ? ctx.featureMap[anchor.kind === 'feature' ? 'features' : 'entities'] : null;
@@ -1195,6 +1453,15 @@ function checkText(value, label, errors, max) {
   if (phrase) errors.push(label + ' says "' + phrase + '" - say what it actually is.');
 }
 
+// Why something is left untested - shown to the person reviewing, who can overturn it.
+function checkReason(value, label, errors) {
+  if (typeof value !== 'string' || value.trim().length < 10) {
+    errors.push(label + ' must say why, in words a person reviewing would accept (at least 10 characters).');
+    return;
+  }
+  checkText(value, label, errors, 300);
+}
+
 // The analysis of one feature: what it is for, how it serves the application, what each of its
 // fields means and should obey, what it depends on, what is still a question, and what research
 // backs it. Every condition of the feature is derived from this, so it is checked before any is.
@@ -1215,6 +1482,7 @@ function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
   const scope = { routeIds: members.length > 0 ? members : Object.keys(data.routes), featureId: featureId };
   checkAnchors(analysis.anchors, label + '.anchors', scope, ctx, errors, true);
 
+  const seenConstraintIds = new Set();
   if (!Array.isArray(analysis.fields)) {
     errors.push(label + '.fields must be an array - one meaning per field of the feature.');
   } else {
@@ -1238,13 +1506,23 @@ function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
         errors.push(where + '.control "' + field.control + '" is not in the inventory of ' + field.routeId + '.');
       }
       checkText(field.meaning, where + '.meaning', errors, 300);
+      const fieldControl = hasControl && ctx.controlsByRoute.has(field.routeId) ? ctx.controlsByRoute.get(field.routeId).get(field.control) : null;
+      // What a field's meaning and constraints may borrow and still say something: its label, and
+      // the title of its page.
+      const fieldOwn = labelOf(fieldControl).concat(ctx.titleOf.get(field.routeId) || [], field.parameter || []);
       if (hasControl && citesControlId(field.meaning, field.control)) {
         errors.push(
           where + '.meaning names the control id ' + field.control + ' - say what the field means to the person using it: what they put in and what it changes.',
         );
+      } else if (saysNothingOwn(field.meaning, fieldOwn)) {
+        errors.push(
+          where +
+            '.meaning "' +
+            field.meaning +
+            '" only restates the field\\'s label - say what the value means here: what a person puts in, what it changes, in the terms of what this application is for.',
+        );
       }
       if (!FIELD_ROLE_VALUES.has(field.role)) errors.push(where + '.role must be one of ' + Array.from(FIELD_ROLE_VALUES).join('|') + '.');
-      const fieldControl = hasControl && ctx.controlsByRoute.has(field.routeId) ? ctx.controlsByRoute.get(field.routeId).get(field.control) : null;
       if (fieldControl && field.role === 'free-text' && !takesFreeText(fieldControl)) {
         errors.push(
           where + '.role is free-text, but ' + describeControl(fieldControl) + ' only takes the values it offers - say what it holds: a quantity, a choice, a toggle, a setting.',
@@ -1263,6 +1541,29 @@ function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
           return;
         }
         checkText(constraint.statement, at + '.statement', errors, 200);
+        if (saysNothingOwn(constraint.statement, fieldOwn)) {
+          errors.push(
+            at +
+              '.statement "' +
+              constraint.statement +
+              '" states no rule - say the rule itself (a limit, a format, the values allowed), or leave constraints empty when nothing constrains the field.',
+          );
+        }
+        // A rule the markup states is tested by the field's own boundaries and partitions; any other
+        // is tested by whatever cites it, so it needs a name to be cited by.
+        if ('id' in constraint || constraint.source !== 'markup') {
+          if (typeof constraint.id !== 'string' || !/^[A-Za-z0-9._-]{1,40}$/.test(constraint.id)) {
+            errors.push(
+              at +
+                '.id must be a short id, unique within the feature ("r1") - the partition, boundary or condition that tests this rule cites it with a constraint anchor.',
+            );
+          } else if (seenConstraintIds.has(constraint.id)) {
+            errors.push(at + '.id "' + constraint.id + '" is already the id of another constraint of this feature.');
+          } else {
+            seenConstraintIds.add(constraint.id);
+          }
+        }
+        if ('untestedReason' in constraint) checkReason(constraint.untestedReason, at + '.untestedReason', errors);
         if (!ORACLE_VALUES.has(constraint.source)) errors.push(at + '.source must be one of ' + Array.from(ORACLE_VALUES).join('|') + '.');
         checkLevel(constraint.confidence, at + '.confidence', errors);
         if (!ENFORCEMENT_VALUES.has(constraint.enforcement)) {
@@ -1331,8 +1632,217 @@ function checkFeatureAnalysis(featureId, analysis, label, data, ctx, errors) {
         }
       }
     }
+    if ('declined' in research) {
+      if (!Array.isArray(research.declined)) {
+        errors.push(label + '.research.declined, when present, must be an array of { check, reason }.');
+      } else {
+        const checks = ctx.researchChecks.get(featureId) || new Map();
+        const seen = new Set();
+        research.declined.forEach(function (item, i) {
+          const at = label + '.research.declined[' + i + ']';
+          if (!item || typeof item !== 'object') {
+            errors.push(at + ' must be an object.');
+            return;
+          }
+          if (typeof item.check !== 'string' || !checks.has(item.check)) {
+            errors.push(at + '.check "' + item.check + '" is not a check of this feature\\'s research record.');
+          } else if (seen.has(item.check)) {
+            errors.push(at + '.check "' + item.check + '" is declined twice.');
+          } else {
+            seen.add(item.check);
+          }
+          checkReason(item.reason, at + '.reason', errors);
+        });
+      }
+    }
   }
+  if ('untestedReason' in analysis) checkReason(analysis.untestedReason, label + '.untestedReason', errors);
   checkText(analysis.analyzedAt, label + '.analyzedAt', errors);
+}
+
+// What each feature's analysis says to test, set against what its partitions, boundaries and
+// conditions test. A research check, or a rule of a field the markup does not state, that nothing
+// cites was read and then dropped - live-observed, 35 of 36 research checks never became a condition,
+// and nothing could tell which. A cut condition still counts: cutting it was a decision someone made
+// where the review shows it.
+function checkCoverage(data, ctx, errors, warnings) {
+  const found = new Map();
+  function slot(featureId) {
+    if (!found.has(featureId)) found.set(featureId, { research: new Set(), constraint: new Set(), conditions: 0, edges: 0, inputPages: 0 });
+    return found.get(featureId);
+  }
+  function note(featureId, anchors) {
+    if (typeof featureId !== 'string') return;
+    for (const anchor of Array.isArray(anchors) ? anchors : []) {
+      if (!anchor || typeof anchor.ref !== 'string') continue;
+      if (anchor.kind === 'research') slot(featureId).research.add(anchor.ref);
+      else if (anchor.kind === 'constraint') slot(featureId).constraint.add(anchor.ref);
+    }
+  }
+  for (const [routeId, entry] of Object.entries(data.routes)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const routeFeature = ctx.featureOfRoute.get(routeId);
+    const controls = ctx.controlsByRoute.get(routeId) || new Map();
+    let takesInput = false;
+    for (const param of Array.isArray(entry.parameters) ? entry.parameters : []) {
+      if (!param || typeof param !== 'object') continue;
+      const control = typeof param.control === 'string' ? controls.get(param.control) : null;
+      if (!(control && FRAME_REGIONS.has(control.region))) takesInput = true;
+      const sets = [].concat(Array.isArray(param.partitions) ? param.partitions : [], Array.isArray(param.boundaries) ? param.boundaries : []);
+      for (const set of sets) if (set) note(routeFeature, set.anchors);
+    }
+    if (takesInput && typeof routeFeature === 'string') slot(routeFeature).inputPages += 1;
+    for (const condition of Array.isArray(entry.conditions) ? entry.conditions : []) {
+      if (!condition || typeof condition.featureId !== 'string') continue;
+      slot(condition.featureId).conditions += 1;
+      if (condition.cut !== true && (condition.scenario === 'negative' || condition.technique === 'boundary-value')) slot(condition.featureId).edges += 1;
+      note(condition.featureId, condition.anchors);
+    }
+  }
+  for (const [featureId, analysis] of Object.entries(data.features)) {
+    if (!analysis || typeof analysis !== 'object') continue;
+    const label = 'features["' + featureId + '"]';
+    const tested = slot(featureId);
+    const research = analysis.research;
+    if (research && (research.status === 'done' || research.status === 'cached')) {
+      const declined = new Set(
+        (Array.isArray(research.declined) ? research.declined : []).map(function (item) {
+          return item && item.check;
+        }),
+      );
+      for (const [id, statement] of ctx.researchChecks.get(featureId) || new Map()) {
+        if (tested.research.has(id) && declined.has(id)) {
+          errors.push(label + '.research declines check ' + id + ', which a condition of the feature cites - keep one or the other.');
+        } else if (!tested.research.has(id) && !declined.has(id)) {
+          errors.push(
+            label +
+              ': research check ' +
+              id +
+              ' ("' +
+              statement.slice(0, 100) +
+              '") is cited by no condition of this feature and not declined - write the condition it asks for (origin research, anchored { kind: "research", ref: "' +
+              id +
+              '" }), or add it to research.declined with the reason it does not apply here.',
+          );
+        }
+      }
+    }
+    (Array.isArray(analysis.fields) ? analysis.fields : []).forEach(function (field, i) {
+      (field && Array.isArray(field.constraints) ? field.constraints : []).forEach(function (constraint, j) {
+        if (!constraint || constraint.source === 'markup' || typeof constraint.id !== 'string') return;
+        const at = label + '.fields[' + i + '].constraints[' + j + '] ("' + String(constraint.statement).slice(0, 100) + '")';
+        const cited = tested.constraint.has(constraint.id);
+        const reasoned = typeof constraint.untestedReason === 'string' && constraint.untestedReason.trim().length > 0;
+        if (cited && reasoned) {
+          errors.push(at + ' is tested and says why it is not - drop untestedReason.');
+        } else if (!cited && !reasoned) {
+          errors.push(
+            at +
+              ' is tested by nothing - cite it ({ kind: "constraint", ref: "' +
+              constraint.id +
+              '" }) from the partition, boundary or condition that tests it, or say in untestedReason why nothing does.',
+          );
+        }
+      });
+    });
+    const hasReason = typeof analysis.untestedReason === 'string' && analysis.untestedReason.trim().length > 0;
+    if (tested.conditions === 0 && !hasReason) {
+      errors.push(label + ' has not one condition on any of its pages - write what it should be tested for, or say in untestedReason why there is nothing to test.');
+    } else if (tested.conditions > 0 && hasReason) {
+      errors.push(label + '.untestedReason says there is nothing to test, but the feature has conditions - drop it.');
+    }
+    // A warning, not an error: a count with no source invites padding, but a feature that takes input
+    // and tries nothing past its main flow is worth a second look before the person sees "0".
+    if (tested.inputPages > 0 && tested.edges === 0) {
+      warnings.push(
+        label +
+          ' takes input on ' +
+          tested.inputPages +
+          ' page(s) and has no edge case - no invalid value, limit or negative condition. Add the ones its fields, rules and research suggest; the review shows the count either way.',
+      );
+    }
+  }
+}
+
+// What a condition the analysis wrote may borrow and still say something of its own: the page's
+// title and address, and the feature's name. What is left has to name something of this page - a
+// value, a count, a message, the thing produced. The feature's purpose is left out on purpose: an
+// honest one names the very values a good condition is about.
+function ownWordsOf(condition, routeId, ctx) {
+  const featureId = condition && condition.featureId;
+  const feature = ctx.featureMap && ctx.featureMap.features && typeof featureId === 'string' ? ctx.featureMap.features[featureId] : null;
+  return [ctx.titleOf.get(routeId), ctx.pathOf.get(routeId), feature && feature.name].filter(function (text) {
+    return typeof text === 'string';
+  });
+}
+
+function checkAuthoredSubstance(condition, label, own, errors) {
+  if (!condition || typeof condition !== 'object' || condition.origin === 'generated' || GENERATED_TECHNIQUES.has(condition.technique)) return;
+  if (saysNothingOwn(condition.description, own, CONDITION_WORDS)) {
+    errors.push(
+      label + '.description "' + condition.description + '" would read the same on any page - name what this feature does here: what goes in and what a person then sees.',
+    );
+  }
+  if (saysNothingOwn(condition.expectedOutcome, own, CONDITION_WORDS)) {
+    errors.push(
+      label + '.expectedOutcome "' + condition.expectedOutcome + '" is true of any page - name what a person sees: the value, the count, the message and where it appears.',
+    );
+  }
+  // Only the first run's input: a follow-up is derived from the first run's output ("the feet shown,
+  // converted back to metres"), so it rightly carries no value of its own.
+  if (saysNothingOwn(condition.sourceInput, own, CONDITION_WORDS)) {
+    errors.push(
+      label + '.sourceInput "' + condition.sourceInput + '" enters nothing a test could type - give the values: the number, the text, the option chosen.',
+    );
+  }
+}
+
+// Every page that takes input has a condition the analysis wrote saying what that input produces -
+// the main flow a person reviews - naming where the page shows it, whenever it records such a place:
+// a field excluded as result-output, or a copy, export or download control nothing excludes.
+// Live-observed without this: 26 pages that take input, and not one condition saying what any of
+// them produces.
+function checkMainFlow(entry, label, controlById, inventory, errors) {
+  const params = Array.isArray(entry.parameters) ? entry.parameters : [];
+  const ownInputs = params.filter(function (p) {
+    const control = p && typeof p.control === 'string' ? controlById.get(p.control) : null;
+    return !(control && FRAME_REGIONS.has(control.region));
+  });
+  if (ownInputs.length === 0) return;
+  const excluded = Array.isArray(entry.excluded) ? entry.excluded : [];
+  const excludedIds = new Set();
+  const places = new Map();
+  for (const item of excluded) {
+    if (!item || typeof item.control !== 'string') continue;
+    excludedIds.add(item.control);
+    if (item.reason === 'result-output' && controlById.has(item.control)) places.set(item.control, describeControl(controlById.get(item.control)));
+  }
+  for (const control of inventory ? inventory.controls : []) {
+    if (control && control.output === true && !FRAME_REGIONS.has(control.region) && !excludedIds.has(control.id)) {
+      places.set(control.id, describeControl(control));
+    }
+  }
+  const flows = (Array.isArray(entry.conditions) ? entry.conditions : []).filter(function (c) {
+    return c && c.origin !== 'generated' && !GENERATED_TECHNIQUES.has(c.technique) && c.scenario === 'positive' && c.layer === 'behavior';
+  });
+  const where = Array.from(places.values()).join('; ');
+  if (flows.length === 0) {
+    errors.push(
+      label +
+        ' takes input, and no condition says what that input produces - write one positive behavior condition: what a person enters and what the page then shows' +
+        (places.size > 0 ? ', naming in outputs where it shows it (' + where + ')' : '') +
+        '.',
+    );
+  } else if (
+    places.size > 0 &&
+    !flows.some(function (c) {
+      return Array.isArray(c.outputs) && c.outputs.some(function (id) {
+        return places.has(id);
+      });
+    })
+  ) {
+    errors.push(label + ': none of its positive behavior conditions names where the page shows the result - add it to outputs of the one that reads it there (' + where + ').');
+  }
 }
 
 // Every parameter of a route stands on a meaning: what the field is for decides which partitions,
@@ -1641,6 +2151,7 @@ function validate() {
         entry.conditions.forEach(function (c, i) {
           isCondition(c, label + '.conditions[' + i + ']', errors);
           checkConditionContext(c, label + '.conditions[' + i + ']', key, data, ctx, errors);
+          checkAuthoredSubstance(c, label + '.conditions[' + i + ']', ownWordsOf(c, key, ctx), errors);
           if (c && c.parameters && typeof c.parameters === 'object') {
             const invalid = invalidPartitionCount(c, parameters);
             const combining = c.technique === 'combinatorial' || c.technique === 'equivalence-partition';
@@ -1668,6 +2179,7 @@ function validate() {
             seenIds.add(c.conditionId);
           }
         });
+        checkMainFlow(entry, label, controlById, inventory, errors);
       }
       if (!Array.isArray(entry.unsatisfiedPairs)) {
         errors.push(label + '.unsatisfiedPairs must be an array.');
@@ -1692,6 +2204,36 @@ function validate() {
   // After the routes, so every inventory is loaded for the control anchors the analyses cite.
   for (const [featureId, analysis] of Object.entries(data.features)) {
     checkFeatureAnalysis(featureId, analysis, 'features["' + featureId + '"]', data, ctx, errors);
+  }
+  if (!PARAMETERS_ONLY) checkCoverage(data, ctx, errors, warnings);
+  // Seven features, one sentence: "Provides <feature> capabilities within the toolkit." A purpose that
+  // reads the same for three features or more once each one's own name is taken out was written for
+  // none of them. A warning, not an error: sibling features can share a shape of sentence honestly.
+  const sameText = new Map();
+  for (const [featureId, analysis] of Object.entries(data.features)) {
+    const mapped = ctx.featureMap && ctx.featureMap.features ? ctx.featureMap.features[featureId] : null;
+    const name = mapped && typeof mapped.name === 'string' ? mapped.name : featureId;
+    const nameWords = new Set(wordsOf(name));
+    for (const field of ['purpose', 'fitsApplication']) {
+      const words = wordsOf(analysis && analysis[field]).filter(function (word) {
+        return !nameWords.has(word);
+      });
+      if (words.length < 6) continue;
+      const key = field + '|' + words.join(' ');
+      if (!sameText.has(key)) sameText.set(key, []);
+      sameText.get(key).push(name);
+    }
+  }
+  for (const [key, names] of sameText) {
+    if (names.length < 3) continue;
+    warnings.push(
+      names.length +
+        ' features share one ' +
+        key.split('|')[0] +
+        ' once their names are taken out (' +
+        names.join(', ') +
+        ') - it says what none of them does. Rewrite each from what the feature takes in and gives back.',
+    );
   }
   // A question still open is a decision the tests depend on and nobody has made.
   const open = [];

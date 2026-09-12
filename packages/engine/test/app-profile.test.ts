@@ -294,6 +294,30 @@ describe('scripts/app-profile.mjs (real execution)', () => {
     }
   });
 
+  it('accepts a note written on one entry, and refuses one that does not say which entry', () => {
+    const dir = setupProject();
+    try {
+      const profile = validProfile() as Record<string, any>;
+      profile.domainNotes.push({
+        note: 'Only managers see orders',
+        statedDuring: 'site-map review',
+        recordedAt: '2026-09-11T10:00:00.000Z',
+        about: { review: 'site-map', type: 'route', id: 'route-orders', path: '/orders' },
+        withdrawnAt: '2026-09-11T11:00:00.000Z',
+      });
+      writeProfile(dir, profile);
+      expect(run(dir, '--validate').output.errors).toEqual([]);
+
+      profile.domainNotes[1].about = { review: 'site-map', type: 'button', id: 'x' };
+      writeProfile(dir, profile);
+      expect(run(dir, '--validate').output.errors.join(' ')).toContain(
+        'domainNotes[1].about must name the entry it was written on',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('accepts a page a person left out, and refuses one nobody can be named for', () => {
     const dir = setupProject();
     try {

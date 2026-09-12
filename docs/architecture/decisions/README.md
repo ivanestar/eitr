@@ -24,23 +24,28 @@ sequentially, zero-padded to 4 digits, kebab-case slug after the number.
 
 ## Index
 
-| #    | Decision                                                                                                                                              | Status   |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 0001 | [Deterministic core-only scaffolder](0001-deterministic-core-only-scaffolder.md)                                                                      | Accepted |
-| 0002 | [No LLM in the plan/apply core](0002-no-llm-in-core.md)                                                                                               | Accepted |
-| 0003 | [Universal primitives + per-role adapters](0003-universal-primitives-plus-adapters.md)                                                                | Accepted |
-| 0004 | [Unconditional path authority on regeneration](0004-path-authority-regeneration.md)                                                                   | Accepted |
-| 0005 | [Fixtures as the composition root](0005-fixtures-as-composition-root.md)                                                                              | Accepted |
-| 0006 | [Zero lock-in for generated output](0006-zero-lock-in.md)                                                                                             | Accepted |
-| 0007 | [Remove the fake `eitr map`/`eitr rescan` CLI commands](0007-remove-fake-map-rescan-cli-commands.md)                                                  | Accepted |
-| 0008 | [Deterministic-over-AI preference for this project's own process](0008-deterministic-over-ai-preference.md)                                           | Accepted |
-| 0009 | [Shared stack-detection heuristics between CLI and engine](0009-shared-detection-heuristics.md)                                                       | Accepted |
-| 0010 | [AI-agent-driven operations ship as assistant skills, never CLI](0010-agent-operations-as-skills-not-cli.md)                                          | Accepted |
-| 0011 | [Removal of the untyped JavaScript target](0011-removal-of-untyped-javascript-target.md)                                                              | Accepted |
-| 0012 | [App-analysis and requirements-to-test synthesis as a staged, gated pipeline](0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)           | Accepted |
-| 0013 | [Freeze the non-TypeScript stacks rather than ship four half-carried ones](0013-freeze-non-typescript-stacks.md)                                      | Accepted |
-| 0014 | [Test analysis starts from what a feature means, and every condition says where its expected result comes from](0014-context-driven-test-analysis.md) | Accepted |
-| 0015 | [A person reviews in the file, and the JSON stays the only record](0015-editable-review-files.md)                                                     | Accepted |
-| 0016 | [Analysis conclusions are checked against independent records, and every disagreement is journaled](0016-corroboration-of-analysis-conclusions.md)    | Accepted |
-| 0017 | [What a person decides in a review reaches every later stage, and a page left out stays out](0017-review-decisions-reach-every-stage.md)              | Accepted |
-| 0018 | [Test data keeps only the numbers that can never be anyone's](0018-test-data-that-can-never-be-anyones.md)                                            | Accepted |
+| #    | Decision                                                                                                                                                         | Status   |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 0001 | [Deterministic core-only scaffolder](0001-deterministic-core-only-scaffolder.md)                                                                                 | Accepted |
+| 0002 | [No LLM in the plan/apply core](0002-no-llm-in-core.md)                                                                                                          | Accepted |
+| 0003 | [Universal primitives + per-role adapters](0003-universal-primitives-plus-adapters.md)                                                                           | Accepted |
+| 0004 | [Unconditional path authority on regeneration](0004-path-authority-regeneration.md)                                                                              | Accepted |
+| 0005 | [Fixtures as the composition root](0005-fixtures-as-composition-root.md)                                                                                         | Accepted |
+| 0006 | [Zero lock-in for generated output](0006-zero-lock-in.md)                                                                                                        | Accepted |
+| 0007 | [Remove the fake `eitr map`/`eitr rescan` CLI commands](0007-remove-fake-map-rescan-cli-commands.md)                                                             | Accepted |
+| 0008 | [Deterministic-over-AI preference for this project's own process](0008-deterministic-over-ai-preference.md)                                                      | Accepted |
+| 0009 | [Shared stack-detection heuristics between CLI and engine](0009-shared-detection-heuristics.md)                                                                  | Accepted |
+| 0010 | [AI-agent-driven operations ship as assistant skills, never CLI](0010-agent-operations-as-skills-not-cli.md)                                                     | Accepted |
+| 0011 | [Removal of the untyped JavaScript target](0011-removal-of-untyped-javascript-target.md)                                                                         | Accepted |
+| 0012 | [App-analysis and requirements-to-test synthesis as a staged, gated pipeline](0012-multi-stage-app-analysis-and-test-synthesis-pipeline.md)                      | Accepted |
+| 0013 | [Freeze the non-TypeScript stacks rather than ship four half-carried ones](0013-freeze-non-typescript-stacks.md)                                                 | Accepted |
+| 0014 | [Test analysis starts from what a feature means, and every condition says where its expected result comes from](0014-context-driven-test-analysis.md)            | Accepted |
+| 0015 | [A person reviews in the file, and the JSON stays the only record](0015-editable-review-files.md)                                                                | Accepted |
+| 0016 | [Analysis conclusions are checked against independent records, and every disagreement is journaled](0016-corroboration-of-analysis-conclusions.md)               | Accepted |
+| 0017 | [What a person decides in a review reaches every later stage, and a page left out stays out](0017-review-decisions-reach-every-stage.md)                         | Accepted |
+| 0018 | [Test data keeps only the numbers that can never be anyone's](0018-test-data-that-can-never-be-anyones.md)                                                       | Accepted |
+| 0019 | [Each invalid value is tested once, and only valid values are paired](0019-each-invalid-value-once.md)                                                           | Accepted |
+| 0020 | [A note is written on the entry it is about, and kept with the project's knowledge](0020-notes-on-review-entries.md)                                             | Accepted |
+| 0021 | [A person reviews what only the domain can confirm; the assistant checks the rest under the person's veto](0021-person-reviews-what-only-the-domain-confirms.md) | Accepted |
+| 0022 | [What the analysis says to test is tested, or declined with a reason the person sees](0022-coverage-items-covered-or-declined.md)                                | Accepted |
+| 0023 | [Test conditions are evaluated against synthetic applications whose defects are known](0023-how-test-conditions-are-evaluated.md)                                | Accepted |

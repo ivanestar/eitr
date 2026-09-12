@@ -204,7 +204,7 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
       // JSON; the stage report carries the research.
       expect(framed.markdown).not.toContain('What it is');
       expect(framed.markdown).toContain('Q1. Is 1000 the real upper limit?');
-      expect(framed.markdown).toContain('   Page: /route-00 - Page 0');
+      expect(framed.markdown).toContain('   P1. Page: /route-00 - Page 0\n   Notes:');
       expect(framed.markdown).toContain('C1. Verify no two generated values are the same (P1)');
       expect(framed.markdown).toContain(
         'C2. Verify with count="1001": the count is refused (P2, regression only)',
@@ -215,6 +215,249 @@ describe('scripts/render-review-artifact.mjs --kind=test-conditions field accoun
         'Research: 0 feature(s) researched, 1 skipped (no web access)',
       );
       expect(framed.report).toContain('Questions for you: 1');
+      // The report names the file the review is in, so printing it shows where to go.
+      expect(framed.report).toMatch(
+        /\n- Review it in: artifacts\/review\/test-conditions-review\.md$/,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A person reviews what only the domain can confirm. What the markup, the malformed-input checklist
+  // or the generator settles is checked by the assistant and shown as one line per page, with what
+  // it rests on - the fields and how many values each takes - and a box that is the person's veto.
+  it('lists only the conditions a person reviews, and sums up the assistant-checked ones per page', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      const base = { featureId: 'f1', oracle: 'markup', priority: 'P2', riskScore: 4 };
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 3,
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters: [
+              { name: 'count', kind: 'number', partitions: [{ id: 'v' }, { id: 'too-many' }] },
+              { name: 'uppercase', kind: 'checkbox', partitions: [{ id: 'on' }, { id: 'off' }] },
+            ],
+            constraints: [],
+            conditions: [
+              {
+                ...base,
+                conditionId: 'p1',
+                origin: 'model',
+                technique: 'property',
+                layer: 'behavior',
+                oracle: 'domain',
+                reviewer: 'person',
+                description: 'Verify every generated GUID is different',
+                priority: 'P1',
+              },
+              {
+                ...base,
+                conditionId: 'a1',
+                origin: 'generated',
+                technique: 'boundary-value',
+                layer: 'field',
+                reviewer: 'assistant',
+                reviewed: true,
+                reviewedBy: 'assistant',
+                description: 'count=1001',
+              },
+              {
+                ...base,
+                conditionId: 'a2',
+                origin: 'generated',
+                technique: 'checklist-based',
+                layer: 'field',
+                reviewer: 'assistant',
+                reviewed: true,
+                reviewedBy: 'assistant',
+                description: 'script',
+              },
+              {
+                ...base,
+                conditionId: 'a3',
+                origin: 'generated',
+                technique: 'checklist-based',
+                layer: 'field',
+                reviewer: 'assistant',
+                cut: true,
+                cutBy: 'assistant',
+                cutReason: 'SQL injection: the page sends nothing to a server',
+                description: 'sql',
+              },
+            ],
+          },
+        },
+        features: { f1: { featureId: 'f1', fields: [], questions: [] } },
+      });
+      const { output } = run(dir, '--kind=test-conditions');
+      expect(output.markdown).toContain('C1. Verify every generated GUID is different (P1)');
+      expect(output.markdown).not.toContain('count=1001');
+      expect(output.markdown).toContain(
+        '- [x] G1. Checked by the assistant, no review needed: 3 - limits, malformed and hostile values on count (2 values), uppercase (2 values). 2 kept; 1 cut as not applying here (SQL injection: the page sends nothing to a server).',
+      );
+      expect(output.entryCount).toBe(1);
+      expect(output.summary).toContain('1 condition(s) for you');
+      expect(output.summary).toContain('3 more checked by the assistant');
+      expect(output.report).toContain('- Checked by the assistant, no review needed: 3');
+      expect(output.report).toContain('2 kept, 1 cut as not applying here');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Whether a feature is covered at all is one line before its conditions, and everything left
+  // untested is listed beside it with the reason given - for the person to overturn in Notes.
+  it('opens each feature with its coverage and what is left untested, and why', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      mkdirSync(join(dir, 'artifacts', 'analysis', 'research'), { recursive: true });
+      writeJson(dir, 'artifacts/analysis/research/id-generator.json', {
+        sources: [{ id: 's1' }],
+        checks: [
+          {
+            id: 'k1',
+            statement: 'every identifier matches the UUID version 4 shape',
+            sourceIds: ['s1'],
+          },
+          { id: 'k2', statement: 'identifiers stay unique across page reloads', sourceIds: ['s1'] },
+          { id: 'k3', statement: 'uppercase output keeps the version digit', sourceIds: ['s1'] },
+        ],
+      });
+      const base = { featureId: 'f1', priority: 'P2', riskScore: 4 };
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 3,
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters: [
+              {
+                name: 'count',
+                kind: 'number',
+                partitions: [{ id: 'v', anchors: [{ kind: 'constraint', ref: 'r1' }] }],
+              },
+            ],
+            constraints: [],
+            conditions: [
+              {
+                ...base,
+                conditionId: 'flow',
+                origin: 'model',
+                technique: 'property',
+                layer: 'behavior',
+                oracle: 'domain',
+                scenario: 'positive',
+                reviewer: 'person',
+                description: 'Verify 10 requested GUIDs are listed',
+                anchors: [{ kind: 'research', ref: 'k1' }],
+              },
+              {
+                ...base,
+                conditionId: 'b1',
+                origin: 'generated',
+                technique: 'boundary-value',
+                layer: 'field',
+                oracle: 'markup',
+                scenario: 'negative',
+                reviewer: 'assistant',
+                description: 'count=1001',
+              },
+              {
+                ...base,
+                conditionId: 'b2',
+                origin: 'generated',
+                technique: 'boundary-value',
+                layer: 'field',
+                oracle: 'markup',
+                scenario: 'positive',
+                reviewer: 'assistant',
+                description: 'count=1000',
+              },
+            ],
+          },
+        },
+        features: {
+          f1: {
+            featureId: 'f1',
+            fields: [
+              {
+                routeId: 'id-0',
+                parameter: 'count',
+                constraints: [
+                  { id: 'r1', statement: 'a whole number of identifiers', source: 'domain' },
+                  {
+                    id: 'r2',
+                    statement: 'the list fits on one screen',
+                    source: 'domain',
+                    untestedReason: 'nothing on the page says how long a list may be',
+                  },
+                  { statement: 'at most 1000', source: 'markup' },
+                ],
+              },
+            ],
+            questions: [],
+            research: {
+              status: 'done',
+              archetype: 'id generator',
+              file: 'artifacts/analysis/research/id-generator.json',
+              declined: [{ check: 'k2', reason: 'the page keeps nothing between reloads' }],
+            },
+          },
+        },
+      });
+      const { output } = run(dir, '--kind=test-conditions');
+      expect(output.markdown).toContain(
+        '   Coverage: main flow on 1 of 1 page(s) that take input; 2 edge case(s); research checks 1 of 3 used, 1 declined; field rules 1 of 2 tested',
+      );
+      expect(output.markdown).toContain(
+        '   Not tested, and why: research k2 "identifiers stay unique across page reloads" - the page keeps nothing between reloads; rule "the list fits on one screen" - nothing on the page says how long a list may be',
+      );
+      expect(output.report).toContain(
+        '- Main flow - what the input produces - on 1 of 1 page(s) that take input',
+      );
+      expect(output.report).toContain('- Research checks turned into conditions: 1 of 3');
+      expect(output.report).toContain('- Left untested, with the reason under its feature: 2');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Counted by features, a run of 1050 conditions over seven features was handed over as fit to
+  // print in the chat. What a person approves one by one is a condition.
+  it('counts a test conditions review by its conditions when deciding inline or file', () => {
+    const dir = setupProject();
+    try {
+      writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(1));
+      const condition = (i: number) => ({
+        conditionId: 'c' + i,
+        technique: 'error-guessing',
+        description: 'Verify case ' + i,
+        featureId: 'f1',
+        layer: 'rule',
+        oracle: 'domain',
+        priority: 'P2',
+        riskScore: 4,
+      });
+      writeJson(dir, 'artifacts/analysis/test-conditions.json', {
+        schemaVersion: 3,
+        routes: {
+          'id-0': {
+            routeId: 'id-0',
+            parameters: [],
+            constraints: [],
+            conditions: Array.from({ length: 12 }, (_, i) => condition(i)),
+          },
+        },
+        features: { f1: { featureId: 'f1', fields: [], questions: [] } },
+      });
+      const { output } = run(dir, '--kind=test-conditions');
+      expect(output.entryCount).toBe(12);
+      expect(output.mode).toBe('file');
+      expect(output.markdown).toBe('');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -766,8 +1009,10 @@ describe('scripts/render-review-artifact.mjs (real execution)', () => {
         writeJson(dir, 'artifacts/site-map/site-map.json', siteMapWith(2));
         writeJson(dir, 'artifacts/analysis/feature-map.json', featureMap());
         const { markdown } = run(dir, '--kind=feature-map').output;
-        // A page's reasoning and evidence end before the next page starts.
-        expect(markdown).toMatch(/Evidences: "Place an order"\n\n {3}- \[ \] P2\. \/route-01/);
+        // A page's reasoning, evidence and notes end before the next page starts.
+        expect(markdown).toMatch(
+          /Evidences: "Place an order"\n {5}Notes:\n\n {3}- \[ \] P2\. \/route-01/,
+        );
         // The feature's last line ends before the entity section starts.
         expect(markdown).toMatch(
           /Impact comes from: [^\n]+\n\n\*\*Things this application works with\*\*/,

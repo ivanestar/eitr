@@ -111,6 +111,20 @@ function wellFormedWithConditions() {
       isSpeculative: true,
       reviewed: false,
     },
+    // The page takes input, so it has a main flow: what that input produces.
+    {
+      conditionId: 'b1c2d3e4f5a6b1c2',
+      parameters: {},
+      technique: 'property',
+      relation: 'count-matches-request',
+      sourceInput: 'email user@example.com, quantity 5',
+      description: 'An order of 5 items to user@example.com is confirmed for exactly those 5 items',
+      expectedOutcome: 'the confirmation lists 5 items and names user@example.com',
+      scenario: 'positive',
+      verification: {},
+      isSpeculative: true,
+      reviewed: false,
+    },
   ];
   return report;
 }
@@ -246,7 +260,9 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
       const output = JSON.parse(result.stdout);
       expect(output.status).toBe('FAILED');
       expect(
-        output.errors.some((e: string) => e.includes('reviewedBy must be "human" or "auto-pilot"')),
+        output.errors.some((e: string) =>
+          e.includes('reviewedBy must be "human", "auto-pilot" or "assistant"'),
+        ),
       ).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -990,7 +1006,8 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
       ).toBe(true);
       expect(errors.some((e) => e.includes('says "accepts entered string"'))).toBe(true);
 
-      // The same field, read: named after what it holds, a number within its range.
+      // The same field, read: named after what it holds, a number within its range, and the two
+      // ends of that range as limits.
       const read = accounted();
       read.routes['route-checkout'].parameters.push({
         name: 'bar width',
@@ -1004,10 +1021,36 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
             expectedOutcome: 'the bars of the barcode preview are 2 units wide',
           },
         ],
-        boundaries: [],
+        boundaries: [
+          {
+            boundary: 'min',
+            values: ['0.5', '1', '1.5'],
+            rule: { signal: 'html5-constraint', excerpt: 'min=1' },
+            acceptedOutcome: 'the preview bars are as wide as the slider reads',
+            rejectedOutcome: 'the slider stays at 1 and the bars stay 1 unit wide',
+          },
+          {
+            boundary: 'max',
+            values: ['4.5', '5', '5.5'],
+            rule: { signal: 'html5-constraint', excerpt: 'max=5' },
+            acceptedOutcome: 'the preview bars are as wide as the slider reads',
+            rejectedOutcome: 'the slider stays at 5 and the bars stay 5 units wide',
+          },
+        ],
         evidence: [{ signal: 'form-label', excerpt: 'Bar Width: 2' }],
       });
       expect(validateWith(read, inventory).errors).toEqual([]);
+
+      // A limit the markup declares and no boundary records is a limit no test hits.
+      const unlimited = structuredClone(read);
+      unlimited.routes['route-checkout'].parameters[3].boundaries = [];
+      const limitErrors = validateWith(unlimited, inventory).errors;
+      expect(
+        limitErrors.some((e) => e.includes('limits with min=1, and no min boundary records it')),
+      ).toBe(true);
+      expect(
+        limitErrors.some((e) => e.includes('limits with max=5, and no max boundary records it')),
+      ).toBe(true);
 
       // A slider stops at the ends of its range, so a value past them is set by script or not at all.
       const past = structuredClone(read);
@@ -1025,6 +1068,147 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
       ).toBe(true);
       past.routes['route-checkout'].parameters[3].partitions[1].executionLevel = 'dom';
       expect(validateWith(past, inventory).errors).toEqual([]);
+    });
+
+    // The second live run, after the check above: the same template with the control ids taken out -
+    // "input_field_8", "Test Sample Text", an empty value called invalid on every optional field
+    // with the field's own label quoted as the rule, meanings and constraints that fit any field.
+    it('fails the template with its ids taken out, and passes the same field read', () => {
+      const withTitle = checkoutInventory({
+        controls: checkoutInventory().controls.concat([
+          { id: 'c8', region: 'main', role: 'textbox', name: 'Title:', tag: 'input', type: 'text' },
+        ]),
+      });
+      const analysisWith = (field: Record<string, unknown>) => ({
+        'feature-checkout': {
+          featureId: 'feature-checkout',
+          purpose: 'Takes an order: the email to confirm it to and how many items',
+          fitsApplication: 'The shop exists to sell, and this is where a sale is completed',
+          archetype: 'checkout',
+          confidence: 'high',
+          anchors: [{ kind: 'feature', ref: 'feature-checkout' }],
+          fields: [
+            {
+              routeId: 'route-checkout',
+              control: 'c8',
+              role: 'free-text',
+              confidence: 'medium',
+              ...field,
+            },
+          ],
+          dependencies: [],
+          questions: [],
+          research: {
+            status: 'skipped',
+            archetype: 'checkout',
+            reason: 'no web access in this test',
+          },
+          analyzedAt: '2026-09-03T11:00:00.000Z',
+        },
+      });
+      const template = accounted() as Report & { features?: unknown };
+      template.routes['route-checkout'].parameters.push({
+        name: 'input_field_8',
+        kind: 'text',
+        control: 'c8',
+        partitions: [
+          {
+            id: 'p_valid_text',
+            kind: 'valid',
+            sampleValues: ['Test Sample Text'],
+            expectedOutcome: 'Input text is accepted for input_field_8.',
+          },
+          {
+            id: 'p_empty_text',
+            kind: 'invalid',
+            sampleValues: [''],
+            expectedOutcome: 'Empty text is rejected with validation error.',
+            rule: { signal: 'form-label', excerpt: 'Title:' },
+          },
+        ],
+        boundaries: [],
+        evidence: [{ signal: 'form-label', excerpt: 'Title:' }],
+      });
+      template.features = analysisWith({
+        meaning: 'Input value representing title',
+        constraints: [
+          {
+            statement: 'Free-text string value adhering to field length and format requirements',
+            source: 'domain',
+            confidence: 'medium',
+            enforcement: 'unknown',
+            anchors: [{ kind: 'control', ref: 'c8' }],
+          },
+        ],
+      });
+      const errors = validateWith(template, withTitle).errors;
+      expect(
+        errors.some((e) => e.includes('"input_field_8" says what kind of control it is')),
+      ).toBe(true);
+      expect(
+        errors.some((e) =>
+          e.includes('"Input text is accepted for input_field_8." is true of any field'),
+        ),
+      ).toBe(true);
+      expect(
+        errors.some((e) =>
+          e.includes('"Empty text is rejected with validation error." is true of any field'),
+        ),
+      ).toBe(true);
+      expect(
+        errors.some((e) =>
+          e.includes(
+            'calls an empty value invalid, but its rule does not say the field is required',
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        errors.some((e) => e.includes('"Input value representing title" only restates the field')),
+      ).toBe(true);
+      expect(errors.some((e) => e.includes('states no rule'))).toBe(true);
+
+      const read = accounted() as Report & { features?: unknown };
+      read.routes['route-checkout'].parameters.push({
+        name: 'report title',
+        kind: 'text',
+        control: 'c8',
+        partitions: [
+          {
+            id: 'typical',
+            kind: 'valid',
+            sampleValues: ['Checkout crash on Safari'],
+            expectedOutcome: 'the preview heading reads "Checkout crash on Safari"',
+          },
+        ],
+        boundaries: [],
+        evidence: [{ signal: 'form-label', excerpt: 'Title:' }],
+      });
+      read.features = analysisWith({
+        meaning: 'The heading the exported bug report carries; people find reports by it',
+        confidence: 'low',
+        constraints: [],
+      });
+      expect(validateWith(read, withTitle).errors).toEqual([]);
+    });
+
+    it('takes an empty value as invalid where the page says the field is required, and a bare label as no rule', () => {
+      const required = accounted();
+      // The email field carries the required attribute: an empty value is invalid there.
+      expect(validateWith(required).errors).toEqual([]);
+
+      const labelOnly = accounted();
+      labelOnly.routes['route-checkout'].parameters[1].partitions[1] = {
+        id: 'too-high',
+        kind: 'invalid',
+        sampleValues: ['1000'],
+        expectedOutcome: 'a message under the field says at most 10 can be ordered',
+        rule: { signal: 'form-label', excerpt: 'Quantity' },
+      };
+      expect(
+        validateWith(labelOnly).errors.some((e) =>
+          e.includes('quotes only the field\'s label "Quantity"'),
+        ),
+      ).toBe(true);
     });
 
     it('fails a field meaning built from its control id, and free text on a control that offers values', () => {
@@ -1169,13 +1353,160 @@ describe('scripts/validate-test-conditions.mjs (real execution)', () => {
           ),
         ).toBe(true);
 
-        const excluded = withConditions([]);
+        const excluded = withConditions([mainFlow()]);
         (excluded.routes['route-checkout'].excluded as unknown[]).push({
           control: 'c7',
           reason: 'off-limits',
           note: 'the human left the clipboard out of scope',
         });
         expect(validateWith(excluded, withOutputs(), full).errors).toEqual([]);
+      });
+
+      // What the order produces, read off the summary box the route excludes as result-output.
+      function mainFlow(overrides: Record<string, unknown> = {}) {
+        return property({
+          conditionId: 'flow',
+          relation: 'count-matches-request',
+          outputs: ['c4'],
+          description: 'An order of 2 with standard shipping is summarised as 2 items',
+          expectedOutcome: 'the order summary lists 2 items and a standard shipping line',
+          ...overrides,
+        });
+      }
+
+      // Live-observed: 48 of 49 copy and export controls excused as "result-output", the reason for
+      // a box a result is shown in - and on a first run, 32 excused as duplicates of nothing checked.
+      it('refuses a copy or export control excused as result-output, or as a duplicate of nothing checked', () => {
+        const asResult = withConditions([mainFlow()]);
+        (asResult.routes['route-checkout'].excluded as unknown[]).push({
+          control: 'c7',
+          reason: 'result-output',
+          note: 'Export or clipboard output control: Copy summary',
+        });
+        expect(
+          validateWith(asResult, withOutputs(), full).errors.some((e) =>
+            e.includes(
+              'leaves out c7 button "Copy summary" as result-output, but it delivers the result',
+            ),
+          ),
+        ).toBe(true);
+
+        const twin = { ...copyControl, id: 'c8' };
+        const inventory = checkoutInventory({
+          controls: [...checkoutInventory().controls, copyControl, twin],
+        });
+        const orphan = withConditions([mainFlow()]);
+        (orphan.routes['route-checkout'].excluded as unknown[]).push(
+          { control: 'c7', reason: 'duplicate', note: 'same as c8' },
+          { control: 'c8', reason: 'duplicate', note: 'same as c7' },
+        );
+        expect(
+          validateWith(orphan, inventory, full).errors.some((e) =>
+            e.includes('a duplicate, but its note names no output control a condition checks'),
+          ),
+        ).toBe(true);
+
+        const standIn = withConditions([mainFlow(), property()]);
+        (standIn.routes['route-checkout'].excluded as unknown[]).push({
+          control: 'c8',
+          reason: 'duplicate',
+          note: 'the second Copy summary, same as c7',
+        });
+        expect(validateWith(standIn, inventory, full).errors).toEqual([]);
+      });
+
+      // Live-observed: 26 pages that take input, and not one condition saying what any of them
+      // produces - the generator's combinations only prove a field accepts a value.
+      it('requires a main flow on a page that takes input, naming where the result shows', () => {
+        const none = validateWith(withConditions([]), checkoutInventory(), full);
+        expect(
+          none.errors.some(
+            (e) =>
+              e.includes('takes input, and no condition says what that input produces') &&
+              e.includes('c4 textbox'),
+          ),
+        ).toBe(true);
+
+        const unnamed = validateWith(
+          withConditions([mainFlow({ outputs: undefined })]),
+          checkoutInventory(),
+          full,
+        );
+        expect(
+          unnamed.errors.some((e) =>
+            e.includes(
+              'none of its positive behavior conditions names where the page shows the result',
+            ),
+          ),
+        ).toBe(true);
+
+        expect(
+          validateWith(withConditions([mainFlow()]), checkoutInventory(), full).errors,
+        ).toEqual([]);
+      });
+
+      it('refuses outputs naming a field the route does not exclude as result-output', () => {
+        const output = validateWith(
+          withConditions([mainFlow({ outputs: ['c4', 'c1'] })]),
+          checkoutInventory(),
+          full,
+        );
+        expect(
+          output.errors.some((e) =>
+            e.includes(
+              'outputs cites "c1", which is neither a copy, export or download control in the inventory nor a field this route excludes as result-output',
+            ),
+          ),
+        ).toBe(true);
+      });
+
+      // Live-observed on 26 pages: one condition each, the page's title wrapped in the same words.
+      it('refuses a condition the analysis wrote that would read the same on any page', () => {
+        const templated = mainFlow({
+          conditionId: 'templated',
+          relation: 'format-conformance',
+          sourceInput: 'Navigate to /checkout and execute default operation',
+          description: 'Verify Checkout renders valid UI components and functional controls',
+          expectedOutcome: 'Page renders intended layout with responsive controls',
+        });
+        const errors = validateWith(
+          withConditions([mainFlow(), templated]),
+          checkoutInventory(),
+          full,
+        ).errors;
+        expect(
+          errors.some((e) =>
+            e.includes(
+              '.description "Verify Checkout renders valid UI components and functional controls" would read the same on any page',
+            ),
+          ),
+        ).toBe(true);
+        expect(
+          errors.some((e) =>
+            e.includes(
+              '.expectedOutcome "Page renders intended layout with responsive controls" is true of any page',
+            ),
+          ),
+        ).toBe(true);
+        expect(
+          errors.some((e) =>
+            e.includes(
+              '.sourceInput "Navigate to /checkout and execute default operation" enters nothing a test could type',
+            ),
+          ),
+        ).toBe(true);
+        // A follow-up run is derived from the first run's output, so it carries no value of its own.
+        const roundTrip = mainFlow({
+          conditionId: 'round-trip',
+          technique: 'metamorphic',
+          relation: 'round-trip',
+          outputs: undefined,
+          followUpInput: 'the summary shown, entered again',
+          description: 'Re-entering the summarised order gives the same summary of 2 items',
+        });
+        expect(
+          validateWith(withConditions([mainFlow(), roundTrip]), checkoutInventory(), full).errors,
+        ).toEqual([]);
       });
 
       it('fails a relation from the wrong list, a metamorphic relation with no follow-up run, and a negative property', () => {
@@ -1410,7 +1741,9 @@ describe('scripts/validate-test-conditions.mjs - feature analysis, anchors and r
       anchors: [{ kind: 'probe', ref: 'p1' }],
     };
     const errors = validateRaw(data).errors.join(' ');
-    expect(errors).toContain('cites research source "s9"');
+    expect(errors).toContain(
+      'cites research "s9", which the research record of this feature lists neither as a source nor as a check',
+    );
     expect(errors).toContain('cites probe "p1"');
   });
 
@@ -1432,6 +1765,7 @@ describe('scripts/validate-test-conditions.mjs - feature analysis, anchors and r
     // A person's own words are a second, independent source.
     data.features['feature-checkout'].fields[0].constraints = [
       {
+        id: 'r1',
         statement: 'a real, deliverable address',
         source: 'human',
         confidence: 'high',
@@ -1443,9 +1777,210 @@ describe('scripts/validate-test-conditions.mjs - feature analysis, anchors and r
             quote: 'confirmations bounce if the address is wrong',
           },
         ],
+        untestedReason: 'deliverability needs a real mailbox, which no test may write to',
       },
     ];
     expect(validateRaw(data).errors).toEqual([]);
+  });
+
+  // A rule the analysis wrote down and nothing tests is an analysis nobody used.
+  it('refuses a field rule the markup does not state that nothing cites and nothing explains', () => {
+    const rule = {
+      id: 'r1',
+      statement: 'never more than 3 per customer, the stock is shared',
+      source: 'domain',
+      confidence: 'medium',
+      enforcement: 'unknown',
+      anchors: [{ kind: 'control', ref: 'c1' }],
+    };
+    const untested = report();
+    untested.features['feature-checkout'].fields[1].constraints.push(rule);
+    expect(validateRaw(untested).errors.join(' ')).toContain(
+      'constraints[1] ("never more than 3 per customer, the stock is shared") is tested by nothing',
+    );
+
+    const noId = report();
+    noId.features['feature-checkout'].fields[1].constraints.push({ ...rule, id: undefined });
+    expect(validateRaw(noId).errors.join(' ')).toContain('constraints[1].id must be a short id');
+
+    const cited = report();
+    cited.features['feature-checkout'].fields[1].constraints.push(rule);
+    cited.routes['route-checkout'].conditions[1].anchors.push({ kind: 'constraint', ref: 'r1' });
+    expect(validateRaw(cited).errors).toEqual([]);
+
+    const explained = report();
+    explained.features['feature-checkout'].fields[1].constraints.push({
+      ...rule,
+      untestedReason: 'the page takes one order at a time and never sees the customer',
+    });
+    expect(validateRaw(explained).errors).toEqual([]);
+
+    const unknown = report();
+    unknown.routes['route-checkout'].conditions[1].anchors.push({ kind: 'constraint', ref: 'r9' });
+    expect(validateRaw(unknown).errors.join(' ')).toContain(
+      'cites constraint "r9", which no field of this feature',
+    );
+  });
+
+  it('asks a feature with no condition anywhere why there is nothing to test', () => {
+    const dir = setupProject();
+    try {
+      withFeatureMap(dir);
+      // A page of static text: its only field is the site frame's language switcher.
+      mkdirSync(join(dir, 'artifacts', 'site-map', 'inventory'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'site-map', 'inventory', 'route-checkout.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          routeId: 'route-checkout',
+          contentHash: 'abc123',
+          controls: [
+            {
+              id: 'c0',
+              region: 'header',
+              role: 'combobox',
+              name: 'Language',
+              tag: 'select',
+              options: ['English'],
+              optionCount: 1,
+            },
+          ],
+        }),
+        'utf8',
+      );
+      const validate = (data: unknown) => {
+        writeRawReport(dir, data);
+        return JSON.parse(run(dir).stdout) as { errors: string[] };
+      };
+      const none = report();
+      none.routes['route-checkout'].parameters = [];
+      none.routes['route-checkout'].conditions = [];
+      none.features['feature-checkout'].fields = [];
+      expect(validate(none).errors.join(' ')).toContain(
+        'has not one condition on any of its pages',
+      );
+
+      none.features['feature-checkout'].untestedReason =
+        'static legal text; the crawl already checks the page loads';
+      expect(validate(none).errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+
+    const stale = report();
+    stale.features['feature-checkout'].untestedReason =
+      'static legal text; the crawl already checks the page loads';
+    expect(validateRaw(stale).errors.join(' ')).toContain(
+      'untestedReason says there is nothing to test, but the feature has conditions',
+    );
+  });
+
+  // Live-observed: 35 of 36 research checks never became a condition, and nothing could tell which.
+  it('refuses a research check no condition cites and the analysis does not decline', () => {
+    const dir = setupProject();
+    try {
+      withFeatureMap(dir);
+      mkdirSync(join(dir, 'artifacts', 'analysis', 'research'), { recursive: true });
+      writeFileSync(
+        join(dir, 'artifacts', 'analysis', 'research', 'checkout.json'),
+        JSON.stringify({
+          sources: [{ id: 's1' }, { id: 's2' }, { id: 's3' }, { id: 's4' }, { id: 's5' }],
+          checks: [
+            { id: 'k1', statement: 'a double submit places one order', sourceIds: ['s1'] },
+            { id: 'k2', statement: 'a coupon code is applied once per order', sourceIds: ['s2'] },
+          ],
+        }),
+        'utf8',
+      );
+      const validate = (data: unknown) => {
+        writeRawReport(dir, data);
+        return JSON.parse(run(dir).stdout) as { errors: string[] };
+      };
+      const data = report();
+      data.features['feature-checkout'].research = {
+        status: 'done',
+        archetype: 'checkout',
+        file: 'artifacts/analysis/research/checkout.json',
+      };
+      const unused = validate(data).errors.join(' ');
+      expect(unused).toContain(
+        'research check k1 ("a double submit places one order") is cited by no condition',
+      );
+      expect(unused).toContain('research check k2');
+
+      data.routes['route-checkout'].conditions[1].anchors.push({ kind: 'research', ref: 'k1' });
+      data.features['feature-checkout'].research.declined = [
+        { check: 'k2', reason: 'the checkout takes no coupon code at all' },
+      ];
+      expect(validate(data).errors).toEqual([]);
+
+      data.features['feature-checkout'].research.declined.push({
+        check: 'k1',
+        reason: 'declined after all, on purpose',
+      });
+      expect(validate(data).errors.join(' ')).toContain(
+        'declines check k1, which a condition of the feature cites',
+      );
+
+      data.features['feature-checkout'].research.declined = [
+        { check: 'k7', reason: 'not a check of the record' },
+      ];
+      expect(validate(data).errors.join(' ')).toContain(
+        '.check "k7" is not a check of this feature\'s research record',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Not an error: a count with no source invites padding. A warning the assistant sees before the
+  // person sees "0 edge case(s)".
+  it('warns when a feature that takes input has no edge case', () => {
+    const plain = report();
+    expect(
+      (validateRaw(plain).warnings as string[]).some((w) =>
+        w.includes('features["feature-checkout"] takes input on 1 page(s) and has no edge case'),
+      ),
+    ).toBe(true);
+
+    const probed = report();
+    probed.routes['route-checkout'].conditions.push({
+      ...structuredClone(probed.routes['route-checkout'].conditions[0]),
+      conditionId: 'feed00000000e0e0',
+      parameters: { email: 'empty', quantity: 'valid' },
+      description: 'With email="": a message under the field says the email is required (negative)',
+      expectedOutcome: 'a message under the field says the email is required',
+      scenario: 'negative',
+    });
+    const output = validateRaw(probed);
+    expect(output.errors).toEqual([]);
+    expect((output.warnings as string[]).some((w) => w.includes('has no edge case'))).toBe(false);
+  });
+
+  // Live-observed on all seven features of a run: "Provides <feature> capabilities within the toolkit".
+  it('warns when three features or more share one purpose once their names are taken out', () => {
+    const data = report();
+    const template = (name: string) => ({
+      ...structuredClone(data.features['feature-checkout']),
+      purpose: 'Provides ' + name + ' capabilities within the web quality assurance toolkit',
+    });
+    data.features['feature-checkout'] = { ...template('checkout'), featureId: 'feature-checkout' };
+    data.features['feature-returns'] = {
+      ...template('returns'),
+      featureId: 'feature-returns',
+      fields: [],
+    };
+    data.features['feature-gift-cards'] = {
+      ...template('gift cards'),
+      featureId: 'feature-gift-cards',
+      fields: [],
+    };
+    const warnings = validateRaw(data).warnings as string[];
+    expect(
+      warnings.some((w) =>
+        w.startsWith('3 features share one purpose once their names are taken out'),
+      ),
+    ).toBe(true);
   });
 
   it('caps a constraint reasoned from the meaning alone at medium', () => {
@@ -1529,7 +2064,7 @@ describe('renderTestConditionsTypes (real standalone tsc check)', () => {
     expect(text).toContain("export type ConditionLayer = 'field' | 'rule' | 'behavior' | 'frame';");
     expect(text).toContain('expectedOutcome: string;');
     expect(text).toContain("export type ExecutionLevel = 'ui' | 'dom' | 'api';");
-    expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot';");
+    expect(text).toContain("reviewedBy?: 'human' | 'auto-pilot' | 'assistant';");
 
     const dir = mkdtempSync(join(tmpdir(), 'eitr-test-conditions-types-'));
     try {

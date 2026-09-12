@@ -21,7 +21,8 @@ export function renderGroundZeroQuestions(): string {
  *   node scripts/ground-zero-questions.mjs --status='{...}'   (harness only)
  *
  * Prints one of:
- *   { status: 'ASK', phase, question: {...}, answered: [...] }
+ *   { status: 'ASK', phase, show, question: {...}, answered: [...] }   - show: the stage report to
+ *                                                                        print above a gate question
  *   { status: 'DONE', phase, plan: {...} }
  *   { status: 'FAILED', errors: [...] }
  *
@@ -49,6 +50,31 @@ const NEXT_AFTER = {
   'test-conditions-reviewed': '/design-test-cases',
   'test-cases-drafted': '/automate-test',
 };
+
+// The review each gate is about, whose stage report the person sees above the question.
+const REVIEW_OF = {
+  'site-map-pending-review': 'site-map',
+  'site-map-reviewed': 'site-map',
+  'feature-map-pending-review': 'feature-map',
+  'feature-map-reviewed': 'feature-map',
+  'test-conditions-pending-review': 'test-conditions',
+  'test-conditions-reviewed': 'test-conditions',
+};
+
+// The stage report as the review file was last drawn - it ends with the file's path. Read from the
+// rendering kept beside the file, so it is the same text the review holds, not a recollection of it.
+function reportFor(stage) {
+  const kind = REVIEW_OF[stage];
+  if (!kind) return null;
+  const file = path.join(CWD, 'artifacts', 'review', '.base', kind + '-review.json');
+  if (!fs.existsSync(file)) return null;
+  try {
+    const base = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return typeof base.report === 'string' ? base.report : null;
+  } catch {
+    return null;
+  }
+}
 
 function argValue(name) {
   const prefix = '--' + name + '=';
@@ -228,6 +254,7 @@ function main() {
     emit({
       status: 'ASK',
       phase: phase,
+      show: phase === 'gate' ? reportFor(status.stage) : null,
       question: {
         id: question.id,
         text: question.dynamicText ? question.dynamicText(status) : question.text,

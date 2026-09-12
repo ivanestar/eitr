@@ -273,15 +273,15 @@ function invalidNameOf(parameters, vector) {
 
 // Pairs directly forbidden by a single ConstraintRule never enter needed at all - only a pair
 // that ends up unsatisfiable through a THIRD parameter's cascading conflict (multiple independent
-// rules interacting) can still fail once it's picked as a seed - see buildSeededVector. A pair of
-// two invalid values never enters either: no vector may carry both.
+// rules interacting) can still fail once it's picked as a seed - see buildSeededVector. Only valid
+// values are paired: an invalid one is tested on its own, in a vector of its own (buildVectors).
 function buildNeededPairs(parameters, constraints) {
   const needed = new Set();
   for (let i = 0; i < parameters.length; i++) {
     for (let j = i + 1; j < parameters.length; j++) {
       for (const pa of parameters[i].partitions) {
         for (const pb of parameters[j].partitions) {
-          if (pa.kind === 'invalid' && pb.kind === 'invalid') continue;
+          if (pa.kind === 'invalid' || pb.kind === 'invalid') continue;
           const fixed = {};
           fixed[parameters[j].name] = pb.id;
           if (violatesConstraint(parameters[i].name, pa.id, fixed, constraints)) continue;
@@ -294,17 +294,10 @@ function buildNeededPairs(parameters, constraints) {
 }
 
 // How many currently-uncovered needed pairs this candidate would newly cover against the values
-// THIS vector has already fixed (seed values plus any columns filled so far). Every call site has
-// at least the seed's 2 values already fixed, so there is no "nothing fixed yet" case to special-case.
-// In a vector carrying an invalid value, only the pair with that value counts - see
-// removeCoveredPairs for why.
+// THIS vector has already fixed (seed values plus any columns filled so far). A vector holding an
+// invalid value covers no pair, so nothing scores there and each column keeps its first valid value.
 function scoreCandidate(parameters, param, partition, vector, needed) {
-  const invalidName = invalidNameOf(parameters, vector);
-  if (invalidName !== null) {
-    return needed.has(pairKey(parameters, param.name, partition.id, invalidName, vector[invalidName]))
-      ? 1
-      : 0;
-  }
+  if (invalidNameOf(parameters, vector) !== null) return 0;
   let count = 0;
   for (const name of Object.keys(vector)) {
     if (needed.has(pairKey(parameters, param.name, partition.id, name, vector[name]))) count++;
@@ -411,19 +404,8 @@ function fillRemaining(parameters, constraints, needed, vector, col) {
   return lastDeadEnd;
 }
 
-// A negative vector covers only the pairs its invalid value forms: the application rejects the
-// input, so the valid values beside it were never exercised together and still need an all-valid
-// vector of their own.
 function removeCoveredPairs(parameters, vector, needed) {
   const names = Object.keys(vector);
-  const invalidName = invalidNameOf(parameters, vector);
-  if (invalidName !== null) {
-    for (const name of names) {
-      if (name === invalidName) continue;
-      needed.delete(pairKey(parameters, invalidName, vector[invalidName], name, vector[name]));
-    }
-    return;
-  }
   for (let i = 0; i < names.length; i++) {
     for (let j = i + 1; j < names.length; j++) {
       needed.delete(pairKey(parameters, names[i], vector[names[i]], names[j], vector[names[j]]));
@@ -464,6 +446,37 @@ function buildVectors(parameters, constraints) {
     } else {
       vectors.push(vector);
       removeCoveredPairs(parameters, vector, needed);
+    }
+  }
+
+  // Each invalid value once, every other parameter at its first valid value: the application
+  // rejects the input on that one value, so pairing it with every value of the others adds tests
+  // that all fail the same way. A rejection that depends on another field is a decision rule,
+  // written by the analysis. A route with one parameter is covered partition by partition already
+  // (buildEquivalencePartitionConditions).
+  for (const param of parameters.length >= 2 ? parameters : []) {
+    for (const partition of param.partitions) {
+      if (partition.kind !== 'invalid') continue;
+      const vector = {};
+      vector[param.name] = partition.id;
+      const dead = fillRemaining(parameters, constraints, new Set(), vector, 0);
+      if (dead) {
+        unsatisfied.push({
+          paramA: param.name,
+          partitionA: partition.id,
+          paramB: null,
+          partitionB: null,
+          reason:
+            'no valid value of the other parameters can stand beside it: ' +
+            dead.deadEnds
+              .map(function (d) {
+                return d.reason;
+              })
+              .join('; '),
+        });
+      } else {
+        vectors.push(vector);
+      }
     }
   }
 
@@ -933,15 +946,15 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle, fiel
   if (entry.conditions && entry.conditions.length > 0 && entry.sourceParamsHash === currentHash) {
     return;
   }
-  // A condition a person cut stays cut when the route is regenerated: the same inputs rebuild the same
-  // id, and a cut undone by regenerating is a decision silently thrown away.
-  const cutIds = new Set(
+  // A condition a person or the assistant cut stays cut when the route is regenerated: the same inputs
+  // rebuild the same id, and a cut undone by regenerating is a decision silently thrown away.
+  const cutIds = new Map(
     (entry.conditions || [])
       .filter(function (c) {
         return c && c.cut === true && c.conditionId;
       })
       .map(function (c) {
-        return c.conditionId;
+        return [c.conditionId, c];
       }),
   );
   const { vectors, unsatisfied } = buildVectors(entry.parameters, entry.constraints || []);
@@ -994,9 +1007,12 @@ function generateForRoute(routeId, entry, criticalityTier, lifecycleBundle, fiel
     if (seen.has(c.conditionId)) continue;
     seen.add(c.conditionId);
     if (cutIds.has(c.conditionId)) {
+      const was = cutIds.get(c.conditionId);
       c.cut = true;
       c.reviewed = false;
       delete c.reviewedBy;
+      if (was.cutBy) c.cutBy = was.cutBy;
+      if (was.cutReason) c.cutReason = was.cutReason;
     }
     deduped.push(c);
   }
@@ -1234,6 +1250,21 @@ function describeGenerated(condition, entry) {
 // default risk on the generator's own conditions - then ranks every condition, authored ones
 // included: risk score = likelihood x the feature's impact, and the priority tier it lands in.
 // Runs on every pass, so a feature whose impact changed at review re-ranks without regenerating.
+// Who reviews a condition. A person, where its expected result is a judgment only the domain can
+// confirm: the analysis wrote it, it rests on words (a label, a person, a requirement, research), or
+// it walks an entity's lifecycle. The assistant, where the page's own markup, the malformed-input
+// checklist or this script's combinations settle it - checked against the markup by the gate, and
+// kept or cut by the assistant for whether it applies here. Set on every pass, so every reader of the
+// file splits the conditions the same way.
+const PERSON_ORACLES = ['human', 'requirement', 'research'];
+
+function reviewerOf(condition) {
+  if (isAuthored(condition)) return 'person';
+  if (condition.technique === 'state-transition' || condition.technique === 'use-case') return 'person';
+  if (condition.layer === 'rule' || PERSON_ORACLES.indexOf(condition.oracle) !== -1) return 'person';
+  return 'assistant';
+}
+
 function annotateAndRank(data, context) {
   for (const [routeId, entry] of Object.entries(data.routes)) {
     const frameControls = routeId === data.frameRouteId ? frameControlsOf(routeId) : new Set();
@@ -1262,6 +1293,7 @@ function annotateAndRank(data, context) {
           });
         if (allFrame) condition.layer = 'frame';
       }
+      condition.reviewer = reviewerOf(condition);
       const impact =
         context.impactByFeature[condition.featureId] || context.criticalityByRoute[routeId] || 'high';
       const likelihood = condition.risk && condition.risk.likelihood;

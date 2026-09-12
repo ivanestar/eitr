@@ -273,11 +273,13 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       );
       expect(combinatorial.length).toBeGreaterThan(0);
 
+      // Valid values are paired; quantity's invalid value is tested once on its own.
+      expect(combinatorial.filter((c) => c.parameters.quantity === 'too-high')).toHaveLength(1);
       const params = ['shippingMethod', 'paymentMethod', 'quantity'];
       const partitionsByParam: Record<string, string[]> = {
         shippingMethod: ['standard', 'express'],
         paymentMethod: ['card', 'paypal'],
-        quantity: ['valid', 'too-high'],
+        quantity: ['valid'],
       };
       const covered = new Set<string>();
       for (const c of combinatorial) {
@@ -415,9 +417,9 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
       expect(result.status).toBe(0);
       const report = readReport(dir);
       const entry = report.routes['route-checkout'];
-      // Exactly the 2 pairs pairing shippingMethod=express with each quantity partition - not a
-      // superset (e.g. never the unrelated paymentMethod=paypal/quantity=valid pair, which has no
-      // constraint relation to anything and is trivially coverable).
+      // Exactly the pair of shippingMethod=express with quantity's valid value - not a superset
+      // (e.g. never the unrelated paymentMethod=paypal/quantity=valid pair, which has no constraint
+      // relation to anything and is trivially coverable). quantity's invalid value is never paired.
       expect(entry.unsatisfiedPairs).toEqual([
         {
           paramA: 'shippingMethod',
@@ -429,31 +431,21 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
             'excluded by constraint: shippingMethod=express -> paymentMethod!=card; ' +
             'excluded by constraint: shippingMethod=express -> paymentMethod!=paypal',
         },
-        {
-          paramA: 'shippingMethod',
-          partitionA: 'express',
-          paramB: 'quantity',
-          partitionB: 'too-high',
-          reason:
-            'combining these two values leaves no valid assignment for another parameter: ' +
-            'excluded by constraint: shippingMethod=express -> paymentMethod!=card; ' +
-            'excluded by constraint: shippingMethod=express -> paymentMethod!=paypal',
-        },
       ]);
       for (const c of entry.conditions) {
         expect(c.parameters.shippingMethod).not.toBe('express');
       }
-      // Every other pair in the route (i.e. every pair not touching shippingMethod=express) still
-      // achieved full pairwise coverage despite the 2 unsatisfiable pairs.
+      // Every other valid pair in the route (i.e. every pair not touching shippingMethod=express)
+      // still achieved full pairwise coverage despite the unsatisfiable one, and quantity's invalid
+      // value is still tested, once.
       const combinatorial = entry.conditions.filter((c) => c.technique === 'combinatorial');
       const coveredPaymentQuantity = new Set(
         combinatorial.map((c) => c.parameters.paymentMethod + '|' + c.parameters.quantity),
       );
       for (const pm of ['card', 'paypal']) {
-        for (const q of ['valid', 'too-high']) {
-          expect(coveredPaymentQuantity.has(pm + '|' + q)).toBe(true);
-        }
+        expect(coveredPaymentQuantity.has(pm + '|valid')).toBe(true);
       }
+      expect(combinatorial.filter((c) => c.parameters.quantity === 'too-high')).toHaveLength(1);
       const coveredShippingPayment = new Set(
         combinatorial
           .filter((c) => c.parameters.shippingMethod === 'standard')
@@ -1164,7 +1156,10 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
         .map((p) => p.name);
     }
 
-    it('never puts two invalid values in one vector, and pairs each with every valid value of the other parameters', () => {
+    // An invalid value is rejected on its own account: tested once, beside the first valid value of
+    // every other parameter, never paired with each of their values - live-observed as three
+    // identical lines for one empty field, 1050 conditions over 28 pages.
+    it('tests each invalid value once, beside valid values only', () => {
       const report = faultRoute();
       const parameters = report.routes['route-convert'].parameters;
       const dir = setupProject(report);
@@ -1176,15 +1171,10 @@ describe('scripts/generate-test-conditions.mjs (real execution)', () => {
         }
         for (const p of parameters) {
           for (const bad of p.partitions.filter((part) => part.kind === 'invalid')) {
+            const carrying = combinatorial.filter((c) => c.parameters[p.name] === bad.id);
+            expect(carrying, p.name + '=' + bad.id).toHaveLength(1);
             for (const q of parameters.filter((other) => other.name !== p.name)) {
-              for (const good of q.partitions.filter((part) => part.kind === 'valid')) {
-                expect(
-                  combinatorial.some(
-                    (c) => c.parameters[p.name] === bad.id && c.parameters[q.name] === good.id,
-                  ),
-                  p.name + '=' + bad.id + ' with ' + q.name + '=' + good.id,
-                ).toBe(true);
-              }
+              expect(carrying[0].parameters[q.name]).toBe(q.partitions[0].id);
             }
           }
         }
