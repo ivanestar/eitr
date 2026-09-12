@@ -109,13 +109,25 @@ export interface GoldMainFlow {
   text: GoldText;
 }
 
+// A rule is often as well shown by any value of a kind as by the one written here: "a negative
+// amount is valid" is tested by any negative amount, not only by -40. Where that is so, the class
+// says which values stand in for the witness; where it is not, only the witness itself does.
+export type GoldValueClass =
+  | { kind: 'number'; lt?: number; lte?: number; gt?: number; gte?: number }
+  | { kind: 'text'; matches: string; not?: string[] };
+
 export interface GoldRule {
   id: string;
   statement: string;
   fields: string[];
   source: 'domain' | 'human';
   // A value that shows the rule, and whether the application should accept it.
-  witness: { field: string; value: string; polarity: 'valid' | 'invalid' };
+  witness: {
+    field: string;
+    value: string;
+    polarity: 'valid' | 'invalid';
+    stands?: GoldValueClass | undefined;
+  };
   text: GoldText;
 }
 

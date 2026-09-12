@@ -327,7 +327,7 @@ q('f4').selectedIndex=1;
       statement: 'A negative amount is valid: a temperature below zero is an ordinary reading',
       fields: ['f2'],
       source: 'domain',
-      witness: { field: 'f2', value: '-40', polarity: 'valid' },
+      witness: { field: 'f2', value: '-40', polarity: 'valid', stands: { kind: 'number', lt: 0 } },
       text: {
         description: '-40 degrees Celsius converts to -40 Fahrenheit rather than being refused',
         outcome: 'the result reads -40',
@@ -342,7 +342,13 @@ q('f4').selectedIndex=1;
       statement: 'Converting a unit to itself returns the amount unchanged',
       fields: ['f3', 'f4'],
       source: 'domain',
-      witness: { field: 'f4', value: lengthUnits[0], polarity: 'valid' },
+      // The same unit on both sides, whether the analysis names the option or writes the word.
+      witness: {
+        field: 'f4',
+        value: lengthUnits[0],
+        polarity: 'valid',
+        stands: { kind: 'text', matches: '^(metres|meters)$' },
+      },
       text: {
         description: '100 metres converted to metres stays 100',
         outcome: 'the result reads 100',
@@ -651,7 +657,13 @@ var mob=q('f2m');if(mob){mob.addEventListener('input',function(){q('f2').value=m
       statement: 'The total is never negative, whatever the coupon takes off',
       fields: ['f1'],
       source: 'domain',
-      witness: { field: 'f1', value: '1', polarity: 'valid' },
+      // Any price the coupon can swallow shows it, not only 1.00.
+      witness: {
+        field: 'f1',
+        value: '1',
+        polarity: 'valid',
+        stands: { kind: 'number', gt: 0, lte: 5 },
+      },
       text: {
         description: 'One item at 1.00 with the coupon SAVE5 totals 0.00, not a negative amount',
         outcome: 'the total reads 0.00',
@@ -996,7 +1008,13 @@ var mob=q('f1m');if(mob){mob.addEventListener('input',function(){q('f1').value=m
       statement: 'Codes in one batch are never repeated - they are used as unique keys',
       fields: ['f1'],
       source: 'domain',
-      witness: { field: 'f1', value: '20', polarity: 'valid' },
+      // Repeats can only show in a batch of more than one, whatever its size.
+      witness: {
+        field: 'f1',
+        value: '20',
+        polarity: 'valid',
+        stands: { kind: 'number', gte: 2 },
+      },
       text: {
         description: 'A batch of 200 codes has no repeats',
         outcome: 'all 200 codes are different',

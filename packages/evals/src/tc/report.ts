@@ -196,6 +196,20 @@ export function agentReport(
   lines.push('- Nothing critical wrong with it: ' + percent(wilson(critical.length, runs.length)));
   const perfect = finished.filter((r) => r.grade && r.grade.failures.length === 0);
   lines.push('- Every grader passed: ' + percent(wilson(perfect.length, runs.length)));
+  const judged = finished
+    .map((r) => r.grade?.byGrader['defect-judge'])
+    .filter((c): c is { passed: number; total: number } => Boolean(c && c.total > 0));
+  if (judged.length > 0)
+    lines.push(
+      '- Would catch the defect seeded in the page, by the judge: ' +
+        percent(clusteredRate(judged)),
+    );
+  const unresolved = finished.reduce((sum, r) => sum + (r.grade?.unresolved || 0), 0);
+  if (unresolved > 0)
+    lines.push(
+      '- Judgements the judge was asked for and did not give (left out of every rate above): ' +
+        unresolved,
+    );
   const perTask = Array.from(byDataset.values()).map((trials) => ({
     passed: trials.filter((t) => t.grade && t.grade.critical).length,
     total: trials.length,

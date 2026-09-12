@@ -316,7 +316,12 @@ document.getElementById('confirm').addEventListener('click',function(){msg('${la
       statement: 'The Team plan needs at least 2 seats',
       fields: ['f3', 'f4'],
       source: 'domain',
-      witness: { field: 'f4', value: '1', polarity: 'invalid' },
+      witness: {
+        field: 'f4',
+        value: '1',
+        polarity: 'invalid',
+        stands: { kind: 'number', lt: 2 },
+      },
       text: {
         description: 'The Team plan with 1 seat is refused',
         outcome: 'a message says the Team plan needs at least 2 seats',
@@ -332,7 +337,13 @@ document.getElementById('confirm').addEventListener('click',function(){msg('${la
       statement: 'The work email has to be a real address: name@domain',
       fields: ['f2'],
       source: 'domain',
-      witness: { field: 'f2', value: 'user@', polarity: 'invalid' },
+      // An address with nothing after the at sign, nothing before it, or no at sign at all.
+      witness: {
+        field: 'f2',
+        value: 'user@',
+        polarity: 'invalid',
+        stands: { kind: 'text', matches: '^[^@\\s]+@$|^@[^@\\s]*$|^[^@\\s]+@[^@.\\s]*$' },
+      },
       text: {
         description: 'user@ with no domain keeps the sign-up on step 1',
         outcome: 'a message says the email address is not valid',
@@ -572,7 +583,13 @@ load();
       statement: 'Saved settings persist across a reload and a visit to another page',
       fields: ['f1', 'f2', 'f3'],
       source: 'domain',
-      witness: { field: 'f3', value: 'YYYY-MM-DD', polarity: 'valid' },
+      // Either format shows that a saved setting comes back.
+      witness: {
+        field: 'f3',
+        value: 'YYYY-MM-DD',
+        polarity: 'valid',
+        stands: { kind: 'text', matches: '^(YYYY-MM-DD|DD\\.MM\\.YYYY)$' },
+      },
       text: {
         description: 'The date format YYYY-MM-DD, once saved, is still chosen after a reload',
         outcome: 'after a reload the date format reads YYYY-MM-DD and the preview shows 2026-09-12',
@@ -775,7 +792,12 @@ document.getElementById('import').addEventListener('click',function(){
       statement: 'An empty file is refused instead of importing 0 rows',
       fields: ['f1'],
       source: 'domain',
-      witness: { field: 'f1', value: 'empty.csv', polarity: 'invalid' },
+      witness: {
+        field: 'f1',
+        value: 'empty.csv',
+        polarity: 'invalid',
+        stands: { kind: 'text', matches: 'empty|пуст' },
+      },
       text: {
         description: 'An empty empty.csv is refused',
         outcome: 'a message says the file is empty',
@@ -1022,7 +1044,13 @@ document.getElementById('signin').addEventListener('click',function(){
       statement: 'The error never tells which of email or password was wrong',
       fields: ['f1', 'f2'],
       source: 'domain',
-      witness: { field: 'f1', value: 'nobody@example.com', polarity: 'invalid' },
+      // Any address nobody is registered under says the same thing.
+      witness: {
+        field: 'f1',
+        value: 'nobody@example.com',
+        polarity: 'invalid',
+        stands: { kind: 'text', matches: '@(example|test)\\.(com|org|net)$' },
+      },
       text: {
         description: 'Signing in as nobody@example.com says ' + wrong,
         outcome: 'the message reads ' + wrong + ' and names neither field',

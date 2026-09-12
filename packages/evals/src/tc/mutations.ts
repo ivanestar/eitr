@@ -331,6 +331,44 @@ export const MUTATIONS: Mutation[] = [
     },
   },
   {
+    id: 'wrong-main-flow-value',
+    what: 'the main flow expects a result the page would never produce for that input',
+    expect: 'graders',
+    apply(analysis, ctx) {
+      for (const [index, route] of ctx.prepared.routes.filter((r) => r.inFeature).entries()) {
+        const page = ctx.prepared.gold.pages.find((p) => p.path === route.path);
+        const token = page && page.mainFlow.expectTokens[0];
+        const figure = token ? token.match(/-?\d+(?:\.\d+)?/) : null;
+        if (!page || !figure) continue;
+        const entry = analysis.routes[route.routeId];
+        if (!(entry.conditions || []).some((c: any) => c.conditionId === 'ref-main-' + index))
+          continue;
+        // A number nothing on the page could arrive at, in place of the one it should produce -
+        // however the condition writes it, 30 and 30.00 being the same number.
+        const target = Number(figure[0]);
+        const wrong = String(target * 7 + 13);
+        const rewrite = (text: string) =>
+          text.replace(/-?\d+(?:[.,]\d+)?/g, (m) =>
+            Number(m.replace(',', '.')) === target ? wrong : m,
+          );
+        // Everywhere the analysis says what this page produces, so nothing is left stating the value
+        // the page should really arrive at.
+        let changed = false;
+        for (const condition of entry.conditions || []) {
+          if (condition.origin === 'generated') continue;
+          for (const key of ['description', 'expectedOutcome']) {
+            if (typeof condition[key] !== 'string') continue;
+            const after = rewrite(condition[key]);
+            if (after !== condition[key]) changed = true;
+            condition[key] = after;
+          }
+        }
+        if (changed) return true;
+      }
+      return false;
+    },
+  },
+  {
     id: 'defect-not-targeted',
     what: 'nothing checks what this kind of page is known to get wrong',
     expect: 'graders',

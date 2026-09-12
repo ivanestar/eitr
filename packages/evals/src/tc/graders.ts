@@ -3,7 +3,7 @@
 // same pair get the same verdict. The judgements code cannot make - whether a condition would
 // actually catch a seeded defect, whether an expected result is right for its input - are in
 // judge.ts and are scored the same way, one binary item at a time.
-import type { GoldApp, GoldField, GoldPage } from './gold.js';
+import type { GoldApp, GoldField, GoldPage, GoldRule, GoldValueClass } from './gold.js';
 import type { PreparedDataset, RouteRecord } from './project.js';
 import { inventoryOf, isField, type InventoryControl } from './reference.js';
 
@@ -13,6 +13,15 @@ export interface GradeItem {
   what: string;
   passed: boolean;
   detail?: string | undefined;
+  // Code got as far as it can and the rest is a judgement: the analysis states a result of its own
+  // and only a reader can say whether it is the right one. It counts as failed until a judge says
+  // otherwise, so a run with no judge never scores itself generously.
+  deferred?: boolean | undefined;
+  // What the judge is asked about, when it is.
+  subject?: { conditionId: string; text: string } | undefined;
+  // The judge was asked and did not answer. That is a fact about the judge, not about the analysis,
+  // so the item is left out of every rate rather than counted as a failure.
+  unresolved?: boolean | undefined;
 }
 
 export interface GradeResult {
@@ -53,9 +62,88 @@ function conditionText(c: any): string {
     .join(' \n ');
 }
 
+// What the condition itself says happens - not the steps that follow it, which belong to another
+// case and whose values say nothing about this one's result.
+function statedResult(c: any): string {
+  return [c.description, c.expectedOutcome].filter(Boolean).join(' \n ');
+}
+
 function numberOf(value: string): number | null {
   const n = Number(String(value).trim());
   return Number.isFinite(n) ? n : null;
+}
+
+function sameValue(a: string, b: string): boolean {
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
+// Whether a value shows the rule its witness stands for: the witness itself always does, and where
+// the gold names a class, every value of that class does too.
+function standsFor(witness: GoldRule['witness'], value: string): boolean {
+  if (sameValue(value, witness.value)) return true;
+  const stands: GoldValueClass | undefined = witness.stands;
+  if (!stands) return false;
+  if (stands.kind === 'number') {
+    const n = numberOf(value);
+    if (n === null) return false;
+    if (stands.lt !== undefined && !(n < stands.lt)) return false;
+    if (stands.lte !== undefined && !(n <= stands.lte)) return false;
+    if (stands.gt !== undefined && !(n > stands.gt)) return false;
+    if (stands.gte !== undefined && !(n >= stands.gte)) return false;
+    return true;
+  }
+  if ((stands.not || []).some((v) => sameValue(v, value))) return false;
+  try {
+    return new RegExp(stands.matches, 'i').test(String(value));
+  } catch {
+    return false;
+  }
+}
+
+// The values a condition points at by naming a partition or a boundary of a parameter.
+function resolvedValues(condition: any, parameters: any[], only?: any): string[] {
+  const out: string[] = [];
+  const named = condition.parameters || {};
+  for (const parameter of parameters) {
+    if (only && parameter !== only) continue;
+    const id = named[parameter.name];
+    if (id === undefined) continue;
+    for (const set of (parameter.partitions || []).concat(parameter.boundaries || [])) {
+      if (String(set.id) !== String(id)) continue;
+      for (const value of set.sampleValues || set.values || []) out.push(String(value));
+    }
+  }
+  return out;
+}
+
+function numbersIn(text: string): number[] {
+  const out: number[] = [];
+  for (const match of String(text || '').matchAll(/-?\d+(?:[.,]\d+)?/g)) {
+    const value = Number(match[0].replace(',', '.'));
+    if (Number.isFinite(value)) out.push(value);
+  }
+  return out;
+}
+
+// A value is named by a text, not merely contained in it: 1 is not in 19.99, so a condition about a
+// price of 19.99 does not test a rule whose witness is 1. A number is read as a number, so 30 is
+// named by a text that says 30.00.
+function textNames(text: string, value: string): boolean {
+  const wanted = numberOf(value);
+  if (wanted === null) return mentions(text, value);
+  return numbersIn(text).some((found) => found === wanted);
+}
+
+// The values a condition works with: the ones it points at by naming a partition or a boundary, and
+// the quoted strings, numbers and words of its own text.
+function valuesUsed(condition: any, parameters: any[], only?: any): string[] {
+  const out: string[] = resolvedValues(condition, parameters, only);
+  const text = conditionText(condition);
+  for (const match of text.matchAll(/"([^"]{0,60})"|'([^']{0,60})'/g))
+    out.push(match[1] ?? match[2] ?? '');
+  for (const match of text.matchAll(/-?\d+(?:[.,]\d+)?/g)) out.push(match[0]);
+  for (const match of text.matchAll(/[A-Za-zА-Яа-яЁё][\w@.-]+/g)) out.push(match[0]);
+  return out;
 }
 
 // Whether the application should accept this value, by the gold - not by what the page does today.
@@ -162,13 +250,29 @@ export function gradeAnalysis(prepared: PreparedDataset, analysis: any): GradeRe
         add('main-flow-output', page, 'the main flow names where the result appears', named);
       }
       const tokens = ctx.page.mainFlow.expectTokens;
-      const carries = flows.some((c) => tokens.every((token) => mentions(conditionText(c), token)));
-      add(
-        'main-flow-value',
+      const carries = flows.some((c) => tokens.every((token) => textNames(statedResult(c), token)));
+      // An analysis is free to work its main flow on an input of its own, and then the value it
+      // states is one only a reader can check. Code decides the rest: a flow that names no value at
+      // all states nothing to check.
+      const withValue = flows.find((c) => /\d/.test(statedResult(c)));
+      const item: GradeItem = {
+        grader: 'main-flow-value',
         page,
-        'the main flow states the value the page should produce (' + tokens.join(', ') + ')',
-        carries,
-      );
+        what: 'the main flow states the value the page should produce (' + tokens.join(', ') + ')',
+        passed: carries,
+      };
+      if (!carries && withValue) {
+        item.deferred = true;
+        item.subject = {
+          conditionId: String(withValue.conditionId),
+          text:
+            statedResult(withValue) + (withValue.sourceInput ? '\n' + withValue.sourceInput : ''),
+        };
+        item.detail = 'a value of its own, not the one the gold names';
+      } else if (!carries) {
+        item.detail = 'no value at all';
+      }
+      items.push(item);
     }
 
     // 2. Every limit the page states has a boundary, and no boundary stands on a limit nothing states.
@@ -230,21 +334,23 @@ export function gradeAnalysis(prepared: PreparedDataset, analysis: any): GradeRe
     // 4. Rules the markup does not state: something tests them.
     for (const rule of ctx.page.rules) {
       const witnessControl = ctx.route.controlOf[rule.witness.field];
-      const parameter = (ctx.entry.parameters || []).find((p: any) => p.control === witnessControl);
+      const parameters = ctx.entry.parameters || [];
+      const parameter = parameters.find((p: any) => p.control === witnessControl);
       const inPartition = Boolean(
         parameter &&
         (parameter.partitions || []).some(
           (p: any) =>
-            (p.sampleValues || []).some((v: string) => String(v).trim() === rule.witness.value) &&
+            (p.sampleValues || []).some((v: string) => standsFor(rule.witness, v)) &&
             (rule.witness.polarity === 'valid' ? p.kind === 'valid' : p.kind === 'invalid'),
         ),
       );
       const inCondition = conditions.some(
         (c) =>
-          mentions(conditionText(c), rule.witness.value) &&
           (rule.witness.polarity === 'valid'
             ? c.scenario === 'positive'
-            : c.scenario === 'negative'),
+            : c.scenario === 'negative') &&
+          (textNames(conditionText(c), rule.witness.value) ||
+            valuesUsed(c, parameters, parameter).some((v) => standsFor(rule.witness, v))),
       );
       add(
         'rule-tested',
@@ -263,8 +369,12 @@ export function gradeAnalysis(prepared: PreparedDataset, analysis: any): GradeRe
       // the page should give. The wording is the analyst's own, so the gold lists what may stand for
       // each; the judge in judge.ts is what decides finally.
       const targeted = conditions.some((c) => {
-        const text = conditionText(c) + ' ' + JSON.stringify(c.parameters || {});
-        const hasTrigger = triggers.length === 0 || triggers.some((v) => mentions(text, String(v)));
+        // The values it works with, never the names it files them under: a partition called
+        // "p_dec_empty" is the analysis's own bookkeeping and says nothing about what is tested.
+        const text =
+          conditionText(c) + ' ' + resolvedValues(c, ctx.entry.parameters || []).join(' ');
+        const hasTrigger =
+          triggers.length === 0 || triggers.some((v) => textNames(text, String(v)));
         // The result it expects is what decides, so it is looked for where a result is stated.
         const rightResult =
           defect.correctTokens.length === 0 ||
@@ -449,4 +559,28 @@ export const CRITICAL_GRADERS = [
 
 export function passesCritically(result: GradeResult): boolean {
   return result.items.every((item) => !CRITICAL_GRADERS.includes(item.grader) || item.passed);
+}
+
+// What a set of graded items comes to - recomputed after a judge has settled what it settles.
+export function summarize(items: GradeItem[]): {
+  byGrader: Record<string, { passed: number; total: number }>;
+  failures: string[];
+  critical: boolean;
+  unresolved: number;
+} {
+  const scored = items.filter((i) => i.unresolved !== true);
+  const byGrader: Record<string, { passed: number; total: number }> = {};
+  for (const item of scored) {
+    const bucket = (byGrader[item.grader] ||= { passed: 0, total: 0 });
+    bucket.total += 1;
+    if (item.passed) bucket.passed += 1;
+  }
+  return {
+    byGrader,
+    failures: scored
+      .filter((i) => !i.passed)
+      .map((i) => i.grader + ': ' + i.what + (i.detail ? ' (' + i.detail + ')' : '')),
+    critical: scored.every((item) => !CRITICAL_GRADERS.includes(item.grader) || item.passed),
+    unresolved: items.length - scored.length,
+  };
 }

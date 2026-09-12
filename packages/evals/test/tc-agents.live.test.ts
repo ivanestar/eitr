@@ -5,14 +5,17 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 import { datasetSpecs } from '../src/tc/covering.js';
 import { prepareDataset, type PreparedDataset } from '../src/tc/project.js';
-import { runAgentBatch } from '../src/tc/agents.js';
-import { judgeDefects } from '../src/tc/judge.js';
+import { regradeRuns, runAgentBatch } from '../src/tc/agents.js';
+import { summarize } from '../src/tc/graders.js';
+import { judgeDefects, judgeValues } from '../src/tc/judge.js';
 import { agentReport, writeReport } from '../src/tc/report.js';
 
 // The paid half of the suite: a real assistant runs the real skill on datasets it has never seen.
 // It costs money and takes hours, so it runs only when asked for by name:
 //   TC_AGENTS=1 [TC_IDS=a,b] [TC_LIMIT=20] [TC_TRIALS=3] [TC_RUNNER=agy|claude] [TC_MODEL=...]
 //   npx vitest run packages/evals/test/tc-agents.live.test.ts
+// TC_REGRADE=<a batch's directory> scores what an earlier batch left behind again, running no
+// assistant: what a changed grader makes of runs already paid for.
 const ENABLED = process.env.TC_AGENTS === '1';
 const CACHE = process.env.TC_CACHE || join(tmpdir(), 'eitr-tc-evals', 'datasets');
 
@@ -36,19 +39,26 @@ describe.skipIf(!ENABLED)('test conditions - what a real assistant writes', () =
         await browser.close();
       }
       const tag = process.env.TC_TAG || new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-      const outRoot = join(tmpdir(), 'eitr-tc-evals', 'agent-runs', tag);
-      const runs = await runAgentBatch(prepared, {
-        runner: (process.env.TC_RUNNER as 'agy' | 'claude') || 'agy',
-        model: process.env.TC_MODEL || 'gemini-3.8-flash-high',
-        effort: 'high',
-        trials: Number(process.env.TC_TRIALS || 1),
-        concurrency: Number(process.env.TC_WORKERS || 2),
-        timeoutMinutes: Number(process.env.TC_TIMEOUT || 45),
-        outRoot,
-      });
+      const outRoot = process.env.TC_REGRADE || join(tmpdir(), 'eitr-tc-evals', 'agent-runs', tag);
+      const runs = process.env.TC_REGRADE
+        ? regradeRuns(outRoot, prepared)
+        : await runAgentBatch(prepared, {
+            runner: (process.env.TC_RUNNER as 'agy' | 'claude') || 'agy',
+            model: process.env.TC_MODEL || 'gemini-3.8-flash-high',
+            effort: 'high',
+            trials: Number(process.env.TC_TRIALS || 1),
+            concurrency: Number(process.env.TC_WORKERS || 2),
+            timeoutMinutes: Number(process.env.TC_TIMEOUT || 45),
+            outRoot,
+          });
 
-      // What code cannot decide: whether anything they wrote would catch the defect in the page.
+      // What code cannot decide: whether anything they wrote would catch the defect in the page, and
+      // whether a main flow worked on an input of the analysis's own expects the right result.
       if (process.env.TC_JUDGE !== '0') {
+        const judgeOptions = {
+          recordDir: join(outRoot, 'judge'),
+          model: process.env.TC_JUDGE_MODEL || 'claude-sonnet-4-6',
+        };
         for (const run of runs) {
           if (!run.produced) continue;
           const dataset = prepared.find((p) => p.spec.id === run.datasetId)!;
@@ -58,19 +68,9 @@ describe.skipIf(!ENABLED)('test conditions - what a real assistant writes', () =
             'artifacts/analysis/test-conditions.json',
           );
           const analysis = JSON.parse(readFileSync(analysisPath, 'utf8'));
-          const judged = await judgeDefects(dataset, analysis, {
-            recordDir: join(outRoot, 'judge'),
-            model: process.env.TC_JUDGE_MODEL || 'claude-sonnet-4-6',
-          });
-          run.items = run.items.concat(judged);
-          if (run.grade) {
-            for (const item of judged) {
-              const bucket = (run.grade.byGrader[item.grader] ||= { passed: 0, total: 0 });
-              bucket.total += 1;
-              if (item.passed) bucket.passed += 1;
-              else run.grade.failures.push(item.grader + ': ' + item.what);
-            }
-          }
+          await judgeValues(dataset, run.items, judgeOptions);
+          run.items = run.items.concat(await judgeDefects(dataset, analysis, judgeOptions));
+          run.grade = summarize(run.items);
         }
         writeFileSync(join(outRoot, 'runs.json'), JSON.stringify(runs, null, 1), 'utf8');
       }

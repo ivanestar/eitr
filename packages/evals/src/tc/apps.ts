@@ -661,7 +661,13 @@ export function buildApp(spec: DatasetSpec): BuiltApp {
           ' is a defect',
         fields: [limited.testId],
         source: 'human',
-        witness: { field: limited.testId, value: String(limit.value + 1), polarity: 'valid' },
+        // Anything over the page's limit and inside what the person allowed shows the same thing.
+        witness: {
+          field: limited.testId,
+          value: String(limit.value + 1),
+          polarity: 'valid',
+          stands: { kind: 'number', gt: limit.value, lte: allowed },
+        },
         text: {
           description:
             limited.label +

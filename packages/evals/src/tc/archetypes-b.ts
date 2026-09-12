@@ -204,7 +204,13 @@ document.getElementById('validate').addEventListener('click',function(){var raw=
       statement: 'Only strict JSON is accepted: single quotes and unquoted keys are errors',
       fields: ['f1'],
       source: 'domain',
-      witness: { field: 'f1', value: "{'a': 1}", polarity: 'invalid' },
+      // Any single-quoted or unquoted key breaks strict JSON the same way.
+      witness: {
+        field: 'f1',
+        value: "{'a': 1}",
+        polarity: 'invalid',
+        stands: { kind: 'text', matches: "[{,]\\s*'|[{,]\\s*[A-Za-z_][\\w-]*\\s*:" },
+      },
       text: {
         description: "{'a': 1} in single quotes is reported as invalid JSON",
         outcome: '"' + invalid + '" appears and nothing is formatted',
@@ -639,7 +645,13 @@ document.getElementById('reset').addEventListener('click',function(){document.qu
         'The exported file is named after the bug id, with characters a file name cannot hold replaced',
       fields: ['f1'],
       source: 'domain',
-      witness: { field: 'f1', value: 'BUG/101:x', polarity: 'valid' },
+      // Any id carrying a character a file name cannot hold shows the same rule.
+      witness: {
+        field: 'f1',
+        value: 'BUG/101:x',
+        polarity: 'valid',
+        stands: { kind: 'text', matches: '[\\\\/:*?"<>|]' },
+      },
       text: {
         description: 'A bug id of BUG/101:x still exports, as BUG_101_x.txt',
         outcome: 'the file downloads as BUG_101_x.txt',
@@ -954,7 +966,13 @@ render();
       statement: 'Search ignores letter case',
       fields: ['f1'],
       source: 'domain',
-      witness: { field: 'f1', value: 'HAMMER', polarity: 'valid' },
+      // Any spelling but the catalogue's own shows that case is ignored.
+      witness: {
+        field: 'f1',
+        value: 'HAMMER',
+        polarity: 'valid',
+        stands: { kind: 'text', matches: '^hammer$', not: ['Hammer'] },
+      },
       text: {
         description: 'Searching HAMMER in capitals finds Hammer',
         outcome: 'the list shows Hammer',

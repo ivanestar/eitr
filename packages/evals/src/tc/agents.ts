@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { join } from 'node:path';
 import { serve, trialCopy, REPO_ROOT, type PreparedDataset } from './project.js';
 import { runScript } from './pipeline.js';
-import { gradeAnalysis, passesCritically, type GradeResult } from './graders.js';
+import { gradeAnalysis, passesCritically, summarize, type GradeResult } from './graders.js';
 
 export const AGENT_PROMPT = [
   '/define-test-conditions',
@@ -45,6 +45,8 @@ export interface AgentRun {
     byGrader: Record<string, { passed: number; total: number }>;
     failures: string[];
     critical: boolean;
+    // Judgements the judge was asked for and did not give.
+    unresolved?: number | undefined;
   } | null;
   items: GradeResult['items'];
 }
@@ -292,6 +294,26 @@ export async function runAgentTrial(
     critical: passesCritically(graded),
   };
   return run;
+}
+
+// Score an earlier batch again. What the assistants wrote is on disk and does not change; when a
+// grader does, the old runs can be re-read instead of paid for a second time.
+export function regradeRuns(outRoot: string, prepared: PreparedDataset[]): AgentRun[] {
+  const runs: AgentRun[] = JSON.parse(readFileSync(join(outRoot, 'runs.json'), 'utf8'));
+  for (const run of runs) {
+    const dataset = prepared.find((p) => p.spec.id === run.datasetId);
+    if (!dataset || !run.produced) continue;
+    const conditions = join(
+      outRoot,
+      run.datasetId + '-t' + run.trial,
+      'artifacts/analysis/test-conditions.json',
+    );
+    if (!existsSync(conditions)) continue;
+    const graded = gradeAnalysis(dataset, JSON.parse(readFileSync(conditions, 'utf8')));
+    run.items = graded.items;
+    run.grade = summarize(graded.items);
+  }
+  return runs;
 }
 
 export async function runAgentBatch(
