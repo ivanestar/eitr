@@ -146,6 +146,17 @@ function valuesUsed(condition: any, parameters: any[], only?: any): string[] {
   return out;
 }
 
+// Whether the domain really has a bound on this side, wherever the page states it. A page can
+// enforce a limit its markup never mentions - the discount that has to be between 0 and 100 says so
+// only when a value is tried - and a boundary on one of those is found, not invented.
+function domainBound(field: GoldField, side: string): boolean {
+  const v = field.validity;
+  if (v.type === 'number') return side === 'min' ? v.min !== undefined : v.max !== undefined;
+  if (v.type === 'text')
+    return side === 'min' ? v.minLength !== undefined : v.maxLength !== undefined;
+  return false;
+}
+
 // Whether the application should accept this value, by the gold - not by what the page does today.
 export function goldAccepts(field: GoldField, value: string): boolean | null {
   const v = field.validity;
@@ -275,7 +286,8 @@ export function gradeAnalysis(prepared: PreparedDataset, analysis: any): GradeRe
       items.push(item);
     }
 
-    // 2. Every limit the page states has a boundary, and no boundary stands on a limit nothing states.
+    // 2. Every limit the page states has a boundary, and no boundary stands on a limit that is not
+    //    there at all - one the markup states, or one the domain really has and a probe can find.
     for (const [controlId, field] of ctx.fieldOfControl) {
       const parameter = (ctx.entry.parameters || []).find((p: any) => p.control === controlId);
       for (const limit of field.limits) {
@@ -302,13 +314,15 @@ export function gradeAnalysis(prepared: PreparedDataset, analysis: any): GradeRe
       }
       if (parameter) {
         for (const boundary of parameter.boundaries || []) {
-          const stated = field.limits.some((l) => l.side === boundary.boundary);
+          const real =
+            field.limits.some((l) => l.side === boundary.boundary) ||
+            domainBound(field, boundary.boundary);
           add(
             'limit-invented',
             page,
-            field.label + ': no boundary on a limit nothing states',
-            stated,
-            stated ? undefined : 'boundary ' + boundary.boundary + ' on a field with no such limit',
+            field.label + ': no boundary on a limit that is not there',
+            real,
+            real ? undefined : 'boundary ' + boundary.boundary + ' on a field with no such limit',
           );
         }
         // 3. Nothing valid is called invalid.

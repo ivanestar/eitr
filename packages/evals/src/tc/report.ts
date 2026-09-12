@@ -146,7 +146,9 @@ export function agentReport(
     if (!byDataset.has(run.datasetId)) byDataset.set(run.datasetId, []);
     byDataset.get(run.datasetId)!.push(run);
   }
-  const finished = runs.filter((r) => r.produced);
+  // A run the assistant had no allowance left for says nothing about how well it writes.
+  const attempted = runs.filter((r) => !r.outOfQuota);
+  const finished = attempted.filter((r) => r.produced);
   lines.push('# Test conditions - what the assistants wrote');
   lines.push('');
   lines.push(
@@ -157,9 +159,12 @@ export function agentReport(
       ' datasets (' +
       runs.filter((r) => !r.ok).length +
       ' did not finish, ' +
-      (runs.length - finished.length) +
+      (attempted.length - finished.length) +
       ' left no analysis)',
   );
+  const starved = runs.filter((r) => r.outOfQuota).length;
+  if (starved > 0)
+    lines.push('Runs the assistant had no allowance left for, counted nowhere below: ' + starved);
   const models = Array.from(new Set(runs.map((r) => r.runner + ' ' + r.model)));
   lines.push('Assistant: ' + models.join(', '));
   const seconds = runs.map((r) => r.seconds).sort((a, b) => a - b);
@@ -190,12 +195,14 @@ export function agentReport(
   lines.push('');
   const gatePassed = finished.filter((r) => r.gate && r.gate.status === 'PASSED');
   lines.push(
-    '- Left an analysis the gate passes: ' + percent(wilson(gatePassed.length, runs.length)),
+    '- Left an analysis the gate passes: ' + percent(wilson(gatePassed.length, attempted.length)),
   );
   const critical = finished.filter((r) => r.grade && r.grade.critical);
-  lines.push('- Nothing critical wrong with it: ' + percent(wilson(critical.length, runs.length)));
+  lines.push(
+    '- Nothing critical wrong with it: ' + percent(wilson(critical.length, attempted.length)),
+  );
   const perfect = finished.filter((r) => r.grade && r.grade.failures.length === 0);
-  lines.push('- Every grader passed: ' + percent(wilson(perfect.length, runs.length)));
+  lines.push('- Every grader passed: ' + percent(wilson(perfect.length, attempted.length)));
   const judged = finished
     .map((r) => r.grade?.byGrader['defect-judge'])
     .filter((c): c is { passed: number; total: number } => Boolean(c && c.total > 0));
@@ -246,7 +253,7 @@ export function agentReport(
   lines.push('| --- | --- | --- |');
   for (const factor of FACTORS) {
     for (const level of factor.levels) {
-      const relevant = runs.filter((r) => (factorsOf[r.datasetId] || {})[factor.id] === level);
+      const relevant = attempted.filter((r) => (factorsOf[r.datasetId] || {})[factor.id] === level);
       if (relevant.length === 0) continue;
       const ok = relevant.filter((r) => r.grade && r.grade.critical).length;
       lines.push(

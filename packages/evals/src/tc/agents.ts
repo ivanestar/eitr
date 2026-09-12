@@ -33,6 +33,8 @@ export interface AgentRun {
   runner: string;
   model: string;
   ok: boolean;
+  // The assistant's account ran out of allowance. Nothing after this says anything about quality.
+  outOfQuota?: boolean | undefined;
   seconds: number;
   usage: Record<string, number> | null;
   error?: string | undefined;
@@ -239,11 +241,15 @@ export async function runAgentTrial(
   } catch {
     usage = null;
   }
+  const outOfQuota = /quota reached|rate limit|resource_exhausted|429/i.test(
+    cli.stdout + cli.stderr,
+  );
   const run: AgentRun = {
     datasetId: prepared.spec.id,
     trial,
     runner: opts.runner,
     model: opts.model,
+    outOfQuota,
     ok: cli.code === 0 && !cli.timedOut,
     seconds: Math.round((Date.now() - started) / 1000),
     usage,
@@ -301,6 +307,10 @@ export async function runAgentTrial(
 export function regradeRuns(outRoot: string, prepared: PreparedDataset[]): AgentRun[] {
   const runs: AgentRun[] = JSON.parse(readFileSync(join(outRoot, 'runs.json'), 'utf8'));
   for (const run of runs) {
+    if (run.outOfQuota === undefined && existsSync(run.transcript))
+      run.outOfQuota = /quota reached|rate limit|resource_exhausted|429/i.test(
+        readFileSync(run.transcript, 'utf8'),
+      );
     const dataset = prepared.find((p) => p.spec.id === run.datasetId);
     if (!dataset || !run.produced) continue;
     const conditions = join(
@@ -374,6 +384,12 @@ export async function runAgentBatch(
           opts.onRun?.(run);
           // Written as each run finishes, so a batch that dies keeps what it earned.
           writeFileSync(join(opts.outRoot, 'runs.json'), JSON.stringify(runs, null, 1), 'utf8');
+          // An allowance that has run out does not come back within a batch, and every run after it
+          // burns a quarter of an hour to produce the same error. Stop, and keep what is scored.
+          if (run.outOfQuota) {
+            queue.length = 0;
+            return;
+          }
         }
       }
     }),
