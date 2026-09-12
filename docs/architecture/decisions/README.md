@@ -48,3 +48,4 @@ sequentially, zero-padded to 4 digits, kebab-case slug after the number.
 | 0020 | [A note is written on the entry it is about, and kept with the project's knowledge](0020-notes-on-review-entries.md)                                             | Accepted |
 | 0021 | [A person reviews what only the domain can confirm; the assistant checks the rest under the person's veto](0021-person-reviews-what-only-the-domain-confirms.md) | Accepted |
 | 0022 | [What the analysis says to test is tested, or declined with a reason the person sees](0022-coverage-items-covered-or-declined.md)                                | Accepted |
+| 0023 | [Test conditions are evaluated against synthetic applications whose defects are known](0023-how-test-conditions-are-evaluated.md)                                | Accepted |
