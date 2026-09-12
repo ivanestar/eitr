@@ -31,7 +31,7 @@ the cache directory.
 | `gold.ts`                | the answer key's shape                                                                                |
 | `project.ts`             | a dataset on disk - generated project, inventories from the project's own scripts, upstream artifacts |
 | `reference.ts`           | the analysis a careful analyst writes, built from the answer key                                      |
-| `mutations.ts`           | nineteen ways an analysis goes wrong, and where each should be caught                                 |
+| `mutations.ts`           | twenty ways an analysis goes wrong, and where each should be caught                                   |
 | `graders.ts`             | what an analysis is worth, in code                                                                    |
 | `judge.ts`               | the one judgement code cannot make, and the sheet a person labels to check it                         |
 | `pipeline.ts`            | the stage's own scripts, run over an analysis                                                         |
@@ -47,6 +47,13 @@ the cache directory.
   mutation nothing catches is a hole, and the suite fails on it.
 - For the paid half, **pass@1** is how often one run is right and **pass^k** how often k runs all
   are; the difference is how much the result depends on luck.
+- **defect-targeted** matches the words the answer key expects, and an analysis writes its own - it
+  calls "a discount over 100 percent is rejected" a miss where the key says 150. Read
+  **defect-judge** for whether a condition would actually fail on the defect, and the calibration
+  sheet for whether the judge can be believed.
+- **main-flow-value** passes on its own only where the analysis states the value the key names. An
+  analysis that works its main flow on an input of its own goes to the judge; without a judge it
+  counts as failed, so a run with `TC_JUDGE=0` reads lower than it is.
 - Rates over items carry a confidence interval clustered by dataset: items of one dataset fail
   together, and treating them as independent would make the interval look narrower than it is.
 

@@ -246,6 +246,13 @@ export function agentReport(
       .filter((c) => c.total > 0);
     lines.push('| ' + grader + ' | ' + percent(clusteredRate(clusters)) + ' |');
   }
+  if (graders.includes('defect-targeted')) {
+    lines.push('');
+    lines.push(
+      'defect-targeted matches the words the answer key expects and an analysis writes its own, so it' +
+        ' reads low; defect-judge is what says whether a condition would actually fail on the defect.',
+    );
+  }
   lines.push('');
   lines.push('## Where it breaks');
   lines.push('');

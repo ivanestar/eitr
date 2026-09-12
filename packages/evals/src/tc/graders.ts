@@ -562,7 +562,9 @@ export const CRITICAL_GRADERS = [
   'limit-boundary',
   'limit-invented',
   'false-invalid',
-  'defect-targeted',
+  // defect-targeted is deliberately not here: it matches words, and an analysis writes its own. It
+  // reads "a discount greater than 100 percent is rejected" and the answer key says the trigger is
+  // 150, so it calls a condition that would fail on the defect a miss. What decides is defect-judge.
   'defect-not-locked-in',
   'rule-tested',
   'research-used',
